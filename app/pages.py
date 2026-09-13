@@ -40,14 +40,16 @@ def _link_banner(player: Optional[Player]) -> str:
     pushes the rest of the page down rather than overlapping it -- see
     the body/.page split in _shell(). The "Generate code" button doubles
     as the code display: clicking it swaps its own label to the code
-    (title attribute carries the usage hint) instead of opening a
-    separate reveal area, and stays clickable to generate a new one."""
+    instead of opening a separate reveal area. A second click copies
+    that code to the clipboard, relabels the button "Copied to
+    clipboard", and disables it for good -- see the click handler in
+    _shell()."""
     if not player or player.account_hash:
         return ""
     return """
     <div class="link-banner" id="linkBanner">
       <div class="link-banner-inner">
-        <span class="link-banner-message">Click to generate a code to enter into your RuneLite settings for the plugin to begin use.</span>
+        <span class="link-banner-message">Click to generate a code to enter into your RuneLite settings for the plugin to begin.</span>
         <button class="link-banner-btn" id="generateLinkBtn" type="button">Generate code</button>
       </div>
       <div class="auth-error link-banner-error" id="linkError"></div>
@@ -67,6 +69,24 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
       const btn = e.target;
       const errorEl = document.getElementById('linkError');
       errorEl.classList.remove('show');
+
+      // Second click: the code is already showing (its value is stashed
+      // in the button's own dataset) -- copy it to the clipboard and lock
+      // the button rather than generating another one.
+      if (btn.dataset.code) {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.code);
+          btn.textContent = 'Copied to clipboard';
+          btn.removeAttribute('title');
+          btn.disabled = true;
+        } catch (err) {
+          errorEl.textContent = 'Could not copy the code -- please copy it manually.';
+          errorEl.classList.add('show');
+        }
+        return;
+      }
+
+      // First click: generate the code and show it in the button's own label.
       btn.disabled = true;
       try {
         const res = await fetch('/api/link/start', { method: 'POST' });
@@ -77,8 +97,9 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
           return;
         }
         btn.textContent = data.code;
+        btn.dataset.code = data.code;
         btn.classList.add('link-banner-btn--code');
-        btn.title = "Paste this into the plugin's settings. Expires in 10 minutes, works once -- click to generate a new one.";
+        btn.title = 'Click to copy this code to your clipboard.';
       } catch (err) {
         errorEl.textContent = 'Something went wrong. Please try again.';
         errorEl.classList.add('show');
