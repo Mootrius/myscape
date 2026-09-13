@@ -93,12 +93,16 @@ credential:
    "Unlink" button (also API-key authenticated). Clears the player's
    `account_hash`/`runescape_name` and revokes every currently-active
    API key on the account, not just the one presenting the request.
-   Takes effect immediately in the database, so the link banner is
-   back the next time the website re-renders a page for that player
-   (a refresh, or a navigation) -- unlike *acquiring* a link, there's
-   no live polling for this direction yet, since the banner (and its
-   poller) only exists on the page once you're already unlinked. See
-   `_link_banner()` in `app/pages.py`.
+   Takes effect immediately in the database. `/dashboard` has its own
+   poller for this direction too (see the `dashLinkedNote` check in
+   `render_dashboard()`, app/pages.py) -- a player looking at "Linked
+   to `<name>`" there will see the link banner come back within a few
+   seconds of unlinking from the plugin, the mirror image of the link
+   banner's own poller for *acquiring* a link (`_link_banner()`, same
+   file). Both directions exist because neither the website nor the
+   plugin has any way to tell an already-open instance of the other
+   about a link change directly -- polling is what closes that gap on
+   both sides.
 
 This is deliberately a bit stronger than the common pattern (see Wise
 Old Man's verification codes) of one long-lived, low-entropy code doing

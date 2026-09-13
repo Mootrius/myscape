@@ -228,7 +228,7 @@ def render_dashboard(player: Player) -> str:
         # session that's already showing this page, so it's always a
         # way out (see linking.revoke_link() in app/routers/linking.py).
         linked_note = f"""
-        <p class="dash-linked-note">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.
+        <p class="dash-linked-note" id="dashLinkedNote">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.
           <button class="link" id="dashUnlinkBtn" type="button">Unlink</button>
         </p>
         <div class="auth-error" id="dashUnlinkError"></div>
@@ -280,6 +280,30 @@ def render_dashboard(player: Player) -> str:
         btn.disabled = false;
       }
     });
+
+    // The mirror image of the link banner's own poller (see _shell()):
+    // while this page shows "Linked to <name>", nothing here would
+    // otherwise notice becoming unlinked elsewhere -- the plugin's own
+    // Unlink button chief among them, since (like linking itself) it
+    // has no way to tell an already-open browser tab about it directly.
+    // The click handler above already reloads immediately on success,
+    // so this only ever ends up doing the work for the *other* trigger.
+    const dashLinkedNote = document.getElementById('dashLinkedNote');
+    if (dashLinkedNote) {
+      const unlinkPollInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/auth/me');
+          if (!res.ok) return; // e.g. session expired -- a normal reload will sort that out
+          const data = await res.json();
+          if (!data.account_hash) {
+            clearInterval(unlinkPollInterval);
+            window.location.reload();
+          }
+        } catch (err) {
+          // Transient network hiccup -- just try again next tick.
+        }
+      }, 3000);
+    }
     """
     return _shell(title="Dashboard — myscape", player=player, body=body, extra_script=script)
 
