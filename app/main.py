@@ -20,6 +20,7 @@ from app.limiter import limiter
 from app.models import LinkCode, Player, PlayerApiKey  # noqa: F401 -- imported so create_all sees them
 from app.pages import render_dashboard, render_landing, render_login, render_signup
 from app.routers import auth, linking
+from app.schema_sync import sync_missing_columns
 from app.schemas import PlayerOut
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
@@ -54,10 +55,16 @@ app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 @app.on_event("startup")
 def on_startup():
-    # Fine for this early stage. Once the schema needs to change without
-    # wiping data, switch to real Alembic migrations instead of
-    # create_all -- see README.md's "Next steps" section.
+    # create_all() makes any table that doesn't exist yet, but never
+    # alters one that already does -- sync_missing_columns() covers that
+    # gap (see app/schema_sync.py; this is what broke signup in
+    # production once, when `players` already existed from an earlier
+    # deploy and never picked up `account_hash`/`password_hash`). Once
+    # the schema needs a change this can't handle (renames, retyping,
+    # constraints), switch to real Alembic migrations -- see README.md's
+    # "Next steps" section.
     Base.metadata.create_all(bind=engine)
+    sync_missing_columns(engine, Base)
 
 
 @app.get("/", response_class=HTMLResponse)

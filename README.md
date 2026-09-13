@@ -129,9 +129,31 @@ here now instead of showing an inline "you're signed in" message.
   equipment/loot data and POSTs it here, using the account-linking flow
   above to get and store its API key
 - Email verification and a password-reset flow
-- Switch from `Base.metadata.create_all` to real Alembic migrations once
-  the schema needs to change without wiping data
+- Switch from `Base.metadata.create_all` + `sync_missing_columns` (see
+  "Database schema changes" below) to real Alembic migrations -- worth
+  doing sooner rather than later now that schema drift has already
+  caused one production incident
 - ~~Point myscape.io's DNS at Render once the first deploy is verified~~ done -- live at myscape.io
 - ~~A real signup/login flow tying a website account to a `Player` row~~ done
 - ~~Actual HTML signup/login pages~~ done -- `/signup` and `/login`
 - ~~A real dashboard for a logged-in player~~ done, in its early form -- `/dashboard`
+
+## Database schema changes
+
+`Base.metadata.create_all()` only creates tables that don't exist yet --
+it never alters a table that's already there. That bit us in production:
+`players` was created by the very first deploy, and neither
+`account_hash` nor `password_hash` (added in later updates) ever
+actually reached the live database, since `create_all()` silently did
+nothing for a table it considered already-created. Signup broke the
+moment it tried to write a `password_hash` column that didn't exist.
+
+`app/schema_sync.py`'s `sync_missing_columns()` (run at startup, right
+after `create_all()`) is the fix: it adds any column the current models
+define that the live table is still missing, and drops a short,
+hand-maintained list of columns confirmed obsolete (right now just the
+old `verification_code`, fully replaced by the LinkCode/PlayerApiKey
+system and a NOT NULL leftover that would otherwise block every insert).
+It's additive-and-explicit-drops only -- no renames, no retyping, no
+constraint changes -- so when a future change needs any of that, it's
+time for real Alembic migrations instead of extending this further.
