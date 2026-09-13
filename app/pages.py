@@ -788,22 +788,54 @@ def render_purchase_goals(player: Player) -> str:
         return '';
       }
 
+      function itemWikiUrl(itemName) {
+        return 'https://oldschool.runescape.wiki/w/' + encodeURIComponent(String(itemName).replace(/ /g, '_'));
+      }
+
       function slotHtml(resolved, slotType, slot, extraClass) {
         var picking = PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot);
         var cls = slotClasses(resolved) + (extraClass ? ' ' + extraClass : '') + (picking ? ' picking' : '');
         var inner = resolved && resolved.icon
           ? '<img class="gear-slot-icon" src="' + esc(resolved.icon) + '" alt="" />'
           : (resolved ? '<span class="tracker-icon-fallback">' + esc(resolved.itemName || '?').slice(0, 6) + '</span>' : '');
-        var title = resolved ? esc(resolved.itemName) + (resolved.cost ? ' -- ' + formatGp(resolved.cost) + ' gp' : '') : 'Empty slot';
-        return '<div class="' + cls + '" data-slot-type="' + slotType + '" data-slot="' + esc(slot) + '" title="' + title + '">' +
-          inner + slotBadge(resolved) + '</div>';
+        var title = resolved
+          ? esc(resolved.itemName) + (resolved.cost ? ' -- ' + formatGp(resolved.cost) + ' gp' : '') + ' -- click to view on the wiki'
+          : 'Empty slot';
+        var itemNameAttr = resolved ? ' data-item-name="' + esc(resolved.itemName) + '"' : '';
+        // The remove ("x") button only ever shows up on hover (see
+        // .gear-slot-remove in purchase-goals.css) and only exists at all
+        // when the slot is filled -- an empty slot has nothing to remove.
+        var removeBtn = resolved ? '<button class="gear-slot-remove" type="button" title="Remove item">&times;</button>' : '';
+        return '<div class="' + cls + '" data-slot-type="' + slotType + '" data-slot="' + esc(slot) + '"' + itemNameAttr + ' title="' + title + '">' +
+          inner + slotBadge(resolved) + removeBtn + '</div>';
       }
 
       function wireSlotClicks() {
         document.querySelectorAll('.gear-slot').forEach(function (el) {
+          var removeBtn = el.querySelector('.gear-slot-remove');
+          if (removeBtn) {
+            removeBtn.addEventListener('click', function (e) {
+              // Don't let this bubble up to the slot's own click handler
+              // below (which would otherwise also open the item's wiki
+              // page at the same time as removing it).
+              e.stopPropagation();
+              var slotType = el.getAttribute('data-slot-type');
+              var slot = slotType === 'inventory' ? parseInt(el.getAttribute('data-slot'), 10) : el.getAttribute('data-slot');
+              removeSlotItem(slotType, slot);
+            });
+          }
           el.addEventListener('click', function () {
             var slotType = el.getAttribute('data-slot-type');
             var slot = slotType === 'inventory' ? parseInt(el.getAttribute('data-slot'), 10) : el.getAttribute('data-slot');
+            var itemName = el.getAttribute('data-item-name');
+            // A filled slot's item is now a link out to the wiki instead
+            // of an editor -- removing is handled by the hover "x"
+            // (above) and adding only ever happens on an empty slot, so
+            // there's nothing left for a filled slot's own click to open.
+            if (itemName) {
+              window.open(itemWikiUrl(itemName), '_blank', 'noopener');
+              return;
+            }
             if (PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot)) {
               PG.picker = null;
             } else {
@@ -980,10 +1012,6 @@ def render_purchase_goals(player: Player) -> str:
           modeToggle +
           body +
           suppliesRow +
-          '  <div class="gear-combo-actions">' +
-          '    <button class="link" id="slotClearBtn" type="button">Clear slot</button>' +
-          '    <button class="link" id="slotCancelBtn" type="button">Cancel</button>' +
-          '  </div>' +
           '</div>';
 
         wireSlotPickerEvents();
@@ -996,8 +1024,6 @@ def render_purchase_goals(player: Player) -> str:
           renderSlotPicker();
         });
         document.getElementById('suppliesToggle')?.addEventListener('change', function (e) { p.supplies = e.target.checked; });
-        document.getElementById('slotCancelBtn').addEventListener('click', function () { PG.picker = null; renderContent(); });
-        document.getElementById('slotClearBtn').addEventListener('click', function () { saveSlot(null); });
 
         if (p.mode === 'search') {
           var input = document.getElementById('slotSearchInput');
@@ -1142,6 +1168,18 @@ def render_purchase_goals(player: Player) -> str:
           body: JSON.stringify({ slot_type: p.slotType, slot: p.slot, item: item }),
         });
         if (data) { PG.data = data; PG.picker = null; render(); }
+      }
+
+      // Removes whatever's in a slot directly from its hover "x" -- unlike
+      // saveSlot above, this doesn't go through PG.picker (a filled slot
+      // no longer opens one at all; see wireSlotClicks), so the slot to
+      // clear is passed in explicitly instead.
+      async function removeSlotItem(slotType, slot) {
+        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/slot', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slot_type: slotType, slot: slot, item: null }),
+        });
+        if (data) { PG.data = data; render(); }
       }
 
       async function runSearch(query, callback) {

@@ -208,6 +208,20 @@
 .gear-slot.not-owned { border-color: var(--red); }
 .gear-slot.affordable { border-color: var(--amber); }
 
+/* Hover-only "remove item" button -- top-right corner, opposite the
+   tradeable/combo/supplies badges (bottom-right, always visible), so the
+   two never collide. Hidden until the slot itself is hovered, since it's
+   a destructive shortcut, not something that should always be on screen. */
+.gear-slot-remove {
+  display: none;
+  position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; z-index: 2;
+  align-items: center; justify-content: center;
+  background: var(--panel-2); border: 1px solid var(--red); color: var(--red);
+  border-radius: 50%; font-size: 12px; line-height: 1; padding: 0; cursor: pointer;
+}
+.gear-slot-remove:hover { background: var(--red); color: var(--panel-2); }
+.gear-slot.filled:hover .gear-slot-remove { display: flex; }
+
 .gear-summary {
   background: var(--panel-translucent);
   border: 1px solid var(--border);
