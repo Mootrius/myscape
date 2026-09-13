@@ -89,14 +89,14 @@ header {
   background: linear-gradient(to bottom, rgba(15, 15, 16, 0.82) 0%, rgba(15, 15, 16, 0.35) 65%, rgba(15, 15, 16, 0) 100%);
 }
 
-/* Three-column layout so the wordmark stays dead center regardless of
-   how long the link text on either side is: two equal flexible rails
-   (.nav-side) with a fixed-width center column between them. */
+/* The wordmark and its two nav links sit together as one centered
+   cluster (rather than the links being pushed out to the header's
+   outer edges), so they read as a single nav unit. */
 .header-inner {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 22px;
 }
 
 /* Text wordmark (replaces the old logo image) -- same pixel font as
@@ -109,7 +109,7 @@ header {
 
 .logo a {
   color: var(--gold);
-  font-size: 22px;
+  font-size: 28px;
   letter-spacing: 0.03em;
   text-decoration: none;
 }
@@ -119,8 +119,6 @@ header {
 .subtitle { color: var(--text-faint); font-size: 15px; margin-top: 6px; }
 
 .nav-side { display: flex; align-items: center; font-size: 15px; }
-.nav-left { justify-content: flex-start; }
-.nav-right { justify-content: flex-end; }
 
 /* White nav text (distinct from the rest of the site's gold/dim-text
    link styling) so it reads clearly flanking the centered logo over
