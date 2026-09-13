@@ -666,6 +666,18 @@ def render_purchase_goals(player: Player) -> str:
           '  <div class="pg-summary-col">' + summary + '</div>' +
           '</div>';
 
+        // Pin the column's width to the gear-frame's own rendered width
+        // (see the comment on .pg-doll-wrap in purchase-goals.css) --
+        // without this, the slot picker rendered into it below would
+        // stretch the column (and the whole row) wider than the frame,
+        // shoving the summary column out of place instead of just
+        // wrapping its own contents inside the frame's width.
+        var dollWrapEl = document.querySelector('.pg-doll-wrap');
+        var gearFrameEl = document.querySelector('.pg-gear-frame');
+        if (dollWrapEl && gearFrameEl) {
+          dollWrapEl.style.width = gearFrameEl.offsetWidth + 'px';
+        }
+
         wireSlotClicks();
         document.getElementById('pgIconTrigger').addEventListener('click', function () {
           PG.iconPicker = !PG.iconPicker;

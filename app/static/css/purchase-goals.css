@@ -108,8 +108,17 @@
    slot picker -- stacked in this one column so the picker appears
    directly under the gear+inventory box rather than at the bottom of
    the whole two-column row, and the summary column beside it doesn't
-   move when the picker opens or closes. */
-.pg-doll-wrap { display: flex; flex-direction: column; gap: 18px; }
+   move when the picker opens or closes. Its `width` is pinned in
+   pixels by JS right after the gear-frame renders (see renderContent
+   in app/pages.py) to the frame's own rendered width -- without that,
+   this column has no width of its own to speak of, so the slot
+   picker's search box/combo-builder fields (which would happily fill
+   any space they're given) stretch it out past the frame, which in
+   turn shoves .pg-summary-col out of the row entirely. Pinning the
+   width forces the picker to wrap its own contents inside the frame's
+   width instead. `max-width: 100%` is the narrow-viewport fallback,
+   in case JS ever sets a pixel width wider than the screen. */
+.pg-doll-wrap { display: flex; flex-direction: column; gap: 18px; max-width: 100%; }
 .pg-summary-col { flex: 1 1 320px; min-width: 280px; }
 
 /* The box holding worn equipment and inventory together (see
@@ -118,15 +127,20 @@
    fully opaque (see .gear-slot below), only this shared frame around
    them is translucent. Doll and inventory sit side by side, like the
    original tool, with the shorter doll vertically centered against the
-   taller inventory grid. */
+   taller inventory grid. `flex-shrink: 0` keeps it from being squeezed
+   narrower than its own content once .pg-doll-wrap's width is pinned
+   (see that rule's comment above) -- it should always be exactly as
+   wide as its content wants, never more, never less. */
 .pg-gear-frame {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 28px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
+  box-sizing: border-box;
 }
 
 .gear-doll {
@@ -227,6 +241,13 @@
   background: var(--panel-translucent); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 14px 16px; margin: 0 0 22px;
   display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap;
+  /* box-sizing so the padding above is absorbed into (not added onto)
+     whatever width the parent gives this -- for .gear-slot-picker
+     specifically, that parent's width is pinned to the gear+inventory
+     frame's own width (see .pg-doll-wrap above), and this keeps the
+     picker from quietly overflowing past it by 2 * 16px of padding. */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
