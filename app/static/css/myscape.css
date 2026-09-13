@@ -53,7 +53,7 @@ header {
 }
 
 .logo { margin: 0; line-height: 0; }
-.logo img { height: 40px; width: auto; display: block; }
+.logo img { height: 20px; width: auto; display: block; }
 
 .subtitle { color: var(--text-faint); font-size: 12.5px; margin-top: 4px; }
 
@@ -166,4 +166,46 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   font-size: 11px;
   color: var(--text-faint);
   margin-top: 4px;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.dash-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px 20px;
+}
+
+.dash-card h3 {
+  font-weight: normal;
+  font-size: 14.5px;
+  margin: 0 0 6px;
+}
+
+.dash-card .subtitle { margin-top: 0; margin-bottom: 12px; }
+
+.dash-card-soon { opacity: 0.55; }
+
+.link-code {
+  background: #100e0b;
+  border: 1px solid var(--border);
+  color: var(--gold);
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding: 12px 10px;
+  margin: 12px 0 8px;
+  word-break: break-all;
+}
+
+.dash-welcome {
+  color: var(--text-faint);
+  font-size: 12.5px;
+  margin: 0 0 20px;
 }

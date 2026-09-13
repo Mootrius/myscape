@@ -14,6 +14,7 @@ def _nav(player: Optional[Player]) -> str:
     if player:
         return f"""
         <nav>
+          <a href="/dashboard">Dashboard</a>
           <span>{escape(player.email or "")}</span>
           <button class="link" id="logoutBtn" type="button">Log out</button>
         </nav>
@@ -58,16 +59,87 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
 
 
 def render_landing(player: Optional[Player]) -> str:
-    if player:
-        body = """
-        <p class="subtitle">You're signed in. The dashboard (purchase goals, loot tracking) is next up.</p>
+    # Logged-in visitors get redirected to /dashboard before this ever
+    # renders (see main.py) -- this stays player-aware only so the nav
+    # doesn't look broken if that ever changes.
+    body = """
+    <p class="subtitle">An Old School RuneScape companion &mdash; purchase goals, loot tracking, and more.
+    <a href="/signup">Sign up</a> to get started.</p>
+    """
+    return _shell(title="myscape", player=player, body=body)
+
+
+def render_dashboard(player: Player) -> str:
+    if player.account_hash:
+        link_card = f"""
+        <h3>RuneLite account</h3>
+        <p class="subtitle">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.</p>
+        <p class="hint">Game account ID: {escape(player.account_hash[:16])}&hellip;</p>
         """
     else:
-        body = """
-        <p class="subtitle">An Old School RuneScape companion &mdash; purchase goals, loot tracking, and more.
-        <a href="/signup">Sign up</a> to get started.</p>
+        link_card = """
+        <h3>Link your RuneLite account</h3>
+        <p class="subtitle">Generate a one-time code to paste into the myscape section of the
+        RuneLite plugin's settings. (The plugin itself is still being built -- this gets your
+        website account ready for when it lands.)</p>
+        <button class="primary" id="generateLinkBtn" type="button">Generate linking code</button>
+        <div id="linkCodeResult" style="display:none;">
+          <div class="link-code" id="linkCodeValue"></div>
+          <p class="hint">Paste this into the plugin's settings. It expires in 10 minutes and
+          only works once -- generate a new one if it expires.</p>
+        </div>
+        <div class="auth-error" id="linkError"></div>
         """
-    return _shell(title="myscape", player=player, body=body)
+
+    body = f"""
+    <p class="dash-welcome">Welcome back, {escape(player.email or "")}.</p>
+    <div class="dash-grid">
+      <div class="dash-card" id="linkCard">
+        {link_card}
+      </div>
+      <div class="dash-card dash-card-soon">
+        <h3>Purchase Goals</h3>
+        <p class="subtitle">Coming soon.</p>
+      </div>
+      <div class="dash-card dash-card-soon">
+        <h3>Loot Tracker</h3>
+        <p class="subtitle">Coming soon.</p>
+      </div>
+    </div>
+    """
+    script = """
+    document.getElementById('generateLinkBtn')?.addEventListener('click', async (e) => {
+      const btn = e.target;
+      const errorEl = document.getElementById('linkError');
+      errorEl.classList.remove('show');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/link/start', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          errorEl.textContent = describeError(data, 'Could not generate a code. Please try again.');
+          errorEl.classList.add('show');
+          return;
+        }
+        document.getElementById('linkCodeValue').textContent = data.code;
+        document.getElementById('linkCodeResult').style.display = 'block';
+        btn.textContent = 'Generate a new code';
+      } catch (err) {
+        errorEl.textContent = 'Something went wrong. Please try again.';
+        errorEl.classList.add('show');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    function describeError(data, fallback) {
+      if (!data || !data.detail) return fallback;
+      if (typeof data.detail === 'string') return data.detail;
+      if (Array.isArray(data.detail) && data.detail[0]?.msg) return data.detail[0].msg;
+      return fallback;
+    }
+    """
+    return _shell(title="Dashboard — myscape", player=player, body=body, extra_script=script)
 
 
 def render_signup() -> str:

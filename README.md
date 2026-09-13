@@ -110,10 +110,19 @@ service and the database and wire them together. First deploy takes a few
 minutes. Once it's up, `/api/health/db` should return
 `{"status": "ok", "playerCount": 0}`.
 
+## Dashboard
+
+`GET /dashboard` (session-authenticated, redirects to `/login` if you're
+not) is the logged-in home page. Right now it has one working feature --
+a "Link your RuneLite account" card wired straight to `/api/link/start`,
+so a signed-in player can generate a real linking code today, ready for
+whenever the plugin exists to consume it -- plus two "coming soon" cards
+(Purchase Goals, Loot Tracker) that are just placeholders until those
+data models exist. Signing in, `/`, `/login`, and `/signup` all redirect
+here now instead of showing an inline "you're signed in" message.
+
 ## Next steps (not built yet)
 
-- A real dashboard for a logged-in player -- `/` currently just says
-  "you're signed in" once you are
 - Purchase Goals / Loot Tracker data model and API endpoints (porting the
   logic from the original single-user Maintrius tool)
 - The actual RuneLite plugin (separate repo) that reads bank/inventory/
@@ -125,3 +134,4 @@ minutes. Once it's up, `/api/health/db` should return
 - ~~Point myscape.io's DNS at Render once the first deploy is verified~~ done -- live at myscape.io
 - ~~A real signup/login flow tying a website account to a `Player` row~~ done
 - ~~Actual HTML signup/login pages~~ done -- `/signup` and `/login`
+- ~~A real dashboard for a logged-in player~~ done, in its early form -- `/dashboard`

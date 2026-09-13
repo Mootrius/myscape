@@ -6,7 +6,7 @@ import os
 from typing import Optional
 
 from fastapi import Depends, FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -18,7 +18,7 @@ from app.auth import get_current_player_from_api_key, get_optional_current_playe
 from app.database import Base, engine, get_db
 from app.limiter import limiter
 from app.models import LinkCode, Player, PlayerApiKey  # noqa: F401 -- imported so create_all sees them
-from app.pages import render_landing, render_login, render_signup
+from app.pages import render_dashboard, render_landing, render_login, render_signup
 from app.routers import auth, linking
 from app.schemas import PlayerOut
 
@@ -62,21 +62,30 @@ def on_startup():
 
 @app.get("/", response_class=HTMLResponse)
 def root(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
-    return render_landing(player)
+    if player:
+        return RedirectResponse("/dashboard", status_code=302)
+    return render_landing(None)
 
 
 @app.get("/signup", response_class=HTMLResponse)
 def signup_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
     if player:
-        return render_landing(player)
+        return RedirectResponse("/dashboard", status_code=302)
     return render_signup()
 
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
     if player:
-        return render_landing(player)
+        return RedirectResponse("/dashboard", status_code=302)
     return render_login()
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    return render_dashboard(player)
 
 
 @app.get("/api/health")
