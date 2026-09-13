@@ -3,19 +3,22 @@ early account system (website signup/login, RuneLite plugin account
 linking) -- see README.md for how the pieces fit together.
 """
 import os
+from typing import Optional
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_player_from_api_key
+from app.auth import get_current_player_from_api_key, get_optional_current_player_from_session
 from app.database import Base, engine, get_db
 from app.limiter import limiter
 from app.models import LinkCode, Player, PlayerApiKey  # noqa: F401 -- imported so create_all sees them
+from app.pages import render_landing, render_login, render_signup
 from app.routers import auth, linking
 from app.schemas import PlayerOut
 
@@ -45,6 +48,9 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(linking.router)
 
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
 
 @app.on_event("startup")
 def on_startup():
@@ -55,24 +61,22 @@ def on_startup():
 
 
 @app.get("/", response_class=HTMLResponse)
-def root():
-    return """
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>myscape</title>
-        <style>
-          body { background: #0f0f10; color: #ece6d8; font-family: system-ui, sans-serif;
-                 display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-          h1 { font-weight: normal; letter-spacing: 0.04em; }
-        </style>
-      </head>
-      <body>
-        <h1>myscape &mdash; coming soon</h1>
-      </body>
-    </html>
-    """
+def root(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    return render_landing(player)
+
+
+@app.get("/signup", response_class=HTMLResponse)
+def signup_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if player:
+        return render_landing(player)
+    return render_signup()
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if player:
+        return render_landing(player)
+    return render_login()
 
 
 @app.get("/api/health")

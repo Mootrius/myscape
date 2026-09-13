@@ -13,6 +13,7 @@ it).
 """
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -63,26 +64,42 @@ def log_out_player(request: Request) -> None:
     request.session.pop(SESSION_PLAYER_ID_KEY, None)
 
 
-def get_current_player_from_session(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> Player:
-    """For the website: requires an active logged-in session, set by
-    /api/auth/login or /api/auth/signup."""
+def _load_player_from_session(request: Request, db: Session) -> Optional[Player]:
     raw_player_id = request.session.get(SESSION_PLAYER_ID_KEY)
     if not raw_player_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in.")
+        return None
 
     try:
         player_id = uuid.UUID(raw_player_id)
     except ValueError:
         log_out_player(request)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in.")
+        return None
 
     player = db.query(Player).filter(Player.id == player_id).first()
     if player is None:
         # The player row was deleted after the session cookie was issued.
         log_out_player(request)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in.")
+        return None
 
     return player
+
+
+def get_current_player_from_session(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Player:
+    """For endpoints that require an active logged-in session, set by
+    /api/auth/login or /api/auth/signup. 401s if there isn't one."""
+    player = _load_player_from_session(request, db)
+    if player is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in.")
+    return player
+
+
+def get_optional_current_player_from_session(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Optional[Player]:
+    """For pages that render differently when logged in but don't
+    require it (the landing page's nav, mainly) -- never raises."""
+    return _load_player_from_session(request, db)

@@ -38,6 +38,12 @@ feature gets built on top of it:
 - `render.yaml` -- tells Render how to deploy this: one web service, one
   Postgres database, and a generated session-signing secret, all wired
   together automatically.
+- `app/pages.py` -- the server-rendered signup/login/landing pages (no
+  template engine -- plain f-strings, since there are only three pages).
+- `app/static/` -- the shared stylesheet and the two custom fonts, in
+  the same dark/gold palette as Maintrius (the original desktop tool).
+  Served as real static files (not inlined as base64 like Maintrius's
+  local HTML) so browsers cache them across page loads.
 
 ## Website accounts
 
@@ -104,9 +110,8 @@ minutes. Once it's up, `/api/health/db` should return
 
 ## Next steps (not built yet)
 
-- Actual HTML signup/login pages -- the endpoints above exist, but
-  there's no frontend yet; right now `/` is still the placeholder
-  landing page
+- A real dashboard for a logged-in player -- `/` currently just says
+  "you're signed in" once you are
 - Purchase Goals / Loot Tracker data model and API endpoints (porting the
   logic from the original single-user Maintrius tool)
 - The actual RuneLite plugin (separate repo) that reads bank/inventory/
@@ -117,3 +122,4 @@ minutes. Once it's up, `/api/health/db` should return
   the schema needs to change without wiping data
 - ~~Point myscape.io's DNS at Render once the first deploy is verified~~ done -- live at myscape.io
 - ~~A real signup/login flow tying a website account to a `Player` row~~ done
+- ~~Actual HTML signup/login pages~~ done -- `/signup` and `/login`
