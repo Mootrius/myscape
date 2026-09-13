@@ -12,18 +12,56 @@ This is deliberately minimal -- just enough to prove the whole chain
 feature gets built on top of it:
 
 - `app/main.py` -- the FastAPI app. A placeholder landing page at `/`,
-  plus `/api/health` (is the app up) and `/api/health/db` (can it reach
-  the database).
+  `/api/health` (is the app up), `/api/health/db` (can it reach the
+  database), and `/api/players/me` (first real use of API-key auth --
+  the plugin calls this to confirm it's linked).
 - `app/database.py` -- SQLAlchemy engine/session setup, reading the
   database connection string from the `DATABASE_URL` environment
   variable.
-- `app/models.py` -- one `Player` table, the seed of the account-linking
-  system: each player gets a `verification_code` that will eventually get
-  pasted into the RuneLite plugin's settings, so the plugin can prove
-  which website account it belongs to without the server ever having to
-  trust a client-asserted username.
+- `app/models.py` -- `Player`, `LinkCode`, and `PlayerApiKey`. See the
+  "Account linking" section below for how these fit together.
+- `app/security.py` -- random token generation + SHA-256 hashing shared
+  by both the link code and the API key.
+- `app/auth.py` -- the `get_current_player` dependency: checks a
+  request's `Authorization: Bearer <api key>` header against the hashed
+  keys in the database.
+- `app/limiter.py` / `app/routers/linking.py` -- the account-linking
+  endpoints (`POST /api/link/start`, `POST /api/link/exchange`), the
+  latter rate-limited per-IP.
 - `render.yaml` -- tells Render how to deploy this: one web service, one
   Postgres database, wired together automatically.
+
+## Account linking
+
+The RuneLite plugin authenticates with a long-lived API key rather than
+a username/password, but getting that key onto the plugin is a two-step
+handoff so the code a player copy-pastes is never itself the long-term
+credential:
+
+1. **`POST /api/link/start`** -- called by the website for a signed-in
+   player (right now `player_id` is passed directly in the body as a
+   placeholder for a real session -- see "Next steps"). Generates a
+   random link code, shown to the player exactly once, valid for 10
+   minutes, usable exactly once. Only its SHA-256 hash is stored.
+2. The player pastes that code into the RuneLite plugin's settings.
+3. **`POST /api/link/exchange`** -- called by the plugin with the code
+   plus RuneLite's stable `account_hash` (not the display name, which
+   can change). Verifies the code, marks it used, binds the game account
+   to the player, and returns a separate, long-lived API key. Only its
+   hash is stored too. This endpoint is rate-limited (10 requests/minute
+   per IP) since it's the one place a caller benefits from guessing.
+4. Every future request from the plugin sends that API key as
+   `Authorization: Bearer <key>`; `app/auth.py` looks it up by hash.
+
+This is deliberately a bit stronger than the common pattern (see Wise
+Old Man's verification codes) of one long-lived, low-entropy code doing
+both jobs: the thing a player pastes is short-lived and single-use, and
+the thing that authenticates every future request is separately
+revocable without forcing a fresh player-facing code.
+
+`POST /api/players` (get-or-create a `Player` by email) exists purely to
+have something to link against before real signup/login is built -- see
+"Next steps."
 
 ## Local development
 
@@ -47,8 +85,12 @@ minutes. Once it's up, `/api/health/db` should return
 - Purchase Goals / Loot Tracker data model and API endpoints (porting the
   logic from the original single-user Maintrius tool)
 - The actual RuneLite plugin (separate repo) that reads bank/inventory/
-  equipment/loot data and POSTs it here
-- A real signup/login flow tying a website account to a `Player` row
+  equipment/loot data and POSTs it here, using the account-linking flow
+  above to get and store its API key
+- A real signup/login flow tying a website account to a `Player` row --
+  once that exists, `POST /api/players` goes away and `POST
+  /api/link/start` takes its player from the authenticated session
+  instead of a client-supplied `player_id`
 - Switch from `Base.metadata.create_all` to real Alembic migrations once
   the schema needs to change without wiping data
-- Point myscape.io's DNS at Render once the first deploy is verified
+- ~~Point myscape.io's DNS at Render once the first deploy is verified~~ done -- live at myscape.io

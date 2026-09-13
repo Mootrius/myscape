@@ -5,13 +5,22 @@ real feature gets built on top of it.
 """
 from fastapi import Depends, FastAPI
 from fastapi.responses import HTMLResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_player
 from app.database import Base, engine, get_db
-from app.models import Player  # noqa: F401 -- imported so create_all sees it
+from app.limiter import limiter
+from app.models import LinkCode, Player, PlayerApiKey  # noqa: F401 -- imported so create_all sees them
+from app.routers import linking
+from app.schemas import PlayerOut
 
 app = FastAPI(title="myscape")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.include_router(linking.router)
 
 
 @app.on_event("startup")
@@ -57,3 +66,11 @@ def health_db(db: Session = Depends(get_db)):
     real end-to-end check for a first deploy."""
     player_count = db.execute(text("SELECT COUNT(*) FROM players")).scalar()
     return {"status": "ok", "playerCount": player_count}
+
+
+@app.get("/api/players/me", response_model=PlayerOut)
+def read_current_player(player: Player = Depends(get_current_player)):
+    """First real use of the API key auth: the plugin calls this (with
+    its `Authorization: Bearer <key>` header) to confirm it's linked and
+    see which player it's linked to."""
+    return player
