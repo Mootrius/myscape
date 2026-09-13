@@ -63,6 +63,44 @@ def _link_banner(player: Optional[Player]) -> str:
     """
 
 
+def _footer(player: Optional[Player]) -> str:
+    """A site-wide footer, the visual mirror of the header (see the
+    `header` rule in myscape.css and its comment) -- same full-width
+    darkening gradient technique, but stronger and fading upward
+    instead of down, so it unmistakably reads as a floor under the
+    page rather than a second, weaker header.
+
+    Holds two things, neither of which is really page content: the
+    "Linked to <name>" status (moved down here from the dashboard body
+    -- it's chrome about the player's account, not something specific
+    to that one page, so every page showing it is more consistent than
+    just the one) with its "Unlink" button, and the OSRS trademark
+    attribution, which belongs on every page regardless of login
+    state. See _shell()'s shared_script for the Unlink button's click
+    handler and its own unlink-poller (the mirror of _link_banner()'s
+    poller below, for the opposite direction)."""
+    linked_line = ""
+    if player and player.account_hash:
+        linked_line = f"""
+        <p class="footer-linked-note" id="footerLinkedNote">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.
+          <button class="link" id="footerUnlinkBtn" type="button">Unlink</button>
+        </p>
+        <div class="auth-error footer-unlink-error" id="footerUnlinkError"></div>
+        """
+    return f"""
+    <footer>
+      <div class="footer-inner wrap">
+        {linked_line}
+        <p class="footer-trademark">
+          <a href="https://oldschool.runescape.com/" target="_blank" rel="noopener">Old School RuneScape</a>
+          is a trademark of
+          <a href="https://www.jagex.com/" target="_blank" rel="noopener">Jagex Ltd.</a>
+        </p>
+      </div>
+    </footer>
+    """
+
+
 def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "") -> str:
     nav_left, nav_right = _nav_sides(player)
     shared_script = """
@@ -121,6 +159,52 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
       return fallback;
     }
 
+    document.getElementById('footerUnlinkBtn')?.addEventListener('click', async (e) => {
+      const btn = e.target;
+      const errorEl = document.getElementById('footerUnlinkError');
+      errorEl.classList.remove('show');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/link/unlink', { method: 'POST' });
+        if (res.ok) {
+          window.location.reload();
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        errorEl.textContent = describeError(data, 'Could not unlink. Please try again.');
+        errorEl.classList.add('show');
+      } catch (err) {
+        errorEl.textContent = 'Something went wrong. Please try again.';
+        errorEl.classList.add('show');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // The mirror image of the link banner's own poller just below: while
+    // the footer shows "Linked to <name>", nothing here would otherwise
+    // notice becoming unlinked elsewhere -- the plugin's own Unlink
+    // button chief among them, since (like linking itself) it has no way
+    // to tell an already-open browser tab about it directly. The click
+    // handler above already reloads immediately on success, so this only
+    // ever ends up doing the work when the *other* side triggered it.
+    const footerLinkedNote = document.getElementById('footerLinkedNote');
+    if (footerLinkedNote) {
+      const unlinkPollInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/auth/me');
+          if (!res.ok) return; // e.g. session expired -- a normal reload will sort that out
+          const data = await res.json();
+          if (!data.account_hash) {
+            clearInterval(unlinkPollInterval);
+            window.location.reload();
+          }
+        } catch (err) {
+          // Transient network hiccup -- just try again next tick.
+        }
+      }, 3000);
+    }
+
     // Linking itself happens over on the RuneLite side (the player pastes
     // the code shown by the button above into the plugin's own "Link
     // account" button) -- this open tab has no way to hear about that
@@ -176,6 +260,7 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
       {body}
     </div>
   </div>
+  {_footer(player)}
   <script>
     {shared_script}
     {extra_script}
@@ -218,22 +303,6 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
 
 
 def render_dashboard(player: Player) -> str:
-    linked_note = ""
-    if player.account_hash:
-        # A website-side way to unlink, independent of the plugin's own
-        # "Unlink" button -- the plugin authenticates that endpoint with
-        # its stored API key, so if that key is ever lost or forgotten
-        # locally without the server hearing about it, the plugin has
-        # no way left to call it. This one only needs the browser
-        # session that's already showing this page, so it's always a
-        # way out (see linking.revoke_link() in app/routers/linking.py).
-        linked_note = f"""
-        <p class="dash-linked-note" id="dashLinkedNote">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.
-          <button class="link" id="dashUnlinkBtn" type="button">Unlink</button>
-        </p>
-        <div class="auth-error" id="dashUnlinkError"></div>
-        """
-
     purchase_goals_card = _dash_card(
         _ICON_COINS,
         "Coins",
@@ -252,60 +321,12 @@ def render_dashboard(player: Player) -> str:
     )
 
     body = f"""
-    {linked_note}
     <div class="dash-grid">
       {purchase_goals_card}
       {loot_tracker_card}
     </div>
     """
-    script = """
-    document.getElementById('dashUnlinkBtn')?.addEventListener('click', async (e) => {
-      const btn = e.target;
-      const errorEl = document.getElementById('dashUnlinkError');
-      errorEl.classList.remove('show');
-      btn.disabled = true;
-      try {
-        const res = await fetch('/api/link/unlink', { method: 'POST' });
-        if (res.ok) {
-          window.location.reload();
-          return;
-        }
-        const data = await res.json().catch(() => ({}));
-        errorEl.textContent = describeError(data, 'Could not unlink. Please try again.');
-        errorEl.classList.add('show');
-      } catch (err) {
-        errorEl.textContent = 'Something went wrong. Please try again.';
-        errorEl.classList.add('show');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    // The mirror image of the link banner's own poller (see _shell()):
-    // while this page shows "Linked to <name>", nothing here would
-    // otherwise notice becoming unlinked elsewhere -- the plugin's own
-    // Unlink button chief among them, since (like linking itself) it
-    // has no way to tell an already-open browser tab about it directly.
-    // The click handler above already reloads immediately on success,
-    // so this only ever ends up doing the work for the *other* trigger.
-    const dashLinkedNote = document.getElementById('dashLinkedNote');
-    if (dashLinkedNote) {
-      const unlinkPollInterval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/auth/me');
-          if (!res.ok) return; // e.g. session expired -- a normal reload will sort that out
-          const data = await res.json();
-          if (!data.account_hash) {
-            clearInterval(unlinkPollInterval);
-            window.location.reload();
-          }
-        } catch (err) {
-          // Transient network hiccup -- just try again next tick.
-        }
-      }, 3000);
-    }
-    """
-    return _shell(title="Dashboard — myscape", player=player, body=body, extra_script=script)
+    return _shell(title="Dashboard — myscape", player=player, body=body)
 
 
 def render_signup() -> str:

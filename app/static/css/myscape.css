@@ -72,8 +72,10 @@ a:hover { color: var(--gold); text-decoration: underline; }
 /* Padding lives here rather than on body so the link banner (a sibling
    before .page, see _shell) can sit flush against the very top and
    sides of the viewport and push this content down in normal document
-   flow, instead of overlapping or covering it. */
-.page { padding: 32px 20px 80px; }
+   flow, instead of overlapping or covering it. Bottom padding is
+   smaller than it used to be now that a real <footer> (see below)
+   follows .page and supplies its own breathing room above the fold. */
+.page { padding: 32px 20px 40px; }
 
 .wrap { max-width: 880px; margin: 0 auto; }
 
@@ -280,16 +282,33 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 
 .dash-card .subtitle { margin-top: 0; margin-bottom: 14px; }
 
-.dash-linked-note {
+/* Site-wide footer (see _footer() in app/pages.py) -- the visual mirror
+   of header above: same full-bleed darkening gradient technique, but
+   flipped (fading upward, `to top`) and pushed noticeably darker at its
+   base than the header ever gets, so it unmistakably reads as a floor
+   under the page rather than a second, weaker header. A generous top
+   padding keeps that strong color from crowding the linked-note/
+   trademark text right at the gradient's darkest point. */
+footer {
+  margin-top: 40px;
+  padding: 56px 20px 28px;
+  background: linear-gradient(to top, rgba(15, 15, 16, 0.94) 0%, rgba(15, 15, 16, 0.5) 55%, rgba(15, 15, 16, 0) 100%);
+}
+
+.footer-inner {
+  text-align: center;
+}
+
+.footer-linked-note {
   color: var(--text-dim);
   font-size: 14.5px;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 
 /* The "Unlink" button next to the linked note -- a plain inline text
    link (matching .auth-switch a below) rather than a boxed button,
    since it's a minor, occasional action sitting inside a sentence. */
-.dash-linked-note button.link {
+.footer-linked-note button.link {
   background: none;
   border: none;
   color: var(--gold-dim);
@@ -301,10 +320,22 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   margin-left: 4px;
 }
 
-.dash-linked-note button.link:hover { color: var(--gold); }
-.dash-linked-note button.link:disabled { opacity: 0.5; cursor: default; }
+.footer-linked-note button.link:hover { color: var(--gold); }
+.footer-linked-note button.link:disabled { opacity: 0.5; cursor: default; }
 
-#dashUnlinkError { margin: 0 0 24px; }
+.footer-unlink-error { max-width: 420px; margin: 0 auto 14px; }
+
+/* Always shown, regardless of login state -- required attribution, not
+   a call to action, so it's deliberately quiet: small and faint rather
+   than styled like the rest of the site's links. */
+.footer-trademark {
+  color: var(--text-faint);
+  font-size: 13px;
+  margin: 0;
+}
+
+.footer-trademark a { color: var(--text-faint); text-decoration: underline; }
+.footer-trademark a:hover { color: var(--text-dim); }
 
 /* Site-wide "link your RuneLite account" banner -- rendered by _shell()
    as a full-bleed block ahead of .page, so it shows on every page (not

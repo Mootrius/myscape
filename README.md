@@ -93,16 +93,16 @@ credential:
    "Unlink" button (also API-key authenticated). Clears the player's
    `account_hash`/`runescape_name` and revokes every currently-active
    API key on the account, not just the one presenting the request.
-   Takes effect immediately in the database. `/dashboard` has its own
-   poller for this direction too (see the `dashLinkedNote` check in
-   `render_dashboard()`, app/pages.py) -- a player looking at "Linked
-   to `<name>`" there will see the link banner come back within a few
-   seconds of unlinking from the plugin, the mirror image of the link
-   banner's own poller for *acquiring* a link (`_link_banner()`, same
-   file). Both directions exist because neither the website nor the
-   plugin has any way to tell an already-open instance of the other
-   about a link change directly -- polling is what closes that gap on
-   both sides.
+   Takes effect immediately in the database. The site-wide footer has
+   its own poller for this direction too (see the `footerLinkedNote`
+   check in `_shell()`'s shared script, app/pages.py) -- a player
+   looking at "Linked to `<name>`" in the footer will see it clear
+   within a few seconds of unlinking from the plugin, the mirror image
+   of the link banner's own poller for *acquiring* a link
+   (`_link_banner()`, same file). Both directions exist because neither
+   the website nor the plugin has any way to tell an already-open
+   instance of the other about a link change directly -- polling is
+   what closes that gap on both sides.
 
 This is deliberately a bit stronger than the common pattern (see Wise
 Old Man's verification codes) of one long-lived, low-entropy code doing
@@ -133,12 +133,11 @@ minutes. Once it's up, `/api/health/db` should return
 `GET /dashboard` (session-authenticated, redirects to `/login` if you're
 not) is the logged-in home page. It currently shows two "coming soon"
 cards (Purchase Goals, Loot Tracker) that are just placeholders until
-those data models exist, plus a "Linked to <name>" note once the player
-has completed account linking (see below). Signing in, `/`, `/login`,
-and `/signup` all redirect here now instead of showing an inline
-"you're signed in" message.
+those data models exist. Signing in, `/`, `/login`, and `/signup` all
+redirect here now instead of showing an inline "you're signed in"
+message.
 
-Linking itself isn't a dashboard card anymore -- it's a site-wide banner
+Linking itself isn't a dashboard card -- it's a site-wide banner
 (`_link_banner()` in `app/pages.py`, rendered by the shared `_shell()`
 above every page's content) that shows for any logged-in player who
 hasn't linked yet, wherever they are on the site, not just the
@@ -146,6 +145,14 @@ dashboard. It reads "You must link your RuneLite plugin settings to
 myscape before it can be used." with a "Generate code" button that
 calls the same `/api/link/start` endpoint and reveals the code inline;
 the banner disappears entirely once `player.account_hash` is set.
+
+Once linked, the "Linked to `<name>`" note (with its own "Unlink"
+button) lives in the site-wide footer instead (`_footer()` in
+`app/pages.py`, rendered by `_shell()` below every page's content) --
+it's chrome about the player's account, not something specific to the
+dashboard, so it shows wherever they are on the site. The footer also
+always carries the required OSRS trademark attribution, regardless of
+login state.
 
 ## Next steps (not built yet)
 
