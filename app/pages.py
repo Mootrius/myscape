@@ -32,18 +32,21 @@ def _link_banner(player: Optional[Player]) -> str:
     link their RuneLite plugin -- shown above the header on every page
     (see _shell), not just the dashboard, since linking is a
     prerequisite for using myscape at all. Renders to nothing once
-    `player.account_hash` is set, or if nobody's logged in."""
+    `player.account_hash` is set, or if nobody's logged in.
+
+    It's a normal-flow block ahead of `.page` (not fixed/absolute), so it
+    pushes the rest of the page down rather than overlapping it -- see
+    the body/.page split in _shell(). The "Generate code" button doubles
+    as the code display: clicking it swaps its own label to the code
+    (title attribute carries the usage hint) instead of opening a
+    separate reveal area, and stays clickable to generate a new one."""
     if not player or player.account_hash:
         return ""
     return """
     <div class="link-banner" id="linkBanner">
       <div class="link-banner-inner">
-        <span class="link-banner-message">You must link your RuneLite plugin settings to myscape before it can be used.</span>
+        <span class="link-banner-message">Click to generate a code to enter into your RuneLite settings for the plugin to begin use.</span>
         <button class="link-banner-btn" id="generateLinkBtn" type="button">Generate code</button>
-        <div class="link-banner-code" id="linkCodeResult" style="display:none;">
-          <span class="link-code-inline" id="linkCodeValue"></span>
-          <span class="link-banner-hint">Paste this into the plugin's settings. Expires in 10 minutes, works once.</span>
-        </div>
       </div>
       <div class="auth-error link-banner-error" id="linkError"></div>
     </div>
@@ -70,9 +73,9 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
           errorEl.classList.add('show');
           return;
         }
-        document.getElementById('linkCodeValue').textContent = data.code;
-        document.getElementById('linkCodeResult').style.display = 'inline-flex';
-        btn.textContent = 'Generate a new code';
+        btn.textContent = data.code;
+        btn.classList.add('link-banner-btn--code');
+        btn.title = "Paste this into the plugin's settings. Expires in 10 minutes, works once -- click to generate a new one.";
       } catch (err) {
         errorEl.textContent = 'Something went wrong. Please try again.';
         errorEl.classList.add('show');
@@ -102,12 +105,14 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
 </head>
 <body>
   {_link_banner(player)}
-  <div class="wrap">
-    <header>
-      <p class="logo"><a href="/"><img src="/static/img/logo.png" alt="myscape" /></a></p>
-      {_nav(player)}
-    </header>
-    {body}
+  <div class="page">
+    <div class="wrap">
+      <header>
+        <p class="logo"><a href="/"><img src="/static/img/logo.png" alt="myscape" /></a></p>
+        {_nav(player)}
+      </header>
+      {body}
+    </div>
   </div>
   <script>
     {shared_script}
