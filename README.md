@@ -117,13 +117,21 @@ minutes. Once it's up, `/api/health/db` should return
 ## Dashboard
 
 `GET /dashboard` (session-authenticated, redirects to `/login` if you're
-not) is the logged-in home page. Right now it has one working feature --
-a "Link your RuneLite account" card wired straight to `/api/link/start`,
-so a signed-in player can generate a real linking code today, ready for
-whenever the plugin exists to consume it -- plus two "coming soon" cards
-(Purchase Goals, Loot Tracker) that are just placeholders until those
-data models exist. Signing in, `/`, `/login`, and `/signup` all redirect
-here now instead of showing an inline "you're signed in" message.
+not) is the logged-in home page. It currently shows two "coming soon"
+cards (Purchase Goals, Loot Tracker) that are just placeholders until
+those data models exist, plus a "Linked to <name>" note once the player
+has completed account linking (see below). Signing in, `/`, `/login`,
+and `/signup` all redirect here now instead of showing an inline
+"you're signed in" message.
+
+Linking itself isn't a dashboard card anymore -- it's a site-wide banner
+(`_link_banner()` in `app/pages.py`, rendered by the shared `_shell()`
+above every page's content) that shows for any logged-in player who
+hasn't linked yet, wherever they are on the site, not just the
+dashboard. It reads "You must link your RuneLite plugin settings to
+myscape before it can be used." with a "Generate code" button that
+calls the same `/api/link/start` endpoint and reveals the code inline;
+the banner disappears entirely once `player.account_hash` is set.
 
 ## Next steps (not built yet)
 
