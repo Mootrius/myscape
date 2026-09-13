@@ -220,8 +220,18 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
 def render_dashboard(player: Player) -> str:
     linked_note = ""
     if player.account_hash:
+        # A website-side way to unlink, independent of the plugin's own
+        # "Unlink" button -- the plugin authenticates that endpoint with
+        # its stored API key, so if that key is ever lost or forgotten
+        # locally without the server hearing about it, the plugin has
+        # no way left to call it. This one only needs the browser
+        # session that's already showing this page, so it's always a
+        # way out (see linking.revoke_link() in app/routers/linking.py).
         linked_note = f"""
-        <p class="dash-linked-note">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.</p>
+        <p class="dash-linked-note">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.
+          <button class="link" id="dashUnlinkBtn" type="button">Unlink</button>
+        </p>
+        <div class="auth-error" id="dashUnlinkError"></div>
         """
 
     purchase_goals_card = _dash_card(
@@ -248,7 +258,30 @@ def render_dashboard(player: Player) -> str:
       {loot_tracker_card}
     </div>
     """
-    return _shell(title="Dashboard — myscape", player=player, body=body)
+    script = """
+    document.getElementById('dashUnlinkBtn')?.addEventListener('click', async (e) => {
+      const btn = e.target;
+      const errorEl = document.getElementById('dashUnlinkError');
+      errorEl.classList.remove('show');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/link/unlink', { method: 'POST' });
+        if (res.ok) {
+          window.location.reload();
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        errorEl.textContent = describeError(data, 'Could not unlink. Please try again.');
+        errorEl.classList.add('show');
+      } catch (err) {
+        errorEl.textContent = 'Something went wrong. Please try again.';
+        errorEl.classList.add('show');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    """
+    return _shell(title="Dashboard — myscape", player=player, body=body, extra_script=script)
 
 
 def render_signup() -> str:

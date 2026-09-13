@@ -283,8 +283,28 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 .dash-linked-note {
   color: var(--text-dim);
   font-size: 14.5px;
-  margin: 0 0 24px;
+  margin: 0 0 12px;
 }
+
+/* The "Unlink" button next to the linked note -- a plain inline text
+   link (matching .auth-switch a below) rather than a boxed button,
+   since it's a minor, occasional action sitting inside a sentence. */
+.dash-linked-note button.link {
+  background: none;
+  border: none;
+  color: var(--gold-dim);
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.dash-linked-note button.link:hover { color: var(--gold); }
+.dash-linked-note button.link:disabled { opacity: 0.5; cursor: default; }
+
+#dashUnlinkError { margin: 0 0 24px; }
 
 /* Site-wide "link your RuneLite account" banner -- rendered by _shell()
    as a full-bleed block ahead of .page, so it shows on every page (not

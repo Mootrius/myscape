@@ -17,6 +17,42 @@ from app.security import generate_token, hash_token
 router = APIRouter(prefix="/api", tags=["account-linking"])
 
 
+def revoke_link(db: Session, player: Player) -> None:
+    """Clears a player's game-account link and revokes every currently
+    -active API key on their account. Shared by both independent ways a
+    link can be undone -- POST /api/link/unlink below (session-
+    authenticated, from the website) and POST /api/players/me/unlink in
+    main.py (API-key authenticated, from the RuneLite plugin's own
+    Unlink button) -- so a player is never stuck relying on one of them
+    still working. That's not hypothetical: an earlier version of the
+    plugin's Unlink button only ever cleared its own locally stored key
+    without calling either endpoint, which left a player's account_hash
+    set here with no API key left to call the plugin-side endpoint
+    with. The session-authenticated route exists specifically as the
+    way out of situations like that one, since it needs nothing from
+    the plugin at all."""
+    now = datetime.now(timezone.utc)
+    for api_key in player.api_keys:
+        if api_key.is_active:
+            api_key.revoked_at = now
+    player.account_hash = None
+    player.runescape_name = None
+    db.commit()
+
+
+@router.post("/link/unlink", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_via_session(
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Lets a signed-in player unlink straight from the website (see the
+    "Unlink" button next to the "Linked to <name>" note on /dashboard in
+    app/pages.py), using only their browser session -- no working
+    plugin API key required. See revoke_link() above for why this
+    exists as a second, independent path."""
+    revoke_link(db, player)
+
+
 @router.post("/link/start", response_model=LinkStartResponse)
 def start_link(
     db: Session = Depends(get_db),

@@ -3,7 +3,6 @@ early account system (website signup/login, RuneLite plugin account
 linking) -- see README.md for how the pieces fit together.
 """
 import os
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, FastAPI, status
@@ -122,23 +121,8 @@ def read_current_player(player: Player = Depends(get_current_player_from_api_key
 
 @app.post("/api/players/me/unlink", status_code=status.HTTP_204_NO_CONTENT)
 def unlink_player(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_api_key)):
-    """Called by the RuneLite plugin's "Unlink" button. Clearing
-    account_hash is what actually undoes the link -- it's what
-    _link_banner() checks (see app/pages.py) to decide whether the
-    website still considers this player linked, and it frees the game
-    account to be linked to a different myscape player later.
-
-    Also revokes every currently-active key for this player, not just
-    the one presenting this request: each link-code exchange mints a
-    new key without revoking whatever key an earlier link left behind
-    (see LinkCode/PlayerApiKey in app/models.py), so a stale plugin
-    install left over from a previous link could otherwise keep
-    authenticating after the player has deliberately disconnected here.
-    """
-    now = datetime.now(timezone.utc)
-    for api_key in player.api_keys:
-        if api_key.is_active:
-            api_key.revoked_at = now
-    player.account_hash = None
-    player.runescape_name = None
-    db.commit()
+    """Called by the RuneLite plugin's "Unlink" button (API-key
+    authenticated). See linking.revoke_link() for what this actually
+    does and why POST /api/link/unlink there is this endpoint's
+    session-authenticated counterpart, not a duplicate."""
+    linking.revoke_link(db, player)
