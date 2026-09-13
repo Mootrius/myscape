@@ -30,7 +30,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -74,6 +74,9 @@ class Player(Base):
     link_codes = relationship("LinkCode", back_populates="player", cascade="all, delete-orphan")
     api_keys = relationship("PlayerApiKey", back_populates="player", cascade="all, delete-orphan")
     bank_items = relationship("BankItem", back_populates="player", cascade="all, delete-orphan")
+    inventory_items = relationship("InventoryItem", back_populates="player", cascade="all, delete-orphan")
+    equipment_items = relationship("EquipmentItem", back_populates="player", cascade="all, delete-orphan")
+    gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -135,10 +138,24 @@ class BankItem(Base):
 
     item_id is OSRS's own item ID (what the plugin reads directly off
     each bank slot), not a foreign key to anything in this database --
-    item names/prices are looked up separately (from the OSRS Wiki/GE
-    API) rather than duplicated here, so this table doesn't need
-    updating every time an item's price changes or a new item is
-    released.
+    a *tradeable* item's name/icon/price are looked up separately (from
+    the OSRS Wiki/GE API) rather than duplicated here, so this table
+    doesn't need updating every time an item's price changes or a new
+    item is released.
+
+    item_name exists only for the untradeable case: an item with no GE
+    listing has no entry in that wiki price/mapping data at all, so
+    there's nothing to look its name up from server-side. It's what lets
+    Purchase Goals recognize "you already own this" for an untradeable
+    item typed into a gear-setup slot (which, having no GE listing
+    either, was never given a real item_id to match against -- see
+    _take_owned's name-fallback path in app/purchase_goals.py) --
+    exactly the role Maintrius's own totalsByName played, just sourced
+    from this plugin's ItemManager lookup instead of a third-party
+    exporter plugin's JSON export. Sent for every item regardless of
+    tradeability (simpler than the plugin having to know which is
+    which), but only ever read back for the untradeable, no-item_id-
+    match case.
     """
 
     __tablename__ = "bank_items"
@@ -146,9 +163,121 @@ class BankItem(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
     player = relationship("Player", back_populates="bank_items")
 
     __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_bank_items_player_item"),)
+
+
+class InventoryItem(Base):
+    """The player's current main-inventory contents (the 28-slot
+    backpack, not the bank) -- same full-snapshot, delete-and-replace
+    model as BankItem above, and for the same reason: Purchase Goals
+    only needs "do they currently have this?", not a history. Synced by
+    POST /api/players/me/inventory (see MyscapeClient#syncInventory in
+    the Mootrius/myscape-plugin repo).
+
+    Quantities here are already aggregated by item id on the plugin
+    side (see MyscapePlugin#aggregateQuantities there) -- unlike a bank
+    slot, an inventory slot commonly holds just 1 of an untradeable
+    item, with the same item spread across several separate slots, so
+    this table's quantity is a real sum across however many slots held
+    it, not a single slot's own count.
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above."""
+
+    __tablename__ = "inventory_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="inventory_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_inventory_items_player_item"),)
+
+
+class EquipmentItem(Base):
+    """The player's currently worn equipment -- one row per filled
+    equipment slot (head/cape/neck/weapon/body/shield/legs/hands/boots/
+    ring/ammo, matching the original Maintrius tool's own EQUIPMENT_SLOTS),
+    not aggregated by item id the way bank/inventory are, since exactly
+    one item can ever occupy a given slot. Same full-snapshot,
+    delete-and-replace model as BankItem/InventoryItem, synced by POST
+    /api/players/me/equipment (see MyscapeClient#syncEquipment in the
+    Mootrius/myscape-plugin repo).
+
+    quantity is almost always 1 -- present mainly for a stacked ammo
+    slot (e.g. a stack of rune arrows). item_name plays the same
+    untradeable-item-matching role documented on BankItem above."""
+
+    __tablename__ = "equipment_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    slot = Column(String, nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="equipment_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "slot", name="uq_equipment_items_player_slot"),)
+
+
+class GearSetup(Base):
+    """A named, saveable equipment+inventory loadout the player is
+    planning/saving toward -- the Purchase Goals feature, ported from
+    the original single-user Maintrius tool's "gear setups" (see
+    build_gear_setups in that repo's osrs_tracker.py). A player can have
+    any number of these (Vorkath, Raids, a skilling setup, ...); each is
+    checked off independently against the player's current
+    bank+inventory+equipment, not against each other, so the same owned
+    item can cover more than one setup's need for it.
+
+    `equipment` and `inventory` are stored as opaque JSON blobs rather
+    than normalized rows, deliberately mirroring how Maintrius itself
+    stores a setup (as a JSON file) -- a slot's contents are one of
+    several different shapes (a plain tradeable item, an untradeable
+    item, a "combo" item composed of multiple parts, or a "supplies"
+    item always assumed owned; see _resolve_gear_slot_item in the
+    original repo), which is exactly the kind of polymorphic, mostly-
+    write-then-read-whole structure JSON suits better than a rigid
+    table. All the actual pricing/ownership computation happens fresh
+    on every read (see app/purchase_goals.py), not stored here -- these
+    columns hold only what the player actually chose to put in each
+    slot.
+
+    `equipment` is a dict keyed by slot name (only filled slots are
+    present); `inventory` is a list of exactly 28 entries, each either
+    an item shape or null for an empty slot. `icon` is a purely
+    cosmetic {"itemId": int|None, "itemName": str|None} pair (or null)
+    representing the whole setup, unrelated to cost/ownership.
+
+    IMPORTANT for anything that edits equipment/inventory in place:
+    SQLAlchemy only detects a change to a JSONB column when a *new*
+    object is assigned to the attribute (setup.equipment = {...}), not
+    when an existing dict/list already loaded onto it is mutated
+    in-place (setup.equipment["head"] = ... would silently fail to
+    persist) -- every write in app/main.py builds a whole new dict/list
+    and assigns it, rather than mutating the loaded one."""
+
+    __tablename__ = "gear_setups"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    icon = Column(JSONB, nullable=True)
+    equipment = Column(JSONB, nullable=False, default=dict)
+    inventory = Column(JSONB, nullable=False, default=lambda: [None] * 28)
+
+    player = relationship("Player", back_populates="gear_setups")

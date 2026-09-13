@@ -26,6 +26,17 @@ try:
 except OSError:
     _CSS_VERSION = 0
 
+# Same cache-busting trick as _CSS_VERSION above, for the Purchase Goals
+# page's own stylesheet -- kept as a separate file (rather than folded
+# into myscape.css) since none of it applies anywhere else on the site.
+_PURCHASE_GOALS_CSS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "css", "purchase-goals.css"
+)
+try:
+    _PURCHASE_GOALS_CSS_VERSION = int(os.path.getmtime(_PURCHASE_GOALS_CSS_PATH))
+except OSError:
+    _PURCHASE_GOALS_CSS_VERSION = 0
+
 
 def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
     """The single link/button that goes on each side of the centered
@@ -118,7 +129,7 @@ def _footer(player: Optional[Player]) -> str:
     """
 
 
-def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "") -> str:
+def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "", extra_head: str = "") -> str:
     nav_left, nav_right = _nav_sides(player)
     shared_script = """
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
@@ -257,6 +268,7 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
   <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="/static/css/myscape.css?v={_CSS_VERSION}" />
+  {extra_head}
 </head>
 <body>
   <video class="bg-video" autoplay muted loop playsinline preload="auto">
@@ -320,13 +332,20 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
 
 
 def render_dashboard(player: Player) -> str:
-    purchase_goals_card = _dash_card(
-        _ICON_COINS,
-        "Coins",
-        "Purchase Goals",
-        "Track your owned GP against the purchases you'd like to make on the "
-        "Grand Exchange, all with live pricing updates for each item. "
-        "One-off purchases and entire setups are both supported.",
+    # Wrapped in a plain link rather than restyling _dash_card for a
+    # click handler -- the inline style just strips the anchor's default
+    # underline/color so it reads as the same card, not a text link.
+    purchase_goals_card = (
+        '<a href="/dashboard/purchase-goals" style="display:block;color:inherit;text-decoration:none;">'
+        + _dash_card(
+            _ICON_COINS,
+            "Coins",
+            "Purchase Goals",
+            "Track your owned GP against the purchases you'd like to make on the "
+            "Grand Exchange, all with live pricing updates for each item. "
+            "One-off purchases and entire setups are both supported.",
+        )
+        + "</a>"
     )
     loot_tracker_card = _dash_card(
         _ICON_BONES,
@@ -454,3 +473,628 @@ def render_login() -> str:
     });
     """
     return _shell(title="Log in — myscape", player=None, body=body, extra_script=script)
+
+
+def render_purchase_goals(player: Player) -> str:
+    """The Purchase Goals page -- named "gear setups" a player plans and
+    tracks GP toward, ported feature-for-feature from the original
+    single-user Maintrius tool's own Purchase Goals UI (see
+    app/purchase_goals.py's module docstring for what changed and what
+    didn't on the way over).
+
+    Unlike the other pages here, everything below the header shell is
+    rendered client-side from a single polled JSON payload (GET
+    /api/gear-setups, see that endpoint in app/main.py) rather than
+    server-rendered -- the original tool worked the same way (a local
+    HTML file polling its own local server), and keeping that shape
+    means every mutation endpoint can just hand back the freshly
+    recomputed state and let the same render() function redraw
+    everything, rather than juggling two different rendering paths."""
+    extra_head = (
+        f'<link rel="stylesheet" href="/static/css/purchase-goals.css?v={_PURCHASE_GOALS_CSS_VERSION}" />'
+    )
+    body = """
+    <div class="pg-header">
+      <div class="tracker-icon-row" id="setupIconRow"></div>
+      <div class="tracker-menu-wrap">
+        <button class="icon-menu-btn" id="setupMenuBtn" type="button" title="Setup options">&#8942;</button>
+        <div class="tracker-menu" id="setupMenu" style="display:none;">
+          <button class="tracker-menu-item" id="menuNewSetup" type="button">New setup</button>
+          <button class="tracker-menu-item" id="menuRenameSetup" type="button">Rename</button>
+          <button class="tracker-menu-item danger" id="menuDeleteSetup" type="button">Delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="auth-error" id="pgError"></div>
+    <div class="pg-setup-form" id="pgNameForm" style="display:none;">
+      <input type="text" id="pgNameInput" placeholder="Setup name" maxlength="60" />
+      <button class="primary" id="pgNameSave" type="button">Save</button>
+      <button class="link" id="pgNameCancel" type="button">Cancel</button>
+    </div>
+    <div id="pgContent"><p class="pg-empty">Loading&hellip;</p></div>
+    """
+    script = """
+    (function () {
+      var COINS_ICON = '/static/img/icon-coins.png';
+
+      var PG = {
+        data: null,
+        activeSetupId: null,
+        picker: null,       // { slotType, slot } while a gear/inventory slot is open for editing
+        iconPicker: false,  // true while the setup-icon picker is open
+        nameFormMode: null, // 'new' | 'rename' | null
+        pollTimer: null,
+        comboSeq: 0,
+      };
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      function formatGp(n) {
+        n = Math.round(n || 0);
+        return n.toLocaleString('en-US');
+      }
+
+      function showError(msg) {
+        var el = document.getElementById('pgError');
+        if (!msg) { el.classList.remove('show'); el.textContent = ''; return; }
+        el.textContent = msg;
+        el.classList.add('show');
+      }
+
+      async function apiCall(url, options) {
+        try {
+          const res = await fetch(url, options);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showError(describeError(data, 'Something went wrong. Please try again.'));
+            return null;
+          }
+          showError(null);
+          return data;
+        } catch (err) {
+          showError('Something went wrong. Please try again.');
+          return null;
+        }
+      }
+
+      async function loadState(showLoadingState) {
+        const data = await apiCall('/api/gear-setups');
+        if (!data) return;
+        PG.data = data;
+        if (!PG.activeSetupId || !data.gearSetups.some(function (s) { return s.id === PG.activeSetupId; })) {
+          PG.activeSetupId = data.gearSetups.length ? data.gearSetups[0].id : null;
+        }
+        render();
+      }
+
+      function activeSetup() {
+        if (!PG.data || !PG.activeSetupId) return null;
+        return PG.data.gearSetups.find(function (s) { return s.id === PG.activeSetupId; }) || null;
+      }
+
+      // ---- Top-level render ---------------------------------------------
+
+      function render() {
+        renderIconRow();
+        renderContent();
+      }
+
+      function renderIconRow() {
+        var row = document.getElementById('setupIconRow');
+        if (!PG.data) { row.innerHTML = ''; return; }
+        row.innerHTML = PG.data.gearSetups.map(function (s) {
+          var active = s.id === PG.activeSetupId ? ' active' : '';
+          if (s.icon && s.icon.icon) {
+            return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" type="button" title="' + esc(s.name) + '">' +
+              '<img src="' + esc(s.icon.icon) + '" alt="" /></button>';
+          }
+          var label = esc((s.icon && s.icon.itemName) || s.name || '?').slice(0, 3);
+          return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" type="button" title="' + esc(s.name) + '">' +
+            '<span class="tracker-icon-fallback">' + label + '</span></button>';
+        }).join('');
+        row.querySelectorAll('[data-setup-id]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            PG.activeSetupId = btn.getAttribute('data-setup-id');
+            PG.picker = null;
+            PG.iconPicker = false;
+            render();
+          });
+        });
+      }
+
+      function renderContent() {
+        var el = document.getElementById('pgContent');
+        if (!PG.data) { el.innerHTML = '<p class="pg-empty">Loading&hellip;</p>'; return; }
+        var setup = activeSetup();
+        if (!setup) {
+          el.innerHTML = '<p class="pg-empty">No gear setups yet -- use the menu above to create your first one.</p>';
+          return;
+        }
+
+        var fundedClass = setup.funded ? ' funded-fill' : '';
+        var pct = Math.max(0, Math.min(100, setup.progressPct));
+        var iconInner = (setup.icon && setup.icon.icon)
+          ? '<img class="overlay-icon" src="' + esc(setup.icon.icon) + '" alt="" />'
+          : '<span class="overlay-icon-placeholder">+</span>';
+
+        var overlay = '' +
+          '<div class="overlay-card">' +
+          '  <div class="overlay-side overlay-source">' +
+          '    <img class="overlay-icon" src="' + COINS_ICON + '" alt="Coins" />' +
+          '    <span class="overlay-amount">' + formatGp(PG.data.coins) + '</span>' +
+          '  </div>' +
+          '  <div class="overlay-progress">' +
+          '    <div class="progress-track overlay-track"><div class="progress-fill' + fundedClass + '" style="width:' + pct + '%;"></div></div>' +
+          '  </div>' +
+          '  <div class="overlay-side overlay-target">' +
+          '    <div class="overlay-icon-wrap" id="pgIconTrigger" title="Set a display icon for this setup">' + iconInner + '</div>' +
+          '    <span class="overlay-amount">' + formatGp(setup.totalCost) + '</span>' +
+          '  </div>' +
+          '</div>';
+
+        var doll = '<div class="gear-doll">' + EQUIPMENT_SLOTS.map(function (slotName) {
+          return slotHtml(setup.equipment[slotName], 'equipment', slotName, 'slot-' + slotName);
+        }).join('') + '</div>';
+
+        var grid = '<div class="inventory-grid">' + setup.inventory.map(function (item, idx) {
+          return slotHtml(item, 'inventory', idx, '');
+        }).join('') + '</div>';
+
+        var summary = renderSummaryHtml(setup);
+
+        el.innerHTML =
+          overlay +
+          '<div class="pg-body">' +
+          '  <div class="pg-doll-col">' + doll + grid + '</div>' +
+          '  <div class="pg-summary-col">' + summary + '</div>' +
+          '</div>' +
+          '<div id="pgIconPicker"></div>' +
+          '<div id="pgSlotPicker"></div>';
+
+        wireSlotClicks();
+        document.getElementById('pgIconTrigger').addEventListener('click', function () {
+          PG.iconPicker = !PG.iconPicker;
+          PG.picker = null;
+          renderIconPicker();
+          document.getElementById('pgSlotPicker').innerHTML = '';
+        });
+        renderIconPicker();
+        renderSlotPicker();
+      }
+
+      var EQUIPMENT_SLOTS = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'boots', 'ring'];
+
+      function slotClasses(resolved) {
+        var cls = 'gear-slot';
+        if (!resolved) return cls;
+        cls += ' filled';
+        if (resolved.owned) cls += ' owned';
+        else if (resolved.affordable) cls += ' affordable';
+        else cls += ' not-owned';
+        return cls;
+      }
+
+      function slotBadge(resolved) {
+        if (!resolved) return '';
+        if (resolved.supplies) return '<span class="gear-slot-supplies-badge" title="Supplies -- always counted as owned">S</span>';
+        if (resolved.components) return '<span class="gear-slot-combo-badge" title="Combined item">C</span>';
+        if (!resolved.tradeable) return '<span class="gear-slot-untradeable-badge" title="Untradeable -- matched by name">?</span>';
+        return '';
+      }
+
+      function slotHtml(resolved, slotType, slot, extraClass) {
+        var picking = PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot);
+        var cls = slotClasses(resolved) + (extraClass ? ' ' + extraClass : '') + (picking ? ' picking' : '');
+        var inner = resolved && resolved.icon
+          ? '<img class="gear-slot-icon" src="' + esc(resolved.icon) + '" alt="" />'
+          : (resolved ? '<span class="tracker-icon-fallback">' + esc(resolved.itemName || '?').slice(0, 6) + '</span>' : '');
+        var title = resolved ? esc(resolved.itemName) + (resolved.cost ? ' -- ' + formatGp(resolved.cost) + ' gp' : '') : 'Empty slot';
+        return '<div class="' + cls + '" data-slot-type="' + slotType + '" data-slot="' + esc(slot) + '" title="' + title + '">' +
+          inner + slotBadge(resolved) + '</div>';
+      }
+
+      function wireSlotClicks() {
+        document.querySelectorAll('.gear-slot').forEach(function (el) {
+          el.addEventListener('click', function () {
+            var slotType = el.getAttribute('data-slot-type');
+            var slot = slotType === 'inventory' ? parseInt(el.getAttribute('data-slot'), 10) : el.getAttribute('data-slot');
+            if (PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot)) {
+              PG.picker = null;
+            } else {
+              openSlotPicker(slotType, slot);
+            }
+            PG.iconPicker = false;
+            renderContent();
+          });
+        });
+      }
+
+      function renderSummaryHtml(setup) {
+        var html = '<div class="gear-summary"><div class="gear-summary-heading">Still to purchase</div>';
+        if (setup.nextPurchase) {
+          var np = setup.nextPurchase;
+          var npPct = Math.max(0, Math.min(100, np.progressPct));
+          html += '' +
+            '<div class="gear-next-purchase">' +
+            '  <div class="gear-next-purchase-icon-wrap">' +
+            (np.icon ? '<img class="gear-next-purchase-icon" src="' + esc(np.icon) + '" alt="" />' : '') +
+            '  </div>' +
+            '  <div class="gear-next-purchase-body">' +
+            '    <div class="gear-next-purchase-label">Next purchase</div>' +
+            '    <div class="gear-next-purchase-name">' + esc(np.itemName) + '</div>' +
+            '    <div class="progress-track"><div class="progress-fill' + (np.funded ? ' funded-fill' : '') + '" style="width:' + npPct + '%;"></div></div>' +
+            '    <div class="gear-next-purchase-amount">' + formatGp(PG.data.coins) + ' / ' + formatGp(np.cost) + ' gp</div>' +
+            '  </div>' +
+            '</div>';
+        }
+        if (!setup.stillToPurchase.length) {
+          html += '<p class="gear-summary-empty">Everything in this setup is already owned.</p>';
+        } else {
+          html += '<div class="gear-summary-list">' + setup.stillToPurchase.map(function (item) {
+            var rowCls = 'gear-summary-row' + (item.purchasable ? '' : ' unpurchasable');
+            var costHtml = item.purchasable
+              ? '<span class="gear-summary-row-cost">' + formatGp(item.cost) + '</span>'
+              : '<span class="gear-summary-row-cost na">n/a</span>';
+            return '<div class="' + rowCls + '">' +
+              (item.icon ? '<img class="gear-summary-row-icon" src="' + esc(item.icon) + '" alt="" />' : '<span class="gear-summary-row-icon"></span>') +
+              '<span class="gear-summary-row-name">' + esc(item.itemName) + (item.isCombo ? ' (combo)' : '') + '</span>' +
+              costHtml +
+              '</div>';
+          }).join('') + '</div>';
+        }
+        html += '</div>';
+        return html;
+      }
+
+      // ---- Setup icon picker ----------------------------------------------
+
+      function renderIconPicker() {
+        var el = document.getElementById('pgIconPicker');
+        if (!el) return;
+        if (!PG.iconPicker) { el.innerHTML = ''; return; }
+        el.innerHTML = '' +
+          '<div class="gear-icon-picker">' +
+          '  <div class="search-box">' +
+          '    <input type="text" id="iconSearchInput" placeholder="Search for an item to use as this setup\\'s icon" autocomplete="off" />' +
+          '    <div class="suggestions" id="iconSuggestions"></div>' +
+          '  </div>' +
+          '  <button class="link" id="iconClearBtn" type="button">Clear icon</button>' +
+          '  <button class="link" id="iconCancelBtn" type="button">Cancel</button>' +
+          '</div>';
+        var input = document.getElementById('iconSearchInput');
+        input.addEventListener('input', debounce(function () { runSearch(input.value, renderIconSuggestions); }, 200));
+        document.getElementById('iconClearBtn').addEventListener('click', async function () {
+          const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/icon', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icon: null }),
+          });
+          if (data) { PG.data = data; PG.iconPicker = false; render(); }
+        });
+        document.getElementById('iconCancelBtn').addEventListener('click', function () { PG.iconPicker = false; renderIconPicker(); });
+      }
+
+      function renderIconSuggestions(results) {
+        var box = document.getElementById('iconSuggestions');
+        if (!box) return;
+        if (!results.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
+        box.innerHTML = results.map(function (r) {
+          return '<div class="suggestion" data-item-id="' + r.id + '" data-item-name="' + esc(r.name) + '">' +
+            (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span></div>';
+        }).join('');
+        box.classList.add('show');
+        box.querySelectorAll('.suggestion').forEach(function (row) {
+          row.addEventListener('click', async function () {
+            const icon = { item_id: parseInt(row.getAttribute('data-item-id'), 10), item_name: row.getAttribute('data-item-name') };
+            const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/icon', {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icon: icon }),
+            });
+            if (data) { PG.data = data; PG.iconPicker = false; render(); }
+          });
+        });
+      }
+
+      // ---- Gear/inventory slot picker --------------------------------------
+
+      function openSlotPicker(slotType, slot) {
+        PG.picker = {
+          slotType: slotType, slot: slot, mode: 'search',
+          comboName: '', comboRows: [newComboRow()], untradeableName: '', supplies: false,
+        };
+      }
+
+      function newComboRow() {
+        return { seq: ++PG.comboSeq, itemId: null, itemName: '', quantity: 1 };
+      }
+
+      function renderSlotPicker() {
+        var el = document.getElementById('pgSlotPicker');
+        if (!el) return;
+        var p = PG.picker;
+        if (!p) { el.innerHTML = ''; return; }
+
+        var modeToggle = '' +
+          '<div class="gear-combo-header">' +
+          '  <button class="link" id="pickerModeToggle" type="button">' +
+          (p.mode === 'search' ? 'Build from parts instead' : 'Search for a single item instead') +
+          '  </button>' +
+          '</div>';
+
+        var body;
+        if (p.mode === 'search') {
+          body = '' +
+            '<div class="search-box">' +
+            '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" />' +
+            '  <div class="suggestions" id="slotSuggestions"></div>' +
+            '</div>' +
+            '<div class="gear-combo-header">' +
+            '  <span class="gear-combo-label">Can\\'t find it? It might be untradeable:</span>' +
+            '  <input type="text" id="untradeableNameInput" placeholder="Exact item name" value="' + esc(p.untradeableName) + '" />' +
+            '  <button class="primary" id="untradeableAddBtn" type="button">Add</button>' +
+            '</div>';
+        } else {
+          body = '' +
+            '<div class="gear-combo-builder">' +
+            '  <div class="gear-combo-header">' +
+            '    <span class="gear-combo-label">Combined item name:</span>' +
+            '    <input type="text" id="comboNameInput" value="' + esc(p.comboName) + '" placeholder="e.g. Neitiznot faceguard" />' +
+            '  </div>' +
+            '  <div class="gear-combo-rows">' +
+            p.comboRows.map(function (row) {
+              return '' +
+                '<div class="gear-combo-row" data-row-seq="' + row.seq + '">' +
+                '  <div class="search-box gear-combo-row-search">' +
+                '    <input type="text" class="combo-row-input" data-row-seq="' + row.seq + '" placeholder="Component item" value="' + esc(row.itemName) + '" autocomplete="off" />' +
+                '    <div class="suggestions" id="comboSuggestions-' + row.seq + '"></div>' +
+                '  </div>' +
+                '  <input type="number" class="gear-combo-qty combo-row-qty" data-row-seq="' + row.seq + '" min="1" value="' + row.quantity + '" />' +
+                '  <button class="gear-combo-row-remove" data-row-seq="' + row.seq + '" type="button" title="Remove component">&times;</button>' +
+                '</div>';
+            }).join('') +
+            '  </div>' +
+            '  <div class="gear-combo-actions">' +
+            '    <button class="link" id="comboAddRowBtn" type="button">+ Add component</button>' +
+            '    <button class="primary" id="comboSaveBtn" type="button">Save combo</button>' +
+            '  </div>' +
+            '</div>';
+        }
+
+        el.innerHTML = '' +
+          '<div class="gear-slot-picker">' +
+          modeToggle +
+          body +
+          '  <div class="gear-combo-header">' +
+          '    <label class="gear-combo-label"><input type="checkbox" id="suppliesToggle"' + (p.supplies ? ' checked' : '') + ' /> Always count as owned (supplies)</label>' +
+          '  </div>' +
+          '  <div class="gear-combo-actions">' +
+          '    <button class="link" id="slotClearBtn" type="button">Clear slot</button>' +
+          '    <button class="link" id="slotCancelBtn" type="button">Cancel</button>' +
+          '  </div>' +
+          '</div>';
+
+        wireSlotPickerEvents();
+      }
+
+      function wireSlotPickerEvents() {
+        var p = PG.picker;
+        document.getElementById('pickerModeToggle').addEventListener('click', function () {
+          p.mode = p.mode === 'search' ? 'combo' : 'search';
+          renderSlotPicker();
+        });
+        document.getElementById('suppliesToggle').addEventListener('change', function (e) { p.supplies = e.target.checked; });
+        document.getElementById('slotCancelBtn').addEventListener('click', function () { PG.picker = null; renderContent(); });
+        document.getElementById('slotClearBtn').addEventListener('click', function () { saveSlot(null); });
+
+        if (p.mode === 'search') {
+          var input = document.getElementById('slotSearchInput');
+          input.addEventListener('input', debounce(function () { runSearch(input.value, renderSlotSuggestions); }, 200));
+          document.getElementById('untradeableNameInput').addEventListener('input', function (e) { p.untradeableName = e.target.value; });
+          document.getElementById('untradeableAddBtn').addEventListener('click', function () {
+            var name = (document.getElementById('untradeableNameInput').value || '').trim();
+            if (!name) return;
+            saveSlot({ item_id: null, item_name: name, supplies: p.supplies });
+          });
+        } else {
+          document.getElementById('comboNameInput').addEventListener('input', function (e) { p.comboName = e.target.value; });
+          document.getElementById('comboAddRowBtn').addEventListener('click', function () {
+            p.comboRows.push(newComboRow());
+            renderSlotPicker();
+          });
+          document.querySelectorAll('.gear-combo-row-remove').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var seq = parseInt(btn.getAttribute('data-row-seq'), 10);
+              if (p.comboRows.length <= 1) return;
+              p.comboRows = p.comboRows.filter(function (r) { return r.seq !== seq; });
+              renderSlotPicker();
+            });
+          });
+          document.querySelectorAll('.combo-row-qty').forEach(function (inp) {
+            inp.addEventListener('input', function () {
+              var seq = parseInt(inp.getAttribute('data-row-seq'), 10);
+              var row = p.comboRows.find(function (r) { return r.seq === seq; });
+              if (row) row.quantity = Math.max(1, parseInt(inp.value, 10) || 1);
+            });
+          });
+          document.querySelectorAll('.combo-row-input').forEach(function (inp) {
+            var seq = parseInt(inp.getAttribute('data-row-seq'), 10);
+            inp.addEventListener('input', debounce(function () {
+              var row = p.comboRows.find(function (r) { return r.seq === seq; });
+              if (row) { row.itemName = inp.value; row.itemId = null; }
+              runSearch(inp.value, function (results) { renderComboSuggestions(seq, results); });
+            }, 200));
+          });
+          document.getElementById('comboSaveBtn').addEventListener('click', function () {
+            var name = (p.comboName || '').trim();
+            var components = p.comboRows
+              .filter(function (r) { return (r.itemName || '').trim(); })
+              .map(function (r) {
+                return r.itemId != null
+                  ? { item_id: r.itemId, item_name: r.itemName, quantity: r.quantity }
+                  : { item_id: null, item_name: r.itemName.trim(), quantity: r.quantity };
+              });
+            if (!name || !components.length) {
+              showError('A combined item needs a name and at least one component.');
+              return;
+            }
+            saveSlot({ item_id: null, item_name: name, components: components, supplies: p.supplies });
+          });
+        }
+      }
+
+      function renderSlotSuggestions(results) {
+        var box = document.getElementById('slotSuggestions');
+        if (!box) return;
+        if (!results.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
+        box.innerHTML = results.map(function (r) {
+          return '<div class="suggestion" data-item-id="' + r.id + '" data-item-name="' + esc(r.name) + '">' +
+            (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span></div>';
+        }).join('');
+        box.classList.add('show');
+        box.querySelectorAll('.suggestion').forEach(function (row) {
+          row.addEventListener('click', function () {
+            saveSlot({
+              item_id: parseInt(row.getAttribute('data-item-id'), 10),
+              item_name: row.getAttribute('data-item-name'),
+              supplies: PG.picker.supplies,
+            });
+          });
+        });
+      }
+
+      function renderComboSuggestions(seq, results) {
+        var box = document.getElementById('comboSuggestions-' + seq);
+        if (!box) return;
+        if (!results.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
+        box.innerHTML = results.map(function (r) {
+          return '<div class="suggestion" data-item-id="' + r.id + '" data-item-name="' + esc(r.name) + '">' +
+            (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span></div>';
+        }).join('');
+        box.classList.add('show');
+        box.querySelectorAll('.suggestion').forEach(function (rowEl) {
+          rowEl.addEventListener('click', function () {
+            var row = PG.picker.comboRows.find(function (r) { return r.seq === seq; });
+            if (row) {
+              row.itemId = parseInt(rowEl.getAttribute('data-item-id'), 10);
+              row.itemName = rowEl.getAttribute('data-item-name');
+            }
+            renderSlotPicker();
+          });
+        });
+      }
+
+      async function saveSlot(item) {
+        var p = PG.picker;
+        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/slot', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slot_type: p.slotType, slot: p.slot, item: item }),
+        });
+        if (data) { PG.data = data; PG.picker = null; render(); }
+      }
+
+      async function runSearch(query, callback) {
+        query = (query || '').trim();
+        if (!query) { callback([]); return; }
+        const data = await apiCall('/api/items/search?q=' + encodeURIComponent(query));
+        callback(data ? data.results : []);
+      }
+
+      function debounce(fn, wait) {
+        var t = null;
+        return function () {
+          var args = arguments;
+          clearTimeout(t);
+          t = setTimeout(function () { fn.apply(null, args); }, wait);
+        };
+      }
+
+      // ---- Setup CRUD (menu + name form) -----------------------------------
+
+      document.getElementById('setupMenuBtn').addEventListener('click', function () {
+        var menu = document.getElementById('setupMenu');
+        menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+      });
+      document.addEventListener('click', function (e) {
+        var wrap = document.querySelector('.tracker-menu-wrap');
+        if (wrap && !wrap.contains(e.target)) document.getElementById('setupMenu').style.display = 'none';
+      });
+
+      document.getElementById('menuNewSetup').addEventListener('click', function () {
+        document.getElementById('setupMenu').style.display = 'none';
+        openNameForm('new', '');
+      });
+      document.getElementById('menuRenameSetup').addEventListener('click', function () {
+        document.getElementById('setupMenu').style.display = 'none';
+        var setup = activeSetup();
+        if (!setup) { showError('Create a setup first.'); return; }
+        openNameForm('rename', setup.name);
+      });
+      document.getElementById('menuDeleteSetup').addEventListener('click', async function () {
+        document.getElementById('setupMenu').style.display = 'none';
+        var setup = activeSetup();
+        if (!setup) return;
+        if (!window.confirm('Delete "' + setup.name + '"? This cannot be undone.')) return;
+        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id), { method: 'DELETE' });
+        if (data) { PG.data = data; PG.activeSetupId = data.gearSetups.length ? data.gearSetups[0].id : null; render(); }
+      });
+
+      function openNameForm(mode, initialValue) {
+        PG.nameFormMode = mode;
+        var form = document.getElementById('pgNameForm');
+        var input = document.getElementById('pgNameInput');
+        form.style.display = 'flex';
+        input.value = initialValue || '';
+        input.focus();
+      }
+
+      document.getElementById('pgNameCancel').addEventListener('click', function () {
+        document.getElementById('pgNameForm').style.display = 'none';
+        PG.nameFormMode = null;
+      });
+      document.getElementById('pgNameSave').addEventListener('click', async function () {
+        var name = (document.getElementById('pgNameInput').value || '').trim();
+        if (!name) { showError('A setup name is required.'); return; }
+        var mode = PG.nameFormMode;
+        document.getElementById('pgNameForm').style.display = 'none';
+        PG.nameFormMode = null;
+        var data;
+        if (mode === 'new') {
+          data = await apiCall('/api/gear-setups', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
+          });
+          if (data) {
+            PG.data = data;
+            var created = data.gearSetups.find(function (s) { return s.name === name; }) || data.gearSetups[data.gearSetups.length - 1];
+            PG.activeSetupId = created ? created.id : PG.activeSetupId;
+            render();
+          }
+        } else if (mode === 'rename') {
+          var setup = activeSetup();
+          if (!setup) return;
+          data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id), {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
+          });
+          if (data) { PG.data = data; render(); }
+        }
+      });
+
+      // ---- Boot + poll ------------------------------------------------------
+
+      loadState();
+      PG.pollTimer = setInterval(function () {
+        // Skip a background refresh while the player has an editor open --
+        // an in-flight rename/slot-pick/combo-build shouldn't get yanked
+        // out from under them by a poll landing mid-edit.
+        if (PG.picker || PG.iconPicker || PG.nameFormMode) return;
+        loadState();
+      }, 5000);
+    })();
+    """
+    return _shell(
+        title="Purchase Goals — myscape",
+        player=player,
+        body=body,
+        extra_script=script,
+        extra_head=extra_head,
+    )

@@ -3,6 +3,7 @@ early account system (website signup/login, RuneLite plugin account
 linking) -- see README.md for how the pieces fit together.
 """
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -24,16 +25,44 @@ from app.auth import (
 )
 from app.database import get_db
 from app.limiter import limiter
-from app.models import BankItem, Player
-from app.pages import render_dashboard, render_landing, render_login, render_signup
+from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player
+from app.pages import render_dashboard, render_landing, render_login, render_purchase_goals, render_signup
+from app.purchase_goals import build_purchase_goals_state, search_items
 from app.routers import auth, linking
-from app.schemas import BankOut, BankItemOut, BankSyncRequest, BankSyncResponse, PlayerOut
+from app.schemas import (
+    BankOut,
+    BankItemOut,
+    BankSyncRequest,
+    BankSyncResponse,
+    CreateGearSetupRequest,
+    EquipmentOut,
+    EquipmentItemOut,
+    EquipmentSyncRequest,
+    EquipmentSyncResponse,
+    EQUIPMENT_SLOTS,
+    INVENTORY_SIZE,
+    InventoryOut,
+    InventoryItemOut,
+    InventorySyncRequest,
+    InventorySyncResponse,
+    ItemSearchResponse,
+    PlayerOut,
+    RenameGearSetupRequest,
+    SetGearSetupIconRequest,
+    SetGearSlotRequest,
+)
 
 # A defensive upper bound, not a real OSRS limit -- the largest bank
 # ever seen is nowhere near this, so the only way a sync would hit it is
 # a malformed or buggy client, and rejecting that outright beats quietly
 # accepting and storing whatever it sent.
 MAX_BANK_ITEMS = 2000
+# The inventory and equipment containers are fixed-size (28 slots, 11
+# slots), so unlike the bank there's a real upper bound on distinct
+# items in one sync -- these are that exact size, not a round-number
+# guess, so anything over is definitely malformed.
+MAX_INVENTORY_ITEMS = INVENTORY_SIZE
+MAX_EQUIPMENT_ITEMS = len(EQUIPMENT_SLOTS)
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
 if not SESSION_SECRET_KEY:
@@ -170,7 +199,10 @@ def sync_bank(
     db.query(BankItem).filter(BankItem.player_id == player.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
-        db.add(BankItem(player_id=player.id, item_id=item.item_id, quantity=item.quantity, updated_at=now))
+        db.add(BankItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
     db.commit()
 
     return BankSyncResponse(item_count=len(payload.items))
@@ -187,3 +219,244 @@ def read_bank(db: Session = Depends(get_db), player: Player = Depends(get_curren
     items = db.query(BankItem).filter(BankItem.player_id == player.id).order_by(BankItem.item_id).all()
     updated_at = items[0].updated_at if items else None
     return BankOut(items=[BankItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/inventory", response_model=InventorySyncResponse)
+def sync_inventory(
+    payload: InventorySyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the main
+    28-slot inventory instead -- see MyscapeClient#syncInventory in the
+    Mootrius/myscape-plugin repo. Full replace, never a merge."""
+    if len(payload.items) > MAX_INVENTORY_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_INVENTORY_ITEMS}).",
+        )
+
+    db.query(InventoryItem).filter(InventoryItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(InventoryItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    db.commit()
+
+    return InventorySyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/inventory", response_model=InventoryOut)
+def read_inventory(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    inventory instead."""
+    items = db.query(InventoryItem).filter(InventoryItem.player_id == player.id).order_by(InventoryItem.item_id).all()
+    updated_at = items[0].updated_at if items else None
+    return InventoryOut(items=[InventoryItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/equipment", response_model=EquipmentSyncResponse)
+def sync_equipment(
+    payload: EquipmentSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for worn
+    equipment instead -- see MyscapeClient#syncEquipment in the
+    Mootrius/myscape-plugin repo. Full replace, never a merge, keyed by
+    slot rather than item id (EquipmentSyncRequest's own validator
+    already rejects a duplicate slot within one sync -- see
+    app/schemas.py)."""
+    if len(payload.items) > MAX_EQUIPMENT_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_EQUIPMENT_ITEMS}).",
+        )
+
+    db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(EquipmentItem(
+            player_id=player.id, slot=item.slot, item_id=item.item_id,
+            item_name=item.item_name, quantity=item.quantity, updated_at=now,
+        ))
+    db.commit()
+
+    return EquipmentSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/equipment", response_model=EquipmentOut)
+def read_equipment(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for worn
+    equipment instead."""
+    items = db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).order_by(EquipmentItem.slot).all()
+    updated_at = items[0].updated_at if items else None
+    return EquipmentOut(items=[EquipmentItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.get("/api/items/search", response_model=ItemSearchResponse)
+def item_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
+    """Backs the gear-setup slot picker's search box (see
+    app/purchase_goals.py's search_items -- ported from Maintrius's own
+    search_items in osrs_tracker.py) -- session-authenticated like every
+    other Purchase Goals endpoint below, since only the website UI calls
+    this, never the plugin."""
+    return ItemSearchResponse(results=search_items(q))
+
+
+@app.get("/dashboard/purchase-goals", response_class=HTMLResponse)
+def purchase_goals_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    return render_purchase_goals(player)
+
+
+@app.get("/api/gear-setups")
+def list_gear_setups(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """The combined state the Purchase Goals page polls (see
+    app/purchase_goals.py's build_purchase_goals_state, ported from
+    Maintrius's own build_state in osrs_tracker.py) -- every one of the
+    player's gear setups, fully priced/owned-checked against their
+    synced bank+inventory+equipment, plus their current coins and
+    whatever wiki price/mapping errors are in effect. Not pinned to a
+    Pydantic response_model (see GearSetupsState's docstring in
+    app/schemas.py) since the shape is too dynamic/nested to usefully
+    fix -- FastAPI serializes the plain dict build_purchase_goals_state
+    returns as-is."""
+    return build_purchase_goals_state(db, player)
+
+
+@app.post("/api/gear-setups", status_code=status.HTTP_201_CREATED)
+def create_gear_setup(
+    payload: CreateGearSetupRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    name = (payload.name or "").strip() or "New Setup"
+    setup = GearSetup(player_id=player.id, name=name, equipment={}, inventory=[None] * INVENTORY_SIZE)
+    db.add(setup)
+    db.commit()
+    return build_purchase_goals_state(db, player)
+
+
+def _get_owned_gear_setup(db: Session, player: Player, setup_id: str) -> GearSetup:
+    try:
+        setup_uuid = uuid.UUID(setup_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="gear setup not found")
+    setup = (
+        db.query(GearSetup)
+        .filter(GearSetup.id == setup_uuid, GearSetup.player_id == player.id)
+        .first()
+    )
+    if setup is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="gear setup not found")
+    return setup
+
+
+@app.patch("/api/gear-setups/{setup_id}")
+def rename_gear_setup(
+    setup_id: str,
+    payload: RenameGearSetupRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup.name = payload.name
+    db.commit()
+    return build_purchase_goals_state(db, player)
+
+
+@app.delete("/api/gear-setups/{setup_id}")
+def delete_gear_setup(
+    setup_id: str,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    setup = _get_owned_gear_setup(db, player, setup_id)
+    db.delete(setup)
+    db.commit()
+    return build_purchase_goals_state(db, player)
+
+
+@app.put("/api/gear-setups/{setup_id}/icon")
+def set_gear_setup_icon(
+    setup_id: str,
+    payload: SetGearSetupIconRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Sets (or, with icon omitted/null, clears) the display-only icon
+    shown next to a setup's total cost -- purely cosmetic, never affects
+    cost/ownership (see GearSetup's docstring in app/models.py and
+    _handle_set_gear_setup_icon in Maintrius's own osrs_tracker.py)."""
+    setup = _get_owned_gear_setup(db, player, setup_id)
+    if payload.icon is None:
+        setup.icon = None
+    else:
+        setup.icon = {"itemId": payload.icon.item_id, "itemName": payload.icon.item_name or None}
+    db.commit()
+    return build_purchase_goals_state(db, player)
+
+
+@app.put("/api/gear-setups/{setup_id}/slot")
+def set_gear_slot(
+    setup_id: str,
+    payload: SetGearSlotRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Fills (or, with item omitted/null, clears) one equipment or
+    inventory slot of a gear setup -- see SetGearSlotRequest/
+    GearSlotItemIn in app/schemas.py for the validated shape (plain
+    tradeable, plain untradeable, composed "combo", or "supplies") and
+    _handle_set_gear_slot in Maintrius's own osrs_tracker.py for the
+    original this ports. Stores exactly what was sent, unresolved --
+    pricing/ownership is computed fresh on every read, not here (see
+    app/purchase_goals.py)."""
+    setup = _get_owned_gear_setup(db, player, setup_id)
+
+    if payload.item is None:
+        stored_item = None
+    else:
+        stored_item = {"itemId": payload.item.item_id, "itemName": payload.item.item_name or None}
+        if payload.item.components:
+            stored_item["components"] = [
+                {"itemId": c.item_id, "itemName": c.item_name or None, "quantity": c.quantity}
+                for c in payload.item.components
+            ]
+        if payload.item.supplies:
+            stored_item["supplies"] = True
+
+    if payload.slot_type == "equipment":
+        if payload.slot not in EQUIPMENT_SLOTS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=f"slot must be one of {EQUIPMENT_SLOTS}"
+            )
+        # New dict, not an in-place mutation of the loaded one -- see the
+        # IMPORTANT note on GearSetup in app/models.py for why that
+        # distinction matters for a JSONB column.
+        equipment = dict(setup.equipment or {})
+        if stored_item is None:
+            equipment.pop(payload.slot, None)
+        else:
+            equipment[payload.slot] = stored_item
+        setup.equipment = equipment
+    elif payload.slot_type == "inventory":
+        if not isinstance(payload.slot, int) or not (0 <= payload.slot < INVENTORY_SIZE):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"slot must be an integer 0-{INVENTORY_SIZE - 1}",
+            )
+        inventory = list(setup.inventory or [None] * INVENTORY_SIZE)
+        if len(inventory) != INVENTORY_SIZE:
+            inventory = (inventory + [None] * INVENTORY_SIZE)[:INVENTORY_SIZE]
+        inventory[payload.slot] = stored_item
+        setup.inventory = inventory
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slot_type must be 'equipment' or 'inventory'")
+
+    db.commit()
+    return build_purchase_goals_state(db, player)

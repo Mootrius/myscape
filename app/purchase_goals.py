@@ -1,0 +1,502 @@
+"""Purchase Goals -- named "gear setups" a player plans/saves toward,
+ported from the original single-user Maintrius tool's osrs_tracker.py
+(see build_gear_setups, _resolve_gear_slot_item, _still_to_purchase_summary
+there for the code this is a direct port of). The mechanic is unchanged;
+only where the inputs come from has:
+
+- Character data (bank/inventory/equipment) came from three JSON files a
+  separate RuneLite Character Exporter plugin wrote to disk; here it
+  comes from the BankItem/InventoryItem/EquipmentItem tables this app's
+  own plugin syncs (see app/main.py's sync endpoints).
+- Item mapping/prices came from local JSON file caches with a
+  last-fetched timestamp; here the exact same OSRS Wiki Real-time Prices
+  API is fetched into in-memory, process-level caches instead (this app
+  has many players sharing one process, not one person's single-user
+  server, and there's nothing about wiki prices that needs to survive a
+  restart -- refetching after one is cheap and harmless).
+- Gear setups themselves came from one JSON file holding every setup;
+  here each is a GearSetup row (see app/models.py), scoped to the
+  player who owns it.
+
+Everything about the actual mechanic -- the four slot-item shapes (plain
+tradeable, plain untradeable, composed "combo", "supplies"), the
+owned-pool bookkeeping, the affordability/still-to-purchase/next-purchase
+computation -- is unchanged from the original.
+"""
+import json
+import re
+import time
+import urllib.parse
+import urllib.request
+from typing import Dict, List, Optional, Tuple
+
+from sqlalchemy.orm import Session
+
+from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player
+from app.schemas import EQUIPMENT_SLOTS, INVENTORY_SIZE
+
+# OSRS's own item id for coins -- used to read "gp in the bank" straight
+# off the synced bank_items rows, the same way the original tool's
+# load_character_snapshot() read it straight off bank.json.
+COINS_ITEM_ID = 995
+
+# The OSRS Wiki Real-time Prices API requires a descriptive User-Agent
+# identifying the tool and how to reach whoever runs it -- see
+# https://prices.runescape.wiki/osrs/faqs
+API_BASE = "https://prices.runescape.wiki/api/v2/osrs"
+# Icons are hotlinked directly by the browser rather than fetched by this
+# server -- the wiki's image hosting sits behind a Cloudflare bot
+# challenge that a plain server-side request can never pass (it requires
+# executing JS), but a real browser loading the page normally isn't a
+# bot and goes straight through.
+ICON_PATH_BASE = "https://oldschool.runescape.wiki/w/Special:FilePath"
+USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
+
+# How long cached data is considered fresh before hitting the wiki API
+# again -- same values the original tool used.
+PRICE_TTL_SECONDS = 60
+MAPPING_TTL_SECONDS = 24 * 60 * 60  # item mapping barely changes; once a day is plenty
+
+# Process-level caches, shared across every player (wiki prices/mapping
+# aren't player-specific) -- {"fetchedAt": float, "byId": {...}, "error": str|None}.
+# Module-level rather than per-request: refetching the ~860KB mapping
+# payload on every single request would be both slow and unnecessary
+# when it changes maybe once a day.
+_mapping_cache: Optional[dict] = None
+_price_cache: Optional[dict] = None
+
+
+def _fetch_json(url: str):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def get_mapping(force: bool = False) -> Tuple[Dict[str, dict], Optional[str]]:
+    """Returns ({itemId: {"name":..., "icon":...}}, error|None), refreshing
+    from the wiki at most once a day (item metadata rarely changes)."""
+    global _mapping_cache
+    fresh = _mapping_cache and (time.time() - _mapping_cache["fetchedAt"]) < MAPPING_TTL_SECONDS
+    if _mapping_cache and fresh and not force:
+        return _mapping_cache["byId"], _mapping_cache.get("error")
+
+    try:
+        raw = _fetch_json(f"{API_BASE}/mapping")
+        by_id = {
+            str(entry["id"]): {"name": entry.get("name"), "icon": entry.get("icon")}
+            for entry in raw
+        }
+        _mapping_cache = {"fetchedAt": time.time(), "byId": by_id, "error": None}
+        return by_id, None
+    except Exception as exc:  # noqa: BLE001 -- surface any failure to the UI
+        err = f"{type(exc).__name__}: {exc}"
+        if _mapping_cache:
+            # Serve stale data rather than nothing if the network hiccups.
+            return _mapping_cache["byId"], err
+        return {}, err
+
+
+def get_latest_prices(force: bool = False) -> Tuple[Dict[str, dict], Optional[str]]:
+    """Returns ({itemId: {"high":..., "low":...}}, error|None)."""
+    global _price_cache
+    fresh = _price_cache and (time.time() - _price_cache["fetchedAt"]) < PRICE_TTL_SECONDS
+    if _price_cache and fresh and not force:
+        return _price_cache["byId"], _price_cache.get("error")
+
+    try:
+        raw = _fetch_json(f"{API_BASE}/latest")
+        data = raw.get("data", raw)  # tolerate either shape
+        by_id = {
+            str(item_id): {"high": v.get("high"), "low": v.get("low")}
+            for item_id, v in data.items()
+        }
+        _price_cache = {"fetchedAt": time.time(), "byId": by_id, "error": None}
+        return by_id, None
+    except Exception as exc:  # noqa: BLE001
+        err = f"{type(exc).__name__}: {exc}"
+        if _price_cache:
+            return _price_cache["byId"], err
+        return {}, err
+
+
+_ICON_EXT_RE = re.compile(r"\.(png|gif|jpg|jpeg)$", re.IGNORECASE)
+
+
+def item_icon_url(icon_filename: Optional[str]) -> Optional[str]:
+    if not icon_filename:
+        return None
+    if not _ICON_EXT_RE.search(icon_filename):
+        icon_filename = icon_filename + ".png"
+    return ICON_PATH_BASE + "/" + urllib.parse.quote(icon_filename)
+
+
+def unit_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[str]]:
+    p = prices.get(str(item_id))
+    if not p:
+        return None, None
+    if p.get("high") is not None:
+        return p["high"], "high (instant-buy)"
+    if p.get("low") is not None:
+        return p["low"], "low (instant-sell, no recent buy trades)"
+    return None, None
+
+
+def search_items(query: str, limit: int = 20) -> List[dict]:
+    mapping, _ = get_mapping()
+    q = query.strip().lower()
+    if not q:
+        return []
+    starts, contains = [], []
+    for item_id, meta in mapping.items():
+        name = meta.get("name") or ""
+        low = name.lower()
+        if low.startswith(q):
+            starts.append((item_id, meta))
+        elif q in low:
+            contains.append((item_id, meta))
+    starts.sort(key=lambda kv: len(kv[1].get("name") or ""))
+    contains.sort(key=lambda kv: len(kv[1].get("name") or ""))
+    combined = (starts + contains)[:limit]
+    return [
+        {"id": int(item_id), "name": meta.get("name"), "icon": item_icon_url(meta.get("icon"))}
+        for item_id, meta in combined
+    ]
+
+
+# Crystal armour (helm/body/legs) can be recolored to match any of the
+# eight Iorwerth Clan houses (e.g. worn as "Crystal helm (ithell)" for
+# the default white/silver look) -- purely cosmetic, so what the plugin
+# actually reports off the client's item id never carries that suffix.
+# Typed into a gear-setup slot as "Crystal helm (ithell)", it would
+# otherwise never name-match what's owned -- see Maintrius's own
+# _strip_cosmetic_item_suffix in osrs_tracker.py for the original of
+# this exact rule, ported unchanged.
+_CRYSTAL_ARMOUR_COLOR_SUFFIX_RE = re.compile(
+    r"\s*\((?:ithell|amlodd|cadarn|crwys|hefin|iorwerth|meilyr|trahaearn)\)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_cosmetic_item_suffix(name: str) -> str:
+    stripped = _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE.sub("", name or "").strip()
+    return stripped if stripped.lower().startswith("crystal ") else name
+
+
+def _normalize_item_name(name: Optional[str]) -> str:
+    return _strip_cosmetic_item_suffix((name or "").strip()).strip().lower()
+
+
+def _take_owned(pool_by_id: dict, pool_by_name: dict, item_id: Optional[int], item_name: Optional[str], qty: int) -> int:
+    """Claim up to qty units of an item from the shared "already own"
+    pool (built from bank+inventory+equipment -- see
+    _build_owned_pools below), returning how many were actually
+    available. A tradeable item is matched by its real item id; an
+    untradeable item (no id) falls back to a case-insensitive match on
+    whatever name was recorded for it. Pools are mutated in place so a
+    physical item can only satisfy one requirement, not several."""
+    if qty <= 0:
+        return 0
+    if item_id is not None:
+        avail = pool_by_id.get(item_id, 0)
+        take = min(avail, qty)
+        if take:
+            pool_by_id[item_id] = avail - take
+        return take
+    key = _normalize_item_name(item_name)
+    if not key:
+        return 0
+    avail = pool_by_name.get(key, 0)
+    take = min(avail, qty)
+    if take:
+        pool_by_name[key] = avail - take
+    return take
+
+
+def _resolve_gear_component(raw_component: dict, mapping: dict, prices: dict, pool_by_id: dict, pool_by_name: dict) -> dict:
+    comp_id = raw_component.get("itemId")
+    qty = raw_component.get("quantity") or 1
+    if comp_id is None:
+        name = raw_component.get("itemName") or "Unknown item"
+        owned_qty = _take_owned(pool_by_id, pool_by_name, None, name, qty)
+        return {
+            "itemId": None, "itemName": name, "icon": None, "quantity": qty,
+            "unitPrice": None, "fullCost": 0, "cost": 0,
+            "ownedQty": owned_qty, "owned": owned_qty >= qty,
+        }
+    meta = mapping.get(str(comp_id), {})
+    name = raw_component.get("itemName") or meta.get("name") or f"Item #{comp_id}"
+    icon = item_icon_url(meta.get("icon"))
+    unit_price, _ = unit_price_for(comp_id, prices)
+    price = unit_price if unit_price is not None else 0
+    owned_qty = _take_owned(pool_by_id, pool_by_name, comp_id, name, qty)
+    remaining = max(qty - owned_qty, 0)
+    return {
+        "itemId": comp_id, "itemName": name, "icon": icon, "quantity": qty,
+        "unitPrice": unit_price, "fullCost": price * qty, "cost": price * remaining,
+        "ownedQty": owned_qty, "owned": owned_qty >= qty,
+    }
+
+
+def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, prices: dict) -> dict:
+    """Resolve a component purely for display (tooltip) purposes, used
+    when the whole combined item is already owned outright -- in that
+    case the individual components are never claimed from the owned
+    pool, since the assembled item itself was."""
+    comp_id = raw_component.get("itemId")
+    qty = raw_component.get("quantity") or 1
+    if comp_id is None:
+        name = raw_component.get("itemName") or "Unknown item"
+        return {
+            "itemId": None, "itemName": name, "icon": None, "quantity": qty,
+            "unitPrice": None, "fullCost": 0, "cost": 0, "ownedQty": qty, "owned": True,
+        }
+    meta = mapping.get(str(comp_id), {})
+    name = raw_component.get("itemName") or meta.get("name") or f"Item #{comp_id}"
+    icon = item_icon_url(meta.get("icon"))
+    unit_price, _ = unit_price_for(comp_id, prices)
+    price = unit_price if unit_price is not None else 0
+    return {
+        "itemId": comp_id, "itemName": name, "icon": icon, "quantity": qty,
+        "unitPrice": unit_price, "fullCost": price * qty, "cost": 0,
+        "ownedQty": qty, "owned": True,
+    }
+
+
+def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dict, pool_by_id: dict, pool_by_name: dict) -> Optional[dict]:
+    """Turn a stored slot item (or None, for an empty slot) into the
+    priced/iconed shape the frontend renders. See GearSlotItemIn's
+    docstring in app/schemas.py for the four possible shapes -- this is
+    a direct port of Maintrius's own _resolve_gear_slot_item."""
+    if not raw_item:
+        return None
+    item_id = raw_item.get("itemId")
+    components_raw = raw_item.get("components")
+
+    if raw_item.get("supplies"):
+        if item_id is not None:
+            meta = mapping.get(str(item_id), {})
+            name = raw_item.get("itemName") or meta.get("name") or f"Item #{item_id}"
+            icon = item_icon_url(meta.get("icon"))
+            unit_price, price_source = unit_price_for(item_id, prices)
+            price = unit_price if unit_price is not None else 0
+            return {
+                "itemId": item_id, "itemName": name, "icon": icon, "tradeable": True,
+                "unitPrice": unit_price, "priceSource": price_source, "fullCost": price,
+                "cost": 0, "owned": True, "supplies": True, "components": None,
+            }
+        name = raw_item.get("itemName") or "Supplies item"
+        return {
+            "itemId": None, "itemName": name, "icon": None, "tradeable": False,
+            "unitPrice": None, "priceSource": None, "fullCost": 0,
+            "cost": 0, "owned": True, "supplies": True, "components": None,
+        }
+
+    if item_id is None and components_raw:
+        name = raw_item.get("itemName") or "Combined item"
+        whole_owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
+        if whole_owned:
+            components = [_resolve_gear_component_display_only(c, mapping, prices) for c in components_raw]
+            total_full = sum(c["fullCost"] for c in components)
+            return {
+                "itemId": None, "itemName": name, "icon": None, "tradeable": False,
+                "unitPrice": None, "priceSource": None, "fullCost": total_full,
+                "cost": 0, "owned": True, "components": components,
+            }
+        components = [_resolve_gear_component(c, mapping, prices, pool_by_id, pool_by_name) for c in components_raw]
+        total_full = sum(c["fullCost"] for c in components)
+        total_cost = sum(c["cost"] for c in components)
+        return {
+            "itemId": None, "itemName": name, "icon": None, "tradeable": False,
+            "unitPrice": None, "priceSource": None, "fullCost": total_full,
+            "cost": total_cost, "owned": total_cost == 0 and all(c["owned"] for c in components),
+            "components": components,
+        }
+    if item_id is None:
+        name = raw_item.get("itemName") or "Untradeable item"
+        owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
+        return {
+            "itemId": None, "itemName": name, "icon": None, "tradeable": False,
+            "unitPrice": None, "priceSource": None, "fullCost": 0,
+            "cost": 0, "owned": owned, "components": None,
+        }
+    meta = mapping.get(str(item_id), {})
+    name = raw_item.get("itemName") or meta.get("name") or f"Item #{item_id}"
+    icon = item_icon_url(meta.get("icon"))
+    unit_price, price_source = unit_price_for(item_id, prices)
+    price = unit_price if unit_price is not None else 0
+    owned = _take_owned(pool_by_id, pool_by_name, item_id, name, 1) >= 1
+    return {
+        "itemId": item_id, "itemName": name, "icon": icon, "tradeable": True,
+        "unitPrice": unit_price, "priceSource": price_source, "fullCost": price,
+        "cost": 0 if owned else price, "owned": owned, "components": None,
+    }
+
+
+def resolve_gear_setup_icon(raw_icon: Optional[dict], mapping: dict) -> Optional[dict]:
+    """Resolve a setup's display-only icon -- just a name + icon URL, no
+    price/ownership attached since it never affects cost."""
+    if not raw_icon:
+        return None
+    item_id = raw_icon.get("itemId")
+    if item_id is not None:
+        meta = mapping.get(str(item_id), {})
+        name = raw_icon.get("itemName") or meta.get("name") or f"Item #{item_id}"
+        icon = item_icon_url(meta.get("icon"))
+        return {"itemId": item_id, "itemName": name, "icon": icon, "tradeable": True}
+    name = raw_icon.get("itemName") or "Item"
+    return {"itemId": None, "itemName": name, "icon": None, "tradeable": False}
+
+
+def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[dict]:
+    if resolved is None:
+        return None
+    purchasable = resolved["tradeable"] or resolved.get("components") is not None
+    resolved["purchasable"] = purchasable
+    resolved["affordable"] = (
+        not resolved["owned"] and purchasable and resolved["cost"] > 0 and coins >= resolved["cost"]
+    )
+    return resolved
+
+
+def _still_to_purchase_summary(equipment: dict, inventory: list, coins: int) -> Tuple[List[dict], Optional[dict]]:
+    pending = [r for r in equipment.values() if r and not r["owned"]]
+    pending += [r for r in inventory if r and not r["owned"]]
+    pending.sort(key=lambda r: (0 if r["purchasable"] else 1, r["cost"]))
+
+    still_to_purchase = [
+        {
+            "itemName": r["itemName"], "icon": r["icon"], "tradeable": r["tradeable"],
+            "isCombo": r.get("components") is not None, "purchasable": r["purchasable"], "cost": r["cost"],
+        }
+        for r in pending
+    ]
+
+    next_purchase = next((item for item in still_to_purchase if item["purchasable"]), None)
+    if next_purchase:
+        cost = next_purchase["cost"]
+        next_purchase = {
+            **next_purchase,
+            "progressPct": 100.0 if cost <= 0 else round(min(coins, cost) / cost * 100, 1),
+            "funded": coins >= cost,
+        }
+    return still_to_purchase, next_purchase
+
+
+def _build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict[str, int]]:
+    """Combines bank+inventory+equipment into the same shape Maintrius's
+    own load_character_snapshot() produced (totalsById/totalsByName) --
+    the "everything currently owned" pool every gear setup checks itself
+    against independently (see build_gear_setups, which takes a fresh
+    copy of this per setup)."""
+    pool_by_id: Dict[int, int] = {}
+    pool_by_name: Dict[str, int] = {}
+
+    def add(item_id: int, item_name: Optional[str], quantity: int):
+        pool_by_id[item_id] = pool_by_id.get(item_id, 0) + quantity
+        if item_name:
+            key = _normalize_item_name(item_name)
+            pool_by_name[key] = pool_by_name.get(key, 0) + quantity
+
+    for item in db.query(BankItem).filter(BankItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(InventoryItem).filter(InventoryItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+
+    return pool_by_id, pool_by_name
+
+
+def _player_coins(db: Session, player: Player) -> int:
+    """GP in possession, same as Maintrius: bank-only (not inventory or
+    equipped), specifically so withdrawing coins to go shopping doesn't
+    make the total look like it dropped -- see load_character_snapshot's
+    docstring in the original osrs_tracker.py for the full reasoning,
+    which applies just as much here."""
+    row = (
+        db.query(BankItem)
+        .filter(BankItem.player_id == player.id, BankItem.item_id == COINS_ITEM_ID)
+        .first()
+    )
+    return row.quantity if row else 0
+
+
+def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, coins: int) -> List[dict]:
+    setups = db.query(GearSetup).filter(GearSetup.player_id == player.id).order_by(GearSetup.created_at).all()
+    base_pool_by_id, base_pool_by_name = _build_owned_pools(db, player)
+
+    results = []
+    for s in setups:
+        total_cost = 0
+        total_full_cost = 0
+        # Fresh copy per setup -- see the docstring on Maintrius's own
+        # build_gear_setups for why (setups are alternate goals, not
+        # simultaneous requirements; the same owned Basilisk jaw can
+        # cover more than one setup's need for it).
+        pool_by_id = dict(base_pool_by_id)
+        pool_by_name = dict(base_pool_by_name)
+
+        equipment = {}
+        setup_equipment = s.equipment or {}
+        for slot in EQUIPMENT_SLOTS:
+            resolved = _mark_slot_affordability(
+                _resolve_gear_slot_item(setup_equipment.get(slot), mapping, prices, pool_by_id, pool_by_name),
+                coins,
+            )
+            equipment[slot] = resolved
+            if resolved:
+                total_cost += resolved["cost"]
+                total_full_cost += resolved["fullCost"]
+
+        inventory = []
+        setup_inventory = s.inventory or [None] * INVENTORY_SIZE
+        for raw_item in setup_inventory:
+            resolved = _mark_slot_affordability(
+                _resolve_gear_slot_item(raw_item, mapping, prices, pool_by_id, pool_by_name), coins
+            )
+            inventory.append(resolved)
+            if resolved:
+                total_cost += resolved["cost"]
+                total_full_cost += resolved["fullCost"]
+
+        progress_pct = 100.0 if total_cost <= 0 else round(min(coins, total_cost) / total_cost * 100, 1)
+        still_to_purchase, next_purchase = _still_to_purchase_summary(equipment, inventory, coins)
+        results.append({
+            "id": str(s.id),
+            "name": s.name or "Untitled Setup",
+            "createdAt": s.created_at.isoformat() if s.created_at else None,
+            "icon": resolve_gear_setup_icon(s.icon, mapping),
+            "equipment": equipment,
+            "inventory": inventory,
+            "totalCost": total_cost,
+            "totalFullCost": total_full_cost,
+            "totalOwnedSavings": max(total_full_cost - total_cost, 0),
+            "progressPct": progress_pct,
+            "funded": coins >= total_cost,
+            "stillToPurchase": still_to_purchase,
+            "nextPurchase": next_purchase,
+        })
+    return results
+
+
+def build_purchase_goals_state(db: Session, player: Player) -> dict:
+    """The Purchase Goals page's own poll payload -- coins, every gear
+    setup (fully priced/owned-checked), the owned-items pool (for any
+    future UI that wants to show it), and whatever wiki fetch errors are
+    currently in effect. A slimmed-down build_state(): Maintrius's own
+    version also folded in Loot Tracker data, which has no equivalent
+    here yet."""
+    mapping, mapping_err = get_mapping()
+    prices, prices_err = get_latest_prices()
+    coins = _player_coins(db, player)
+    _, pool_by_name = _build_owned_pools(db, player)
+
+    return {
+        "coins": coins,
+        "pricesError": prices_err,
+        "mappingError": mapping_err,
+        # Most expensive setup (full cost, ignoring what's already owned)
+        # first -- same as Maintrius's own build_state.
+        "gearSetups": sorted(build_gear_setups(db, player, mapping, prices, coins), key=lambda s: -s["totalFullCost"]),
+        "ownedItems": pool_by_name,
+    }

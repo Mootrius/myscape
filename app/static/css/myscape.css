@@ -33,6 +33,12 @@
   --text-muted: #b2ada3;
   --text-faint: #77746e;
   --red: #c05a4c;
+  /* Added for Purchase Goals' gear-slot affordability states (green =
+     already owned, amber = not owned but affordable right now, red =
+     not owned and not affordable / not purchasable at all) -- same
+     values Maintrius itself used for the same purpose. */
+  --amber: #d9a53c;
+  --green: #6fae5a;
   --radius: 0px;
 }
 

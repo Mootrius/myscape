@@ -1,0 +1,231 @@
+/* Purchase Goals -- the gear-setup planner ported from Maintrius (the
+   original single-user desktop tool this grew out of). Loaded only by
+   /dashboard/purchase-goals, not the shared myscape.css, since none of
+   this applies anywhere else on the site yet -- see app/pages.py's
+   render_purchase_goals. Class names and values are carried over
+   directly from Maintrius's own osrs_tracker_ui.html so this looks and
+   behaves the same way it always has. */
+
+.pg-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  position: relative;
+}
+
+.tracker-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.tracker-icon-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.tracker-icon-btn img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+.tracker-icon-btn.active { border-color: var(--gold); }
+.tracker-icon-btn:hover { border-color: var(--gold-dim); }
+.tracker-icon-fallback { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1.15; padding: 0 3px; }
+
+.tracker-menu-wrap { position: relative; }
+.icon-menu-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim);
+  font-size: 16px; cursor: pointer;
+}
+.icon-menu-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.tracker-menu {
+  position: absolute; top: 52px; right: 0; z-index: 5;
+  background: var(--panel); border: 1px solid var(--border); min-width: 160px;
+  display: flex; flex-direction: column;
+}
+.tracker-menu-item {
+  background: none; border: none; text-align: left; padding: 10px 14px;
+  color: var(--text); font-size: 13px; cursor: pointer;
+}
+.tracker-menu-item:hover { background: var(--panel-2); color: var(--gold); }
+.tracker-menu-item.danger:hover { color: var(--red); }
+
+.pg-setup-form {
+  display: flex; gap: 8px; justify-content: center; margin-bottom: 18px;
+}
+.pg-setup-form input[type="text"] { flex: 1 1 280px; max-width: 360px; }
+
+.overlay-card {
+  border-radius: var(--radius);
+  padding: 18px 22px; margin-bottom: 24px;
+  display: flex; align-items: center; gap: 18px;
+  background: var(--panel);
+  min-height: 90px;
+}
+.overlay-side { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.overlay-side.overlay-target { flex-direction: row-reverse; }
+.overlay-icon { width: 38px; height: 38px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0; }
+.overlay-amount { font-size: 23px; font-weight: normal; color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.overlay-progress { flex: 1; min-width: 60px; }
+.progress-track { height: 9px; background: #100e0b; border-radius: 0; overflow: hidden; border: 1px solid var(--border); }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); border-radius: 0; transition: width 0.4s ease; }
+.progress-fill.funded-fill { background: linear-gradient(90deg, #4c7a44, var(--green)); }
+.progress-track.overlay-track { height: 16px; }
+
+.overlay-icon-wrap {
+  width: 38px; height: 38px; flex-shrink: 0; cursor: pointer; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.overlay-icon-wrap:hover { background: rgba(255,255,255,0.06); }
+.overlay-icon-wrap .overlay-icon { width: 38px; height: 38px; }
+.overlay-icon-placeholder {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px dashed var(--text-faint);
+  color: var(--text-faint); display: flex; align-items: center; justify-content: center;
+  font-size: 16px; line-height: 1;
+}
+.overlay-icon-wrap:hover .overlay-icon-placeholder { border-color: var(--gold-dim); color: var(--gold); }
+
+.pg-body { display: flex; gap: 36px; flex-wrap: wrap; }
+.pg-doll-col { display: flex; flex-direction: column; gap: 22px; align-items: center; }
+.pg-summary-col { flex: 1 1 320px; min-width: 280px; }
+
+.gear-doll {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(5, 56px);
+  grid-template-areas:
+    ".      head   ."
+    "cape   neck   ammo"
+    "weapon body   shield"
+    ".      legs   ."
+    "hands  boots  ring";
+  gap: 8px;
+}
+/* Places each named equipment slot into its grid-template-areas cell
+   above -- without these, the areas are declared but nothing actually
+   claims them, and the slots just fill in document order instead of
+   forming the paperdoll shape. */
+.slot-head { grid-area: head; }
+.slot-cape { grid-area: cape; }
+.slot-neck { grid-area: neck; }
+.slot-ammo { grid-area: ammo; }
+.slot-weapon { grid-area: weapon; }
+.slot-body { grid-area: body; }
+.slot-shield { grid-area: shield; }
+.slot-legs { grid-area: legs; }
+.slot-hands { grid-area: hands; }
+.slot-boots { grid-area: boots; }
+.slot-ring { grid-area: ring; }
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 56px);
+  grid-template-rows: repeat(7, 56px);
+  gap: 8px;
+}
+.gear-slot {
+  position: relative; width: 56px; height: 56px; border-radius: 0;
+  background: var(--panel-2); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.gear-slot:hover { border-color: var(--gold-dim); }
+.gear-slot.filled { background: #1c1a14; }
+.gear-slot.picking { border-color: var(--gold); }
+.gear-slot-icon { width: 38px; height: 38px; object-fit: contain; image-rendering: pixelated; }
+
+.gear-slot-untradeable-badge, .gear-slot-combo-badge {
+  position: absolute; bottom: -6px; right: -6px; width: 15px; height: 15px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;
+  background: var(--panel-2); border: 1px solid var(--red); color: var(--red); line-height: 1;
+}
+.gear-slot.affordable .gear-slot-untradeable-badge, .gear-slot.affordable .gear-slot-combo-badge {
+  border-color: var(--amber); color: var(--amber);
+}
+.gear-slot.owned .gear-slot-untradeable-badge, .gear-slot.owned .gear-slot-combo-badge {
+  border-color: var(--green); color: var(--green);
+}
+.gear-slot-supplies-badge {
+  position: absolute; bottom: -6px; right: -6px; width: 15px; height: 15px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;
+  background: var(--panel-2); border: 1px solid var(--green); color: var(--green); line-height: 1;
+}
+.gear-slot.owned { border-color: var(--green); }
+.gear-slot.not-owned { border-color: var(--red); }
+.gear-slot.affordable { border-color: var(--amber); }
+
+.gear-summary { padding-top: 4px; }
+.gear-summary-heading {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-faint); margin-bottom: 12px;
+}
+.gear-summary-empty { font-size: 12.5px; color: var(--text-dim); }
+.gear-next-purchase { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.gear-next-purchase-icon-wrap {
+  width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.gear-next-purchase-icon { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+.gear-next-purchase-body { flex: 1; min-width: 0; }
+.gear-next-purchase-label { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+.gear-next-purchase-name { font-size: 13.5px; color: var(--text); margin: 1px 0 5px; }
+.gear-next-purchase-amount { font-size: 11px; color: var(--text-dim); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.gear-summary-list { display: flex; flex-direction: column; gap: 6px; }
+.gear-summary-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: var(--panel-2); border: 1px solid var(--border); }
+.gear-summary-row.unpurchasable { opacity: 0.55; }
+.gear-summary-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: none; }
+.gear-summary-row-name { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gear-summary-row-cost { font-size: 12px; color: var(--gold); white-space: nowrap; }
+.gear-summary-row-cost.na { color: var(--text-faint); }
+
+.gear-icon-picker, .gear-slot-picker {
+  background: var(--panel); border-radius: var(--radius);
+  padding: 14px 16px; margin: 14px 0 22px;
+  display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap;
+}
+
+.search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
+.search-box input[type="text"] { width: 100%; }
+.suggestions {
+  display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
+  background: var(--panel); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
+}
+.suggestions.show { display: block; }
+.suggestion {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 13px;
+  color: var(--text); cursor: pointer;
+}
+.suggestion:hover, .suggestion.active { background: var(--panel-2); }
+.suggestion img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
+.suggestion.suggestion-untradeable { color: var(--text-faint); font-style: italic; }
+
+.gear-combo-builder {
+  width: 100%; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.gear-combo-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gear-combo-label { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+.gear-combo-header input[type="text"] { flex: 1 1 220px; min-width: 160px; }
+.gear-combo-rows { display: flex; flex-direction: column; gap: 8px; }
+.gear-combo-row { display: flex; align-items: center; gap: 8px; }
+.gear-combo-row-search { flex: 1 1 auto; min-width: 160px; }
+.gear-combo-qty { width: 56px !important; flex-shrink: 0; }
+.gear-combo-row-remove {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 0; width: 30px; height: 30px; font-size: 13px; cursor: pointer; line-height: 1; flex-shrink: 0;
+}
+.gear-combo-row-remove:hover { border-color: var(--red); color: var(--red); }
+.gear-combo-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+.pg-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 40px 10px; }
+
+@media (max-width: 720px) {
+  .pg-body { flex-direction: column; align-items: center; }
+}
