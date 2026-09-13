@@ -40,10 +40,12 @@ feature gets built on top of it:
   together automatically.
 - `app/pages.py` -- the server-rendered signup/login/landing pages (no
   template engine -- plain f-strings, since there are only three pages).
-- `app/static/` -- the shared stylesheet and the two custom fonts, in
-  the same dark/gold palette as Maintrius (the original desktop tool).
-  Served as real static files (not inlined as base64 like Maintrius's
-  local HTML) so browsers cache them across page loads.
+- `app/static/` -- the shared stylesheet, the pixel body font, and the
+  logo, in the same dark/gold palette as Maintrius (the original desktop
+  tool). The font is served as a real static file (not inlined as
+  base64 like Maintrius's local HTML) so browsers cache it across page
+  loads. The wordmark lives in the logo image, not text -- there's no
+  heading/display font on the site.
 
 ## Website accounts
 

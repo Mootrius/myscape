@@ -44,7 +44,7 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
 <body>
   <div class="wrap">
     <header>
-      <h1>my<span class="accent">scape</span></h1>
+      <p class="logo"><a href="/"><img src="/static/img/logo.png" alt="myscape" /></a></p>
       {_nav(player)}
     </header>
     {body}

@@ -1,19 +1,14 @@
-/* Shared visual identity across myscape's site -- same palette and
-   fonts as Maintrius (the original single-user desktop tool this
-   product grew out of), so the website feels like the same app family.
-   Font files are served from here (not inlined as base64 like
-   Maintrius's local HTML file) so browsers cache them across pages
-   instead of re-downloading on every request. */
+/* Shared visual identity across myscape's site -- same palette and body
+   font as Maintrius (the original single-user desktop tool this product
+   grew out of), so the website feels like the same app family. Just the
+   one pixel font everywhere (no display/heading font) -- the logo image
+   carries the wordmark instead. Font file is served from here (not
+   inlined as base64 like Maintrius's local HTML file) so browsers cache
+   it across pages instead of re-downloading on every request. */
 
 @font-face {
   font-family: 'RuneScapePlain11';
   src: url('/static/fonts/RuneScapePlain11.otf') format('opentype');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'RuneScapeQuillCaps';
-  src: url('/static/fonts/RuneScapeQuillCaps.otf') format('opentype');
   font-display: swap;
 }
 
@@ -57,15 +52,8 @@ header {
   margin-bottom: 22px;
 }
 
-h1 {
-  font-family: 'RuneScapeQuillCaps', -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  font-size: 32px;
-  margin: 0;
-  letter-spacing: 0.4px;
-  font-weight: normal;
-}
-
-h1 span.accent { color: var(--gold); }
+.logo { margin: 0; line-height: 0; }
+.logo img { height: 40px; width: auto; display: block; }
 
 .subtitle { color: var(--text-faint); font-size: 12.5px; margin-top: 4px; }
 
@@ -99,9 +87,9 @@ nav a:hover, nav button.link:hover { color: var(--gold); }
 }
 
 .auth-card h2 {
-  font-family: 'RuneScapeQuillCaps', -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
   font-weight: normal;
-  font-size: 22px;
+  font-size: 17px;
+  letter-spacing: 0.02em;
   margin: 0 0 4px;
 }
 
