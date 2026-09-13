@@ -271,11 +271,6 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
   {extra_head}
 </head>
 <body>
-  <video class="bg-video" autoplay muted loop playsinline preload="auto">
-    <source src="/static/video/background.webm" type="video/webm" />
-    <source src="/static/video/background.mp4" type="video/mp4" />
-  </video>
-  <div class="bg-overlay"></div>
   {_link_banner(player)}
   <header>
     <nav class="wrap header-inner">
@@ -824,7 +819,8 @@ def render_purchase_goals(player: Player) -> str:
       function openSlotPicker(slotType, slot) {
         PG.picker = {
           slotType: slotType, slot: slot, mode: 'search',
-          comboName: '', comboRows: [newComboRow()], untradeableName: '', supplies: false,
+          query: '', selected: null,
+          comboName: '', comboRows: [newComboRow()], supplies: false,
         };
       }
 
@@ -838,24 +834,25 @@ def render_purchase_goals(player: Player) -> str:
         var p = PG.picker;
         if (!p) { el.innerHTML = ''; return; }
 
-        var modeToggle = '' +
-          '<div class="gear-combo-header">' +
-          '  <button class="link" id="pickerModeToggle" type="button">' +
-          (p.mode === 'search' ? 'Build from parts instead' : 'Search for a single item instead') +
-          '  </button>' +
-          '</div>';
+        // Only shown in combo mode, as a way back -- in search mode the
+        // equivalent switch is one of the three action buttons below
+        // instead (see gear-slot-picker-actions), alongside Add and
+        // Add as supplies.
+        var modeToggle = p.mode === 'combo'
+          ? '<div class="gear-combo-header"><button class="link" id="pickerModeToggle" type="button">Search for a single item instead</button></div>'
+          : '';
 
         var body;
         if (p.mode === 'search') {
           body = '' +
-            '<div class="search-box">' +
-            '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" />' +
+            '<div class="search-box search-box-full">' +
+            '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" value="' + esc(p.query) + '" />' +
             '  <div class="suggestions" id="slotSuggestions"></div>' +
             '</div>' +
-            '<div class="gear-combo-header">' +
-            '  <span class="gear-combo-label">Can\\'t find it? It might be untradeable:</span>' +
-            '  <input type="text" id="untradeableNameInput" placeholder="Exact item name" value="' + esc(p.untradeableName) + '" />' +
-            '  <button class="primary" id="untradeableAddBtn" type="button">Add</button>' +
+            '<div class="gear-slot-picker-actions">' +
+            '  <button class="gspa-secondary" id="pickerBuildComboBtn" type="button">Build from parts</button>' +
+            '  <button class="gspa-secondary" id="slotAddSuppliesBtn" type="button">Add as supplies</button>' +
+            '  <button class="gspa-primary" id="slotAddBtn" type="button">Add</button>' +
             '</div>';
         } else {
           body = '' +
@@ -884,13 +881,20 @@ def render_purchase_goals(player: Player) -> str:
             '</div>';
         }
 
+        // The "always owned" toggle only applies to a combo build now --
+        // search mode has its own dedicated "Add as supplies" button
+        // instead (see gear-slot-picker-actions above), which needs no
+        // separate toggle since it's just another action on whatever's
+        // currently selected.
+        var suppliesRow = p.mode === 'combo'
+          ? '<div class="gear-combo-header"><label class="gear-combo-label"><input type="checkbox" id="suppliesToggle"' + (p.supplies ? ' checked' : '') + ' /> Always count as owned (supplies)</label></div>'
+          : '';
+
         el.innerHTML = '' +
           '<div class="gear-slot-picker">' +
           modeToggle +
           body +
-          '  <div class="gear-combo-header">' +
-          '    <label class="gear-combo-label"><input type="checkbox" id="suppliesToggle"' + (p.supplies ? ' checked' : '') + ' /> Always count as owned (supplies)</label>' +
-          '  </div>' +
+          suppliesRow +
           '  <div class="gear-combo-actions">' +
           '    <button class="link" id="slotClearBtn" type="button">Clear slot</button>' +
           '    <button class="link" id="slotCancelBtn" type="button">Cancel</button>' +
@@ -902,22 +906,34 @@ def render_purchase_goals(player: Player) -> str:
 
       function wireSlotPickerEvents() {
         var p = PG.picker;
-        document.getElementById('pickerModeToggle').addEventListener('click', function () {
-          p.mode = p.mode === 'search' ? 'combo' : 'search';
+        document.getElementById('pickerModeToggle')?.addEventListener('click', function () {
+          p.mode = 'search';
           renderSlotPicker();
         });
-        document.getElementById('suppliesToggle').addEventListener('change', function (e) { p.supplies = e.target.checked; });
+        document.getElementById('suppliesToggle')?.addEventListener('change', function (e) { p.supplies = e.target.checked; });
         document.getElementById('slotCancelBtn').addEventListener('click', function () { PG.picker = null; renderContent(); });
         document.getElementById('slotClearBtn').addEventListener('click', function () { saveSlot(null); });
 
         if (p.mode === 'search') {
           var input = document.getElementById('slotSearchInput');
-          input.addEventListener('input', debounce(function () { runSearch(input.value, renderSlotSuggestions); }, 200));
-          document.getElementById('untradeableNameInput').addEventListener('input', function (e) { p.untradeableName = e.target.value; });
-          document.getElementById('untradeableAddBtn').addEventListener('click', function () {
-            var name = (document.getElementById('untradeableNameInput').value || '').trim();
-            if (!name) return;
-            saveSlot({ item_id: null, item_name: name, supplies: p.supplies });
+          input.addEventListener('input', debounce(function () {
+            p.query = input.value;
+            // Whatever was selected before no longer matches what's
+            // typed now -- Add/Add as supplies need a fresh pick.
+            p.selected = null;
+            runSearch(input.value, function (results) { renderSlotSuggestions(input.value, results); });
+          }, 200));
+          document.getElementById('pickerBuildComboBtn').addEventListener('click', function () {
+            p.mode = 'combo';
+            renderSlotPicker();
+          });
+          document.getElementById('slotAddBtn').addEventListener('click', function () {
+            if (!p.selected) { showError('Pick an item from the list first.'); return; }
+            saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName });
+          });
+          document.getElementById('slotAddSuppliesBtn').addEventListener('click', function () {
+            if (!p.selected) { showError('Pick an item from the list first.'); return; }
+            saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName, supplies: true });
           });
         } else {
           document.getElementById('comboNameInput').addEventListener('input', function (e) { p.comboName = e.target.value; });
@@ -966,22 +982,49 @@ def render_purchase_goals(player: Player) -> str:
         }
       }
 
-      function renderSlotSuggestions(results) {
+      function renderSlotSuggestions(query, results) {
         var box = document.getElementById('slotSuggestions');
         if (!box) return;
-        if (!results.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
-        box.innerHTML = results.map(function (r) {
+        var trimmed = (query || '').trim();
+        if (!trimmed) { box.classList.remove('show'); box.innerHTML = ''; return; }
+
+        var rowsHtml = results.map(function (r) {
           return '<div class="suggestion" data-item-id="' + r.id + '" data-item-name="' + esc(r.name) + '">' +
             (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span></div>';
         }).join('');
+
+        // No live-priced (tradeable) match at all -- offer to add exactly
+        // what was typed as an untradeable item instead, matched by name
+        // rather than id (see _take_owned in app/purchase_goals.py).
+        if (!results.length) {
+          rowsHtml = '<div class="suggestion suggestion-add-untradeable" data-untradeable-name="' + esc(trimmed) + '">' +
+            '<span class="suggestion-add-icon">+</span><span>Add &ldquo;' + esc(trimmed) + '&rdquo; as an untradeable item</span></div>';
+        }
+
+        box.innerHTML = rowsHtml;
         box.classList.add('show');
-        box.querySelectorAll('.suggestion').forEach(function (row) {
+
+        var input = document.getElementById('slotSearchInput');
+        box.querySelectorAll('.suggestion[data-item-id]').forEach(function (row) {
           row.addEventListener('click', function () {
-            saveSlot({
-              item_id: parseInt(row.getAttribute('data-item-id'), 10),
-              item_name: row.getAttribute('data-item-name'),
-              supplies: PG.picker.supplies,
-            });
+            PG.picker.selected = {
+              itemId: parseInt(row.getAttribute('data-item-id'), 10),
+              itemName: row.getAttribute('data-item-name'),
+            };
+            PG.picker.query = PG.picker.selected.itemName;
+            if (input) input.value = PG.picker.selected.itemName;
+            box.classList.remove('show');
+            box.innerHTML = '';
+          });
+        });
+        box.querySelectorAll('.suggestion-add-untradeable').forEach(function (row) {
+          row.addEventListener('click', function () {
+            var name = row.getAttribute('data-untradeable-name');
+            PG.picker.selected = { itemId: null, itemName: name };
+            PG.picker.query = name;
+            if (input) input.value = name;
+            box.classList.remove('show');
+            box.innerHTML = '';
           });
         });
       }

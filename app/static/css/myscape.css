@@ -68,32 +68,6 @@ button, input { font-family: inherit; }
 a { color: var(--gold-dim); text-decoration: none; }
 a:hover { color: var(--gold); text-decoration: underline; }
 
-/* Looping muted background video, fixed behind everything, with a dark
-   scrim over it so text stays readable. Both sit at negative z-index,
-   which is enough to keep them behind the rest of the page since none
-   of the normal-flow content sets its own z-index (default stacking
-   order already puts it above). `object-fit: cover` fills the viewport
-   without distorting the video's aspect ratio. */
-.bg-video {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: -2;
-}
-
-.bg-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(15, 15, 16, 0.5);
-  z-index: -1;
-}
-
 /* Padding lives here rather than on body so the link banner (a sibling
    before .page, see _shell) can sit flush against the very top and
    sides of the viewport and push this content down in normal document

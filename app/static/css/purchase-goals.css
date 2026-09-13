@@ -251,6 +251,10 @@
 }
 
 .search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
+/* The slot picker's own search box (as opposed to the setup-icon
+   picker's, or a combo-builder row's) takes its whole row -- see the
+   "Search for an item" input in .gear-slot-picker. */
+.search-box.search-box-full { flex: 1 1 100%; width: 100%; }
 .search-box input[type="text"] { width: 100%; }
 .suggestions {
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
@@ -263,7 +267,36 @@
 }
 .suggestion:hover, .suggestion.active { background: var(--panel-2); }
 .suggestion img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
-.suggestion.suggestion-untradeable { color: var(--text-faint); font-style: italic; }
+
+/* The "no tradeable match -- add it as untradeable instead" row that
+   replaces the search results when the query matches nothing in the
+   OSRS Wiki's (tradeable-only) price mapping -- styled as an action,
+   not an item, so it doesn't look like a real search result. */
+.suggestion-add-untradeable { color: var(--gold-dim); font-style: italic; }
+.suggestion-add-untradeable:hover { color: var(--gold); }
+.suggestion-add-icon {
+  width: 22px; height: 22px; flex: none; border: 1px dashed currentColor;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1;
+}
+
+/* The three equal-height actions under the slot picker's search box:
+   switch to building a combo, add what's selected as supplies, or add
+   it plainly. Deliberately plain bordered/filled buttons (not .link
+   text buttons) so all three render at the same height regardless of
+   which one carries the primary gold treatment. */
+.gear-slot-picker-actions { display: flex; gap: 8px; width: 100%; margin-top: 2px; }
+.gear-slot-picker-actions button {
+  flex: 1 1 0;
+  padding: 11px 12px;
+  font-size: 13.5px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.gspa-primary { background: var(--gold); color: #221c10; border: none; }
+.gspa-primary:hover { background: #ffab42; }
+.gspa-secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+.gspa-secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
 
 .gear-combo-builder {
   width: 100%; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border);
