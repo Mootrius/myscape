@@ -165,48 +165,20 @@ def render_landing(player: Optional[Player]) -> str:
 
 
 # Small inline SVGs for the dashboard cards below -- drawn from scratch in
-# the site's own palette (not the game's actual item sprites) so they don't
-# depend on any external asset fetch and stay on-brand. `currentColor` isn't
-# used since each coin/bone tier wants its own shade for depth.
-_ICON_COINS = """
-<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="17" cy="32" r="12" fill="#cf7a17" stroke="#221c10" stroke-width="2" />
-  <circle cx="17" cy="32" r="6.5" fill="none" stroke="#221c10" stroke-width="1.5" opacity="0.45" />
-  <circle cx="26" cy="23.5" r="12" fill="#ff981f" stroke="#221c10" stroke-width="2" />
-  <circle cx="26" cy="23.5" r="6.5" fill="none" stroke="#221c10" stroke-width="1.5" opacity="0.45" />
-  <circle cx="35" cy="15" r="12" fill="#ffab42" stroke="#221c10" stroke-width="2" />
-  <circle cx="35" cy="15" r="6.5" fill="none" stroke="#221c10" stroke-width="1.5" opacity="0.45" />
-</svg>
-"""
-
-_ICON_BONES = """
-<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-  <g transform="rotate(20 24 24)">
-    <rect x="8" y="17.5" width="32" height="13" rx="6.5" fill="#221c10" />
-    <circle cx="10" cy="18" r="8.5" fill="#221c10" />
-    <circle cx="10" cy="30" r="8.5" fill="#221c10" />
-    <circle cx="38" cy="18" r="8.5" fill="#221c10" />
-    <circle cx="38" cy="30" r="8.5" fill="#221c10" />
-  </g>
-  <g transform="rotate(20 24 24)">
-    <rect x="10" y="19.5" width="28" height="9" rx="4.5" fill="#e4dcc8" />
-    <circle cx="10" cy="18" r="6.5" fill="#e4dcc8" />
-    <circle cx="10" cy="30" r="6.5" fill="#e4dcc8" />
-    <circle cx="38" cy="18" r="6.5" fill="#e4dcc8" />
-    <circle cx="38" cy="30" r="6.5" fill="#e4dcc8" />
-  </g>
-</svg>
-"""
+# the game's own item icons (from the OSRS Wiki), not drawings of our own --
+# so a returning player recognizes them at a glance.
+_ICON_COINS = "/static/img/icon-coins.png"
+_ICON_BONES = "/static/img/icon-dragon-bones.png"
 
 
-def _dash_card(icon_svg: str, title: str, description: str) -> str:
+def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
     """One dashboard feature card -- an icon chip on the left, heading and
     description stacked on the right. Both current cards describe features
     that aren't live yet, but their copy explains what's coming rather than
     just saying "coming soon" now that there's something to say about them."""
     return f"""
     <div class="dash-card">
-      <div class="dash-card-icon" aria-hidden="true">{icon_svg}</div>
+      <div class="dash-card-icon"><img src="{escape(icon_src)}" alt="{escape(icon_alt)}" /></div>
       <div class="dash-card-body">
         <h3>{escape(title)}</h3>
         <p class="subtitle">{escape(description)}</p>
@@ -224,6 +196,7 @@ def render_dashboard(player: Player) -> str:
 
     purchase_goals_card = _dash_card(
         _ICON_COINS,
+        "Coins",
         "Purchase Goals",
         "Track your owned GP against the purchases you'd like to make on the "
         "Grand Exchange, all with live pricing updates for each item. "
@@ -231,6 +204,7 @@ def render_dashboard(player: Player) -> str:
     )
     loot_tracker_card = _dash_card(
         _ICON_BONES,
+        "Dragon bones",
         "Loot Tracker",
         "Track the loot from any NPC you kill, with useful graphs and other "
         "statistics available for your tracking pleasure. Customize which "
