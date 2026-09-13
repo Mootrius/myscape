@@ -25,7 +25,7 @@
 
 .tracker-icon-btn {
   width: 44px; height: 44px;
-  border-radius: 50%;
+  border-radius: var(--radius);
   background: var(--panel-2);
   border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center;
@@ -39,15 +39,25 @@
 .tracker-icon-fallback { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1.15; padding: 0 3px; }
 
 .tracker-menu-wrap { position: relative; }
+/* Slightly smaller than the setup icons beside it -- it's a secondary
+   action (options), not another setup to pick. */
 .icon-menu-btn {
-  width: 44px; height: 44px; border-radius: 50%;
+  width: 36px; height: 36px; border-radius: var(--radius);
   background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim);
-  font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
 }
 .icon-menu-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+
+/* A drawn three-bar hamburger rather than a text glyph, so it stays
+   crisp and sharp-cornered like the rest of the site's iconography
+   instead of depending on how a font happens to render "☰". */
+.hamburger-icon { display: flex; flex-direction: column; justify-content: space-between; width: 16px; height: 11px; }
+.hamburger-icon span { display: block; height: 2px; background: currentColor; }
+
 .tracker-menu {
-  position: absolute; top: 52px; right: 0; z-index: 5;
-  background: var(--panel); border: 1px solid var(--border); min-width: 160px;
+  position: absolute; top: 44px; right: 0; z-index: 5;
+  background: var(--panel-translucent); border: 1px solid var(--border); min-width: 160px;
   display: flex; flex-direction: column;
 }
 .tracker-menu-item {
@@ -66,7 +76,8 @@
   border-radius: var(--radius);
   padding: 18px 22px; margin-bottom: 24px;
   display: flex; align-items: center; gap: 18px;
-  background: var(--panel);
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
   min-height: 90px;
 }
 .overlay-side { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
@@ -92,9 +103,31 @@
 }
 .overlay-icon-wrap:hover .overlay-icon-placeholder { border-color: var(--gold-dim); color: var(--gold); }
 
-.pg-body { display: flex; gap: 36px; flex-wrap: wrap; }
-.pg-doll-col { display: flex; flex-direction: column; gap: 22px; align-items: center; }
+.pg-body { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+/* Holds the gear-frame (below) and, when a slot is being edited, the
+   slot picker -- stacked in this one column so the picker appears
+   directly under the gear+inventory box rather than at the bottom of
+   the whole two-column row, and the summary column beside it doesn't
+   move when the picker opens or closes. */
+.pg-doll-wrap { display: flex; flex-direction: column; gap: 18px; }
 .pg-summary-col { flex: 1 1 320px; min-width: 280px; }
+
+/* The box holding worn equipment and inventory together (see
+   .dash-card in myscape.css for the same translucent-panel/faint-
+   border treatment used site-wide) -- the individual slots inside stay
+   fully opaque (see .gear-slot below), only this shared frame around
+   them is translucent. Doll and inventory sit side by side, like the
+   original tool, with the shorter doll vertically centered against the
+   taller inventory grid. */
+.pg-gear-frame {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
 
 .gear-doll {
   display: grid;
@@ -161,7 +194,12 @@
 .gear-slot.not-owned { border-color: var(--red); }
 .gear-slot.affordable { border-color: var(--amber); }
 
-.gear-summary { padding-top: 4px; }
+.gear-summary {
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
 .gear-summary-heading {
   font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--text-faint); margin-bottom: 12px;
@@ -186,8 +224,8 @@
 .gear-summary-row-cost.na { color: var(--text-faint); }
 
 .gear-icon-picker, .gear-slot-picker {
-  background: var(--panel); border-radius: var(--radius);
-  padding: 14px 16px; margin: 14px 0 22px;
+  background: var(--panel-translucent); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; margin: 0 0 22px;
   display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap;
 }
 
@@ -195,7 +233,7 @@
 .search-box input[type="text"] { width: 100%; }
 .suggestions {
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
-  background: var(--panel); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
+  background: var(--panel-translucent); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
 }
 .suggestions.show { display: block; }
 .suggestion {
@@ -228,4 +266,5 @@
 
 @media (max-width: 720px) {
   .pg-body { flex-direction: column; align-items: center; }
+  .pg-gear-frame { flex-direction: column; }
 }

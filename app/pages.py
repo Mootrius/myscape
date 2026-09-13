@@ -497,7 +497,9 @@ def render_purchase_goals(player: Player) -> str:
     <div class="pg-header">
       <div class="tracker-icon-row" id="setupIconRow"></div>
       <div class="tracker-menu-wrap">
-        <button class="icon-menu-btn" id="setupMenuBtn" type="button" title="Setup options">&#8942;</button>
+        <button class="icon-menu-btn" id="setupMenuBtn" type="button" title="Setup options">
+          <span class="hamburger-icon"><span></span><span></span><span></span></span>
+        </button>
         <div class="tracker-menu" id="setupMenu" style="display:none;">
           <button class="tracker-menu-item" id="menuNewSetup" type="button">New setup</button>
           <button class="tracker-menu-item" id="menuRenameSetup" type="button">Rename</button>
@@ -646,14 +648,23 @@ def render_purchase_goals(player: Player) -> str:
 
         var summary = renderSummaryHtml(setup);
 
+        // The icon picker sits directly under the progress bar (so
+        // opening it pushes the gear+inventory box and summary down,
+        // not the whole page below them), and the slot picker sits
+        // directly under the gear+inventory box itself, inside the
+        // same left-hand column as that box -- see .pg-doll-wrap in
+        // purchase-goals.css -- so it never disturbs the summary
+        // column beside it.
         el.innerHTML =
           overlay +
-          '<div class="pg-body">' +
-          '  <div class="pg-doll-col">' + doll + grid + '</div>' +
-          '  <div class="pg-summary-col">' + summary + '</div>' +
-          '</div>' +
           '<div id="pgIconPicker"></div>' +
-          '<div id="pgSlotPicker"></div>';
+          '<div class="pg-body">' +
+          '  <div class="pg-doll-wrap">' +
+          '    <div class="pg-gear-frame">' + doll + grid + '</div>' +
+          '    <div id="pgSlotPicker"></div>' +
+          '  </div>' +
+          '  <div class="pg-summary-col">' + summary + '</div>' +
+          '</div>';
 
         wireSlotClicks();
         document.getElementById('pgIconTrigger').addEventListener('click', function () {
