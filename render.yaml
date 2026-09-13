@@ -15,3 +15,10 @@ services:
         fromDatabase:
           name: myscape-db
           property: connectionString
+      - key: PYTHON_VERSION
+        # Pinned explicitly rather than trusting Render's default -- that
+        # default has already jumped to a Python version (3.14) newer than
+        # psycopg2-binary has working precompiled wheels for, which is what
+        # broke the first deploy (ImportError: undefined symbol
+        # _PyInterpreterState_Get -- a wheel built for the wrong Python ABI).
+        value: "3.12.7"
