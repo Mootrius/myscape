@@ -13,7 +13,7 @@ from app.models import Player
 def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
     """The single link/button that goes on each side of the centered
     logo in the header (see _shell). Logged out: Log in on the left,
-    Create an account on the right. Logged in: Dashboard on the left,
+    Sign up on the right. Logged in: Dashboard on the left,
     Log out on the right -- the email address used to show here too,
     but there's no room for it next to a centered logo without
     crowding the nav, so it's dropped (still shown on the dashboard
@@ -25,7 +25,7 @@ def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
         )
     return (
         '<a href="/login">Log in</a>',
-        '<a href="/signup">Create an account</a>',
+        '<a href="/signup">Sign up</a>',
     )
 
 
@@ -172,8 +172,7 @@ def render_signup() -> str:
     body = """
     <div class="auth-shell">
       <div class="auth-card">
-        <h2>Create your account</h2>
-        <p class="auth-subtitle">Free to join &mdash; link a RuneLite plugin once you're in.</p>
+        <h2>Sign up</h2>
         <div class="auth-error" id="formError"></div>
         <form id="signupForm">
           <div class="field">
@@ -183,7 +182,6 @@ def render_signup() -> str:
           <div class="field">
             <label for="password">Password</label>
             <input type="password" id="password" name="password" placeholder="At least 8 characters" required minlength="8" />
-            <div class="hint">Minimum 8 characters.</div>
           </div>
           <button class="primary" type="submit">Sign up</button>
         </form>
@@ -230,7 +228,6 @@ def render_login() -> str:
     <div class="auth-shell">
       <div class="auth-card">
         <h2>Log in</h2>
-        <p class="auth-subtitle">Welcome back.</p>
         <div class="auth-error" id="formError"></div>
         <form id="loginForm">
           <div class="field">
