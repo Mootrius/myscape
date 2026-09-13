@@ -4,10 +4,27 @@ No template engine -- these are simple enough that plain f-strings beat
 adding a Jinja2 dependency for a handful of pages. If the page count
 grows past "a handful," that tradeoff is worth revisiting.
 """
+import os
 from html import escape
 from typing import Optional
 
 from app.models import Player
+
+# Cache-busting query string for the stylesheet link in _shell() below.
+# Without this, a browser that already has myscape.css cached (Starlette's
+# StaticFiles doesn't send a Cache-Control header, so browsers are free to
+# treat it as fresh for a while on their own heuristics) can keep serving
+# a stale copy after a CSS-only deploy, with no visible sign anything is
+# wrong -- the page's HTML is never cached, so it looks like the deploy
+# "didn't work" when it's really just an old stylesheet. Appending the
+# file's own mtime as `?v=` gives every deploy (which always re-checks
+# out the repo, refreshing this) a new URL, so there's nothing stale to
+# fall back to.
+_STATIC_CSS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "css", "myscape.css")
+try:
+    _CSS_VERSION = int(os.path.getmtime(_STATIC_CSS_PATH))
+except OSError:
+    _CSS_VERSION = 0
 
 
 def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
@@ -239,7 +256,7 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
   <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/static/css/myscape.css" />
+  <link rel="stylesheet" href="/static/css/myscape.css?v={_CSS_VERSION}" />
 </head>
 <body>
   <video class="bg-video" autoplay muted loop playsinline preload="auto">
