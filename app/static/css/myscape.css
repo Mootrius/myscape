@@ -136,7 +136,7 @@ header {
 
 .logo a:hover { color: var(--gold); text-decoration: none; }
 
-.subtitle { color: var(--text-faint); font-size: 15px; margin-top: 6px; }
+.subtitle { color: var(--text); font-size: 15px; margin-top: 6px; }
 
 .nav-side { display: flex; align-items: center; font-size: 15px; }
 
@@ -183,7 +183,7 @@ header {
 .field label {
   display: block;
   font-size: 13.5px;
-  color: var(--text-dim);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 8px;
@@ -199,6 +199,10 @@ input[type="email"], input[type="password"], input[type="text"] {
   width: 100%;
 }
 
+/* Left dim on purpose (unlike the rest of the site's copy, now plain
+   white) -- it's a hint, not real content, and needs to read as
+   visually distinct from what the player actually types, which is
+   the same white as everything else. */
 input::placeholder { color: var(--text-faint); }
 input:focus { outline: none; border-color: var(--gold-dim); }
 
@@ -234,7 +238,7 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 .auth-switch {
   text-align: center;
   font-size: 14.5px;
-  color: var(--text-faint);
+  color: var(--text);
   margin-top: 22px;
 }
 
@@ -311,7 +315,7 @@ footer {
 }
 
 .footer-linked-note {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 14.5px;
   margin: 0 0 10px;
 }
@@ -339,15 +343,15 @@ footer {
 .footer-unlink-error { max-width: 420px; margin: 0 auto 14px; }
 
 .footer-trademark {
-  color: var(--text-faint);
+  color: var(--text);
   font-size: 13px;
   margin: 0;
 }
 
 /* Required attribution, but its two links use the same signature gold
-   as the Unlink link above (and every other link sitewide) -- only the
-   surrounding "is a trademark of" text stays faint, so the two clickable
-   names are what actually draws the eye. */
+   as the Unlink link above (and every other link sitewide) -- the
+   surrounding "is a trademark of" text stays plain white so only the
+   two clickable names stand out in gold. */
 .footer-trademark a { color: var(--gold-dim); text-decoration: none; }
 .footer-trademark a:hover { color: var(--gold); text-decoration: underline; }
 
