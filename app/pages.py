@@ -508,7 +508,48 @@ def render_purchase_goals(player: Player) -> str:
       <button class="primary" id="pgNameSave" type="button">Save</button>
       <button class="link" id="pgNameCancel" type="button">Cancel</button>
     </div>
-    <div id="pgContent"><p class="pg-empty">Loading&hellip;</p></div>
+    <div class="overlay-card" id="pgOverlay" style="display:none;">
+      <div class="overlay-side overlay-source">
+        <img class="overlay-icon" src="/static/img/icon-coins.png" alt="Coins" />
+        <span class="overlay-amount" id="pgCoinsAmount">0</span>
+      </div>
+      <div class="overlay-progress">
+        <div class="progress-track overlay-track"><div class="progress-fill" id="pgOverlayFill" style="width:0%;"></div></div>
+      </div>
+      <div class="overlay-side overlay-target">
+        <div class="overlay-icon-wrap" id="pgIconTrigger" title="Set a display icon for this setup">
+          <img class="overlay-icon" id="pgOverlayIconImg" alt="" style="display:none;" />
+          <span class="overlay-icon-placeholder" id="pgOverlayIconPlaceholder">+</span>
+        </div>
+        <span class="overlay-amount" id="pgCostAmount">0</span>
+      </div>
+    </div>
+    <div id="pgIconPicker"></div>
+    <div class="pg-body" id="pgBody" style="display:none;">
+      <div class="pg-doll-wrap">
+        <div class="pg-gear-frame" id="pgGearFrame"></div>
+        <div id="pgSlotPicker"></div>
+      </div>
+      <div class="pg-summary-col">
+        <div class="gear-summary">
+          <div class="gear-summary-heading">Still to purchase</div>
+          <div class="gear-next-purchase" id="pgNextPurchase" style="display:none;">
+            <div class="gear-next-purchase-icon-wrap">
+              <img class="gear-next-purchase-icon" id="pgNpIcon" src="" alt="" />
+            </div>
+            <div class="gear-next-purchase-body">
+              <div class="gear-next-purchase-label">Next purchase</div>
+              <div class="gear-next-purchase-name" id="pgNpName"></div>
+              <div class="progress-track"><div class="progress-fill" id="pgNpFill" style="width:0%;"></div></div>
+              <div class="gear-next-purchase-amount" id="pgNpAmount"></div>
+            </div>
+          </div>
+          <p class="gear-summary-empty" id="pgSummaryEmpty" style="display:none;">Everything in this setup is already owned.</p>
+          <div class="gear-summary-list" id="pgSummaryList"></div>
+        </div>
+      </div>
+    </div>
+    <p class="pg-empty" id="pgEmptyMsg">Loading&hellip;</p>
     """
     script = """
     (function () {
@@ -522,12 +563,6 @@ def render_purchase_goals(player: Player) -> str:
         nameFormMode: null, // 'new' | 'rename' | null
         pollTimer: null,
         comboSeq: 0,
-        // Last-displayed values for the animated overlay/next-purchase
-        // numbers and bars (see tickNumberText below) -- null means
-        // "nothing shown yet", which skips the animation and just
-        // displays the new value outright, same as the original
-        // desktop app's tween helper.
-        anim: { coins: null, cost: null, pct: null, npPct: null },
       };
 
       function esc(s) {
@@ -541,43 +576,60 @@ def render_purchase_goals(player: Player) -> str:
         return n.toLocaleString('en-US');
       }
 
-      // Ticks an element's text from `fromValue` to `toValue` over half a
-      // second instead of popping straight to the new number -- the same
-      // effect the original desktop app used for its gear-setup GP
-      // amounts. Callers pass the previously-displayed value explicitly
-      // (rather than this tracking it per-element) since the Purchase
-      // Goals page rebuilds these elements on every render instead of
-      // mutating a fixed set of nodes; skip the call entirely when there's
-      // nothing to animate from (first paint) or the value hasn't moved.
-      function tickNumberText(el, fromValue, toValue, format) {
+      // Ticks an element's text from whatever it currently shows to a new
+      // target over half a second, instead of popping straight to the new
+      // number -- same idea as the original desktop app's tween helper.
+      // This only works because pgCoinsAmount/pgCostAmount are now fixed,
+      // persistent elements (see the static markup above) that live for
+      // the whole page instead of being torn down and rebuilt on every
+      // poll -- an element that gets replaced every few seconds has no
+      // "currently shows" to tween from, and re-tweening from a stale
+      // snapshot on a brand-new node each time is exactly what was
+      // causing the coins readout to visibly flicker. Keyed per-element
+      // (WeakMap) so a still-running tween is cancelled rather than left
+      // to fight a new one for the same node -- two rAF loops racing to
+      // write the same textContent every frame is its own flicker bug.
+      var numberTweens = new WeakMap();
+      function tickNumberText(el, targetValue, format) {
         if (!el) return;
+        if (typeof targetValue !== 'number' || !isFinite(targetValue)) {
+          var prevBad = numberTweens.get(el);
+          if (prevBad && prevBad.raf) cancelAnimationFrame(prevBad.raf);
+          el.textContent = format(targetValue);
+          numberTweens.delete(el);
+          return;
+        }
+
+        var prev = numberTweens.get(el);
+        var startValue = prev ? prev.currentValue : targetValue;
+        if (prev && prev.raf) cancelAnimationFrame(prev.raf);
+
+        // First time this element has ever been set, or already showing
+        // the target -- nothing to animate, just show it outright.
+        if (!prev || startValue === targetValue) {
+          el.textContent = format(targetValue);
+          numberTweens.set(el, { raf: null, currentValue: targetValue });
+          return;
+        }
+
         var duration = 500;
         var startTime = null;
         function step(ts) {
           if (startTime === null) startTime = ts;
           var t = Math.min(1, (ts - startTime) / duration);
           var eased = 1 - Math.pow(1 - t, 3); // ease-out, matches the bars' feel
-          el.textContent = format(fromValue + (toValue - fromValue) * eased);
-          if (t < 1) requestAnimationFrame(step);
-          else el.textContent = format(toValue);
+          var current = startValue + (targetValue - startValue) * eased;
+          el.textContent = format(current);
+          if (t < 1) {
+            var state = numberTweens.get(el);
+            state.currentValue = current;
+            state.raf = requestAnimationFrame(step);
+          } else {
+            el.textContent = format(targetValue);
+            numberTweens.set(el, { raf: null, currentValue: targetValue });
+          }
         }
-        requestAnimationFrame(step);
-      }
-
-      // Grows/shrinks a .progress-fill bar's width from `fromPct` to
-      // `toPct` by relying on its own CSS transition (see .progress-fill
-      // in purchase-goals.css) -- the bar just needs to actually paint at
-      // the "from" width for a frame before the "to" width is applied, or
-      // the browser has nothing to transition between. The double rAF
-      // guarantees that first paint happens before the change lands.
-      function tickBarWidth(el, fromPct, toPct) {
-        if (!el) return;
-        el.style.width = fromPct + '%';
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
-            el.style.width = toPct + '%';
-          });
-        });
+        numberTweens.set(el, { raf: requestAnimationFrame(step), currentValue: startValue });
       }
 
       function showError(msg) {
@@ -649,53 +701,31 @@ def render_purchase_goals(player: Player) -> str:
       }
 
       function renderContent() {
-        var el = document.getElementById('pgContent');
+        var overlayEl = document.getElementById('pgOverlay');
+        var bodyEl = document.getElementById('pgBody');
+        var emptyEl = document.getElementById('pgEmptyMsg');
+
         if (!PG.data) {
-          el.innerHTML = '<p class="pg-empty">Loading&hellip;</p>';
-          PG.anim = { coins: null, cost: null, pct: null, npPct: null };
+          overlayEl.style.display = 'none';
+          bodyEl.style.display = 'none';
+          emptyEl.style.display = '';
+          emptyEl.textContent = 'Loading…';
           return;
         }
         var setup = activeSetup();
         if (!setup) {
-          el.innerHTML = '<p class="pg-empty">No gear setups yet -- use the menu above to create your first one.</p>';
-          PG.anim = { coins: null, cost: null, pct: null, npPct: null };
+          overlayEl.style.display = 'none';
+          bodyEl.style.display = 'none';
+          emptyEl.style.display = '';
+          emptyEl.textContent = 'No gear setups yet -- use the menu above to create your first one.';
           return;
         }
 
-        // Snapshot of whatever was on screen before this render, so the
-        // freshly-built markup below can start from those values and then
-        // tween/transition into the new ones once it's in the DOM -- see
-        // tickNumberText/tickBarWidth. A null field means nothing's been
-        // shown yet (first paint), so that value renders outright instead
-        // of animating from nowhere.
-        var fromCoins = PG.anim.coins;
-        var fromCost = PG.anim.cost;
-        var fromPct = PG.anim.pct;
-        var fromNpPct = PG.anim.npPct;
+        overlayEl.style.display = '';
+        bodyEl.style.display = '';
+        emptyEl.style.display = 'none';
 
-        var fundedClass = setup.funded ? ' funded-fill' : '';
-        var coins = PG.data.coins;
-        var cost = setup.totalCost;
-        var pct = Math.max(0, Math.min(100, setup.progressPct));
-        var initialPct = fromPct != null ? fromPct : pct;
-        var iconInner = (setup.icon && setup.icon.icon)
-          ? '<img class="overlay-icon" src="' + esc(setup.icon.icon) + '" alt="" />'
-          : '<span class="overlay-icon-placeholder">+</span>';
-
-        var overlay = '' +
-          '<div class="overlay-card">' +
-          '  <div class="overlay-side overlay-source">' +
-          '    <img class="overlay-icon" src="' + COINS_ICON + '" alt="Coins" />' +
-          '    <span class="overlay-amount" id="pgCoinsAmount">' + formatGp(fromCoins != null ? fromCoins : coins) + '</span>' +
-          '  </div>' +
-          '  <div class="overlay-progress">' +
-          '    <div class="progress-track overlay-track"><div class="progress-fill' + fundedClass + '" id="pgOverlayFill" style="width:' + initialPct + '%;"></div></div>' +
-          '  </div>' +
-          '  <div class="overlay-side overlay-target">' +
-          '    <div class="overlay-icon-wrap" id="pgIconTrigger" title="Set a display icon for this setup">' + iconInner + '</div>' +
-          '    <span class="overlay-amount" id="pgCostAmount">' + formatGp(fromCost != null ? fromCost : cost) + '</span>' +
-          '  </div>' +
-          '</div>';
+        updateOverlay(setup);
 
         var doll = '<div class="gear-doll">' + EQUIPMENT_SLOTS.map(function (slotName) {
           return slotHtml(setup.equipment[slotName], 'equipment', slotName, 'slot-' + slotName);
@@ -705,26 +735,8 @@ def render_purchase_goals(player: Player) -> str:
           return slotHtml(item, 'inventory', idx, '');
         }).join('') + '</div>';
 
-        var npPct = setup.nextPurchase ? Math.max(0, Math.min(100, setup.nextPurchase.progressPct)) : null;
-        var summary = renderSummaryHtml(setup, fromNpPct);
-
-        // The icon picker sits directly under the progress bar (so
-        // opening it pushes the gear+inventory box and summary down,
-        // not the whole page below them), and the slot picker sits
-        // directly under the gear+inventory box itself, inside the
-        // same left-hand column as that box -- see .pg-doll-wrap in
-        // purchase-goals.css -- so it never disturbs the summary
-        // column beside it.
-        el.innerHTML =
-          overlay +
-          '<div id="pgIconPicker"></div>' +
-          '<div class="pg-body">' +
-          '  <div class="pg-doll-wrap">' +
-          '    <div class="pg-gear-frame">' + doll + grid + '</div>' +
-          '    <div id="pgSlotPicker"></div>' +
-          '  </div>' +
-          '  <div class="pg-summary-col">' + summary + '</div>' +
-          '</div>';
+        document.getElementById('pgGearFrame').innerHTML = doll + grid;
+        renderSummaryList(setup);
 
         // Pin the column's width to the gear-frame's own rendered width
         // (see the comment on .pg-doll-wrap in purchase-goals.css) --
@@ -733,39 +745,58 @@ def render_purchase_goals(player: Player) -> str:
         // shoving the summary column out of place instead of just
         // wrapping its own contents inside the frame's width.
         var dollWrapEl = document.querySelector('.pg-doll-wrap');
-        var gearFrameEl = document.querySelector('.pg-gear-frame');
+        var gearFrameEl = document.getElementById('pgGearFrame');
         if (dollWrapEl && gearFrameEl) {
           dollWrapEl.style.width = gearFrameEl.offsetWidth + 'px';
         }
 
         wireSlotClicks();
-        document.getElementById('pgIconTrigger').addEventListener('click', function () {
-          PG.iconPicker = !PG.iconPicker;
-          PG.picker = null;
-          renderIconPicker();
-          document.getElementById('pgSlotPicker').innerHTML = '';
-        });
         renderIconPicker();
         renderSlotPicker();
+      }
 
-        // Tween the overlay's GP numbers and grow/shrink both progress
-        // bars from whatever was previously on screen -- skipped
-        // (element just shows the final value/width outright) whenever
-        // there's nothing to animate from yet, per the null checks
-        // inside tickNumberText/tickBarWidth's callers below.
-        if (fromCoins != null && fromCoins !== coins) {
-          tickNumberText(document.getElementById('pgCoinsAmount'), fromCoins, coins, formatGp);
+      // Updates the overlay's GP numbers/bar and the next-purchase mini
+      // bar in place, on the same fixed elements every time (see the
+      // static markup in render_purchase_goals), instead of rebuilding
+      // them -- that's what lets tickNumberText tween the numbers and the
+      // bars' own CSS transition (see .progress-fill) animate their width
+      // smoothly rather than popping or flickering on every poll.
+      function updateOverlay(setup) {
+        var pct = Math.max(0, Math.min(100, setup.progressPct));
+        tickNumberText(document.getElementById('pgCoinsAmount'), PG.data.coins, formatGp);
+        tickNumberText(document.getElementById('pgCostAmount'), setup.totalCost, formatGp);
+
+        var fillEl = document.getElementById('pgOverlayFill');
+        fillEl.style.width = pct + '%';
+        fillEl.classList.toggle('funded-fill', !!setup.funded);
+
+        var iconImgEl = document.getElementById('pgOverlayIconImg');
+        var iconPlaceholderEl = document.getElementById('pgOverlayIconPlaceholder');
+        if (setup.icon && setup.icon.icon) {
+          iconImgEl.src = setup.icon.icon;
+          iconImgEl.style.display = '';
+          iconPlaceholderEl.style.display = 'none';
+        } else {
+          iconImgEl.style.display = 'none';
+          iconPlaceholderEl.style.display = '';
         }
-        if (fromCost != null && fromCost !== cost) {
-          tickNumberText(document.getElementById('pgCostAmount'), fromCost, cost, formatGp);
+
+        var npEl = document.getElementById('pgNextPurchase');
+        if (setup.nextPurchase) {
+          var np = setup.nextPurchase;
+          var npPct = Math.max(0, Math.min(100, np.progressPct));
+          npEl.style.display = '';
+          var npIconEl = document.getElementById('pgNpIcon');
+          npIconEl.src = np.icon || '';
+          npIconEl.style.visibility = np.icon ? '' : 'hidden';
+          document.getElementById('pgNpName').textContent = np.itemName;
+          var npFillEl = document.getElementById('pgNpFill');
+          npFillEl.style.width = npPct + '%';
+          npFillEl.classList.toggle('funded-fill', !!np.funded);
+          document.getElementById('pgNpAmount').textContent = formatGp(PG.data.coins) + ' / ' + formatGp(np.cost) + ' gp';
+        } else {
+          npEl.style.display = 'none';
         }
-        if (fromPct != null && fromPct !== pct) {
-          tickBarWidth(document.getElementById('pgOverlayFill'), fromPct, pct);
-        }
-        if (npPct != null && fromNpPct != null && fromNpPct !== npPct) {
-          tickBarWidth(document.getElementById('pgNpFill'), fromNpPct, npPct);
-        }
-        PG.anim = { coins: coins, cost: cost, pct: pct, npPct: npPct };
       }
 
       var EQUIPMENT_SLOTS = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'boots', 'ring'];
@@ -847,42 +878,32 @@ def render_purchase_goals(player: Player) -> str:
         });
       }
 
-      function renderSummaryHtml(setup, fromNpPct) {
-        var html = '<div class="gear-summary"><div class="gear-summary-heading">Still to purchase</div>';
-        if (setup.nextPurchase) {
-          var np = setup.nextPurchase;
-          var npPct = Math.max(0, Math.min(100, np.progressPct));
-          var npInitialPct = fromNpPct != null ? fromNpPct : npPct;
-          html += '' +
-            '<div class="gear-next-purchase">' +
-            '  <div class="gear-next-purchase-icon-wrap">' +
-            (np.icon ? '<img class="gear-next-purchase-icon" src="' + esc(np.icon) + '" alt="" />' : '') +
-            '  </div>' +
-            '  <div class="gear-next-purchase-body">' +
-            '    <div class="gear-next-purchase-label">Next purchase</div>' +
-            '    <div class="gear-next-purchase-name">' + esc(np.itemName) + '</div>' +
-            '    <div class="progress-track"><div class="progress-fill' + (np.funded ? ' funded-fill' : '') + '" id="pgNpFill" style="width:' + npInitialPct + '%;"></div></div>' +
-            '    <div class="gear-next-purchase-amount">' + formatGp(PG.data.coins) + ' / ' + formatGp(np.cost) + ' gp</div>' +
-            '  </div>' +
-            '</div>';
-        }
+      // Only the "still to purchase" list + empty message -- the
+      // next-purchase mini bar/amount above it is a fixed element updated
+      // in place by updateOverlay() instead, so it isn't rebuilt (and
+      // therefore doesn't need to animate) every time this list changes.
+      function renderSummaryList(setup) {
+        var emptyEl = document.getElementById('pgSummaryEmpty');
+        var listEl = document.getElementById('pgSummaryList');
         if (!setup.stillToPurchase.length) {
-          html += '<p class="gear-summary-empty">Everything in this setup is already owned.</p>';
-        } else {
-          html += '<div class="gear-summary-list">' + setup.stillToPurchase.map(function (item) {
-            var rowCls = 'gear-summary-row' + (item.purchasable ? '' : ' unpurchasable');
-            var costHtml = item.purchasable
-              ? '<span class="gear-summary-row-cost">' + formatGp(item.cost) + '</span>'
-              : '<span class="gear-summary-row-cost na">n/a</span>';
-            return '<div class="' + rowCls + '">' +
-              (item.icon ? '<img class="gear-summary-row-icon" src="' + esc(item.icon) + '" alt="" />' : '<span class="gear-summary-row-icon"></span>') +
-              '<span class="gear-summary-row-name">' + esc(item.itemName) + (item.isCombo ? ' (combo)' : '') + '</span>' +
-              costHtml +
-              '</div>';
-          }).join('') + '</div>';
+          emptyEl.style.display = '';
+          listEl.style.display = 'none';
+          listEl.innerHTML = '';
+          return;
         }
-        html += '</div>';
-        return html;
+        emptyEl.style.display = 'none';
+        listEl.style.display = '';
+        listEl.innerHTML = setup.stillToPurchase.map(function (item) {
+          var rowCls = 'gear-summary-row' + (item.purchasable ? '' : ' unpurchasable');
+          var costHtml = item.purchasable
+            ? '<span class="gear-summary-row-cost">' + formatGp(item.cost) + '</span>'
+            : '<span class="gear-summary-row-cost na">n/a</span>';
+          return '<div class="' + rowCls + '">' +
+            (item.icon ? '<img class="gear-summary-row-icon" src="' + esc(item.icon) + '" alt="" />' : '<span class="gear-summary-row-icon"></span>') +
+            '<span class="gear-summary-row-name">' + esc(item.itemName) + (item.isCombo ? ' (combo)' : '') + '</span>' +
+            costHtml +
+            '</div>';
+        }).join('');
       }
 
       // ---- Setup icon picker ----------------------------------------------
@@ -1197,6 +1218,17 @@ def render_purchase_goals(player: Player) -> str:
           t = setTimeout(function () { fn.apply(null, args); }, wait);
         };
       }
+
+      // pgIconTrigger is now a fixed element (see the static overlay
+      // markup in render_purchase_goals) instead of being rebuilt on
+      // every render, so it only needs wiring up once here rather than
+      // on every renderContent() call.
+      document.getElementById('pgIconTrigger').addEventListener('click', function () {
+        PG.iconPicker = !PG.iconPicker;
+        PG.picker = null;
+        renderIconPicker();
+        document.getElementById('pgSlotPicker').innerHTML = '';
+      });
 
       // ---- Setup CRUD (menu + name form) -----------------------------------
 
