@@ -68,6 +68,29 @@ button, input { font-family: inherit; }
 a { color: var(--gold-dim); text-decoration: none; }
 a:hover { color: var(--gold); text-decoration: underline; }
 
+/* Generic "looks like a link, is actually a button" treatment -- used all
+   over the Purchase Goals page (mode toggles, "+ Add component", "Clear
+   slot"/"Cancel", "Clear icon", etc.) for tertiary actions that shouldn't
+   compete visually with a real button. Without this, a bare <button
+   class="link"> falls back to the browser's native button chrome (a
+   white, rounded box), which is what was happening before this rule
+   existed -- .nav-side/.footer-linked-note below still win on specificity
+   for their own two-class selectors, so this only fills the gap
+   everywhere else. */
+button.link {
+  background: none;
+  border: none;
+  color: var(--gold-dim);
+  font-family: inherit;
+  font-size: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+button.link:hover { color: var(--gold); text-decoration: underline; }
+button.link:disabled { opacity: 0.5; cursor: default; }
+
 /* Padding lives here rather than on body so the link banner (a sibling
    before .page, see _shell) can sit flush against the very top and
    sides of the viewport and push this content down in normal document
@@ -178,7 +201,7 @@ header {
   margin-bottom: 8px;
 }
 
-input[type="email"], input[type="password"], input[type="text"] {
+input[type="email"], input[type="password"], input[type="text"], input[type="number"] {
   background: #100e0b;
   border: 1px solid var(--border);
   color: var(--text);
@@ -194,6 +217,54 @@ input[type="email"], input[type="password"], input[type="text"] {
    the player actually types (--text, full white). */
 input::placeholder { color: var(--text-faint); }
 input:focus { outline: none; border-color: var(--gold-dim); }
+
+/* Number inputs (the combo-builder's component quantity field) would
+   otherwise keep the browser's native white up/down spinner glued onto
+   the themed box above -- drop it entirely for a plain dark field
+   consistent with the rest of the site, rather than a mismatched widget. */
+input[type="number"] { -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* A fully custom flat checkbox (the combo builder's "Always count as
+   owned" toggle) -- accent-color alone still leaves the unchecked box
+   in the browser's native white/gray, so this replaces it outright with
+   the same small dark-square-plus-gold-fill treatment used everywhere
+   else on the site (tracker-icon-btn, gear-slot, etc.) instead of an
+   unstyled system control. */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin: 0;
+  background: #100e0b;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+}
+
+input[type="checkbox"]:checked { background: var(--gold); border-color: var(--gold); }
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #221c10;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:focus { outline: none; border-color: var(--gold-dim); }
 
 button.primary {
   background: var(--gold);

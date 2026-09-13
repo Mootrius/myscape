@@ -522,6 +522,12 @@ def render_purchase_goals(player: Player) -> str:
         nameFormMode: null, // 'new' | 'rename' | null
         pollTimer: null,
         comboSeq: 0,
+        // Last-displayed values for the animated overlay/next-purchase
+        // numbers and bars (see tickNumberText below) -- null means
+        // "nothing shown yet", which skips the animation and just
+        // displays the new value outright, same as the original
+        // desktop app's tween helper.
+        anim: { coins: null, cost: null, pct: null, npPct: null },
       };
 
       function esc(s) {
@@ -533,6 +539,45 @@ def render_purchase_goals(player: Player) -> str:
       function formatGp(n) {
         n = Math.round(n || 0);
         return n.toLocaleString('en-US');
+      }
+
+      // Ticks an element's text from `fromValue` to `toValue` over half a
+      // second instead of popping straight to the new number -- the same
+      // effect the original desktop app used for its gear-setup GP
+      // amounts. Callers pass the previously-displayed value explicitly
+      // (rather than this tracking it per-element) since the Purchase
+      // Goals page rebuilds these elements on every render instead of
+      // mutating a fixed set of nodes; skip the call entirely when there's
+      // nothing to animate from (first paint) or the value hasn't moved.
+      function tickNumberText(el, fromValue, toValue, format) {
+        if (!el) return;
+        var duration = 500;
+        var startTime = null;
+        function step(ts) {
+          if (startTime === null) startTime = ts;
+          var t = Math.min(1, (ts - startTime) / duration);
+          var eased = 1 - Math.pow(1 - t, 3); // ease-out, matches the bars' feel
+          el.textContent = format(fromValue + (toValue - fromValue) * eased);
+          if (t < 1) requestAnimationFrame(step);
+          else el.textContent = format(toValue);
+        }
+        requestAnimationFrame(step);
+      }
+
+      // Grows/shrinks a .progress-fill bar's width from `fromPct` to
+      // `toPct` by relying on its own CSS transition (see .progress-fill
+      // in purchase-goals.css) -- the bar just needs to actually paint at
+      // the "from" width for a frame before the "to" width is applied, or
+      // the browser has nothing to transition between. The double rAF
+      // guarantees that first paint happens before the change lands.
+      function tickBarWidth(el, fromPct, toPct) {
+        if (!el) return;
+        el.style.width = fromPct + '%';
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            el.style.width = toPct + '%';
+          });
+        });
       }
 
       function showError(msg) {
@@ -605,15 +650,34 @@ def render_purchase_goals(player: Player) -> str:
 
       function renderContent() {
         var el = document.getElementById('pgContent');
-        if (!PG.data) { el.innerHTML = '<p class="pg-empty">Loading&hellip;</p>'; return; }
+        if (!PG.data) {
+          el.innerHTML = '<p class="pg-empty">Loading&hellip;</p>';
+          PG.anim = { coins: null, cost: null, pct: null, npPct: null };
+          return;
+        }
         var setup = activeSetup();
         if (!setup) {
           el.innerHTML = '<p class="pg-empty">No gear setups yet -- use the menu above to create your first one.</p>';
+          PG.anim = { coins: null, cost: null, pct: null, npPct: null };
           return;
         }
 
+        // Snapshot of whatever was on screen before this render, so the
+        // freshly-built markup below can start from those values and then
+        // tween/transition into the new ones once it's in the DOM -- see
+        // tickNumberText/tickBarWidth. A null field means nothing's been
+        // shown yet (first paint), so that value renders outright instead
+        // of animating from nowhere.
+        var fromCoins = PG.anim.coins;
+        var fromCost = PG.anim.cost;
+        var fromPct = PG.anim.pct;
+        var fromNpPct = PG.anim.npPct;
+
         var fundedClass = setup.funded ? ' funded-fill' : '';
+        var coins = PG.data.coins;
+        var cost = setup.totalCost;
         var pct = Math.max(0, Math.min(100, setup.progressPct));
+        var initialPct = fromPct != null ? fromPct : pct;
         var iconInner = (setup.icon && setup.icon.icon)
           ? '<img class="overlay-icon" src="' + esc(setup.icon.icon) + '" alt="" />'
           : '<span class="overlay-icon-placeholder">+</span>';
@@ -622,14 +686,14 @@ def render_purchase_goals(player: Player) -> str:
           '<div class="overlay-card">' +
           '  <div class="overlay-side overlay-source">' +
           '    <img class="overlay-icon" src="' + COINS_ICON + '" alt="Coins" />' +
-          '    <span class="overlay-amount">' + formatGp(PG.data.coins) + '</span>' +
+          '    <span class="overlay-amount" id="pgCoinsAmount">' + formatGp(fromCoins != null ? fromCoins : coins) + '</span>' +
           '  </div>' +
           '  <div class="overlay-progress">' +
-          '    <div class="progress-track overlay-track"><div class="progress-fill' + fundedClass + '" style="width:' + pct + '%;"></div></div>' +
+          '    <div class="progress-track overlay-track"><div class="progress-fill' + fundedClass + '" id="pgOverlayFill" style="width:' + initialPct + '%;"></div></div>' +
           '  </div>' +
           '  <div class="overlay-side overlay-target">' +
           '    <div class="overlay-icon-wrap" id="pgIconTrigger" title="Set a display icon for this setup">' + iconInner + '</div>' +
-          '    <span class="overlay-amount">' + formatGp(setup.totalCost) + '</span>' +
+          '    <span class="overlay-amount" id="pgCostAmount">' + formatGp(fromCost != null ? fromCost : cost) + '</span>' +
           '  </div>' +
           '</div>';
 
@@ -641,7 +705,8 @@ def render_purchase_goals(player: Player) -> str:
           return slotHtml(item, 'inventory', idx, '');
         }).join('') + '</div>';
 
-        var summary = renderSummaryHtml(setup);
+        var npPct = setup.nextPurchase ? Math.max(0, Math.min(100, setup.nextPurchase.progressPct)) : null;
+        var summary = renderSummaryHtml(setup, fromNpPct);
 
         // The icon picker sits directly under the progress bar (so
         // opening it pushes the gear+inventory box and summary down,
@@ -682,6 +747,25 @@ def render_purchase_goals(player: Player) -> str:
         });
         renderIconPicker();
         renderSlotPicker();
+
+        // Tween the overlay's GP numbers and grow/shrink both progress
+        // bars from whatever was previously on screen -- skipped
+        // (element just shows the final value/width outright) whenever
+        // there's nothing to animate from yet, per the null checks
+        // inside tickNumberText/tickBarWidth's callers below.
+        if (fromCoins != null && fromCoins !== coins) {
+          tickNumberText(document.getElementById('pgCoinsAmount'), fromCoins, coins, formatGp);
+        }
+        if (fromCost != null && fromCost !== cost) {
+          tickNumberText(document.getElementById('pgCostAmount'), fromCost, cost, formatGp);
+        }
+        if (fromPct != null && fromPct !== pct) {
+          tickBarWidth(document.getElementById('pgOverlayFill'), fromPct, pct);
+        }
+        if (npPct != null && fromNpPct != null && fromNpPct !== npPct) {
+          tickBarWidth(document.getElementById('pgNpFill'), fromNpPct, npPct);
+        }
+        PG.anim = { coins: coins, cost: cost, pct: pct, npPct: npPct };
       }
 
       var EQUIPMENT_SLOTS = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'boots', 'ring'];
@@ -731,11 +815,12 @@ def render_purchase_goals(player: Player) -> str:
         });
       }
 
-      function renderSummaryHtml(setup) {
+      function renderSummaryHtml(setup, fromNpPct) {
         var html = '<div class="gear-summary"><div class="gear-summary-heading">Still to purchase</div>';
         if (setup.nextPurchase) {
           var np = setup.nextPurchase;
           var npPct = Math.max(0, Math.min(100, np.progressPct));
+          var npInitialPct = fromNpPct != null ? fromNpPct : npPct;
           html += '' +
             '<div class="gear-next-purchase">' +
             '  <div class="gear-next-purchase-icon-wrap">' +
@@ -744,7 +829,7 @@ def render_purchase_goals(player: Player) -> str:
             '  <div class="gear-next-purchase-body">' +
             '    <div class="gear-next-purchase-label">Next purchase</div>' +
             '    <div class="gear-next-purchase-name">' + esc(np.itemName) + '</div>' +
-            '    <div class="progress-track"><div class="progress-fill' + (np.funded ? ' funded-fill' : '') + '" style="width:' + npPct + '%;"></div></div>' +
+            '    <div class="progress-track"><div class="progress-fill' + (np.funded ? ' funded-fill' : '') + '" id="pgNpFill" style="width:' + npInitialPct + '%;"></div></div>' +
             '    <div class="gear-next-purchase-amount">' + formatGp(PG.data.coins) + ' / ' + formatGp(np.cost) + ' gp</div>' +
             '  </div>' +
             '</div>';
