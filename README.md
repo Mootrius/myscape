@@ -45,7 +45,11 @@ feature gets built on top of it:
   tool). The font is served as a real static file (not inlined as
   base64 like Maintrius's local HTML) so browsers cache it across page
   loads. The wordmark lives in the logo image, not text -- there's no
-  heading/display font on the site.
+  heading/display font on the site. `app/static/favicon.ico` and
+  `app/static/icons/` are the browser-tab icon, linked from every page
+  in `app/pages.py`'s shared page shell -- a favicon is just a file the
+  app serves and a `<link rel="icon">` tag pointing at it, so it lives
+  entirely in this repo and needs nothing set on Render.
 
 ## Website accounts
 
