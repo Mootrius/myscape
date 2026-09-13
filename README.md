@@ -37,6 +37,9 @@ feature gets built on top of it:
 - `app/limiter.py` / `app/routers/linking.py` -- the account-linking
   endpoints (`POST /api/link/start`, `POST /api/link/exchange`), the
   latter rate-limited per-IP.
+- `app/models.py`'s `BankItem` / `app/main.py`'s `POST` and `GET
+  /api/players/me/bank` -- the plugin's bank sync. See "Bank sync"
+  below.
 - `render.yaml` -- tells Render how to deploy this: one web service, one
   Postgres database, and a generated session-signing secret, all wired
   together automatically.
@@ -112,6 +115,28 @@ both jobs: the thing a player pastes is short-lived and single-use, and
 the thing that authenticates every future request is separately
 revocable without forcing a fresh player-facing code.
 
+## Bank sync
+
+The first piece of real data collection built on top of a link, and the
+data source behind the Purchase Goals card (see "Dashboard" below):
+
+1. **`POST /api/players/me/bank`** -- called by the RuneLite plugin
+   (API-key authenticated) whenever the bank interface is open and its
+   contents settle after a change (the plugin debounces rapid deposit/
+   withdraw events -- see `onItemContainerChanged` in the
+   Mootrius/myscape-plugin repo's `MyscapePlugin.java` -- so a whole
+   banking session collapses into one request). Always a full replace,
+   never a merge: every one of the player's existing `bank_items` rows
+   is deleted and replaced with exactly what the request says, so an
+   item that's been sold or withdrawn since the last sync disappears
+   here too, the same way it disappeared from the actual bank. Capped
+   at `MAX_BANK_ITEMS` (2000, a defensive bound rather than a real OSRS
+   limit) to reject anything malformed rather than storing it.
+2. **`GET /api/players/me/bank`** -- session-authenticated (this is the
+   website reading its own copy back, not the plugin writing it),
+   returns the last-synced items plus when they were last updated.
+   Nothing in the UI reads this yet -- see "Dashboard" below.
+
 ## Local development
 
 1. Install Python 3.11+, then: `pip install -r requirements.txt`
@@ -137,10 +162,13 @@ minutes. Once it's up, `/api/health/db` should return
 
 `GET /dashboard` (session-authenticated, redirects to `/login` if you're
 not) is the logged-in home page. It currently shows two "coming soon"
-cards (Purchase Goals, Loot Tracker) that are just placeholders until
-those data models exist. Signing in, `/`, `/login`, and `/signup` all
-redirect here now instead of showing an inline "you're signed in"
-message.
+cards (Purchase Goals, Loot Tracker). The plugin now syncs bank
+contents behind the Purchase Goals card (see "Bank sync" above,
+`GET /api/players/me/bank`), but the card itself hasn't been wired up
+to read it yet -- still a placeholder on the dashboard for now. Loot
+Tracker has no data model yet at all. Signing in, `/`, `/login`, and
+`/signup` all redirect here now instead of showing an inline "you're
+signed in" message.
 
 Linking itself isn't a dashboard card -- it's a site-wide banner
 (`_link_banner()` in `app/pages.py`, rendered by the shared `_shell()`
@@ -161,11 +189,12 @@ login state.
 
 ## Next steps (not built yet)
 
-- Purchase Goals / Loot Tracker data model and API endpoints (porting the
+- A Purchase Goals UI that actually reads the synced bank data (the data
+  model, sync endpoints, and plugin-side collection are done -- see
+  "Bank sync" above -- but the dashboard card is still a placeholder)
+- Loot Tracker data model and API endpoints, and the plugin-side
+  inventory/equipment/loot collection to go with them (porting the
   logic from the original single-user Maintrius tool)
-- The actual RuneLite plugin (separate repo) that reads bank/inventory/
-  equipment/loot data and POSTs it here, using the account-linking flow
-  above to get and store its API key
 - Email verification and a password-reset flow
 - ~~Point myscape.io's DNS at Render once the first deploy is verified~~ done -- live at myscape.io
 - ~~A real signup/login flow tying a website account to a `Player` row~~ done
@@ -173,6 +202,9 @@ login state.
 - ~~A real dashboard for a logged-in player~~ done, in its early form -- `/dashboard`
 - ~~Switch from `Base.metadata.create_all` + `sync_missing_columns` to
   real Alembic migrations~~ done -- see "Database schema changes" below
+- ~~The actual RuneLite plugin (separate repo) reading bank data and
+  POSTing it here~~ done, for the bank -- see "Bank sync" above;
+  inventory/equipment/loot data collection is still not built
 
 ## Database schema changes
 

@@ -1,7 +1,7 @@
 """Pydantic request/response shapes for the API."""
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -60,3 +60,43 @@ class LinkExchangeRequest(BaseModel):
 class LinkExchangeResponse(BaseModel):
     api_key: str
     player_id: uuid.UUID
+
+
+class BankItemIn(BaseModel):
+    item_id: int
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class BankSyncRequest(BaseModel):
+    items: List[BankItemIn]
+
+
+class BankSyncResponse(BaseModel):
+    item_count: int
+
+
+class BankItemOut(BaseModel):
+    item_id: int
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class BankOut(BaseModel):
+    items: List[BankItemOut]
+    updated_at: Optional[datetime] = None

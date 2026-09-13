@@ -29,7 +29,7 @@ account inherit history that isn't theirs.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -73,6 +73,7 @@ class Player(Base):
 
     link_codes = relationship("LinkCode", back_populates="player", cascade="all, delete-orphan")
     api_keys = relationship("PlayerApiKey", back_populates="player", cascade="all, delete-orphan")
+    bank_items = relationship("BankItem", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -117,3 +118,37 @@ class PlayerApiKey(Base):
     @property
     def is_active(self) -> bool:
         return self.revoked_at is None
+
+
+class BankItem(Base):
+    """The player's current bank contents, as last reported by the
+    RuneLite plugin (see POST /api/players/me/bank in main.py, and
+    MyscapeClient#syncBank in the Mootrius/myscape-plugin repo). This is
+    always a full snapshot of "what's in the bank right now", not a
+    history -- every sync deletes the player's existing rows and
+    replaces them with exactly what the request says, so an item
+    that's been sold or withdrawn since the last sync disappears from
+    here too, the same as it disappeared from the actual bank. (A
+    history of bank contents over time might be worth adding later, but
+    Purchase Goals -- "do they currently have this?" -- only needs the
+    present state.)
+
+    item_id is OSRS's own item ID (what the plugin reads directly off
+    each bank slot), not a foreign key to anything in this database --
+    item names/prices are looked up separately (from the OSRS Wiki/GE
+    API) rather than duplicated here, so this table doesn't need
+    updating every time an item's price changes or a new item is
+    released.
+    """
+
+    __tablename__ = "bank_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="bank_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_bank_items_player_item"),)
