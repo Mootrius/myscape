@@ -89,6 +89,16 @@ credential:
    per IP) since it's the one place a caller benefits from guessing.
 4. Every future request from the plugin sends that API key as
    `Authorization: Bearer <key>`; `app/auth.py` looks it up by hash.
+5. **`POST /api/players/me/unlink`** -- called by the plugin's own
+   "Unlink" button (also API-key authenticated). Clears the player's
+   `account_hash`/`runescape_name` and revokes every currently-active
+   API key on the account, not just the one presenting the request.
+   Takes effect immediately in the database, so the link banner is
+   back the next time the website re-renders a page for that player
+   (a refresh, or a navigation) -- unlike *acquiring* a link, there's
+   no live polling for this direction yet, since the banner (and its
+   poller) only exists on the page once you're already unlinked. See
+   `_link_banner()` in `app/pages.py`.
 
 This is deliberately a bit stronger than the common pattern (see Wise
 Old Man's verification codes) of one long-lived, low-entropy code doing
