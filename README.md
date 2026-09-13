@@ -19,6 +19,8 @@ feature gets built on top of it:
 - `app/database.py` -- SQLAlchemy engine/session setup, reading the
   database connection string from the `DATABASE_URL` environment
   variable.
+- `migrations/` -- Alembic migrations (see "Database schema changes"
+  below for the full workflow).
 - `app/models.py` -- `Player` (now with a `password_hash`), `LinkCode`,
   and `PlayerApiKey`. See "Account linking" below for how the latter two
   fit together.
@@ -118,7 +120,10 @@ revocable without forcing a fresh player-facing code.
 3. `cp .env.example .env` and fill in `DATABASE_URL` with that database's
    connection string, and `SESSION_SECRET_KEY` with a random value (the
    file explains how to generate one).
-4. `uvicorn app.main:app --reload` and open http://localhost:8000
+4. `uvicorn app.main:app --reload` and open http://localhost:8000 -- the
+   app brings a brand-new database up to the latest schema itself on
+   startup (see "Database schema changes" below), no separate migration
+   command needed.
 
 ## Deploying
 
@@ -162,31 +167,43 @@ login state.
   equipment/loot data and POSTs it here, using the account-linking flow
   above to get and store its API key
 - Email verification and a password-reset flow
-- Switch from `Base.metadata.create_all` + `sync_missing_columns` (see
-  "Database schema changes" below) to real Alembic migrations -- worth
-  doing sooner rather than later now that schema drift has already
-  caused one production incident
 - ~~Point myscape.io's DNS at Render once the first deploy is verified~~ done -- live at myscape.io
 - ~~A real signup/login flow tying a website account to a `Player` row~~ done
 - ~~Actual HTML signup/login pages~~ done -- `/signup` and `/login`
 - ~~A real dashboard for a logged-in player~~ done, in its early form -- `/dashboard`
+- ~~Switch from `Base.metadata.create_all` + `sync_missing_columns` to
+  real Alembic migrations~~ done -- see "Database schema changes" below
 
 ## Database schema changes
 
-`Base.metadata.create_all()` only creates tables that don't exist yet --
-it never alters a table that's already there. That bit us in production:
-`players` was created by the very first deploy, and neither
-`account_hash` nor `password_hash` (added in later updates) ever
-actually reached the live database, since `create_all()` silently did
-nothing for a table it considered already-created. Signup broke the
-moment it tried to write a `password_hash` column that didn't exist.
+Schema changes go through [Alembic](https://alembic.sqlalchemy.org/)
+migrations now, in `migrations/versions/`. The app runs `alembic upgrade
+head` itself at startup (see `on_startup()` in `app/main.py`) -- the same
+moment `Base.metadata.create_all()` plus a hand-written
+`sync_missing_columns()` used to run, which is what this replaced. That
+older approach only ever added new tables and (via a short,
+hand-maintained list) patched missing columns onto existing ones; it
+couldn't rename or retype a column or change a constraint, and there
+was no record anywhere of what had changed or when. That gap is exactly
+what broke signup in production once: `players` was created by the very
+first deploy, and neither `account_hash` nor `password_hash` (added in
+later updates) ever actually reached the live database, since
+`create_all()` silently does nothing for a table it considers
+already-created.
 
-`app/schema_sync.py`'s `sync_missing_columns()` (run at startup, right
-after `create_all()`) is the fix: it adds any column the current models
-define that the live table is still missing, and drops a short,
-hand-maintained list of columns confirmed obsolete (right now just the
-old `verification_code`, fully replaced by the LinkCode/PlayerApiKey
-system and a NOT NULL leftover that would otherwise block every insert).
-It's additive-and-explicit-drops only -- no renames, no retyping, no
-constraint changes -- so when a future change needs any of that, it's
-time for real Alembic migrations instead of extending this further.
+The workflow for a schema change now: edit the model in `app/models.py`,
+then run `alembic revision --autogenerate -m "add whatever"` (with
+`DATABASE_URL` pointed at a database that's already up to date) to draft
+a migration file from the diff, review what it generated, and commit it
+alongside the model change. It takes effect the next time the app starts
+-- no separate manual step.
+
+The very first migration
+(`migrations/versions/5cf359e6d5b1_initial_schema.py`) is a special
+case: production's tables already existed (built up over time by
+`create_all`/`sync_missing_columns`, never by Alembic), so that
+migration checks whether each table is already there and only creates
+the ones that aren't, rather than assuming a blank database like every
+migration after it can. That's what let it ship without any one-time
+"tell Alembic production is already migrated" step -- it figured that
+out on its own, the first time it ran there.

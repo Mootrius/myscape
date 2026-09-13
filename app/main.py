@@ -5,6 +5,8 @@ linking) -- see README.md for how the pieces fit together.
 import os
 from typing import Optional
 
+from alembic import command
+from alembic.config import Config
 from fastapi import Depends, FastAPI, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,12 +17,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_player_from_api_key, get_optional_current_player_from_session
-from app.database import Base, engine, get_db
+from app.database import get_db
 from app.limiter import limiter
-from app.models import LinkCode, Player, PlayerApiKey  # noqa: F401 -- imported so create_all sees them
+from app.models import Player
 from app.pages import render_dashboard, render_landing, render_login, render_signup
 from app.routers import auth, linking
-from app.schema_sync import sync_missing_columns
 from app.schemas import PlayerOut
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
@@ -52,19 +53,25 @@ app.include_router(linking.router)
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 @app.on_event("startup")
 def on_startup():
-    # create_all() makes any table that doesn't exist yet, but never
-    # alters one that already does -- sync_missing_columns() covers that
-    # gap (see app/schema_sync.py; this is what broke signup in
-    # production once, when `players` already existed from an earlier
-    # deploy and never picked up `account_hash`/`password_hash`). Once
-    # the schema needs a change this can't handle (renames, retyping,
-    # constraints), switch to real Alembic migrations -- see README.md's
-    # "Next steps" section.
-    Base.metadata.create_all(bind=engine)
-    sync_missing_columns(engine, Base)
+    # Brings the database up to the latest schema by applying whichever
+    # of migrations/versions/*.py it hasn't seen yet (see README.md's
+    # "Database schema changes") -- the Alembic equivalent of the old
+    # Base.metadata.create_all() + sync_missing_columns() pair this
+    # replaced, which is also why this still runs unconditionally on
+    # every startup rather than as a separate deploy step: it's the
+    # smallest change from the previous behavior, and safe here since
+    # this service only ever runs as a single instance. The very first
+    # migration is written defensively (skips any table that already
+    # exists) specifically so this needs no one-time manual step to
+    # tell Alembic that production's existing tables are already
+    # "migrated" -- see migrations/versions/5cf359e6d5b1_initial_schema.py.
+    alembic_cfg = Config(os.path.join(_REPO_ROOT, "alembic.ini"))
+    command.upgrade(alembic_cfg, "head")
 
 
 @app.get("/", response_class=HTMLResponse)
