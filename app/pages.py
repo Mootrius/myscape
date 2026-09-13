@@ -158,10 +158,9 @@ def render_landing(player: Optional[Player]) -> str:
     # Logged-in visitors get redirected to /dashboard before this ever
     # renders (see main.py) -- this stays player-aware only so the nav
     # (and link banner) don't look broken if that ever changes.
-    body = """
-    <p class="subtitle">An Old School RuneScape companion &mdash; purchase goals, loot tracking, and more.
-    <a href="/signup">Sign up</a> to get started.</p>
-    """
+    # No body copy for now -- just the header/nav over the background
+    # video, until there's a real landing pitch to put here.
+    body = ""
     return _shell(title="myscape", player=player, body=body)
 
 
@@ -173,14 +172,13 @@ def render_dashboard(player: Player) -> str:
         """
 
     body = f"""
-    <p class="dash-welcome">Welcome back, {escape(player.email or "")}.</p>
     {linked_note}
     <div class="dash-grid">
-      <div class="dash-card dash-card-soon">
+      <div class="dash-card">
         <h3>Purchase Goals</h3>
         <p class="subtitle">Coming soon.</p>
       </div>
-      <div class="dash-card dash-card-soon">
+      <div class="dash-card">
         <h3>Loot Tracker</h3>
         <p class="subtitle">Coming soon.</p>
       </div>
