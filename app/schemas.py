@@ -3,11 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
-
-
-class PlayerCreate(BaseModel):
-    email: str
+from pydantic import BaseModel, field_validator
 
 
 class PlayerOut(BaseModel):
@@ -20,8 +16,34 @@ class PlayerOut(BaseModel):
         from_attributes = True
 
 
-class LinkStartRequest(BaseModel):
-    player_id: uuid.UUID
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if "@" not in value or len(value) < 3:
+            raise ValueError("That doesn't look like a valid email address.")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def check_password_length(cls, value: str) -> str:
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters.")
+        return value
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
 
 
 class LinkStartResponse(BaseModel):

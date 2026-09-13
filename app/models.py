@@ -61,6 +61,10 @@ class Player(Base):
     # never the identity key -- that's account_hash below.
     runescape_name = Column(String, nullable=True)
     email = Column(String, nullable=True, unique=True)
+    # Nullable because it's meaningless for a row that only ever gets
+    # created by admin tooling; every row created through the real
+    # signup endpoint always has one.
+    password_hash = Column(String, nullable=True)
     # RuneLite's stable per-account identifier. Nullable until the first
     # successful link-code exchange, unique once set so one game account
     # can't be linked to two myscape players.

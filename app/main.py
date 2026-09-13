@@ -1,33 +1,56 @@
-"""myscape's web app: for now, just a placeholder landing page plus two
-health-check endpoints, so the very first deploy proves the whole chain
-works end to end (Render -> this app -> the Postgres database) before any
-real feature gets built on top of it.
+"""myscape's web app: a placeholder landing page, health checks, and the
+early account system (website signup/login, RuneLite plugin account
+linking) -- see README.md for how the pieces fit together.
 """
+import os
+
 from fastapi import Depends, FastAPI
 from fastapi.responses import HTMLResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_player
+from app.auth import get_current_player_from_api_key
 from app.database import Base, engine, get_db
 from app.limiter import limiter
 from app.models import LinkCode, Player, PlayerApiKey  # noqa: F401 -- imported so create_all sees them
-from app.routers import linking
+from app.routers import auth, linking
 from app.schemas import PlayerOut
+
+SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
+if not SESSION_SECRET_KEY:
+    raise RuntimeError(
+        "SESSION_SECRET_KEY is not set. Generate one (e.g. `python -c "
+        "'import secrets; print(secrets.token_hex(32))'`) and set it as an "
+        "environment variable -- see .env.example. On Render, render.yaml "
+        "already has it set to auto-generate and persist a value."
+    )
 
 app = FastAPI(title="myscape")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Session cookies back website login (see app/auth.py). `https_only` is on
+# because myscape.io is HTTPS-only in production; if that ever gets in the
+# way of local http://localhost testing, override it with an env var --
+# don't just delete it.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET_KEY,
+    same_site="lax",
+    https_only=os.environ.get("SESSION_COOKIE_HTTPS_ONLY", "true").lower() != "false",
+    max_age=60 * 60 * 24 * 30,  # 30 days
+)
+app.include_router(auth.router)
 app.include_router(linking.router)
 
 
 @app.on_event("startup")
 def on_startup():
-    # Fine for this early, single-table stage. Once the schema needs to
-    # change without wiping data, switch to real Alembic migrations
-    # instead of create_all -- see README.md's "Next steps" section.
+    # Fine for this early stage. Once the schema needs to change without
+    # wiping data, switch to real Alembic migrations instead of
+    # create_all -- see README.md's "Next steps" section.
     Base.metadata.create_all(bind=engine)
 
 
@@ -69,7 +92,7 @@ def health_db(db: Session = Depends(get_db)):
 
 
 @app.get("/api/players/me", response_model=PlayerOut)
-def read_current_player(player: Player = Depends(get_current_player)):
+def read_current_player(player: Player = Depends(get_current_player_from_api_key)):
     """First real use of the API key auth: the plugin calls this (with
     its `Authorization: Bearer <key>` header) to confirm it's linked and
     see which player it's linked to."""

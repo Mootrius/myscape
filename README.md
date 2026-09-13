@@ -13,23 +13,48 @@ feature gets built on top of it:
 
 - `app/main.py` -- the FastAPI app. A placeholder landing page at `/`,
   `/api/health` (is the app up), `/api/health/db` (can it reach the
-  database), and `/api/players/me` (first real use of API-key auth --
-  the plugin calls this to confirm it's linked).
+  database), `/api/players/me` (first real use of API-key auth -- the
+  plugin calls this to confirm it's linked), and the session-cookie
+  middleware backing website login.
 - `app/database.py` -- SQLAlchemy engine/session setup, reading the
   database connection string from the `DATABASE_URL` environment
   variable.
-- `app/models.py` -- `Player`, `LinkCode`, and `PlayerApiKey`. See the
-  "Account linking" section below for how these fit together.
-- `app/security.py` -- random token generation + SHA-256 hashing shared
-  by both the link code and the API key.
-- `app/auth.py` -- the `get_current_player` dependency: checks a
-  request's `Authorization: Bearer <api key>` header against the hashed
-  keys in the database.
+- `app/models.py` -- `Player` (now with a `password_hash`), `LinkCode`,
+  and `PlayerApiKey`. See "Account linking" below for how the latter two
+  fit together.
+- `app/security.py` -- random token generation + SHA-256 hashing for the
+  link code and API key, plus scrypt password hashing for website
+  accounts.
+- `app/auth.py` -- two auth dependencies: `get_current_player_from_session`
+  (website, via the signed session cookie) and
+  `get_current_player_from_api_key` (RuneLite plugin, via `Authorization:
+  Bearer <key>`).
+- `app/routers/auth.py` -- website signup/login/logout
+  (`/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`,
+  `/api/auth/me`).
 - `app/limiter.py` / `app/routers/linking.py` -- the account-linking
   endpoints (`POST /api/link/start`, `POST /api/link/exchange`), the
   latter rate-limited per-IP.
 - `render.yaml` -- tells Render how to deploy this: one web service, one
-  Postgres database, wired together automatically.
+  Postgres database, and a generated session-signing secret, all wired
+  together automatically.
+
+## Website accounts
+
+`POST /api/auth/signup` (email + password, min 8 characters) creates a
+`Player` row with a scrypt-hashed password and immediately logs the
+browser in via a signed session cookie. `POST /api/auth/login` and
+`POST /api/auth/logout` do what they say; `GET /api/auth/me` returns the
+signed-in player, or 401 if there isn't one. Passwords are hashed with
+scrypt (Python's stdlib `hashlib.scrypt`, deliberately not the same
+SHA-256 used for the link code/API key below -- a human-chosen password
+needs a slow, memory-hard hash, a high-entropy random token doesn't).
+Login is rate-limited per-IP, and a failed login always takes about the
+same time whether or not the email exists, so timing can't be used to
+enumerate registered accounts.
+
+There's no email verification or password-reset flow yet -- see "Next
+steps."
 
 ## Account linking
 
@@ -38,11 +63,11 @@ a username/password, but getting that key onto the plugin is a two-step
 handoff so the code a player copy-pastes is never itself the long-term
 credential:
 
-1. **`POST /api/link/start`** -- called by the website for a signed-in
-   player (right now `player_id` is passed directly in the body as a
-   placeholder for a real session -- see "Next steps"). Generates a
-   random link code, shown to the player exactly once, valid for 10
-   minutes, usable exactly once. Only its SHA-256 hash is stored.
+1. **`POST /api/link/start`** -- called by the website for the
+   signed-in player (identified by their session cookie -- see "Website
+   accounts" above). Generates a random link code, shown to the player
+   exactly once, valid for 10 minutes, usable exactly once. Only its
+   SHA-256 hash is stored.
 2. The player pastes that code into the RuneLite plugin's settings.
 3. **`POST /api/link/exchange`** -- called by the plugin with the code
    plus RuneLite's stable `account_hash` (not the display name, which
@@ -59,17 +84,14 @@ both jobs: the thing a player pastes is short-lived and single-use, and
 the thing that authenticates every future request is separately
 revocable without forcing a fresh player-facing code.
 
-`POST /api/players` (get-or-create a `Player` by email) exists purely to
-have something to link against before real signup/login is built -- see
-"Next steps."
-
 ## Local development
 
 1. Install Python 3.11+, then: `pip install -r requirements.txt`
 2. Get a Postgres database to point at (a local install, or a free
    throwaway one from Render/another provider).
 3. `cp .env.example .env` and fill in `DATABASE_URL` with that database's
-   connection string.
+   connection string, and `SESSION_SECRET_KEY` with a random value (the
+   file explains how to generate one).
 4. `uvicorn app.main:app --reload` and open http://localhost:8000
 
 ## Deploying
@@ -82,15 +104,16 @@ minutes. Once it's up, `/api/health/db` should return
 
 ## Next steps (not built yet)
 
+- Actual HTML signup/login pages -- the endpoints above exist, but
+  there's no frontend yet; right now `/` is still the placeholder
+  landing page
 - Purchase Goals / Loot Tracker data model and API endpoints (porting the
   logic from the original single-user Maintrius tool)
 - The actual RuneLite plugin (separate repo) that reads bank/inventory/
   equipment/loot data and POSTs it here, using the account-linking flow
   above to get and store its API key
-- A real signup/login flow tying a website account to a `Player` row --
-  once that exists, `POST /api/players` goes away and `POST
-  /api/link/start` takes its player from the authenticated session
-  instead of a client-supplied `player_id`
+- Email verification and a password-reset flow
 - Switch from `Base.metadata.create_all` to real Alembic migrations once
   the schema needs to change without wiping data
 - ~~Point myscape.io's DNS at Render once the first deploy is verified~~ done -- live at myscape.io
+- ~~A real signup/login flow tying a website account to a `Player` row~~ done

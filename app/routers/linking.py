@@ -7,50 +7,24 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_player_from_session
 from app.database import get_db
 from app.limiter import limiter
 from app.models import LINK_CODE_LIFETIME, LinkCode, Player, PlayerApiKey
-from app.schemas import (
-    LinkExchangeRequest,
-    LinkExchangeResponse,
-    LinkStartRequest,
-    LinkStartResponse,
-    PlayerCreate,
-    PlayerOut,
-)
+from app.schemas import LinkExchangeRequest, LinkExchangeResponse, LinkStartResponse
 from app.security import generate_token, hash_token
 
 router = APIRouter(prefix="/api", tags=["account-linking"])
 
 
-@router.post("/players", response_model=PlayerOut, status_code=status.HTTP_201_CREATED)
-def create_player(payload: PlayerCreate, db: Session = Depends(get_db)):
-    """Stand-in for real signup until the website has an actual
-    login flow (see README "Next steps"). Gets-or-creates a Player row
-    by email so the rest of the linking flow has something to test
-    against; this endpoint should be replaced -- not built on top of --
-    once real authenticated sessions exist, since right now anyone who
-    knows an email can act as that player."""
-    existing = db.query(Player).filter(Player.email == payload.email).first()
-    if existing:
-        return existing
-    player = Player(email=payload.email)
-    db.add(player)
-    db.commit()
-    db.refresh(player)
-    return player
-
-
 @router.post("/link/start", response_model=LinkStartResponse)
-def start_link(payload: LinkStartRequest, db: Session = Depends(get_db)):
-    """Called by the website for a signed-in player. Generates a link
-    code, shows it to them exactly once (this response), and stores only
-    its hash. TODO once real sessions exist: take the player from the
-    authenticated session instead of a client-supplied player_id."""
-    player = db.query(Player).filter(Player.id == payload.player_id).first()
-    if player is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such player.")
-
+def start_link(
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Called by the website for the signed-in player (via their session
+    cookie -- see app/routers/auth.py). Generates a link code, shows it
+    to them exactly once (this response), and stores only its hash."""
     raw_code = generate_token()
     expires_at = datetime.now(timezone.utc) + LINK_CODE_LIFETIME
     link_code = LinkCode(player_id=player.id, code_hash=hash_token(raw_code), expires_at=expires_at)

@@ -22,3 +22,10 @@ services:
         # broke the first deploy (ImportError: undefined symbol
         # _PyInterpreterState_Get -- a wheel built for the wrong Python ABI).
         value: "3.12.7"
+      - key: SESSION_SECRET_KEY
+        # Signs website login session cookies. generateValue makes Render
+        # create a random value once and keep it stable across deploys and
+        # restarts -- if this changed on every restart, everyone's login
+        # session would silently break every time the free-tier service
+        # spins down from inactivity and wakes back up.
+        generateValue: true
