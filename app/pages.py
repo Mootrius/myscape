@@ -104,13 +104,20 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
   <link rel="stylesheet" href="/static/css/myscape.css" />
 </head>
 <body>
+  <video class="bg-video" autoplay muted loop playsinline preload="auto">
+    <source src="/static/video/background.webm" type="video/webm" />
+    <source src="/static/video/background.mp4" type="video/mp4" />
+  </video>
+  <div class="bg-overlay"></div>
   {_link_banner(player)}
+  <header>
+    <div class="wrap header-inner">
+      <p class="logo"><a href="/"><img src="/static/img/logo.png" alt="myscape" /></a></p>
+      {_nav(player)}
+    </div>
+  </header>
   <div class="page">
     <div class="wrap">
-      <header>
-        <p class="logo"><a href="/"><img src="/static/img/logo.png" alt="myscape" /></a></p>
-        {_nav(player)}
-      </header>
       {body}
     </div>
   </div>
