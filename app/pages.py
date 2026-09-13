@@ -10,21 +10,23 @@ from typing import Optional
 from app.models import Player
 
 
-def _nav(player: Optional[Player]) -> str:
+def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
+    """The single link/button that goes on each side of the centered
+    logo in the header (see _shell). Logged out: Log in on the left,
+    Create an account on the right. Logged in: Dashboard on the left,
+    Log out on the right -- the email address used to show here too,
+    but there's no room for it next to a centered logo without
+    crowding the nav, so it's dropped (still shown on the dashboard
+    itself)."""
     if player:
-        return f"""
-        <nav>
-          <a href="/dashboard">Dashboard</a>
-          <span>{escape(player.email or "")}</span>
-          <button class="link" id="logoutBtn" type="button">Log out</button>
-        </nav>
-        """
-    return """
-    <nav>
-      <a href="/login">Log in</a>
-      <a href="/signup">Sign up</a>
-    </nav>
-    """
+        return (
+            '<a href="/dashboard">Dashboard</a>',
+            '<button class="link" id="logoutBtn" type="button">Log out</button>',
+        )
+    return (
+        '<a href="/login">Log in</a>',
+        '<a href="/signup">Create an account</a>',
+    )
 
 
 def _link_banner(player: Optional[Player]) -> str:
@@ -54,6 +56,7 @@ def _link_banner(player: Optional[Player]) -> str:
 
 
 def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "") -> str:
+    nav_left, nav_right = _nav_sides(player)
     shared_script = """
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -111,10 +114,11 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
   <div class="bg-overlay"></div>
   {_link_banner(player)}
   <header>
-    <div class="wrap header-inner">
-      <p class="logo"><a href="/"><img src="/static/img/logo.png" alt="myscape" /></a></p>
-      {_nav(player)}
-    </div>
+    <nav class="wrap header-inner">
+      <div class="nav-side nav-left">{nav_left}</div>
+      <p class="logo"><a href="/">myscape</a></p>
+      <div class="nav-side nav-right">{nav_right}</div>
+    </nav>
   </header>
   <div class="page">
     <div class="wrap">

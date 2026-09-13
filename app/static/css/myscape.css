@@ -89,23 +89,44 @@ header {
   background: linear-gradient(to bottom, rgba(15, 15, 16, 0.82) 0%, rgba(15, 15, 16, 0.35) 65%, rgba(15, 15, 16, 0) 100%);
 }
 
+/* Three-column layout so the wordmark stays dead center regardless of
+   how long the link text on either side is: two equal flexible rails
+   (.nav-side) with a fixed-width center column between them. */
 .header-inner {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 10px;
 }
 
-.logo { margin: 0; line-height: 0; }
-.logo img { height: 30px; width: auto; display: block; }
+/* Text wordmark (replaces the old logo image) -- same pixel font as
+   the rest of the site, in the site's signature gold/orange. */
+.logo {
+  margin: 0;
+  line-height: 1;
+  text-align: center;
+}
+
+.logo a {
+  color: var(--gold);
+  font-size: 22px;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+}
+
+.logo a:hover { color: var(--gold); text-decoration: none; }
 
 .subtitle { color: var(--text-faint); font-size: 15px; margin-top: 6px; }
 
-nav { display: flex; align-items: center; gap: 18px; font-size: 15px; }
+.nav-side { display: flex; align-items: center; font-size: 15px; }
+.nav-left { justify-content: flex-start; }
+.nav-right { justify-content: flex-end; }
 
-nav a, nav button.link {
-  color: var(--text-dim);
+/* White nav text (distinct from the rest of the site's gold/dim-text
+   link styling) so it reads clearly flanking the centered logo over
+   the video background. */
+.nav-side a, .nav-side button.link {
+  color: #fff;
   text-decoration: none;
   background: none;
   border: none;
@@ -114,7 +135,7 @@ nav a, nav button.link {
   padding: 0;
 }
 
-nav a:hover, nav button.link:hover { color: var(--gold); }
+.nav-side a:hover, .nav-side button.link:hover { color: var(--gold); }
 
 .auth-shell {
   display: flex;
