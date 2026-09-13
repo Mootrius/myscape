@@ -194,20 +194,80 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 
 .dash-card-soon { opacity: 0.55; }
 
-.link-code {
-  background: #100e0b;
-  border: 1px solid var(--border);
-  color: var(--gold);
-  font-size: 23px;
-  letter-spacing: 0.06em;
-  text-align: center;
-  padding: 15px 12px;
-  margin: 14px 0 10px;
-  word-break: break-all;
-}
-
 .dash-welcome {
   color: var(--text-faint);
   font-size: 15px;
   margin: 0 0 24px;
+}
+
+.dash-linked-note {
+  color: var(--text-dim);
+  font-size: 14.5px;
+  margin: -14px 0 24px;
+}
+
+/* Site-wide "link your RuneLite account" banner -- rendered by _shell()
+   above the page's .wrap, so it shows on every page (not just the
+   dashboard) whenever a logged-in player hasn't linked yet. */
+
+.link-banner {
+  background: var(--gold);
+  color: #221c10;
+  padding: 14px 20px;
+  margin-bottom: 0;
+}
+
+.link-banner-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+}
+
+.link-banner-message {
+  font-size: 15px;
+  flex: 1 1 320px;
+}
+
+.link-banner-btn {
+  background: #221c10;
+  color: var(--gold);
+  border: none;
+  border-radius: var(--radius);
+  padding: 10px 18px;
+  font-size: 15px;
+  font-family: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.link-banner-btn:hover { background: #362c1a; }
+.link-banner-btn:disabled { opacity: 0.5; cursor: default; }
+
+.link-banner-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.link-code-inline {
+  background: #221c10;
+  color: var(--gold);
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  padding: 8px 12px;
+  word-break: break-all;
+}
+
+.link-banner-hint {
+  font-size: 13px;
+  color: #4a3c22;
+}
+
+.link-banner-error {
+  max-width: 880px;
+  margin: 10px auto 0;
 }

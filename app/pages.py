@@ -1,8 +1,8 @@
-"""Server-rendered HTML pages (landing, signup, login).
+"""Server-rendered HTML pages (landing, signup, login, dashboard).
 
 No template engine -- these are simple enough that plain f-strings beat
-adding a Jinja2 dependency for three pages. If the page count grows past
-"a handful," that tradeoff is worth revisiting.
+adding a Jinja2 dependency for a handful of pages. If the page count
+grows past "a handful," that tradeoff is worth revisiting.
 """
 from html import escape
 from typing import Optional
@@ -27,91 +27,36 @@ def _nav(player: Optional[Player]) -> str:
     """
 
 
+def _link_banner(player: Optional[Player]) -> str:
+    """A site-wide banner telling a logged-in, not-yet-linked player to
+    link their RuneLite plugin -- shown above the header on every page
+    (see _shell), not just the dashboard, since linking is a
+    prerequisite for using myscape at all. Renders to nothing once
+    `player.account_hash` is set, or if nobody's logged in."""
+    if not player or player.account_hash:
+        return ""
+    return """
+    <div class="link-banner" id="linkBanner">
+      <div class="link-banner-inner">
+        <span class="link-banner-message">You must link your RuneLite plugin settings to myscape before it can be used.</span>
+        <button class="link-banner-btn" id="generateLinkBtn" type="button">Generate code</button>
+        <div class="link-banner-code" id="linkCodeResult" style="display:none;">
+          <span class="link-code-inline" id="linkCodeValue"></span>
+          <span class="link-banner-hint">Paste this into the plugin's settings. Expires in 10 minutes, works once.</span>
+        </div>
+      </div>
+      <div class="auth-error link-banner-error" id="linkError"></div>
+    </div>
+    """
+
+
 def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "") -> str:
-    logout_script = """
+    shared_script = """
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
       window.location.href = '/';
     });
-    """
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{escape(title)}</title>
-  <link rel="icon" href="/static/favicon.ico" sizes="any" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png" />
-  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/static/css/myscape.css" />
-</head>
-<body>
-  <div class="wrap">
-    <header>
-      <p class="logo"><a href="/"><img src="/static/img/logo.png" alt="myscape" /></a></p>
-      {_nav(player)}
-    </header>
-    {body}
-  </div>
-  <script>
-    {logout_script}
-    {extra_script}
-  </script>
-</body>
-</html>"""
 
-
-def render_landing(player: Optional[Player]) -> str:
-    # Logged-in visitors get redirected to /dashboard before this ever
-    # renders (see main.py) -- this stays player-aware only so the nav
-    # doesn't look broken if that ever changes.
-    body = """
-    <p class="subtitle">An Old School RuneScape companion &mdash; purchase goals, loot tracking, and more.
-    <a href="/signup">Sign up</a> to get started.</p>
-    """
-    return _shell(title="myscape", player=player, body=body)
-
-
-def render_dashboard(player: Player) -> str:
-    if player.account_hash:
-        link_card = f"""
-        <h3>RuneLite account</h3>
-        <p class="subtitle">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.</p>
-        <p class="hint">Game account ID: {escape(player.account_hash[:16])}&hellip;</p>
-        """
-    else:
-        link_card = """
-        <h3>Link your RuneLite account</h3>
-        <p class="subtitle">Generate a one-time code to paste into the myscape section of the
-        RuneLite plugin's settings. (The plugin itself is still being built -- this gets your
-        website account ready for when it lands.)</p>
-        <button class="primary" id="generateLinkBtn" type="button">Generate linking code</button>
-        <div id="linkCodeResult" style="display:none;">
-          <div class="link-code" id="linkCodeValue"></div>
-          <p class="hint">Paste this into the plugin's settings. It expires in 10 minutes and
-          only works once -- generate a new one if it expires.</p>
-        </div>
-        <div class="auth-error" id="linkError"></div>
-        """
-
-    body = f"""
-    <p class="dash-welcome">Welcome back, {escape(player.email or "")}.</p>
-    <div class="dash-grid">
-      <div class="dash-card" id="linkCard">
-        {link_card}
-      </div>
-      <div class="dash-card dash-card-soon">
-        <h3>Purchase Goals</h3>
-        <p class="subtitle">Coming soon.</p>
-      </div>
-      <div class="dash-card dash-card-soon">
-        <h3>Loot Tracker</h3>
-        <p class="subtitle">Coming soon.</p>
-      </div>
-    </div>
-    """
-    script = """
     document.getElementById('generateLinkBtn')?.addEventListener('click', async (e) => {
       const btn = e.target;
       const errorEl = document.getElementById('linkError');
@@ -126,7 +71,7 @@ def render_dashboard(player: Player) -> str:
           return;
         }
         document.getElementById('linkCodeValue').textContent = data.code;
-        document.getElementById('linkCodeResult').style.display = 'block';
+        document.getElementById('linkCodeResult').style.display = 'inline-flex';
         btn.textContent = 'Generate a new code';
       } catch (err) {
         errorEl.textContent = 'Something went wrong. Please try again.';
@@ -143,7 +88,68 @@ def render_dashboard(player: Player) -> str:
       return fallback;
     }
     """
-    return _shell(title="Dashboard — myscape", player=player, body=body, extra_script=script)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{escape(title)}</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="/static/css/myscape.css" />
+</head>
+<body>
+  {_link_banner(player)}
+  <div class="wrap">
+    <header>
+      <p class="logo"><a href="/"><img src="/static/img/logo.png" alt="myscape" /></a></p>
+      {_nav(player)}
+    </header>
+    {body}
+  </div>
+  <script>
+    {shared_script}
+    {extra_script}
+  </script>
+</body>
+</html>"""
+
+
+def render_landing(player: Optional[Player]) -> str:
+    # Logged-in visitors get redirected to /dashboard before this ever
+    # renders (see main.py) -- this stays player-aware only so the nav
+    # (and link banner) don't look broken if that ever changes.
+    body = """
+    <p class="subtitle">An Old School RuneScape companion &mdash; purchase goals, loot tracking, and more.
+    <a href="/signup">Sign up</a> to get started.</p>
+    """
+    return _shell(title="myscape", player=player, body=body)
+
+
+def render_dashboard(player: Player) -> str:
+    linked_note = ""
+    if player.account_hash:
+        linked_note = f"""
+        <p class="dash-linked-note">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.</p>
+        """
+
+    body = f"""
+    <p class="dash-welcome">Welcome back, {escape(player.email or "")}.</p>
+    {linked_note}
+    <div class="dash-grid">
+      <div class="dash-card dash-card-soon">
+        <h3>Purchase Goals</h3>
+        <p class="subtitle">Coming soon.</p>
+      </div>
+      <div class="dash-card dash-card-soon">
+        <h3>Loot Tracker</h3>
+        <p class="subtitle">Coming soon.</p>
+      </div>
+    </div>
+    """
+    return _shell(title="Dashboard — myscape", player=player, body=body)
 
 
 def render_signup() -> str:
@@ -199,13 +205,6 @@ def render_signup() -> str:
         submitBtn.disabled = false;
       }
     });
-
-    function describeError(data, fallback) {
-      if (!data || !data.detail) return fallback;
-      if (typeof data.detail === 'string') return data.detail;
-      if (Array.isArray(data.detail) && data.detail[0]?.msg) return data.detail[0].msg;
-      return fallback;
-    }
     """
     return _shell(title="Sign up — myscape", player=None, body=body, extra_script=script)
 
@@ -262,12 +261,5 @@ def render_login() -> str:
         submitBtn.disabled = false;
       }
     });
-
-    function describeError(data, fallback) {
-      if (!data || !data.detail) return fallback;
-      if (typeof data.detail === 'string') return data.detail;
-      if (Array.isArray(data.detail) && data.detail[0]?.msg) return data.detail[0].msg;
-      return fallback;
-    }
     """
     return _shell(title="Log in — myscape", player=None, body=body, extra_script=script)
