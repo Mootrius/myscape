@@ -43,7 +43,13 @@ def _link_banner(player: Optional[Player]) -> str:
     instead of opening a separate reveal area. A second click copies
     that code to the clipboard, relabels the button "Copied to
     clipboard", and disables it for good -- see the click handler in
-    _shell()."""
+    _shell().
+
+    The banner's `id="linkBanner"` isn't just styling -- _shell()'s
+    shared script uses its presence to decide whether to poll for the
+    link completing (see that function) and reload once it has, since
+    the actual linking click happens over in the RuneLite plugin, which
+    has no way to tell this browser tab about it directly."""
     if not player or player.account_hash:
         return ""
     return """
@@ -113,6 +119,30 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
       if (typeof data.detail === 'string') return data.detail;
       if (Array.isArray(data.detail) && data.detail[0]?.msg) return data.detail[0].msg;
       return fallback;
+    }
+
+    // Linking itself happens over on the RuneLite side (the player pastes
+    // the code shown by the button above into the plugin's own "Link
+    // account" button) -- this open tab has no way to hear about that
+    // directly, so while the banner is up it polls the session-authenticated
+    // "who am I" endpoint every few seconds and reloads once account_hash
+    // comes back set, the same way it would if the player refreshed by
+    // hand. Stops polling the moment it succeeds (or the tab is closed).
+    const linkBanner = document.getElementById('linkBanner');
+    if (linkBanner) {
+      const linkPollInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/auth/me');
+          if (!res.ok) return; // e.g. session expired -- a normal reload will sort that out
+          const data = await res.json();
+          if (data.account_hash) {
+            clearInterval(linkPollInterval);
+            window.location.reload();
+          }
+        } catch (err) {
+          // Transient network hiccup -- just try again next tick.
+        }
+      }, 3000);
     }
     """
     return f"""<!doctype html>
