@@ -80,25 +80,23 @@
    label -- identity is icon + tooltip only (same as the Purchase
    Goals version), with kill count and gp value as the two visible
    lines instead. ---------- */
-/* flex-grow (rather than a plain wrap of fixed-width boxes) so
-   whichever row a box lands in stretches to use up that row's own
-   leftover space instead of leaving it as dead space at the row's
-   right edge -- flex-wrap gives each wrapped line its own leftover
-   space to distribute this way. A row's boxes all grow by the same
-   amount since they share one flex-grow, so it stays a tidy grid
-   rather than picking one box to stretch. */
 .loot-npc-row { display: flex; flex-wrap: wrap; gap: 10px; }
-/* Deliberately rectangular (taller than wide), via aspect-ratio: 3/4
-   -- the mirror image of the item box's own aspect-ratio: 1/1 below.
-   Pinning the ratio (rather than just letting the icon+kc+gp stack
-   happen to come out taller) keeps the box's shape steady even for an
-   NPC whose wiki icon 404s and disappears (see iconImg in the script
-   below) -- content is vertically centered inside whatever space that
-   leaves rather than the box collapsing to fit it. max-width caps how
-   far a box can grow so a near-empty row (one or two NPCs) doesn't
-   stretch into one oversized box. */
+/* A fixed size, not a stretchy one -- flex-basis is calc()'d as
+   exactly one quarter of the row's own width (minus the three 10px
+   gaps a row of 4 needs), so four boxes always line up flush edge to
+   edge across the panel. flex-grow/shrink: 0 keeps that size constant
+   whether the current row has 1 box or 8 -- a lightly-filled row just
+   ends early and leaves empty space, rather than the boxes growing to
+   fill it (that stretchy behavior is what this replaces). Deliberately
+   rectangular (taller than wide), via aspect-ratio: 3/4 -- the mirror
+   image of the item box's own aspect-ratio: 1/1 below. Pinning the
+   ratio (rather than just letting the icon+kc+gp stack happen to come
+   out taller) keeps the box's shape steady even for an NPC whose wiki
+   icon 404s and disappears (see iconImg in the script below) --
+   content is vertically centered inside whatever space that leaves
+   rather than the box collapsing to fit it. */
 .loot-npc-box {
-  flex: 1 0 84px; max-width: 120px; aspect-ratio: 3 / 4; box-sizing: border-box;
+  flex: 0 0 calc((100% - 30px) / 4); aspect-ratio: 3 / 4; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 10px 8px; cursor: pointer;
@@ -163,19 +161,18 @@
    item's name available on hover only (same identity-by-tooltip
    convention as the NPC boxes). Same npc-scoped, 24h-windowed data --
    see windowItems/npcItems in app/loot.py's build_loot_state. ---------- */
-/* Same flex-grow reasoning as .loot-npc-row above -- each wrapped
-   row's boxes stretch to fill that row's leftover width instead of
-   leaving a gap after the last one. */
 .loot-item-list { display: flex; flex-wrap: wrap; gap: 8px; }
-/* Square regardless of content -- aspect-ratio: 1/1 ties the height to
-   the width instead of letting the icon+qty+gp stack decide it, same
-   idea as the NPC box's own aspect-ratio: 3/4 above (which pins it to
-   taller-than-wide instead). Smaller than the NPC box beside it,
-   matching how much less there is to show per item. max-width caps
-   how far a box can grow on a near-empty row, same reasoning as the
-   NPC box's own cap. */
+/* Same fixed-size reasoning as .loot-npc-box above -- flex-basis is
+   exactly one sixth of the row's width (minus the five 8px gaps a row
+   of 6 needs), flex-grow/shrink: 0 so that size never changes no
+   matter how many items are actually in a given row. Square regardless
+   of content -- aspect-ratio: 1/1 ties the height to the width instead
+   of letting the icon+qty+gp stack decide it, same idea as the NPC
+   box's own aspect-ratio: 3/4 above (which pins it to taller-than-wide
+   instead). Smaller than the NPC box beside it, matching how much less
+   there is to show per item. */
 .loot-item-box {
-  flex: 1 0 56px; max-width: 76px; aspect-ratio: 1 / 1; box-sizing: border-box;
+  flex: 0 0 calc((100% - 40px) / 6); aspect-ratio: 1 / 1; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 4px;
