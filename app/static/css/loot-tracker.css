@@ -13,7 +13,7 @@
   padding: 18px 22px 14px; margin-bottom: 18px;
 }
 .loot-chart-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-.loot-chart-total { font-size: 20px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.loot-chart-total { font-size: 13px; color: var(--gold); font-variant-numeric: tabular-nums; }
 .loot-chart-kills { font-size: 12px; color: var(--text-faint); }
 
 /* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
@@ -39,19 +39,57 @@
 .loot-section-title { font-size: 15px; color: var(--text-dim); margin: 0 0 10px; }
 
 .loot-recent-kill {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: flex-start; gap: 14px;
   background: var(--panel-2); border: 1px solid var(--border);
   padding: 10px 20px; margin-bottom: 18px;
 }
 .loot-recent-kill-empty { color: var(--text-faint); font-size: 13px; }
-.loot-recent-kill-portrait-wrap { flex: 0 0 auto; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; }
+
+/* The portrait now doubles as a backdrop for the name/time overlay
+   (below), so it's sized up from the old plain-icon 48px to leave that
+   text room to sit on top of it instead of overflowing its edges. */
+.loot-recent-kill-portrait-wrap {
+  position: relative; flex: 0 0 auto; width: 72px; height: 72px;
+  display: flex; align-items: center; justify-content: center;
+}
 .loot-recent-kill-portrait { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: pixelated; }
-.loot-recent-kill-info { flex: 0 0 auto; }
-.loot-recent-kill-name { font-size: 13px; color: var(--text); }
-.loot-recent-kill-time { font-size: 11px; color: var(--text-faint); }
+
+/* Name + time-ago sit directly over the top of the portrait image
+   (rather than in a separate text column beside it) -- a thin dark
+   text-outline (no background box) keeps them legible over whatever
+   the icon's own art looks like at that spot, same treatment as the
+   item-quantity numbers below. */
+.loot-recent-kill-overlay {
+  position: absolute; top: 2px; left: 2px; right: 2px;
+  display: flex; align-items: baseline; gap: 5px; overflow: hidden;
+  pointer-events: none;
+}
+.loot-recent-kill-name {
+  font-size: 11px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+}
+.loot-recent-kill-time {
+  font-size: 9.5px; color: var(--text-dim); white-space: nowrap; flex: none;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+}
+
+/* The gp value sits above the item icons, both right-aligned into the
+   card's top-right corner. */
+.loot-recent-kill-items-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .loot-recent-kill-value { font-size: 15px; color: var(--gold); font-variant-numeric: tabular-nums; }
-.loot-recent-kill-items { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.loot-recent-kill-items { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.loot-recent-kill-item {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+}
 .loot-recent-kill-item-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; }
+/* A slight text outline instead of the "Recent loot" list's solid
+   background box (.loot-recent-item-qty) -- lighter-weight treatment
+   for this one card. */
+.loot-recent-kill-item-qty {
+  position: absolute; bottom: -2px; right: -2px; font-size: 9px; color: #fff; font-weight: 600;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+}
 
 .loot-totals { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 .loot-total-card {

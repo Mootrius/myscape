@@ -150,6 +150,12 @@ header {
 
 .subtitle { color: var(--text-muted); font-size: 15px; margin-top: 6px; }
 
+/* A page's own on-page title -- e.g. "Purchase Goals"/"Loot Tracker"
+   at the top of their .wrap content, below the site header. Shared
+   here (rather than duplicated per-page-feature CSS file) since any
+   dashboard sub-page can use it the same way. */
+.page-title { font-size: 22px; font-weight: normal; letter-spacing: 0.02em; margin: 0 0 20px; }
+
 .nav-side { display: flex; align-items: center; font-size: 15px; }
 
 /* White nav text (distinct from the rest of the site's gold/dim-text

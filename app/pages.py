@@ -503,6 +503,7 @@ def render_purchase_goals(player: Player) -> str:
         f'<link rel="stylesheet" href="/static/css/purchase-goals.css?v={_PURCHASE_GOALS_CSS_VERSION}" />'
     )
     body = """
+    <h2 class="page-title">Purchase Goals</h2>
     <div class="pg-header">
       <div class="tracker-icon-row" id="setupIconRow"></div>
       <div class="tracker-menu-wrap">
@@ -1578,13 +1579,14 @@ def render_loot_tracker(player: Player) -> str:
     see app/loot.py's build_loot_state)."""
     extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
     body = """
+    <h2 class="page-title">Loot Tracker</h2>
     <div class="auth-error" id="lootError"></div>
     <p class="pg-empty" id="lootEmptyMsg">Loading&hellip;</p>
     <div id="lootBody" style="display:none;">
       <div class="loot-chart-card">
         <div class="loot-chart-header">
-          <div class="loot-chart-total" id="lootChartTotal">0 gp</div>
           <div class="loot-chart-kills" id="lootChartKills">0 kills &middot; last 24h</div>
+          <div class="loot-chart-total" id="lootChartTotal">0 gp</div>
         </div>
         <div class="loot-bar-plot">
           <div class="loot-bar-gridlines" id="lootBarGridlines"></div>
@@ -1744,16 +1746,23 @@ def render_loot_tracker(player: Player) -> str:
         }
         var items = (kill.items || []).slice().sort(function (a, b) { return b.value - a.value; });
         var itemsHtml = items.map(function (it) {
-          return iconImg(it.icon, it.itemName, 'loot-recent-kill-item-icon');
+          return '<span class="loot-recent-kill-item" title="' + escapeHtml(it.itemName) + ' x' + it.quantity + '">' +
+            iconImg(it.icon, it.itemName, 'loot-recent-kill-item-icon') +
+            '<span class="loot-recent-kill-item-qty">' + it.quantity + '</span>' +
+          '</span>';
         }).join('');
         el.innerHTML =
-          '<div class="loot-recent-kill-portrait-wrap">' + iconImg(kill.icon, kill.sourceName, 'loot-recent-kill-portrait') + '</div>' +
-          '<div class="loot-recent-kill-info">' +
-            '<div class="loot-recent-kill-name">' + escapeHtml(kill.sourceName) + '</div>' +
-            '<div class="loot-recent-kill-time">' + timeAgo(kill.occurredAt) + '</div>' +
-            '<div class="loot-recent-kill-value">' + fmtGp(kill.value) + ' gp</div>' +
+          '<div class="loot-recent-kill-portrait-wrap">' +
+            iconImg(kill.icon, kill.sourceName, 'loot-recent-kill-portrait') +
+            '<div class="loot-recent-kill-overlay">' +
+              '<span class="loot-recent-kill-name">' + escapeHtml(kill.sourceName) + '</span>' +
+              '<span class="loot-recent-kill-time">' + timeAgo(kill.occurredAt) + '</span>' +
+            '</div>' +
           '</div>' +
-          '<div class="loot-recent-kill-items">' + itemsHtml + '</div>';
+          '<div class="loot-recent-kill-items-col">' +
+            '<div class="loot-recent-kill-value">' + fmtGp(kill.value) + ' gp</div>' +
+            '<div class="loot-recent-kill-items">' + itemsHtml + '</div>' +
+          '</div>';
       }
 
       function iconImg(src, alt, cls) {
