@@ -874,6 +874,18 @@ def render_purchase_goals(player: Player) -> str:
             PG.iconPicker = false;
             renderContent();
             if (opening) {
+              var input = document.getElementById('slotSearchInput');
+              if (input) {
+                // preventScroll so the browser's own native "scroll
+                // focused element into view" doesn't fire a second,
+                // competing (and non-smooth) scroll right before ours
+                // below -- scrollPickerIntoView is the only thing that
+                // should move the page here. select() is a no-op on an
+                // empty input but puts any leftover text in a re-opened
+                // picker's box in a ready-to-replace state.
+                input.focus({ preventScroll: true });
+                input.select();
+              }
               scrollPickerIntoView();
             }
           });
@@ -881,20 +893,33 @@ def render_purchase_goals(player: Player) -> str:
       }
 
       // Smoothly scrolls the just-opened slot picker's search box into
-      // view -- the picker renders directly below the gear/inventory
-      // grid, which can easily sit below the fold (a shorter viewport,
-      // or the page having been scrolled down to reach the slot that
-      // was clicked), so without this a player could click an empty
-      // slot and not notice anything happened. scrollIntoView's
-      // 'nearest' block only scrolls the minimum amount actually needed
-      // to bring it into view -- a no-op when it's already visible,
-      // rather than jumping the page around on every click. Called
-      // right after renderContent() rebuilds #pgSlotPicker, so the
-      // search input already exists in the DOM by the time this runs.
+      // view, with some breathing room below it -- the picker renders
+      // directly below the gear/inventory grid, which can easily sit
+      // below the fold (a shorter viewport, or the page having been
+      // scrolled down to reach the slot that was clicked), so without
+      // this a player could click an empty slot and not notice anything
+      // happened. Deliberately scrolls a bit past the search box itself
+      // (MARGIN_BELOW), not just up to its bottom edge -- landing it
+      // right at the very edge of the viewport looks cramped, and
+      // leaves no room for the suggestions dropdown that appears the
+      // moment the player starts typing. A no-op when the box (plus
+      // that margin) is already visible, rather than jumping the page
+      // around on every click. Called right after renderContent()
+      // rebuilds #pgSlotPicker, so the search input already exists in
+      // the DOM by the time this runs.
       function scrollPickerIntoView() {
         var target = document.getElementById('slotSearchInput') || document.getElementById('pgSlotPicker');
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (!target) return;
+        var MARGIN_BELOW = 160;
+        var rect = target.getBoundingClientRect();
+        var overflowBelow = rect.bottom + MARGIN_BELOW - window.innerHeight;
+        if (overflowBelow > 0) {
+          window.scrollBy({ top: overflowBelow, left: 0, behavior: 'smooth' });
+        } else if (rect.top < 0) {
+          // Rare: the picker sits above the current scroll position
+          // (e.g. the page was scrolled further since it opened) --
+          // bring it back into view from the top instead.
+          window.scrollBy({ top: rect.top - 24, left: 0, behavior: 'smooth' });
         }
       }
 
