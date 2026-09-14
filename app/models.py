@@ -79,6 +79,7 @@ class Player(Base):
     potion_storage_items = relationship("PotionStorageItem", back_populates="player", cascade="all, delete-orphan")
     rune_pouch_items = relationship("RunePouchItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
+    loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -395,3 +396,56 @@ class GearSetup(Base):
     still_to_purchase_custom_order = Column(JSONB, nullable=True)
 
     player = relationship("Player", back_populates="gear_setups")
+
+
+class LootEvent(Base):
+    """One kill/casket-opening/pickpocket's worth of loot, synced by
+    POST /api/players/me/loot (see MyscapeClient#syncLootEvent in the
+    Mootrius/myscape-plugin repo) -- the data source behind the Loot
+    Tracker feature (see app/loot.py).
+
+    Structurally different from BankItem/InventoryItem/EquipmentItem/
+    PotionStorageItem/RunePouchItem above: those are all "current state"
+    snapshots the plugin re-sends in full and this app deletes-and-
+    replaces on every sync. Loot events are a historical log instead --
+    each row is one thing that already happened and is never replaced,
+    so a sync here is an insert, not a replace. That also means a sync
+    can't just be retried blindly the way a snapshot sync can (retrying
+    a delete-and-replace is naturally idempotent; retrying an insert
+    isn't) -- event_id exists specifically to make it idempotent anyway:
+    the plugin generates a random id once, the moment the drop happens,
+    and a sync that already has a matching (player_id, event_id) row is
+    just skipped rather than double-counted, so a retried or
+    double-submitted sync can never inflate a player's totals.
+
+    source_type is RuneLite's own LootRecordType, lowercased ("npc",
+    "player", "event", "pickpocket", "unknown") -- "event" covers clue
+    scroll caskets and other non-NPC rewards, but RuneLite's bundled
+    Loot Tracker plugin (the actual source of this data -- see
+    MyscapePlugin#onLootReceived) reports every clue casket's
+    source_name as the bare word "Casket", with no tier -- a known,
+    real limitation of the event this reads, not a bug here, and not
+    yet worked around (see app/loot.py's module docstring).
+
+    items is a list of {"item_id": int, "item_name": str|None,
+    "quantity": int} -- same shape as the other item-source tables'
+    columns, just nested here as JSON per-event instead of one row per
+    item, since a loot event's items are logically one unit (one kill's
+    drops) rather than each contributing independently to a current-
+    ownership pool the way bank/inventory items do."""
+
+    __tablename__ = "loot_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    event_id = Column(String, nullable=False)
+    source_name = Column(String, nullable=False)
+    source_type = Column(String, nullable=False)
+    combat_level = Column(Integer, nullable=True)
+    items = Column(JSONB, nullable=False, default=list)
+    occurred_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="loot_events")
+
+    __table_args__ = (UniqueConstraint("player_id", "event_id", name="uq_loot_events_player_event"),)

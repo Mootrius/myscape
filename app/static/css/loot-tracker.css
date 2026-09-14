@@ -1,0 +1,57 @@
+/* Loot Tracker page -- see render_loot_tracker in app/pages.py. Reuses
+   the same --panel-2/--border/--gold tokens myscape.css and
+   purchase-goals.css already define, rather than inventing a second
+   palette for one more page. */
+
+.loot-header { margin-bottom: 18px; }
+.loot-header h2 { margin: 0; }
+.loot-header .subtitle { margin-top: 4px; }
+
+.loot-totals { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.loot-total-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  padding: 14px 18px; flex: 1 1 220px;
+}
+.loot-total-icon { width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated; flex: none; }
+.loot-total-label { font-size: 12.5px; color: var(--text-muted); }
+.loot-total-amount { font-size: 22px; color: var(--gold); font-weight: 600; margin-top: 2px; }
+
+.loot-columns { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+.loot-column { flex: 1 1 320px; min-width: 280px; }
+.loot-column h3 { margin: 0 0 10px; font-size: 15px; color: var(--text-dim); }
+.loot-column-empty { color: var(--text-faint); font-size: 13px; }
+
+.loot-source-list, .loot-recent-list { display: flex; flex-direction: column; gap: 6px; }
+
+.loot-source-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+.loot-source-icon { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; flex: none; }
+.loot-source-name { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loot-source-count { color: var(--text-faint); margin-left: 6px; font-size: 11.5px; }
+.loot-source-value { font-size: 12.5px; color: var(--gold); white-space: nowrap; }
+
+.loot-recent-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+.loot-recent-icon { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; flex: none; margin-top: 2px; }
+.loot-recent-body { flex: 1; min-width: 0; }
+.loot-recent-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.loot-recent-name { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loot-recent-time { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.loot-recent-items { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.loot-recent-item {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border);
+}
+.loot-recent-item-icon { width: 20px; height: 20px; object-fit: contain; image-rendering: pixelated; }
+.loot-recent-item-qty {
+  position: absolute; bottom: -2px; right: -2px; font-size: 9px; color: var(--text-dim);
+  background: var(--panel); padding: 0 2px; line-height: 1.3;
+}
+.loot-recent-value { font-size: 12.5px; color: var(--gold); white-space: nowrap; flex: none; align-self: center; }

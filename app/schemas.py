@@ -561,3 +561,70 @@ class GearSetupsState(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+# -- Loot Tracker: an append-only log of kills/caskets/pickpockets, not
+# a current-state snapshot -- see LootEvent's docstring in app/models.py
+# for why its sync shape (POST /api/players/me/loot) doesn't match the
+# delete-and-replace pattern every other sync endpoint above uses. -----
+
+class LootEventItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class LootEventIn(BaseModel):
+    # Client-generated once, the moment the drop happens (see
+    # LootEvent's docstring in app/models.py) -- what makes a retried or
+    # duplicated sync of the same event safe rather than double-counted.
+    event_id: str
+    source_name: str
+    source_type: str
+    combat_level: Optional[int] = None
+    occurred_at: datetime
+    items: List[LootEventItemIn]
+
+    @field_validator("event_id", "source_name", "source_type")
+    @classmethod
+    def check_non_empty(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("must not be empty.")
+        return value
+
+
+class LootSyncRequest(BaseModel):
+    events: List[LootEventIn]
+
+
+class LootSyncResponse(BaseModel):
+    # How many of the events in this request were actually new -- a
+    # number smaller than len(events) is normal and not an error (some
+    # were already on file; see LootEvent's docstring), not just a
+    # smaller-than-expected count to be surprised by.
+    added_count: int
+
+
+class LootState(BaseModel):
+    """Documents (not enforced) the payload GET /api/players/me/loot
+    returns: totalValue, killCount, sourceTotals (per NPC/event,
+    sorted by value), recentLoot, pricesError/mappingError. See
+    build_loot_state in app/loot.py."""
+
+    class Config:
+        extra = "allow"

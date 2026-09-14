@@ -37,6 +37,16 @@ try:
 except OSError:
     _PURCHASE_GOALS_CSS_VERSION = 0
 
+# Same cache-busting trick again, for the Loot Tracker page's own
+# stylesheet.
+_LOOT_TRACKER_CSS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "css", "loot-tracker.css"
+)
+try:
+    _LOOT_TRACKER_CSS_VERSION = int(os.path.getmtime(_LOOT_TRACKER_CSS_PATH))
+except OSError:
+    _LOOT_TRACKER_CSS_VERSION = 0
+
 
 def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
     """The single link/button that goes on each side of the centered
@@ -342,13 +352,17 @@ def render_dashboard(player: Player) -> str:
         )
         + "</a>"
     )
-    loot_tracker_card = _dash_card(
-        _ICON_BONES,
-        "Dragon bones",
-        "Loot Tracker",
-        "Track the loot from any NPC you kill, with useful graphs and other "
-        "statistics available for your tracking pleasure. Customize which "
-        "NPCs are tracked and what data is shown.",
+    loot_tracker_card = (
+        '<a href="/dashboard/loot" style="display:block;color:inherit;text-decoration:none;">'
+        + _dash_card(
+            _ICON_BONES,
+            "Dragon bones",
+            "Loot Tracker",
+            "Track the loot from any NPC you kill, with useful graphs and other "
+            "statistics available for your tracking pleasure. Customize which "
+            "NPCs are tracked and what data is shown.",
+        )
+        + "</a>"
     )
 
     body = f"""
@@ -1547,6 +1561,176 @@ def render_purchase_goals(player: Player) -> str:
     """
     return _shell(
         title="Purchase Goals — myscape",
+        player=player,
+        body=body,
+        extra_script=script,
+        extra_head=extra_head,
+    )
+
+
+def render_loot_tracker(player: Player) -> str:
+    """The Loot Tracker page -- a first pass at porting the original
+    single-user Maintrius tool's Loot Tracker/Trip Tracker features
+    (see app/loot.py's module docstring for what's here today and
+    what's deliberately not yet). Same shape as render_purchase_goals
+    above: a thin server-rendered shell, everything below it drawn
+    client-side from one polled JSON payload (GET /api/players/me/loot,
+    see app/loot.py's build_loot_state)."""
+    extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
+    body = """
+    <div class="loot-header">
+      <h2>Loot Tracker</h2>
+      <p class="subtitle">Every kill, casket, and pickpocket your linked RuneLite client has synced.</p>
+    </div>
+    <div class="auth-error" id="lootError"></div>
+    <p class="pg-empty" id="lootEmptyMsg">Loading&hellip;</p>
+    <div id="lootBody" style="display:none;">
+      <div class="loot-totals">
+        <div class="loot-total-card">
+          <img class="loot-total-icon" src="/static/img/icon-coins.png" alt="Coins" />
+          <div class="loot-total-body">
+            <div class="loot-total-label">Total loot value</div>
+            <div class="loot-total-amount" id="lootTotalValue">0</div>
+          </div>
+        </div>
+        <div class="loot-total-card">
+          <div class="loot-total-body">
+            <div class="loot-total-label">Loot events logged</div>
+            <div class="loot-total-amount" id="lootKillCount">0</div>
+          </div>
+        </div>
+      </div>
+      <div class="loot-columns">
+        <div class="loot-column">
+          <h3>By source</h3>
+          <p class="loot-column-empty" id="lootSourcesEmpty" style="display:none;">
+            Nothing synced yet -- go get some kills in, with the plugin linked and running.
+          </p>
+          <div class="loot-source-list" id="lootSourceList"></div>
+        </div>
+        <div class="loot-column">
+          <h3>Recent loot</h3>
+          <p class="loot-column-empty" id="lootRecentEmpty" style="display:none;">Nothing here yet.</p>
+          <div class="loot-recent-list" id="lootRecentList"></div>
+        </div>
+      </div>
+    </div>
+    """
+    script = """
+    (function () {
+      var COINS_ICON = '/static/img/icon-coins.png';
+
+      function fmtGp(n) {
+        n = n || 0;
+        return n.toLocaleString('en-US');
+      }
+
+      function timeAgo(isoString) {
+        if (!isoString) return '';
+        var then = new Date(isoString).getTime();
+        var diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+        if (diffSec < 60) return diffSec + 's ago';
+        var diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return diffMin + 'm ago';
+        var diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return diffHr + 'h ago';
+        return Math.floor(diffHr / 24) + 'd ago';
+      }
+
+      function iconImg(src, alt, cls) {
+        if (!src) return '';
+        // Quietly hidden on a 404 (a guessed NPC/item wiki filename that
+        // doesn't exist) rather than showing a broken-image icon -- same
+        // treatment item icons already get elsewhere on the site.
+        return '<img class="' + cls + '" src="' + src + '" alt="" loading="lazy" ' +
+          'onerror="this.style.display=\\'none\\'" />';
+      }
+
+      function renderSourceList(sourceTotals) {
+        var emptyEl = document.getElementById('lootSourcesEmpty');
+        var listEl = document.getElementById('lootSourceList');
+        if (!sourceTotals.length) {
+          emptyEl.style.display = '';
+          listEl.innerHTML = '';
+          return;
+        }
+        emptyEl.style.display = 'none';
+        listEl.innerHTML = sourceTotals.map(function (s) {
+          return '<div class="loot-source-row">' +
+            iconImg(s.icon, s.sourceName, 'loot-source-icon') +
+            '<div class="loot-source-name">' + escapeHtml(s.sourceName) +
+              '<span class="loot-source-count">&times;' + s.count + '</span></div>' +
+            '<div class="loot-source-value">' + fmtGp(s.value) + '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      function renderRecentList(recentLoot) {
+        var emptyEl = document.getElementById('lootRecentEmpty');
+        var listEl = document.getElementById('lootRecentList');
+        if (!recentLoot.length) {
+          emptyEl.style.display = '';
+          listEl.innerHTML = '';
+          return;
+        }
+        emptyEl.style.display = 'none';
+        listEl.innerHTML = recentLoot.map(function (e) {
+          var itemsHtml = (e.items || []).map(function (it) {
+            return '<span class="loot-recent-item" title="' + escapeHtml(it.itemName) + ' x' + it.quantity + '">' +
+              iconImg(it.icon, it.itemName, 'loot-recent-item-icon') +
+              '<span class="loot-recent-item-qty">' + it.quantity + '</span>' +
+            '</span>';
+          }).join('');
+          return '<div class="loot-recent-row">' +
+            iconImg(e.icon, e.sourceName, 'loot-recent-icon') +
+            '<div class="loot-recent-body">' +
+              '<div class="loot-recent-top">' +
+                '<span class="loot-recent-name">' + escapeHtml(e.sourceName) + '</span>' +
+                '<span class="loot-recent-time">' + timeAgo(e.occurredAt) + '</span>' +
+              '</div>' +
+              '<div class="loot-recent-items">' + itemsHtml + '</div>' +
+            '</div>' +
+            '<div class="loot-recent-value">' + fmtGp(e.value) + '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      function escapeHtml(s) {
+        var div = document.createElement('div');
+        div.textContent = s == null ? '' : String(s);
+        return div.innerHTML;
+      }
+
+      async function loadState() {
+        var errorEl = document.getElementById('lootError');
+        try {
+          var res = await fetch('/api/players/me/loot');
+          if (!res.ok) {
+            errorEl.textContent = 'Could not load your loot. Please refresh.';
+            errorEl.classList.add('show');
+            return;
+          }
+          errorEl.classList.remove('show');
+          var data = await res.json();
+
+          document.getElementById('lootEmptyMsg').style.display = 'none';
+          document.getElementById('lootBody').style.display = '';
+          document.getElementById('lootTotalValue').textContent = fmtGp(data.totalValue);
+          document.getElementById('lootKillCount').textContent = (data.killCount || 0).toLocaleString('en-US');
+          renderSourceList(data.sourceTotals || []);
+          renderRecentList(data.recentLoot || []);
+        } catch (err) {
+          errorEl.textContent = 'Something went wrong loading your loot.';
+          errorEl.classList.add('show');
+        }
+      }
+
+      loadState();
+      setInterval(loadState, 10000);
+    })();
+    """
+    return _shell(
+        title="Loot Tracker — myscape",
         player=player,
         body=body,
         extra_script=script,

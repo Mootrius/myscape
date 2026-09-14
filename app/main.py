@@ -25,8 +25,9 @@ from app.auth import (
 )
 from app.database import get_db
 from app.limiter import limiter
+from app.loot import build_loot_state, sync_loot_events
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem, RunePouchItem
-from app.pages import render_dashboard, render_landing, render_login, render_purchase_goals, render_signup
+from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_purchase_goals, render_signup
 from app.purchase_goals import (
     build_purchase_goals_state,
     get_mapping,
@@ -55,6 +56,8 @@ from app.schemas import (
     InventorySyncRequest,
     InventorySyncResponse,
     ItemSearchResponse,
+    LootSyncRequest,
+    LootSyncResponse,
     MoveGearSlotItemRequest,
     PlayerOut,
     PotionStorageOut,
@@ -96,6 +99,12 @@ MAX_POTION_STORAGE_ITEMS = 200
 # not a round-number guess. Left with a little headroom in case Jagex
 # ever ships a bigger pouch before this constant is revisited.
 MAX_RUNE_POUCH_ITEMS = 10
+# The plugin syncs one loot event immediately as it happens (see
+# MyscapePlugin#onLootReceived), so a real sync is always exactly 1 --
+# this is a defensive upper bound against a malformed/buggy client
+# trying to batch an unreasonable number into one request, not a real
+# expected size.
+MAX_LOOT_EVENTS_PER_SYNC = 50
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
 if not SESSION_SECRET_KEY:
@@ -428,6 +437,40 @@ def read_rune_pouch(db: Session = Depends(get_db), player: Player = Depends(get_
     return RunePouchOut(items=[RunePouchItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
+@app.post("/api/players/me/loot", response_model=LootSyncResponse)
+def sync_loot(
+    payload: LootSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Records one or more loot events (a kill, a clue casket, a
+    pickpocket -- see MyscapePlugin#onLootReceived in the
+    Mootrius/myscape-plugin repo) as they happen. Unlike every sync
+    endpoint above, this is an insert-if-new, not a delete-and-replace
+    -- see LootEvent's docstring in app/models.py for why a historical
+    log needs a different sync shape than a current-state snapshot, and
+    sync_loot_events in app/loot.py for the actual dedup logic (keyed
+    on each event's client-generated event_id)."""
+    if len(payload.events) > MAX_LOOT_EVENTS_PER_SYNC:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many events in one sync (max {MAX_LOOT_EVENTS_PER_SYNC}).",
+        )
+    added_count = sync_loot_events(db, player, payload.events)
+    return LootSyncResponse(added_count=added_count)
+
+
+@app.get("/api/players/me/loot")
+def read_loot(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """The combined state the Loot Tracker page polls -- an all-time GP
+    total, a per-source breakdown, and a recent-loot feed, all computed
+    fresh from this player's synced LootEvent rows. Not pinned to a
+    Pydantic response_model for the same reason GET /api/gear-setups
+    above isn't -- see LootState's docstring in app/schemas.py. See
+    build_loot_state in app/loot.py."""
+    return build_loot_state(db, player)
+
+
 @app.get("/api/items/search", response_model=ItemSearchResponse)
 def item_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
     """Backs the gear-setup slot picker's search box (see
@@ -443,6 +486,13 @@ def purchase_goals_page(player: Optional[Player] = Depends(get_optional_current_
     if not player:
         return RedirectResponse("/login", status_code=302)
     return render_purchase_goals(player)
+
+
+@app.get("/dashboard/loot", response_class=HTMLResponse)
+def loot_tracker_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    return render_loot_tracker(player)
 
 
 @app.get("/api/gear-setups")
