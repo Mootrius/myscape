@@ -55,9 +55,12 @@
 .hamburger-icon { display: flex; flex-direction: column; justify-content: space-between; width: 16px; height: 11px; }
 .hamburger-icon span { display: block; height: 2px; background: currentColor; }
 
+/* Opaque, not the --panel-translucent used by cards elsewhere on this
+   page -- this floats directly over the gear grid/summary list, and at
+   82% opacity the content underneath showed through distractingly. */
 .tracker-menu {
   position: absolute; top: 44px; right: 0; z-index: 5;
-  background: var(--panel-translucent); border: 1px solid var(--border); min-width: 160px;
+  background: var(--panel); border: 1px solid var(--border); min-width: 160px;
   display: flex; flex-direction: column;
 }
 .tracker-menu-item {
@@ -68,9 +71,36 @@
 .tracker-menu-item.danger:hover { color: var(--red); }
 
 .pg-setup-form {
-  display: flex; gap: 8px; justify-content: center; margin-bottom: 18px;
+  display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 18px;
 }
 .pg-setup-form input[type="text"] { flex: 1 1 280px; max-width: 360px; }
+/* button.primary (myscape.css) defaults to width: 100% for full-width
+   auth-form submit buttons -- wrong here, where it sits beside an input
+   and a Cancel button in one row rather than stacked alone, and at 100%
+   it was blowing up to the width of the whole centered page column.
+   Pinned back down to a normal, content-sized button so the row reads
+   as one compact, centered group instead of three stretched elements. */
+/* #pgNameSave (id) rather than the .pg-setup-form-save class alone --
+   button.primary's own element+class selector in myscape.css otherwise
+   outweighs a single class here and the width: 100% below loses. */
+button.primary#pgNameSave, .pg-setup-form-save {
+  width: auto; flex: 0 0 auto;
+  padding: 10px 22px; font-size: 14px; margin-top: 0;
+}
+
+/* A plain bordered "box" button for secondary actions that sit beside a
+   primary one (Cancel next to Save, Clear/Cancel in the icon picker) --
+   button.link (myscape.css) renders as bare text, which read as an
+   afterthought next to a real button; this gives it the same visual
+   weight as everything else in these rows. */
+.btn-secondary {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-dim); font-family: inherit;
+  padding: 10px 18px; font-size: 13px;
+  cursor: pointer;
+}
+.btn-secondary:hover { border-color: var(--gold-dim); color: var(--text); }
+.btn-secondary:disabled { opacity: 0.5; cursor: default; }
 
 .overlay-card {
   border-radius: var(--radius);

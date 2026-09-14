@@ -505,8 +505,8 @@ def render_purchase_goals(player: Player) -> str:
     <div class="auth-error" id="pgError"></div>
     <div class="pg-setup-form" id="pgNameForm" style="display:none;">
       <input type="text" id="pgNameInput" placeholder="Setup name" maxlength="60" />
-      <button class="primary" id="pgNameSave" type="button">Save</button>
-      <button class="link" id="pgNameCancel" type="button">Cancel</button>
+      <button class="primary pg-setup-form-save" id="pgNameSave" type="button">Save</button>
+      <button class="btn-secondary" id="pgNameCancel" type="button">Cancel</button>
     </div>
     <div class="overlay-card" id="pgOverlay" style="display:none;">
       <div class="overlay-side overlay-source">
@@ -1170,8 +1170,8 @@ def render_purchase_goals(player: Player) -> str:
           '    <div class="suggestions" id="iconSuggestions"></div>' +
           '  </div>' +
           '  <div class="gear-icon-picker-actions">' +
-          '    <button class="link" id="iconClearBtn" type="button">Clear icon</button>' +
-          '    <button class="link" id="iconCancelBtn" type="button">Cancel</button>' +
+          '    <button class="btn-secondary" id="iconClearBtn" type="button">Clear</button>' +
+          '    <button class="btn-secondary" id="iconCancelBtn" type="button">Cancel</button>' +
           '  </div>' +
           '</div>';
         var input = document.getElementById('iconSearchInput');
