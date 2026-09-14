@@ -163,7 +163,9 @@ header {
 
 /* White nav text (distinct from the rest of the site's gold/dim-text
    link styling) so it reads clearly flanking the centered logo over
-   the video background. */
+   the video background. Capitalized -- unlike the "myscape" logo
+   between them, which stays lowercase on purpose (it's a wordmark,
+   not a nav label). */
 .nav-side a, .nav-side button.link {
   color: #fff;
   text-decoration: none;
@@ -172,6 +174,8 @@ header {
   font-size: 15px;
   cursor: pointer;
   padding: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .nav-side a:hover, .nav-side button.link:hover { color: var(--gold); }

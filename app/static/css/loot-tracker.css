@@ -58,8 +58,7 @@
 .loot-bar-x-label { flex: 1 1 0; text-align: center; font-size: 9px; color: var(--text-faint); white-space: nowrap; }
 .loot-bar-x-label.now { text-align: right; }
 
-.loot-section-title { font-size: 15px; color: var(--text-dim); margin: 0 0 10px; }
-.loot-column-empty { color: var(--text-faint); font-size: 13px; }
+.loot-column-empty { color: var(--text-faint); font-size: 13px; margin: 0 0 10px; }
 
 /* ---------- "By NPC" row -- one clickable box per NPC killed in the
    last 24 hours (see renderNpcRow in app/pages.py), styled after

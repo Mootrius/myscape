@@ -1602,7 +1602,6 @@ def render_loot_tracker(player: Player) -> str:
         </div>
         <div class="loot-bar-x-labels" id="lootBarXLabels"></div>
       </div>
-      <div class="loot-section-title">By NPC</div>
       <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
         No NPC kills in the last 24 hours yet.
       </p>
@@ -1704,6 +1703,17 @@ def render_loot_tracker(player: Player) -> str:
         function outlinePct(b) {
           return maxValue > 0 ? Math.max(0, Math.min(100, (b.value / maxValue) * 100)) : 0;
         }
+        // A bordered box still paints its border even at height:0 (the
+        // same reason a 0x0 div with colored borders makes a CSS
+        // triangle) -- so an hour with zero total loot rendered a
+        // visible sliver of the outline's border color once selecting
+        // an NPC made that border non-transparent. Only turning the
+        // border on for an hour that actually has something to outline
+        // avoids that rather than trying to hide a 0-height box's
+        // border with more CSS.
+        function outlineActive(b) {
+          return !!selectedNpc && b.value > 0;
+        }
         function fillValue(b, i) {
           return selectedNpc ? (selectedValues[i] || 0) : b.value;
         }
@@ -1723,7 +1733,7 @@ def render_loot_tracker(player: Player) -> str:
         if (existingCols.length !== buckets.length) {
           barsEl.innerHTML = buckets.map(function (b, i) {
             return '<div class="loot-bar-col" title="' + titleFor(b, i) + '">' +
-              '<div class="loot-bar-outline' + (selectedNpc ? ' active' : '') + '" style="height:' + outlinePct(b) + '%;"></div>' +
+              '<div class="loot-bar-outline' + (outlineActive(b) ? ' active' : '') + '" style="height:' + outlinePct(b) + '%;"></div>' +
               '<div class="loot-bar-fill' + (fillPct(b, i) > 0 ? ' has-value' : '') + '" style="height:' + fillPct(b, i) + '%;"></div>' +
             '</div>';
           }).join('');
@@ -1733,7 +1743,7 @@ def render_loot_tracker(player: Player) -> str:
             col.title = titleFor(b, i);
             var outline = col.querySelector('.loot-bar-outline');
             outline.style.height = outlinePct(b) + '%';
-            outline.classList.toggle('active', !!selectedNpc);
+            outline.classList.toggle('active', outlineActive(b));
             var fill = col.querySelector('.loot-bar-fill');
             var fp = fillPct(b, i);
             fill.style.height = fp + '%';
@@ -1755,24 +1765,49 @@ def render_loot_tracker(player: Player) -> str:
       // already-active one clears it back to "all sources") and
       // re-rendering the chart/row from the last-polled data, with no
       // extra fetch needed.
+      //
+      // Only rebuilds the row's HTML (and so its <img> icons) when the
+      // actual set/order of NPCs has changed -- otherwise just toggles
+      // each existing box's active/title state in place. Rebuilding on
+      // every single 10s poll (even though the same NPCs were still
+      // showing) was what made an icon "flicker": a fresh <img src=...>
+      // every poll re-fetches/redraws it from scratch, which shows up
+      // as a flash for any icon that isn't instant to (re)load -- not a
+      // problem with that icon's own URL.
+      var lastNpcKey = null;
       function renderNpcRow(npcs) {
         var emptyEl = document.getElementById('lootNpcEmpty');
         var rowEl = document.getElementById('lootNpcRow');
         if (!npcs.length) {
           emptyEl.style.display = '';
           rowEl.innerHTML = '';
+          lastNpcKey = null;
           return;
         }
         emptyEl.style.display = 'none';
-        rowEl.innerHTML = npcs.map(function (n) {
-          var active = state.selectedNpc === n.sourceName;
-          return '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
-            escapeHtml(n.sourceName) + '" title="' + escapeHtml(n.sourceName) + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' +
-            n.killCount + ' kill' + (n.killCount === 1 ? '' : 's') + '">' +
-            iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
-            '<div class="loot-npc-box-name">' + escapeHtml(n.sourceName) + '</div>' +
-          '</button>';
-        }).join('');
+
+        var key = npcs.map(function (n) { return n.sourceName; }).join('|');
+        if (key !== lastNpcKey) {
+          lastNpcKey = key;
+          rowEl.innerHTML = npcs.map(function (n) {
+            var active = state.selectedNpc === n.sourceName;
+            return '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
+              escapeHtml(n.sourceName) + '" title="' + escapeHtml(n.sourceName) + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' +
+              n.killCount + ' kill' + (n.killCount === 1 ? '' : 's') + '">' +
+              iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
+              '<div class="loot-npc-box-name">' + escapeHtml(n.sourceName) + '</div>' +
+            '</button>';
+          }).join('');
+          return;
+        }
+
+        var boxes = rowEl.children;
+        npcs.forEach(function (n, i) {
+          var box = boxes[i];
+          if (!box) return;
+          box.classList.toggle('active', state.selectedNpc === n.sourceName);
+          box.title = n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kill' + (n.killCount === 1 ? '' : 's');
+        });
       }
 
       document.getElementById('lootNpcRow').addEventListener('click', function (e) {
