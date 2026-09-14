@@ -405,49 +405,60 @@ def _charged_item_price(name: Optional[str], prices: dict) -> Tuple[Optional[int
 
 
 # Crystal helm/body/legs (see _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE above for
-# the eight house colours each comes in) are made from a single Crystal
-# armour seed plus 50 Crystal shards sung together at a singing bowl --
-# no GE listing of their own, same shape as the charged weapons above.
-# The wiki's own item-combination recipe data for these three items
-# (app/data/recipes.json) is unreliable, though: for the plain/undyed
-# form specifically, it documents the *recolouring* recipe (turning an
-# already-owned Amlodd-coloured piece back to the default colour with a
-# Crystal of Meilyr) rather than how to acquire the piece in the first
-# place -- and since that recipe's own material is itself an
-# (also-recipe-having) coloured variant of the very same item, walking
-# it via _expand_materials terminates (the depth/seen guards see to
-# that) but bottoms out treating "Crystal helm" as one of its own,
-# unpriced (cost 0) components. Rather than trying to fix that data in
-# place, this bypasses the recipe/components path entirely for these
-# three items and, per how the user wants this priced, just pins them
-# to the Crystal armour seed's own live price (the 50 crystal shards
-# are comparatively minor and highly variable in value -- even the
-# wiki's own page for these prices them with a multi-line fallback
-# formula -- so left out, same simplification as the charged weapons'
-# uncharged-price-only pricing above).
-_CRYSTAL_ARMOUR_PIECE_NAMES = {"crystal helm", "crystal body", "crystal legs"}
+# the eight house colours each comes in) are made from Crystal armour
+# seeds (a different number per piece -- see
+# _CRYSTAL_ARMOUR_PIECE_SEED_COUNT below) plus Crystal shards, sung
+# together at a singing bowl -- no GE listing of their own, same shape
+# as the charged weapons above. The wiki's own item-combination recipe
+# data for these three items (app/data/recipes.json) is unreliable,
+# though: for the plain/undyed form specifically, it documents the
+# *recolouring* recipe (turning an already-owned Amlodd-coloured piece
+# back to the default colour with a Crystal of Meilyr) rather than how
+# to acquire the piece in the first place -- and since that recipe's
+# own material is itself an (also-recipe-having) coloured variant of
+# the very same item, walking it via _expand_materials terminates (the
+# depth/seen guards see to that) but bottoms out treating "Crystal
+# helm" as one of its own, unpriced (cost 0) components. Rather than
+# trying to fix that data in place, this bypasses the recipe/components
+# path entirely for these three items and, per how the user wants this
+# priced, just pins each to its own seed count times a Crystal armour
+# seed's live price (the Crystal shards are comparatively minor and
+# highly variable in value -- even the wiki's own page for these prices
+# them with a multi-line fallback formula -- so left out, same
+# simplification as the charged weapons' uncharged-price-only pricing
+# above).
+# Each piece takes a different number of seeds to sing at a singing
+# bowl -- confirmed against the wiki's own Creation recipe for each
+# (Crystal_helm/Crystal_body/Crystal_legs, "Armour seed" section):
+# 1 for a helm, 2 for legs, 3 for a body (bigger piece, more material --
+# same shape mat2quantity of Crystal shards follows too: 50/100/150,
+# left out of this pricing same as a single piece's shards are).
+_CRYSTAL_ARMOUR_PIECE_SEED_COUNT = {"crystal helm": 1, "crystal legs": 2, "crystal body": 3}
 _CRYSTAL_ARMOUR_SEED_NAME = "Crystal armour seed"
 
 
 def is_crystal_armour_piece(name: Optional[str]) -> bool:
     """True for "Crystal helm"/"Crystal body"/"Crystal legs", in any of
     their eight house colours (e.g. "Crystal helm (ithell)") -- see
-    _CRYSTAL_ARMOUR_PIECE_NAMES above for why these specifically need
-    special handling."""
-    return _strip_cosmetic_item_suffix((name or "").strip()).strip().lower() in _CRYSTAL_ARMOUR_PIECE_NAMES
+    _CRYSTAL_ARMOUR_PIECE_SEED_COUNT above for why these specifically
+    need special handling."""
+    return _strip_cosmetic_item_suffix((name or "").strip()).strip().lower() in _CRYSTAL_ARMOUR_PIECE_SEED_COUNT
 
 
 def _crystal_armour_seed_price(name: Optional[str], prices: dict) -> Tuple[Optional[int], Optional[str]]:
-    """For a crystal helm/body/legs (any colour), returns the live price
-    of a Crystal armour seed -- same shape as unit_price_for,
-    (unit_price, price_source), both None if name isn't one of these
-    three items or the seed currently has no live price."""
-    if not is_crystal_armour_piece(name):
+    """For a crystal helm/body/legs (any colour), returns that piece's
+    price as its seed count (1/2/3 -- see
+    _CRYSTAL_ARMOUR_PIECE_SEED_COUNT) times a single Crystal armour
+    seed's live price -- same shape as unit_price_for, (unit_price,
+    price_source), both None if name isn't one of these three items or
+    the seed currently has no live price."""
+    seed_count = _CRYSTAL_ARMOUR_PIECE_SEED_COUNT.get(_strip_cosmetic_item_suffix((name or "").strip()).strip().lower())
+    if seed_count is None:
         return None, None
     for candidate_id in find_item_ids(_CRYSTAL_ARMOUR_SEED_NAME) or []:
         unit_price, price_source = unit_price_for(candidate_id, prices)
         if unit_price is not None:
-            return unit_price, price_source
+            return unit_price * seed_count, price_source
     return None, None
 
 
