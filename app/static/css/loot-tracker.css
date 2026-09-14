@@ -38,14 +38,19 @@
 }
 
 /* ---------- range button (presets + CUSTOM date pair) -- replaces the
-   old hardcoded "LAST 24H" text in the chart header's left slot. A
-   plain dropdown menu, same open/close-on-outside-click pattern as
-   Purchase Goals' own .tracker-menu-wrap/#setupMenu. ---------- */
-.loot-chart-range { position: relative; z-index: 2; }
+   old hardcoded "LAST 24H" text in the chart header's left slot.
+   Trigger button matches .sort-btn/.loot-sort-tab's own box model
+   exactly (panel-2 fill, gold-dim border on hover); the menu itself
+   mirrors Purchase Goals' own dropdown, .tracker-menu/.tracker-menu-item
+   in purchase-goals.css (flat panel background, no shadow, no per-item
+   border -- a plain background+color swap on hover/active, not a new
+   visual language), same open/close-on-outside-click pattern as that
+   menu's #setupMenu too. ---------- */
+.loot-chart-range { position: relative; z-index: 5; }
 .loot-range-btn {
   display: flex; align-items: center; gap: 5px;
-  padding: 5px 10px;
-  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 6px 10px;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer; white-space: nowrap;
@@ -54,41 +59,44 @@
 .loot-range-caret { font-size: 9px; color: var(--text-faint); }
 .loot-range-menu {
   position: absolute; top: calc(100% + 4px); left: 0;
-  display: flex; flex-direction: column; gap: 2px;
-  min-width: 132px; padding: 6px;
-  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  display: flex; flex-direction: column;
+  min-width: 148px;
+  background: var(--panel); border: 1px solid var(--border);
 }
 .loot-range-option {
-  padding: 6px 8px;
-  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; text-align: left;
+  padding: 8px 12px;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; text-align: left;
   color: var(--text-dim);
-  background: transparent; border: 1px solid transparent; border-radius: var(--radius);
+  background: none; border: none;
   cursor: pointer;
 }
-.loot-range-option:hover { color: var(--text); background: var(--panel); }
-.loot-range-option.active { color: var(--gold); border-color: var(--gold-dim); }
+.loot-range-option:hover { background: var(--panel-2); color: var(--gold); }
+.loot-range-option.active { background: var(--panel-2); color: var(--gold); }
 .loot-range-custom {
-  display: flex; flex-direction: column; gap: 6px;
-  margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border-top: 1px solid var(--border);
 }
 .loot-range-custom-field {
-  display: flex; flex-direction: column; gap: 3px;
+  display: flex; flex-direction: column; gap: 4px;
   font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
 }
 .loot-range-custom-field input[type="date"] {
-  padding: 5px 6px; font-size: 12px; color: var(--text);
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  background: #100e0b; border: 1px solid var(--border); color: var(--text); border-radius: var(--radius);
+  padding: 6px 8px; font-size: 12px; font-family: inherit;
   color-scheme: dark;
 }
+/* Same .btn-secondary/.sort-btn family as every other secondary action
+   on the site -- panel-2 fill, gold-dim border only on hover -- rather
+   than a permanently gold-accented button, which nothing else here
+   uses for a default (unpressed) state. */
 .loot-range-apply {
-  padding: 6px 8px;
-  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
-  color: var(--gold);
-  background: var(--panel); border: 1px solid var(--gold-dim); border-radius: var(--radius);
+  padding: 7px 8px;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
 }
-.loot-range-apply:hover { border-color: var(--gold); }
+.loot-range-apply:hover { border-color: var(--gold-dim); color: var(--text); }
 
 /* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
    themselves (not on .loot-bar-plot -- padding there would be a no-op
