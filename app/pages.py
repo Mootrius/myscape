@@ -746,9 +746,21 @@ def render_purchase_goals(player: Player) -> str:
 
         updateOverlay(setup);
 
-        var doll = '<div class="gear-doll">' + EQUIPMENT_SLOTS.map(function (slotName) {
-          return slotHtml(setup.equipment[slotName], 'equipment', slotName, 'slot-' + slotName);
-        }).join('') + '</div>';
+        // The 11 real paperdoll slots and the 4 misc slots (runes,
+        // teleports, whatever else a setup needs beyond its actual gear
+        // -- see MISC_EQUIPMENT_SLOTS in app/schemas.py) render as two
+        // separate grids stacked in one flex column (see .gear-doll in
+        // purchase-goals.css) rather than one combined grid, so the misc
+        // row can be sized/positioned independently of the paperdoll
+        // shape above it.
+        var doll = '<div class="gear-doll">' +
+          '<div class="gear-doll-slots">' + MAIN_EQUIPMENT_SLOTS.map(function (slotName) {
+            return slotHtml(setup.equipment[slotName], 'equipment', slotName, 'slot-' + slotName);
+          }).join('') + '</div>' +
+          '<div class="gear-doll-misc">' + MISC_EQUIPMENT_SLOTS.map(function (slotName) {
+            return slotHtml(setup.equipment[slotName], 'equipment', slotName, 'gear-slot-sm');
+          }).join('') + '</div>' +
+        '</div>';
 
         var grid = '<div class="inventory-grid">' + setup.inventory.map(function (item, idx) {
           return slotHtml(item, 'inventory', idx, '');
@@ -819,7 +831,13 @@ def render_purchase_goals(player: Player) -> str:
         }
       }
 
-      var EQUIPMENT_SLOTS = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'boots', 'ring'];
+      var MAIN_EQUIPMENT_SLOTS = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'boots', 'ring'];
+      // Four extra planning-only slots (runes for a rune pouch,
+      // teleports, whatever else a setup needs beyond its actual gear)
+      // -- see MISC_EQUIPMENT_SLOTS in app/schemas.py, which this
+      // mirrors client-side same as MAIN_EQUIPMENT_SLOTS above mirrors
+      // that file's EQUIPMENT_SLOTS.
+      var MISC_EQUIPMENT_SLOTS = ['misc1', 'misc2', 'misc3', 'misc4'];
 
       function slotClasses(resolved) {
         var cls = 'gear-slot';

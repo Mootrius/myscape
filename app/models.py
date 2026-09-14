@@ -299,10 +299,15 @@ class GearSetup(Base):
     slot.
 
     `equipment` is a dict keyed by slot name (only filled slots are
-    present); `inventory` is a list of exactly 28 entries, each either
-    an item shape or null for an empty slot. `icon` is a purely
-    cosmetic {"itemId": int|None, "itemName": str|None} pair (or null)
-    representing the whole setup, unrelated to cost/ownership.
+    present) -- see GEAR_SETUP_EQUIPMENT_SLOTS in app/schemas.py for the
+    full set of 15 keys it may use: the 11 real, RuneLite-reportable
+    equipment slots plus 4 "misc" planning-only slots (runes for a rune
+    pouch, teleports, or any other item a setup needs beyond its actual
+    gear) that exist only here, never in the real equipment-sync table
+    (see EquipmentItem below). `inventory` is a list of exactly 28
+    entries, each either an item shape or null for an empty slot. `icon`
+    is a purely cosmetic {"itemId": int|None, "itemName": str|None} pair
+    (or null) representing the whole setup, unrelated to cost/ownership.
 
     IMPORTANT for anything that edits equipment/inventory in place:
     SQLAlchemy only detects a change to a JSONB column when a *new*

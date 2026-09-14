@@ -40,7 +40,7 @@ from sqlalchemy.orm import Session
 from app.item_ids import find_item_icon, find_item_ids, search_item_names
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem
 from app.recipes import find_recipe, search_recipe_names
-from app.schemas import EQUIPMENT_SLOTS, INVENTORY_SIZE
+from app.schemas import GEAR_SETUP_EQUIPMENT_SLOTS, INVENTORY_SIZE
 
 # OSRS's own item id for coins -- used to read "gp in the bank" straight
 # off the synced bank_items rows, the same way the original tool's
@@ -897,7 +897,7 @@ def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, 
 
         equipment = {}
         setup_equipment = s.equipment or {}
-        for slot in EQUIPMENT_SLOTS:
+        for slot in GEAR_SETUP_EQUIPMENT_SLOTS:
             resolved = _mark_slot_affordability(
                 _resolve_gear_slot_item(setup_equipment.get(slot), mapping, prices, pool_by_id, pool_by_name),
                 coins,

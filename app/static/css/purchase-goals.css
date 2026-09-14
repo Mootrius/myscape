@@ -177,14 +177,18 @@ button.primary#pgNameSave, .pg-setup-form-save {
    border treatment used site-wide) -- the individual slots inside stay
    fully opaque (see .gear-slot below), only this shared frame around
    them is translucent. Doll and inventory sit side by side, like the
-   original tool, with the shorter doll vertically centered against the
-   taller inventory grid. `flex-shrink: 0` keeps it from being squeezed
-   narrower than its own content once .pg-doll-wrap's width is pinned
-   (see that rule's comment above) -- it should always be exactly as
-   wide as its content wants, never more, never less. */
+   original tool. `align-items: stretch` (the default, set explicitly
+   for clarity) makes .gear-doll the same height as the taller
+   .inventory-grid beside it, which is what lets .gear-doll-misc below
+   push itself down to the exact bottom of that shared height with
+   `margin-top: auto` -- see .gear-doll's own comment. `flex-shrink: 0`
+   keeps this frame from being squeezed narrower than its own content
+   once .pg-doll-wrap's width is pinned (see that rule's comment
+   above) -- it should always be exactly as wide as its content wants,
+   never more, never less. */
 .pg-gear-frame {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   flex-shrink: 0;
   gap: 28px;
   background: var(--panel-translucent);
@@ -194,7 +198,19 @@ button.primary#pgNameSave, .pg-setup-form-save {
   box-sizing: border-box;
 }
 
-.gear-doll {
+/* Stacks the paperdoll (.gear-doll-slots) above the 4 misc slots
+   (.gear-doll-misc) in one flex column. Was previously just the
+   paperdoll grid, vertically centered against .inventory-grid; now
+   that column is stretched to that same height (see .pg-gear-frame
+   above) and .gear-doll-misc's `margin-top: auto` (below) claims all
+   the leftover space, which does two things at once: it pushes the
+   paperdoll up flush against the top of the frame (one row's worth
+   higher than it sat when centered), and it pins the misc row's own
+   bottom edge exactly level with inventory-grid's bottom -- both
+   without hardcoding either pixel offset. */
+.gear-doll { display: flex; flex-direction: column; }
+
+.gear-doll-slots {
   display: grid;
   grid-template-columns: repeat(3, 56px);
   grid-template-rows: repeat(5, 56px);
@@ -221,6 +237,35 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .slot-hands { grid-area: hands; }
 .slot-boots { grid-area: boots; }
 .slot-ring { grid-area: ring; }
+
+/* The 4 misc slots (runes, teleports, whatever else -- see
+   MISC_EQUIPMENT_SLOTS in app/schemas.py), in their own row below the
+   paperdoll. Width: 184px is deliberately exactly 3 normal slots plus
+   their 2 gaps (3*56 + 2*8), i.e. the same width as .gear-doll-slots
+   above it, not 4 full-size slots' worth -- so each of the 4 slots
+   below is correspondingly smaller (see .gear-slot-sm) to still fit
+   4-across in that same 3-slot width. margin-top: auto is what
+   actually positions this row -- see .gear-doll's comment above. */
+.gear-doll-misc {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 184px;
+  margin-top: auto;
+}
+/* Smaller than the standard 56px .gear-slot so 4 of them fit in the
+   same 184px width 3 normal slots take up (184 - 3 gaps of 8px = 160px
+   / 4 = 40px each) -- width comes from the grid column above, height
+   is set to match so these stay square rather than squashed. The icon
+   inside is sized down to match (compare .gear-summary-row-icon, the
+   same 26px used for compact rows elsewhere on this page).
+   .gear-slot.gear-slot-sm (both classes, matching the actual markup --
+   see slotHtml in app/pages.py) rather than .gear-slot-sm alone, so
+   this reliably outweighs .gear-slot's own width/height below on
+   specificity instead of depending on which rule happens to come
+   later in this file. */
+.gear-slot.gear-slot-sm { width: auto; height: 40px; }
+.gear-slot.gear-slot-sm .gear-slot-icon { width: 26px; height: 26px; }
 
 .inventory-grid {
   display: grid;

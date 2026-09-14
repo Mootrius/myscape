@@ -5,16 +5,36 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, field_validator
 
-# The 11 equipment slots a gear setup can fill -- matches EQUIPMENT_SLOTS
-# in the original Maintrius tool's osrs_tracker.py exactly (RuneLite's
-# own ARMS/HAIR/JAW slots are cosmetic-only and never used in vanilla
-# OSRS, so they were never part of that list either -- see
-# MyscapePlugin's EQUIPMENT_SLOT_NAMES in the Mootrius/myscape-plugin
-# repo for where this list is mirrored on the plugin side).
+# The 11 real, in-game equipment slots -- matches EQUIPMENT_SLOTS in the
+# original Maintrius tool's osrs_tracker.py exactly (RuneLite's own
+# ARMS/HAIR/JAW slots are cosmetic-only and never used in vanilla OSRS,
+# so they were never part of that list either -- see MyscapePlugin's
+# EQUIPMENT_SLOT_NAMES in the Mootrius/myscape-plugin repo for where
+# this list is mirrored on the plugin side). This is specifically the
+# set of slots the RuneLite plugin can ever report worn equipment in
+# (see EquipmentItemIn.check_slot and MAX_EQUIPMENT_ITEMS below) -- for
+# a gear SETUP's own slots (which also include the 4 misc slots below),
+# use GEAR_SETUP_EQUIPMENT_SLOTS instead.
 EQUIPMENT_SLOTS = [
     "head", "cape", "neck", "ammo", "weapon", "body",
     "shield", "legs", "hands", "boots", "ring",
 ]
+# Four extra, purely app-side planning slots on the equipment doll --
+# not real OSRS equipment slots (the RuneLite plugin never reports
+# worn equipment in these, so they're excluded from EQUIPMENT_SLOTS
+# above), for whatever a player wants to plan around buying alongside a
+# setup's real gear: runes for a rune pouch, teleports for the setup's
+# activity, and so on. Ownership still resolves the same generic way
+# as every other slot (see _build_owned_pools in app/purchase_goals.py
+# -- it's just a bank/inventory/equipment/potion-storage total by item,
+# with no per-slot special-casing), so any item works here.
+MISC_EQUIPMENT_SLOTS = ["misc1", "misc2", "misc3", "misc4"]
+# All slots a gear setup's equipment dict can use -- the 11 real slots
+# plus the 4 misc ones above. Used for validating/iterating a SETUP's
+# own slots (set_gear_slot, move_gear_slot_item, build_gear_setups);
+# EQUIPMENT_SLOTS alone remains what the real RuneLite equipment sync
+# is validated against.
+GEAR_SETUP_EQUIPMENT_SLOTS = EQUIPMENT_SLOTS + MISC_EQUIPMENT_SLOTS
 INVENTORY_SIZE = 28
 
 

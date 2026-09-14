@@ -48,6 +48,7 @@ from app.schemas import (
     EquipmentSyncRequest,
     EquipmentSyncResponse,
     EQUIPMENT_SLOTS,
+    GEAR_SETUP_EQUIPMENT_SLOTS,
     INVENTORY_SIZE,
     InventoryOut,
     InventoryItemOut,
@@ -528,9 +529,9 @@ def set_gear_slot(
                 stored_item["components"] = auto_components
 
     if payload.slot_type == "equipment":
-        if payload.slot not in EQUIPMENT_SLOTS:
+        if payload.slot not in GEAR_SETUP_EQUIPMENT_SLOTS:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=f"slot must be one of {EQUIPMENT_SLOTS}"
+                status_code=status.HTTP_400_BAD_REQUEST, detail=f"slot must be one of {GEAR_SETUP_EQUIPMENT_SLOTS}"
             )
         # New dict, not an in-place mutation of the loaded one -- see the
         # IMPORTANT note on GearSetup in app/models.py for why that
@@ -564,8 +565,10 @@ def _check_gear_slot(slot_type: str, slot: Any) -> None:
     it's writing, factored out so move_gear_slot_item below can apply it
     to both the source and destination slot of a drag-and-drop."""
     if slot_type == "equipment":
-        if slot not in EQUIPMENT_SLOTS:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"slot must be one of {EQUIPMENT_SLOTS}")
+        if slot not in GEAR_SETUP_EQUIPMENT_SLOTS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=f"slot must be one of {GEAR_SETUP_EQUIPMENT_SLOTS}"
+            )
     elif slot_type == "inventory":
         if not isinstance(slot, int) or not (0 <= slot < INVENTORY_SIZE):
             raise HTTPException(
