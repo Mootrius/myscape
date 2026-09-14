@@ -818,8 +818,19 @@ def render_purchase_goals(player: Player) -> str:
       function slotHtml(resolved, slotType, slot, extraClass) {
         var picking = PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot);
         var cls = slotClasses(resolved) + (extraClass ? ' ' + extraClass : '') + (picking ? ' picking' : '');
+        // draggable="false" here -- browsers make <img> draggable by
+        // default, which competes with the .gear-slot div's own
+        // draggable="true" (see below): starting a drag with the
+        // pointer right over the icon picked up the browser's native
+        // image-drag instead of bubbling up to the slot's own
+        // dragstart, so only the icon moved (as an image, not a slot
+        // move) while the rest of the box didn't drag at all. This (plus
+        // the matching -webkit-user-drag: none in purchase-goals.css for
+        // Safari, which doesn't always respect the attribute alone)
+        // makes the whole box the only thing that's ever draggable,
+        // everywhere the pointer starts within it.
         var inner = resolved && resolved.icon
-          ? '<img class="gear-slot-icon" src="' + esc(resolved.icon) + '" alt="" />'
+          ? '<img class="gear-slot-icon" src="' + esc(resolved.icon) + '" alt="" draggable="false" />'
           : (resolved ? '<span class="tracker-icon-fallback">' + esc(resolved.itemName || '?').slice(0, 6) + '</span>' : '');
         var title = resolved ? esc(resolved.itemName) : 'Empty slot';
         var itemNameAttr = resolved ? ' data-item-name="' + esc(resolved.itemName) + '"' : '';
