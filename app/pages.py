@@ -1655,7 +1655,7 @@ def render_loot_tracker(player: Player) -> str:
       <div class="loot-panels">
         <div class="loot-panel">
           <div class="loot-panel-controls">
-            <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search NPCs&hellip;" autocomplete="off" />
+            <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search for an NPC" autocomplete="off" />
             {_sort_tabs("lootNpcSortTabs", "KC")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
@@ -1665,7 +1665,7 @@ def render_loot_tracker(player: Player) -> str:
         </div>
         <div class="loot-panel">
           <div class="loot-panel-controls">
-            <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search items&hellip;" autocomplete="off" />
+            <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search for an item" autocomplete="off" />
             {_sort_tabs("lootItemSortTabs", "Qty")}
           </div>
           <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
