@@ -63,6 +63,8 @@ from app.schemas import (
     RenameGearSetupRequest,
     SetGearSetupIconRequest,
     SetGearSlotRequest,
+    SetStillToPurchaseOrderRequest,
+    SetStillToPurchaseSortRequest,
 )
 
 # A defensive upper bound, not a real OSRS limit -- the largest bank
@@ -631,5 +633,51 @@ def move_gear_slot_item(
 
     setup.equipment = equipment
     setup.inventory = inventory
+    db.commit()
+    return build_purchase_goals_state(db, player)
+
+
+@app.put("/api/gear-setups/{setup_id}/still-to-purchase-sort")
+def set_still_to_purchase_sort(
+    setup_id: str,
+    payload: SetStillToPurchaseSortRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Switches which of the three buttons above a setup's "Still to
+    Purchase" list is active -- see STILL_TO_PURCHASE_SORT_MODES in
+    app/schemas.py and _still_to_purchase_summary in
+    app/purchase_goals.py for what each one actually does. Doesn't
+    touch still_to_purchase_custom_order -- switching to "custom" and
+    back doesn't lose a previously-dragged order, and switching away
+    from "custom" doesn't erase it either, it's just not applied while
+    a different mode is active."""
+    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup.still_to_purchase_sort_mode = payload.sort_mode
+    db.commit()
+    return build_purchase_goals_state(db, player)
+
+
+@app.put("/api/gear-setups/{setup_id}/still-to-purchase-order")
+def set_still_to_purchase_order(
+    setup_id: str,
+    payload: SetStillToPurchaseOrderRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Saves a drag-and-drop reorder of a setup's "Still to Purchase"
+    list -- payload.order is the complete list as currently displayed
+    (not a delta), one {slot_type, slot} entry per row, exactly mirroring
+    how set_gear_slot/move_gear_slot_item always store a full
+    replacement rather than a patch. Also switches the setup into
+    "custom" sort mode if it wasn't already there -- dragging a row is
+    only ever possible in "custom" mode client-side (see
+    renderSummaryList in app/pages.py), so this is a defensive
+    backstop, not something a well-behaved client should ever rely on."""
+    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup.still_to_purchase_sort_mode = "custom"
+    setup.still_to_purchase_custom_order = [
+        {"slotType": entry.slot_type, "slot": entry.slot} for entry in payload.order
+    ]
     db.commit()
     return build_purchase_goals_state(db, player)

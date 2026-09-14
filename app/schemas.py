@@ -416,6 +416,51 @@ class MoveGearSlotItemRequest(BaseModel):
         return value
 
 
+STILL_TO_PURCHASE_SORT_MODES = ("low_to_high", "high_to_low", "custom")
+
+
+class SetStillToPurchaseSortRequest(BaseModel):
+    """Switches a setup's "Still to Purchase" list between the three
+    sort modes the three buttons above that list offer -- see
+    still_to_purchase_sort_mode on GearSetup in app/models.py."""
+
+    sort_mode: str
+
+    @field_validator("sort_mode")
+    @classmethod
+    def check_sort_mode(cls, value: str) -> str:
+        if value not in STILL_TO_PURCHASE_SORT_MODES:
+            raise ValueError(f"sort_mode must be one of {STILL_TO_PURCHASE_SORT_MODES}")
+        return value
+
+
+class StillToPurchaseOrderEntryIn(BaseModel):
+    """One row of a drag-and-drop-reordered "Still to Purchase" list --
+    a still-to-purchase row IS a specific equipment/inventory slot (see
+    build_gear_setups in app/purchase_goals.py), so this is the same
+    slot-identity shape MoveGearSlotItemRequest's from/to use."""
+
+    slot_type: str  # "equipment" | "inventory"
+    slot: Any  # slot name (str) for equipment, index (int) for inventory
+
+    @field_validator("slot_type")
+    @classmethod
+    def check_slot_type(cls, value: str) -> str:
+        if value not in ("equipment", "inventory"):
+            raise ValueError("slot_type must be 'equipment' or 'inventory'.")
+        return value
+
+
+class SetStillToPurchaseOrderRequest(BaseModel):
+    """The full new row order after a drag-and-drop reorder in "custom"
+    sort mode -- always the complete list as currently displayed, not a
+    delta, mirroring how set_gear_slot/move_gear_slot_item always store
+    a full replacement rather than a patch. See
+    still_to_purchase_custom_order on GearSetup in app/models.py."""
+
+    order: List[StillToPurchaseOrderEntryIn]
+
+
 class CreateGearSetupRequest(BaseModel):
     name: str = ""
 

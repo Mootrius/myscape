@@ -532,7 +532,7 @@ def render_purchase_goals(player: Player) -> str:
       </div>
       <div class="pg-summary-col">
         <div class="gear-summary">
-          <div class="gear-summary-heading">Still to purchase</div>
+          <div class="gear-summary-sort" id="pgSortButtons"></div>
           <div class="gear-next-purchase" id="pgNextPurchase" style="display:none;">
             <div class="gear-next-purchase-icon-wrap">
               <img class="gear-next-purchase-icon" id="pgNpIcon" src="" alt="" />
@@ -563,6 +563,15 @@ def render_purchase_goals(player: Player) -> str:
         nameFormMode: null, // 'new' | 'rename' | null
         pollTimer: null,
         dragSuppressClick: false, // true for one click right after a completed drag-and-drop (see wireSlotClicks)
+        // Bumped every time a direct, explicit action (a click, a drag-drop,
+        // a form submit -- anything that isn't the background poll) applies
+        // a fresh server response to PG.data. loadState() -- the poll's
+        // only entry point -- snapshots this before its own fetch and
+        // compares after: if it changed while the fetch was in flight, a
+        // newer, more authoritative response already landed and the poll's
+        // now-stale one is dropped instead of clobbering it. See loadState
+        // below and the "Boot + poll" section at the end of this script.
+        stateVersion: 0,
       };
 
       function esc(s) {
@@ -656,8 +665,18 @@ def render_purchase_goals(player: Player) -> str:
       }
 
       async function loadState(showLoadingState) {
+        // Snapshot the version before the request goes out. This is the
+        // background poll's only entry point (plus the one-time boot
+        // call) -- if some other, more direct action (a sort-button
+        // click, a drag-drop, a rename...) applies its own fresher
+        // response while this fetch is still in flight, PG.stateVersion
+        // will have moved on by the time we get here, and this now-stale
+        // response is dropped rather than overwriting the newer state.
+        var versionAtStart = PG.stateVersion;
         const data = await apiCall('/api/gear-setups');
         if (!data) return;
+        if (PG.stateVersion !== versionAtStart) return;
+        PG.stateVersion++;
         PG.data = data;
         if (!PG.activeSetupId || !data.gearSetups.some(function (s) { return s.id === PG.activeSetupId; })) {
           PG.activeSetupId = data.gearSetups.length ? data.gearSetups[0].id : null;
@@ -736,6 +755,7 @@ def render_purchase_goals(player: Player) -> str:
         }).join('') + '</div>';
 
         document.getElementById('pgGearFrame').innerHTML = doll + grid;
+        renderSortButtons(setup);
         renderSummaryList(setup);
 
         // Pin the column's width to the gear-frame's own rendered width
@@ -991,6 +1011,43 @@ def render_purchase_goals(player: Player) -> str:
         }
       }
 
+      // ---- Still to Purchase: sort mode buttons + drag-to-reorder ----------
+
+      var STILL_TO_PURCHASE_SORT_MODES = [
+        { key: 'high_to_low', label: 'High to Low' },
+        { key: 'low_to_high', label: 'Low to High' },
+        { key: 'custom', label: 'Custom' },
+      ];
+
+      // The three buttons that replaced the old static "Still to
+      // purchase" label -- rebuilt every render (like the rest of this
+      // page) so the active one can track setup.stillToPurchaseSort,
+      // which changes server-side, not just on the client.
+      function renderSortButtons(setup) {
+        var el = document.getElementById('pgSortButtons');
+        if (!el) return;
+        var mode = setup.stillToPurchaseSort || 'low_to_high';
+        el.innerHTML = STILL_TO_PURCHASE_SORT_MODES.map(function (m) {
+          var cls = 'sort-btn' + (m.key === mode ? ' active' : '');
+          return '<button type="button" class="' + cls + '" data-sort-mode="' + m.key + '">' + m.label + '</button>';
+        }).join('');
+        el.querySelectorAll('.sort-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var newMode = btn.getAttribute('data-sort-mode');
+            if (newMode === mode) return;
+            setStillToPurchaseSort(newMode);
+          });
+        });
+      }
+
+      async function setStillToPurchaseSort(mode) {
+        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/still-to-purchase-sort', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sort_mode: mode }),
+        });
+        if (data) { PG.stateVersion++; PG.data = data; render(); }
+      }
+
       // Only the "still to purchase" list + empty message -- the
       // next-purchase mini bar/amount above it is a fixed element updated
       // in place by updateOverlay() instead, so it isn't rebuilt (and
@@ -1006,17 +1063,98 @@ def render_purchase_goals(player: Player) -> str:
         }
         emptyEl.style.display = 'none';
         listEl.style.display = '';
+        // Rows are only draggable in "custom" sort mode -- dragging one
+        // in "high to low"/"low to high" would just get computed right
+        // back out from under you on the next render, since those two
+        // are always re-sorted by live cost rather than remembered.
+        var customMode = (setup.stillToPurchaseSort || 'low_to_high') === 'custom';
         listEl.innerHTML = setup.stillToPurchase.map(function (item) {
-          var rowCls = 'gear-summary-row' + (item.purchasable ? '' : ' unpurchasable');
+          var rowCls = 'gear-summary-row' + (item.purchasable ? '' : ' unpurchasable') + (customMode ? ' draggable' : '');
           var costHtml = item.purchasable
             ? '<span class="gear-summary-row-cost">' + formatGp(item.cost) + '</span>'
             : '<span class="gear-summary-row-cost na">n/a</span>';
-          return '<div class="' + rowCls + '">' +
-            (item.icon ? '<img class="gear-summary-row-icon" src="' + esc(item.icon) + '" alt="" />' : '<span class="gear-summary-row-icon"></span>') +
+          var draggableAttr = customMode ? ' draggable="true"' : '';
+          var slotAttrs = ' data-slot-type="' + esc(item.slotType) + '" data-slot="' + esc(item.slot) + '"';
+          // draggable="false" on the icon for the same reason as
+          // .gear-slot-icon (see slotHtml) -- otherwise starting a drag
+          // with the pointer over the icon grabs the browser's own
+          // native image drag instead of the row underneath it.
+          return '<div class="' + rowCls + '"' + slotAttrs + draggableAttr + '>' +
+            (item.icon ? '<img class="gear-summary-row-icon" src="' + esc(item.icon) + '" alt="" draggable="false" />' : '<span class="gear-summary-row-icon"></span>') +
             '<span class="gear-summary-row-name">' + esc(item.itemName) + '</span>' +
             costHtml +
             '</div>';
         }).join('');
+        wireSummaryDrag(customMode);
+      }
+
+      // Drag-and-drop reordering for the "custom" sort mode -- same
+      // dragstart/dragover/drop shape as wireSlotClicks' gear-slot
+      // dragging, just vertical-list reordering instead of move-or-swap
+      // between two fixed slots. A drop always lands the dragged row
+      // immediately before whichever row it was dropped on.
+      function wireSummaryDrag(customMode) {
+        if (!customMode) return;
+        document.querySelectorAll('#pgSummaryList .gear-summary-row').forEach(function (el) {
+          el.addEventListener('dragstart', function (e) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+              slotType: el.getAttribute('data-slot-type'),
+              slot: el.getAttribute('data-slot'),
+            }));
+            el.classList.add('dragging');
+          });
+          el.addEventListener('dragend', function () {
+            el.classList.remove('dragging');
+            document.querySelectorAll('#pgSummaryList .gear-summary-row.drag-over').forEach(function (t) {
+              t.classList.remove('drag-over');
+            });
+          });
+          el.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            el.classList.add('drag-over');
+          });
+          el.addEventListener('dragleave', function () {
+            el.classList.remove('drag-over');
+          });
+          el.addEventListener('drop', function (e) {
+            e.preventDefault();
+            el.classList.remove('drag-over');
+            var raw = e.dataTransfer.getData('text/plain');
+            if (!raw) return;
+            var source;
+            try { source = JSON.parse(raw); } catch (err) { return; }
+            var target = { slotType: el.getAttribute('data-slot-type'), slot: el.getAttribute('data-slot') };
+            if (source.slotType === target.slotType && String(source.slot) === String(target.slot)) return;
+            reorderStillToPurchase(source, target);
+          });
+        });
+      }
+
+      async function reorderStillToPurchase(source, target) {
+        var setup = activeSetup();
+        if (!setup) return;
+        function sameSlot(a, b) { return a.slotType === b.slotType && String(a.slot) === String(b.slot); }
+        var order = setup.stillToPurchase.map(function (item) { return { slotType: item.slotType, slot: item.slot }; });
+        var fromIdx = order.findIndex(function (entry) { return sameSlot(entry, source); });
+        if (fromIdx === -1) return;
+        var moved = order.splice(fromIdx, 1)[0];
+        // Removing the dragged row can shift the target's own index down
+        // by one, so its position is looked up again fresh rather than
+        // reusing an index captured before the splice above.
+        var toIdx = order.findIndex(function (entry) { return sameSlot(entry, target); });
+        if (toIdx === -1) { order.splice(fromIdx, 0, moved); } else { order.splice(toIdx, 0, moved); }
+
+        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/still-to-purchase-order', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order: order.map(function (entry) {
+              return { slot_type: entry.slotType, slot: entry.slotType === 'inventory' ? parseInt(entry.slot, 10) : entry.slot };
+            }),
+          }),
+        });
+        if (data) { PG.stateVersion++; PG.data = data; render(); }
       }
 
       // ---- Setup icon picker ----------------------------------------------
@@ -1042,7 +1180,7 @@ def render_purchase_goals(player: Player) -> str:
           const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/icon', {
             method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icon: null }),
           });
-          if (data) { PG.data = data; PG.iconPicker = false; render(); }
+          if (data) { PG.stateVersion++; PG.data = data; PG.iconPicker = false; render(); }
         });
         document.getElementById('iconCancelBtn').addEventListener('click', function () { PG.iconPicker = false; renderIconPicker(); });
       }
@@ -1062,7 +1200,7 @@ def render_purchase_goals(player: Player) -> str:
             const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/icon', {
               method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icon: icon }),
             });
-            if (data) { PG.data = data; PG.iconPicker = false; render(); }
+            if (data) { PG.stateVersion++; PG.data = data; PG.iconPicker = false; render(); }
           });
         });
       }
@@ -1163,7 +1301,7 @@ def render_purchase_goals(player: Player) -> str:
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slot_type: p.slotType, slot: p.slot, item: item }),
         });
-        if (data) { PG.data = data; PG.picker = null; render(); }
+        if (data) { PG.stateVersion++; PG.data = data; PG.picker = null; render(); }
       }
 
       // Removes whatever's in a slot directly from its hover "x" -- unlike
@@ -1175,7 +1313,7 @@ def render_purchase_goals(player: Player) -> str:
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slot_type: slotType, slot: slot, item: null }),
         });
-        if (data) { PG.data = data; render(); }
+        if (data) { PG.stateVersion++; PG.data = data; render(); }
       }
 
       // Drag-and-drop: moves whatever's in (fromSlotType, fromSlot) into
@@ -1194,7 +1332,7 @@ def render_purchase_goals(player: Player) -> str:
             to_slot_type: toSlotType, to_slot: toSlot,
           }),
         });
-        if (data) { PG.data = data; PG.picker = null; render(); }
+        if (data) { PG.stateVersion++; PG.data = data; PG.picker = null; render(); }
       }
 
       async function runSearch(query, callback) {
@@ -1251,7 +1389,7 @@ def render_purchase_goals(player: Player) -> str:
         if (!setup) return;
         if (!window.confirm('Delete "' + setup.name + '"? This cannot be undone.')) return;
         const data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id), { method: 'DELETE' });
-        if (data) { PG.data = data; PG.activeSetupId = data.gearSetups.length ? data.gearSetups[0].id : null; render(); }
+        if (data) { PG.stateVersion++; PG.data = data; PG.activeSetupId = data.gearSetups.length ? data.gearSetups[0].id : null; render(); }
       });
 
       function openNameForm(mode, initialValue) {
@@ -1279,6 +1417,7 @@ def render_purchase_goals(player: Player) -> str:
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
           });
           if (data) {
+            PG.stateVersion++;
             PG.data = data;
             var created = data.gearSetups.find(function (s) { return s.name === name; }) || data.gearSetups[data.gearSetups.length - 1];
             PG.activeSetupId = created ? created.id : PG.activeSetupId;
@@ -1290,7 +1429,7 @@ def render_purchase_goals(player: Player) -> str:
           data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id), {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
           });
-          if (data) { PG.data = data; render(); }
+          if (data) { PG.stateVersion++; PG.data = data; render(); }
         }
       });
 

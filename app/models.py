@@ -321,5 +321,22 @@ class GearSetup(Base):
     icon = Column(JSONB, nullable=True)
     equipment = Column(JSONB, nullable=False, default=dict)
     inventory = Column(JSONB, nullable=False, default=lambda: [None] * 28)
+    # How the "Still to Purchase" list on this setup is ordered --
+    # "low_to_high"/"high_to_low" (by live cost) are computed fresh on
+    # every read same as everything else here, but "custom" needs
+    # somewhere to remember the player's own drag-and-drop ordering
+    # between requests, hence still_to_purchase_custom_order below. See
+    # _still_to_purchase_summary in app/purchase_goals.py for how both
+    # are actually applied.
+    still_to_purchase_sort_mode = Column(String, nullable=False, default="low_to_high")
+    # A list of {"slotType": "equipment"|"inventory", "slot": <str|int>}
+    # entries, in the order the player last dragged them into -- the
+    # same slot-identity shape move_gear_slot_item's payload uses,
+    # deliberately, since a "still to purchase" row IS a specific
+    # equipment/inventory slot (see build_gear_setups). Null/missing
+    # until the player actually reorders something in "custom" mode; a
+    # pending item with no entry here (new, or reordering never
+    # touched it) falls back to cost-ascending, same as "low_to_high".
+    still_to_purchase_custom_order = Column(JSONB, nullable=True)
 
     player = relationship("Player", back_populates="gear_setups")

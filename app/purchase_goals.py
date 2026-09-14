@@ -756,9 +756,21 @@ def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[d
     return resolved
 
 
-def _still_to_purchase_summary(equipment: dict, inventory: list, coins: int) -> Tuple[List[dict], Optional[dict]]:
-    pending = [r for r in equipment.values() if r and not r["owned"]]
-    pending += [r for r in inventory if r and not r["owned"]]
+def _still_to_purchase_summary(
+    equipment: dict,
+    inventory: list,
+    coins: int,
+    sort_mode: str = "low_to_high",
+    custom_order: Optional[list] = None,
+) -> Tuple[List[dict], Optional[dict]]:
+    # Every pending row also carries the exact slot it came from
+    # (slotType/slot) -- a "still to purchase" row IS a specific
+    # equipment/inventory slot, and that identity is what "custom" sort
+    # mode's drag-and-drop reordering is keyed on (see
+    # StillToPurchaseOrderEntryIn in app/schemas.py) -- the same
+    # slot-identity shape move_gear_slot_item's from/to already use.
+    pending = [(r, "equipment", slot) for slot, r in equipment.items() if r and not r["owned"]]
+    pending += [(r, "inventory", idx) for idx, r in enumerate(inventory) if r and not r["owned"]]
     # Fully untradeable -- itself has no GE listing, and (for a combo)
     # none of its components do either, so purchasable is False and
     # there's no live price to ever pin this to (see the fullCost > 0
@@ -766,20 +778,44 @@ def _still_to_purchase_summary(equipment: dict, inventory: list, coins: int) -> 
     # buy this for n/a" line, it's just not a real purchase target at
     # all, so it's left out of the list entirely rather than shown with
     # a "n/a" cost -- Keris partisan of the sun is the reported case.
-    pending = [r for r in pending if r["purchasable"]]
-    pending.sort(key=lambda r: r["cost"])
+    pending = [entry for entry in pending if entry[0]["purchasable"]]
+
+    if sort_mode == "high_to_low":
+        pending.sort(key=lambda entry: entry[0]["cost"], reverse=True)
+    elif sort_mode == "custom":
+        # Anything not in the player's own saved order (new since they
+        # last dragged something, or they've simply never reordered at
+        # all yet) falls back to cost-ascending, same as
+        # "low_to_high" -- both so a first-time switch to "custom"
+        # starts from a sensible order rather than an arbitrary one, and
+        # so a freshly-added item doesn't get silently lost at whatever
+        # position Python happens to iterate equipment/inventory in.
+        order_index = {
+            (entry.get("slotType"), str(entry.get("slot"))): i for i, entry in enumerate(custom_order or [])
+        }
+        pending.sort(
+            key=lambda entry: (
+                order_index.get((entry[1], str(entry[2])), len(order_index)),
+                entry[0]["cost"],
+            )
+        )
+    else:
+        pending.sort(key=lambda entry: entry[0]["cost"])
 
     still_to_purchase = [
         {
             "itemName": r["itemName"], "icon": r["icon"], "tradeable": r["tradeable"],
             "isCombo": r.get("components") is not None, "purchasable": r["purchasable"], "cost": r["cost"],
+            "slotType": slot_type, "slot": slot,
         }
-        for r in pending
+        for r, slot_type, slot in pending
     ]
 
-    # Every remaining row is purchasable now that the unpriceable ones
-    # were filtered out above, so this is just "the cheapest one".
-    next_purchase = still_to_purchase[0] if still_to_purchase else None
+    # Independent of however the list above ended up sorted/reordered
+    # for display -- always the single cheapest purchasable item, so
+    # switching sort mode (or dragging a custom order around) never
+    # changes what's highlighted as the next thing to actually buy.
+    next_purchase = min(still_to_purchase, key=lambda item: item["cost"], default=None)
     if next_purchase:
         cost = next_purchase["cost"]
         next_purchase = {
@@ -877,7 +913,10 @@ def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, 
                 total_full_cost += resolved["fullCost"]
 
         progress_pct = 100.0 if total_cost <= 0 else round(min(coins, total_cost) / total_cost * 100, 1)
-        still_to_purchase, next_purchase = _still_to_purchase_summary(equipment, inventory, coins)
+        sort_mode = s.still_to_purchase_sort_mode or "low_to_high"
+        still_to_purchase, next_purchase = _still_to_purchase_summary(
+            equipment, inventory, coins, sort_mode, s.still_to_purchase_custom_order
+        )
         results.append({
             "id": str(s.id),
             "name": s.name or "Untitled Setup",
@@ -890,6 +929,7 @@ def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, 
             "totalOwnedSavings": max(total_full_cost - total_cost, 0),
             "progressPct": progress_pct,
             "funded": coins >= total_cost,
+            "stillToPurchaseSort": sort_mode,
             "stillToPurchase": still_to_purchase,
             "nextPurchase": next_purchase,
         })
