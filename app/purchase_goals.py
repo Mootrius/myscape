@@ -462,6 +462,77 @@ def _crystal_armour_seed_price(name: Optional[str], prices: dict) -> Tuple[Optio
     return None, None
 
 
+# Bow of Faerdhinen / Blade of Saeldor: both made from a single
+# Enhanced crystal weapon seed (100 crystal shards to bring a fresh one
+# up to full charge, left out of this price same as crystal armour's
+# shards are above). The permanent, non-degrading "(c)"/corrupted form
+# of each additionally costs crystal shards traded in to Amrod for
+# Enhanced crystal teleport seeds (150 shards per seed, per the wiki's
+# own "Crystal shard#Exchanging seeds" table) -- confirmed against each
+# weapon's own wiki page: 2,000 shards (~13.3 teleport seeds' worth) to
+# corrupt a bow, 1,000 shards (~6.7 teleport seeds' worth) to corrupt a
+# blade -- they aren't the same despite the base weapon otherwise being
+# priced identically. Neither weapon has a GE listing of its own in
+# either form (a corrupted one can never be traded at all; an active,
+# uncorrupted one degrades with use, so only the fully-depleted
+# "(inactive)" form -- already handled fine by the ordinary tradeable
+# branch below, not touched here -- is ever GE-tradeable), so both hit
+# the same plain-untradeable branch as the charged weapons/crystal
+# armour above.
+_FAERDHINEN_SAELDOR_RE = re.compile(
+    r"^(?P<base>bow of faerdhinen|blade of saeldor)(?P<corrupt>\s*\(c\))?"
+    r"(?:\s*\((?:ithell|amlodd|cadarn|crwys|hefin|iorwerth|meilyr|trahaearn)\))?$",
+    re.IGNORECASE,
+)
+_FAERDHINEN_SAELDOR_CORRUPT_SHARDS = {"bow of faerdhinen": 2000, "blade of saeldor": 1000}
+_CRYSTAL_SHARDS_PER_TELEPORT_SEED = 150
+_ENHANCED_CRYSTAL_WEAPON_SEED_NAME = "Enhanced crystal weapon seed"
+_ENHANCED_CRYSTAL_TELEPORT_SEED_NAME = "Enhanced crystal teleport seed"
+
+
+def is_faerdhinen_or_saeldor(name: Optional[str]) -> bool:
+    """True for "Bow of Faerdhinen"/"Blade of Saeldor", corrupted or
+    not, in any of their eight house colours -- see
+    _FAERDHINEN_SAELDOR_RE above for why these specifically need
+    special handling."""
+    return bool(_FAERDHINEN_SAELDOR_RE.match((name or "").strip()))
+
+
+def _faerdhinen_saeldor_price(name: Optional[str], prices: dict) -> Tuple[Optional[int], Optional[str]]:
+    """For a Bow of Faerdhinen/Blade of Saeldor (any colour, corrupted
+    or not), returns an Enhanced crystal weapon seed's live price, plus
+    -- if this is the corrupted "(c)" form -- the live cost of however
+    many Enhanced crystal teleport seeds' worth of crystal shards that
+    weapon's corruption requires (see _FAERDHINEN_SAELDOR_CORRUPT_SHARDS).
+    Same shape as unit_price_for, (unit_price, price_source); both None
+    if name doesn't match one of these weapons or the weapon seed
+    itself currently has no live price. If corrupted but the teleport
+    seed has no live price to fall back on, this still returns the
+    weapon seed's own price alone rather than nothing."""
+    match = _FAERDHINEN_SAELDOR_RE.match((name or "").strip())
+    if not match:
+        return None, None
+    seed_price = None
+    seed_source = None
+    for candidate_id in find_item_ids(_ENHANCED_CRYSTAL_WEAPON_SEED_NAME) or []:
+        seed_price, seed_source = unit_price_for(candidate_id, prices)
+        if seed_price is not None:
+            break
+    if seed_price is None:
+        return None, None
+    total = seed_price
+    if match.group("corrupt"):
+        shard_count = _FAERDHINEN_SAELDOR_CORRUPT_SHARDS[match.group("base").lower()]
+        teleport_price = None
+        for candidate_id in find_item_ids(_ENHANCED_CRYSTAL_TELEPORT_SEED_NAME) or []:
+            teleport_price, _ = unit_price_for(candidate_id, prices)
+            if teleport_price is not None:
+                break
+        if teleport_price is not None:
+            total += round(shard_count * teleport_price / _CRYSTAL_SHARDS_PER_TELEPORT_SEED)
+    return total, seed_source
+
+
 def _untradeable_item_icon(name: str) -> Optional[str]:
     """An untradeable item obviously has no Grand Exchange icon of its
     own, but we may still know its real wiki icon regardless -- either
@@ -497,22 +568,26 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
     item_id = raw_item.get("itemId")
     components_raw = raw_item.get("components")
 
-    # Crystal helm/body/legs specifically -- checked first, ahead of
-    # both the combo and plain-untradeable branches below, so this
-    # takes over regardless of whatever (possibly still the old, wrong)
-    # components a setup saved earlier may already have stored for one
-    # -- see _crystal_armour_seed_price's docstring for why that data
-    # can't be trusted. Falls through to the normal handling below only
-    # if the seed itself currently has no live price to pin to.
+    # Crystal helm/body/legs, and Bow of Faerdhinen/Blade of Saeldor
+    # (corrupted or not) -- checked first, ahead of both the combo and
+    # plain-untradeable branches below, so this takes over regardless of
+    # whatever (possibly still old/wrong) components a setup saved
+    # earlier may already have stored for one -- see
+    # _crystal_armour_seed_price's and _faerdhinen_saeldor_price's
+    # docstrings for why that data can't be trusted. Falls through to
+    # the normal handling below only if neither matches or the relevant
+    # seed itself currently has no live price to pin to.
     if item_id is None:
         name = raw_item.get("itemName") or ""
-        crystal_price, crystal_price_source = _crystal_armour_seed_price(name, prices)
-        if crystal_price is not None:
+        special_price, special_price_source = _crystal_armour_seed_price(name, prices)
+        if special_price is None:
+            special_price, special_price_source = _faerdhinen_saeldor_price(name, prices)
+        if special_price is not None:
             owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
             return {
                 "itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False,
-                "unitPrice": crystal_price, "priceSource": crystal_price_source, "fullCost": crystal_price,
-                "cost": 0 if owned else crystal_price, "owned": owned, "components": None,
+                "unitPrice": special_price, "priceSource": special_price_source, "fullCost": special_price,
+                "cost": 0 if owned else special_price, "owned": owned, "components": None,
             }
 
     if item_id is None and components_raw:
