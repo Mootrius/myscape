@@ -544,7 +544,7 @@ def render_purchase_goals(player: Player) -> str:
               <div class="gear-next-purchase-amount" id="pgNpAmount"></div>
             </div>
           </div>
-          <p class="gear-summary-empty" id="pgSummaryEmpty" style="display:none;">Everything in this setup is already owned.</p>
+          <p class="gear-summary-empty" id="pgSummaryEmpty" style="display:none;"></p>
           <div class="gear-summary-list" id="pgSummaryList"></div>
         </div>
       </div>
@@ -1035,8 +1035,8 @@ def render_purchase_goals(player: Player) -> str:
       // ---- Still to Purchase: sort mode buttons + drag-to-reorder ----------
 
       var STILL_TO_PURCHASE_SORT_MODES = [
-        { key: 'high_to_low', label: 'High to Low' },
         { key: 'low_to_high', label: 'Low to High' },
+        { key: 'high_to_low', label: 'High to Low' },
         { key: 'alphabetical', label: 'Alphabetical' },
         { key: 'custom', label: 'Custom' },
       ];
@@ -1070,6 +1070,24 @@ def render_purchase_goals(player: Player) -> str:
         if (data) { PG.stateVersion++; PG.data = data; render(); }
       }
 
+      // True if any gear (equipment, including the misc slots) or
+      // inventory slot on this setup actually holds an item -- used
+      // purely to pick the right empty-state message in
+      // renderSummaryList below, since an empty "still to purchase"
+      // list alone doesn't say whether that's because nothing's been
+      // added yet or because everything added is already owned.
+      function setupHasAnyItems(setup) {
+        var equipment = setup.equipment || {};
+        for (var slot in equipment) {
+          if (Object.prototype.hasOwnProperty.call(equipment, slot) && equipment[slot]) return true;
+        }
+        var inventory = setup.inventory || [];
+        for (var i = 0; i < inventory.length; i++) {
+          if (inventory[i]) return true;
+        }
+        return false;
+      }
+
       // Only the "still to purchase" list + empty message -- the
       // next-purchase mini bar/amount above it is a fixed element updated
       // in place by updateOverlay() instead, so it isn't rebuilt (and
@@ -1078,6 +1096,17 @@ def render_purchase_goals(player: Player) -> str:
         var emptyEl = document.getElementById('pgSummaryEmpty');
         var listEl = document.getElementById('pgSummaryList');
         if (!setup.stillToPurchase.length) {
+          // An empty "still to purchase" list means one of two very
+          // different things -- a brand new (or emptied-out) setup with
+          // nothing in any slot yet, versus a setup that's fully filled
+          // in and every one of those items is already owned -- so the
+          // message has to say which. setupHasAnyItems checks the
+          // setup's actual gear/inventory slots directly rather than
+          // inferring from stillToPurchase being empty, since that's
+          // exactly the one signal that's identical in both cases.
+          emptyEl.textContent = setupHasAnyItems(setup)
+            ? 'Everything in this setup is already owned.'
+            : 'Add items to the left to get started.';
           emptyEl.style.display = '';
           listEl.style.display = 'none';
           listEl.innerHTML = '';
@@ -1378,10 +1407,23 @@ def render_purchase_goals(player: Player) -> str:
       // every render, so it only needs wiring up once here rather than
       // on every renderContent() call.
       document.getElementById('pgIconTrigger').addEventListener('click', function () {
-        PG.iconPicker = !PG.iconPicker;
+        var opening = !PG.iconPicker;
+        PG.iconPicker = opening;
         PG.picker = null;
         renderIconPicker();
         document.getElementById('pgSlotPicker').innerHTML = '';
+        if (opening) {
+          // Same "land the cursor in the search box, ready to type"
+          // treatment as opening a gear/inventory slot's own picker --
+          // see the slot-click handler above. select() is a no-op on an
+          // empty input but puts any leftover text in a re-opened
+          // picker's box in a ready-to-replace state.
+          var input = document.getElementById('iconSearchInput');
+          if (input) {
+            input.focus({ preventScroll: true });
+            input.select();
+          }
+        }
       });
 
       // ---- Setup CRUD (menu + name form) -----------------------------------
