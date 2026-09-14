@@ -31,6 +31,7 @@ from app.purchase_goals import (
     build_purchase_goals_state,
     get_mapping,
     is_crystal_armour_piece,
+    is_elidinis_ward_f,
     is_faerdhinen_or_saeldor,
     search_items,
 )
@@ -506,14 +507,18 @@ def set_gear_slot(
             and payload.item.item_name
             and not is_crystal_armour_piece(payload.item.item_name)
             and not is_faerdhinen_or_saeldor(payload.item.item_name)
+            and not is_elidinis_ward_f(payload.item.item_name)
         ):
-            # Crystal helm/body/legs, and Bow of Faerdhinen/Blade of
-            # Saeldor, are skipped here -- the wiki's own recipe data
-            # for them is unreliable (see _crystal_armour_seed_price's
-            # and _faerdhinen_saeldor_price's docstrings in
+            # Crystal helm/body/legs, Bow of Faerdhinen/Blade of
+            # Saeldor, and Elidinis' ward (f) are skipped here -- the
+            # wiki's own recipe data for the first two is unreliable,
+            # and simply doesn't exist at all for the ward (see
+            # _crystal_armour_seed_price's, _faerdhinen_saeldor_price's,
+            # and _elidinis_ward_f_price's docstrings in
             # app/purchase_goals.py), and they're priced against the
-            # relevant seed(s) directly at read time instead, so
-            # there's nothing useful to auto-expand into up front.
+            # relevant seed(s)/ingredients directly at read time
+            # instead, so there's nothing useful to auto-expand into up
+            # front.
             mapping, _ = get_mapping()
             auto_components = expand_recipe_components(payload.item.item_name, mapping)
             if auto_components:

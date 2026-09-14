@@ -534,6 +534,62 @@ def _faerdhinen_saeldor_price(name: Optional[str], prices: dict) -> Tuple[Option
     return total, seed_source
 
 
+# Elidinis' ward (f) -- the "fortified" form of Elidinis' ward, made by
+# attaching an Arcane sigil to a plain Elidinis' ward and pouring in
+# 10,000 Soul runes at once (confirmed against the item's own wiki
+# page's Creation recipe: mat1 Elidinis' ward, mat2 Arcane sigil, mat3
+# Soul rune x10,000). Same shape as the cases above -- untradeable, no
+# GE listing of its own -- but unlike crystal armour/Faerdhinen/Saeldor,
+# recipes.json doesn't have a *wrong* entry for it, it simply has no
+# entry at all, so there's nothing bad to override, just nothing to
+# fall back on without this. (Elidinis' ward (or), the cosmetic
+# upgrade built on top of this one with a Menaphite ornament kit, does
+# already have a correct recipes.json entry of its own that names this
+# item as its material -- untouched here.)
+_ELIDINIS_WARD_F_NAME = "elidinis' ward (f)"
+_ELIDINIS_WARD_BASE_NAME = "Elidinis' ward"
+_ARCANE_SIGIL_NAME = "Arcane sigil"
+_SOUL_RUNE_NAME = "Soul rune"
+_ELIDINIS_WARD_F_SOUL_RUNES = 10000
+
+
+def is_elidinis_ward_f(name: Optional[str]) -> bool:
+    """True for "Elidinis' ward (f)" specifically -- not the plain,
+    already-tradeable "Elidinis' ward" or the cosmetic "Elidinis' ward
+    (or)" (see _ELIDINIS_WARD_F_NAME above)."""
+    return (name or "").strip().lower() == _ELIDINIS_WARD_F_NAME
+
+
+def _elidinis_ward_f_price(name: Optional[str], prices: dict) -> Tuple[Optional[int], Optional[str]]:
+    """For "Elidinis' ward (f)", returns the summed live price of a
+    plain Elidinis' ward, an Arcane sigil, and 10,000 Soul runes -- same
+    shape as unit_price_for, (unit_price, price_source), both None if
+    name isn't this item or any one of the three ingredients currently
+    has no live price (a partial total would understate the real cost
+    rather than just being unavailable, so this is all-or-nothing)."""
+    if not is_elidinis_ward_f(name):
+        return None, None
+    total = 0
+    price_source = None
+    for ingredient_name, quantity in (
+        (_ELIDINIS_WARD_BASE_NAME, 1),
+        (_ARCANE_SIGIL_NAME, 1),
+        (_SOUL_RUNE_NAME, _ELIDINIS_WARD_F_SOUL_RUNES),
+    ):
+        ingredient_price = None
+        ingredient_source = None
+        for candidate_id in find_item_ids(ingredient_name) or []:
+            ingredient_price, ingredient_source = unit_price_for(candidate_id, prices)
+            if ingredient_price is not None:
+                break
+        if ingredient_price is None:
+            return None, None
+        total += ingredient_price * quantity
+        if price_source is None:
+            price_source = ingredient_source
+    return total, price_source
+
+
 def _untradeable_item_icon(name: str) -> Optional[str]:
     """An untradeable item obviously has no Grand Exchange icon of its
     own, but we may still know its real wiki icon regardless -- either
@@ -569,20 +625,23 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
     item_id = raw_item.get("itemId")
     components_raw = raw_item.get("components")
 
-    # Crystal helm/body/legs, and Bow of Faerdhinen/Blade of Saeldor
-    # (corrupted or not) -- checked first, ahead of both the combo and
-    # plain-untradeable branches below, so this takes over regardless of
-    # whatever (possibly still old/wrong) components a setup saved
-    # earlier may already have stored for one -- see
-    # _crystal_armour_seed_price's and _faerdhinen_saeldor_price's
-    # docstrings for why that data can't be trusted. Falls through to
-    # the normal handling below only if neither matches or the relevant
-    # seed itself currently has no live price to pin to.
+    # Crystal helm/body/legs, Bow of Faerdhinen/Blade of Saeldor
+    # (corrupted or not), and Elidinis' ward (f) -- checked first, ahead
+    # of both the combo and plain-untradeable branches below, so this
+    # takes over regardless of whatever (possibly still old/wrong)
+    # components a setup saved earlier may already have stored for one
+    # -- see _crystal_armour_seed_price's, _faerdhinen_saeldor_price's,
+    # and _elidinis_ward_f_price's docstrings for why that data can't be
+    # trusted (or, for the ward, simply doesn't exist). Falls through to
+    # the normal handling below only if none of them match or the
+    # relevant seed/ingredients currently have no live price to pin to.
     if item_id is None:
         name = raw_item.get("itemName") or ""
         special_price, special_price_source = _crystal_armour_seed_price(name, prices)
         if special_price is None:
             special_price, special_price_source = _faerdhinen_saeldor_price(name, prices)
+        if special_price is None:
+            special_price, special_price_source = _elidinis_ward_f_price(name, prices)
         if special_price is not None:
             owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
             return {
