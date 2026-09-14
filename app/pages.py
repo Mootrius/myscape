@@ -562,6 +562,7 @@ def render_purchase_goals(player: Player) -> str:
         iconPicker: false,  // true while the setup-icon picker is open
         nameFormMode: null, // 'new' | 'rename' | null
         pollTimer: null,
+        dragSuppressClick: false, // true for one click right after a completed drag-and-drop (see wireSlotClicks)
       };
 
       function esc(s) {
@@ -826,7 +827,12 @@ def render_purchase_goals(player: Player) -> str:
         // .gear-slot-remove in purchase-goals.css) and only exists at all
         // when the slot is filled -- an empty slot has nothing to remove.
         var removeBtn = resolved ? '<button class="gear-slot-remove" type="button" title="Remove item">&times;</button>' : '';
-        return '<div class="' + cls + '" data-slot-type="' + slotType + '" data-slot="' + esc(slot) + '"' + itemNameAttr + ' title="' + title + '">' +
+        // Only a filled slot can be dragged FROM (nothing to move out of
+        // an empty one) -- but every slot, filled or empty, is a valid
+        // drop target either way (see wireSlotClicks), so this only ever
+        // gates the `draggable` attribute, never drop handling.
+        var draggableAttr = resolved ? ' draggable="true"' : '';
+        return '<div class="' + cls + '" data-slot-type="' + slotType + '" data-slot="' + esc(slot) + '"' + itemNameAttr + draggableAttr + ' title="' + title + '">' +
           inner + removeBtn + '</div>';
       }
 
@@ -844,7 +850,67 @@ def render_purchase_goals(player: Player) -> str:
               removeSlotItem(slotType, slot);
             });
           }
+          // ---- Drag-and-drop: drag a filled slot onto another slot to
+          // move it there, or swap the two if the destination is also
+          // filled. Works between equipment and inventory in either
+          // direction, since every slot shares this same .gear-slot
+          // wiring regardless of slotType. Only a filled slot is
+          // `draggable` (see slotHtml), but EVERY slot -- filled or
+          // empty -- needs the dragover/drop listeners below, since any
+          // of them can be a drop target.
+          if (el.getAttribute('draggable') === 'true') {
+            el.addEventListener('dragstart', function (e) {
+              var slotType = el.getAttribute('data-slot-type');
+              var slot = el.getAttribute('data-slot');
+              e.dataTransfer.effectAllowed = 'move';
+              // text/plain (rather than a custom MIME type) so this also
+              // degrades harmlessly if dropped outside the app instead of
+              // silently failing to initiate the drag in some browsers.
+              e.dataTransfer.setData('text/plain', JSON.stringify({ slotType: slotType, slot: slot }));
+              el.classList.add('dragging');
+            });
+            el.addEventListener('dragend', function () {
+              el.classList.remove('dragging');
+              document.querySelectorAll('.gear-slot.drag-over').forEach(function (t) {
+                t.classList.remove('drag-over');
+              });
+              // A completed drag shouldn't ALSO register as a click on
+              // the slot it started from (which would open the item's
+              // wiki page right after moving it) -- suppressed once,
+              // below, then cleared.
+              PG.dragSuppressClick = true;
+            });
+          }
+          el.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            el.classList.add('drag-over');
+          });
+          el.addEventListener('dragleave', function () {
+            el.classList.remove('drag-over');
+          });
+          el.addEventListener('drop', function (e) {
+            e.preventDefault();
+            el.classList.remove('drag-over');
+            var raw = e.dataTransfer.getData('text/plain');
+            if (!raw) return;
+            var source;
+            try { source = JSON.parse(raw); } catch (err) { return; }
+            var toSlotType = el.getAttribute('data-slot-type');
+            var toSlot = toSlotType === 'inventory' ? parseInt(el.getAttribute('data-slot'), 10) : el.getAttribute('data-slot');
+            var fromSlotType = source.slotType;
+            var fromSlot = fromSlotType === 'inventory' ? parseInt(source.slot, 10) : source.slot;
+            // Dropped back onto its own slot -- nothing to do (also
+            // covered server-side, but no reason to round-trip for it).
+            if (fromSlotType === toSlotType && String(fromSlot) === String(toSlot)) return;
+            moveSlotItem(fromSlotType, fromSlot, toSlotType, toSlot);
+          });
+
           el.addEventListener('click', function () {
+            if (PG.dragSuppressClick) {
+              PG.dragSuppressClick = false;
+              return;
+            }
             var slotType = el.getAttribute('data-slot-type');
             var slot = slotType === 'inventory' ? parseInt(el.getAttribute('data-slot'), 10) : el.getAttribute('data-slot');
             var itemName = el.getAttribute('data-item-name');
@@ -1099,6 +1165,25 @@ def render_purchase_goals(player: Player) -> str:
           body: JSON.stringify({ slot_type: slotType, slot: slot, item: null }),
         });
         if (data) { PG.data = data; render(); }
+      }
+
+      // Drag-and-drop: moves whatever's in (fromSlotType, fromSlot) into
+      // (toSlotType, toSlot), across equipment and inventory alike --
+      // see move_gear_slot_item in app/main.py, which does the actual
+      // move-or-swap server-side against the raw stored item (not this
+      // resolved/priced shape), so a combo's exact stored components
+      // travel with it untouched. Closes any open slot picker afterward
+      // -- if one happened to be open on the slot just dropped into, its
+      // stale target no longer matches what's there.
+      async function moveSlotItem(fromSlotType, fromSlot, toSlotType, toSlot) {
+        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/slot/move', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from_slot_type: fromSlotType, from_slot: fromSlot,
+            to_slot_type: toSlotType, to_slot: toSlot,
+          }),
+        });
+        if (data) { PG.data = data; PG.picker = null; render(); }
       }
 
       async function runSearch(query, callback) {

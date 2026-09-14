@@ -397,6 +397,25 @@ class SetGearSlotRequest(BaseModel):
         return value
 
 
+class MoveGearSlotItemRequest(BaseModel):
+    """Drag-and-drop payload: move whatever's in (from_slot_type,
+    from_slot) into (to_slot_type, to_slot). If the destination already
+    holds an item, the two simply swap places rather than the source's
+    old item being lost -- see move_gear_slot_item in app/main.py."""
+
+    from_slot_type: str  # "equipment" | "inventory"
+    from_slot: Any  # slot name (str) for equipment, index (int) for inventory
+    to_slot_type: str  # "equipment" | "inventory"
+    to_slot: Any
+
+    @field_validator("from_slot_type", "to_slot_type")
+    @classmethod
+    def check_slot_type(cls, value: str) -> str:
+        if value not in ("equipment", "inventory"):
+            raise ValueError("slot_type must be 'equipment' or 'inventory'.")
+        return value
+
+
 class CreateGearSetupRequest(BaseModel):
     name: str = ""
 

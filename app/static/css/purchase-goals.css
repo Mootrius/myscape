@@ -195,6 +195,16 @@
 .gear-slot.picking { border-color: var(--gold); }
 .gear-slot-icon { width: 38px; height: 38px; object-fit: contain; image-rendering: pixelated; }
 
+/* Drag-and-drop (see wireSlotClicks/moveSlotItem in app/pages.py) --
+   an outline rather than a border/background change so it never
+   competes with the owned/not-owned/affordable border color the same
+   way the plain hover state above doesn't. .dragging fades the slot
+   being dragged FROM so it reads as "picked up"; .drag-over rings
+   whichever slot the drag is currently over as a drop target,
+   including an empty one. */
+.gear-slot.dragging { opacity: 0.4; }
+.gear-slot.drag-over { outline: 2px dashed var(--gold); outline-offset: -2px; }
+
 .gear-slot.owned { border-color: var(--green); }
 .gear-slot.not-owned { border-color: var(--red); }
 .gear-slot.affordable { border-color: var(--amber); }

@@ -5,7 +5,7 @@ linking) -- see README.md for how the pieces fit together.
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from alembic import command
 from alembic.config import Config
@@ -54,6 +54,7 @@ from app.schemas import (
     InventorySyncRequest,
     InventorySyncResponse,
     ItemSearchResponse,
+    MoveGearSlotItemRequest,
     PlayerOut,
     PotionStorageOut,
     PotionStorageItemOut,
@@ -552,5 +553,83 @@ def set_gear_slot(
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slot_type must be 'equipment' or 'inventory'")
 
+    db.commit()
+    return build_purchase_goals_state(db, player)
+
+
+def _check_gear_slot(slot_type: str, slot: Any) -> None:
+    """Same slot-shape validation set_gear_slot applies to the one slot
+    it's writing, factored out so move_gear_slot_item below can apply it
+    to both the source and destination slot of a drag-and-drop."""
+    if slot_type == "equipment":
+        if slot not in EQUIPMENT_SLOTS:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"slot must be one of {EQUIPMENT_SLOTS}")
+    elif slot_type == "inventory":
+        if not isinstance(slot, int) or not (0 <= slot < INVENTORY_SIZE):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"slot must be an integer 0-{INVENTORY_SIZE - 1}",
+            )
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slot_type must be 'equipment' or 'inventory'")
+
+
+def _read_gear_slot(equipment: dict, inventory: list, slot_type: str, slot: Any) -> Optional[dict]:
+    return equipment.get(slot) if slot_type == "equipment" else inventory[slot]
+
+
+def _write_gear_slot(equipment: dict, inventory: list, slot_type: str, slot: Any, item: Optional[dict]) -> None:
+    if slot_type == "equipment":
+        if item is None:
+            equipment.pop(slot, None)
+        else:
+            equipment[slot] = item
+    else:
+        inventory[slot] = item
+
+
+@app.put("/api/gear-setups/{setup_id}/slot/move")
+def move_gear_slot_item(
+    setup_id: str,
+    payload: MoveGearSlotItemRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Drag-and-drop: moves whatever's stored in (from_slot_type,
+    from_slot) into (to_slot_type, to_slot), across equipment and
+    inventory alike. If the destination already holds an item, the two
+    simply swap rather than the destination's original item being lost.
+
+    Operates purely on the raw stored shape (exactly what set_gear_slot
+    itself would have stored -- item id/name, or a combo's already-
+    expanded components list), never on the resolved/priced shape the
+    frontend renders -- so a combo's exact stored components move
+    across untouched rather than being reconstructed from (and
+    potentially drifting from) their priced/resolved form."""
+    setup = _get_owned_gear_setup(db, player, setup_id)
+
+    _check_gear_slot(payload.from_slot_type, payload.from_slot)
+    _check_gear_slot(payload.to_slot_type, payload.to_slot)
+
+    if payload.from_slot_type == payload.to_slot_type and payload.from_slot == payload.to_slot:
+        # Dropped a slot onto itself -- nothing to do.
+        return build_purchase_goals_state(db, player)
+
+    # Fresh dict/list, not an in-place mutation of the loaded ones -- see
+    # the IMPORTANT note on GearSetup in app/models.py for why that
+    # distinction matters for a JSONB column.
+    equipment = dict(setup.equipment or {})
+    inventory = list(setup.inventory or [None] * INVENTORY_SIZE)
+    if len(inventory) != INVENTORY_SIZE:
+        inventory = (inventory + [None] * INVENTORY_SIZE)[:INVENTORY_SIZE]
+
+    from_item = _read_gear_slot(equipment, inventory, payload.from_slot_type, payload.from_slot)
+    to_item = _read_gear_slot(equipment, inventory, payload.to_slot_type, payload.to_slot)
+
+    _write_gear_slot(equipment, inventory, payload.to_slot_type, payload.to_slot, from_item)
+    _write_gear_slot(equipment, inventory, payload.from_slot_type, payload.from_slot, to_item)
+
+    setup.equipment = equipment
+    setup.inventory = inventory
     db.commit()
     return build_purchase_goals_state(db, player)
