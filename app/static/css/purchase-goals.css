@@ -325,11 +325,14 @@ button.primary#pgNameSave, .pg-setup-form-save {
   box-sizing: border-box;
 }
 
-/* Stacks "Clear icon" above "Cancel" (rather than side by side, which
-   read as two competing actions of equal weight) in the setup-icon
-   picker -- the two are wrapped in their own column so they act as one
-   flex child of .gear-icon-picker instead of two. */
-.gear-icon-picker-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+/* "Clear" and "Cancel" side by side in the setup-icon picker -- the two
+   are wrapped in their own row so they act as one flex child of
+   .gear-icon-picker (which also holds the search box) instead of two,
+   and flex-shrink: 0 keeps them their natural button width so it's the
+   search box beside them (flex: 1 1 240px, so it's the one allowed to
+   shrink) that gives up the room this row now takes. */
+.gear-icon-picker-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; flex: 0 0 auto; }
+.gear-icon-picker-actions .btn-secondary { flex: 0 0 auto; }
 
 .search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
 /* The slot picker's own search box (as opposed to the setup-icon
