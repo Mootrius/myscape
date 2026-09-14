@@ -65,6 +65,20 @@ def find_item_icon(item_name: str) -> Optional[str]:
     return entry.get("icon") if entry else None
 
 
+def find_item_by_exact_name(item_name: str) -> Optional[dict]:
+    """Returns the raw {"name": str, "icon": str|None, "ids": [int, ...]}
+    entry for item_name (case-insensitive exact match), or None. Used by
+    search_items in app/purchase_goals.py as the last of three tiers it
+    checks for an EXACT match (after the live tradeable mapping and
+    known recipes) -- see that function's own comment for why a plain
+    startswith/contains scan alone isn't enough to guarantee a short,
+    precise name (e.g. "Dom", the Doom of Mokhaiotl's pet) actually
+    surfaces as a search result at all, let alone first."""
+    if not item_name:
+        return None
+    return get_item_index().get(item_name.strip().lower())
+
+
 def search_item_names(query: str, limit: int, exclude: Optional[set] = None) -> List[dict]:
     """Fuzzy-searches this snapshot by name, using the same
     startswith-then-contains scheme as search_items in

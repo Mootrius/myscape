@@ -37,7 +37,7 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.item_ids import find_item_icon, find_item_ids, search_item_names
+from app.item_ids import find_item_by_exact_name, find_item_icon, find_item_ids, search_item_names
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem
 from app.recipes import find_recipe, search_recipe_names
 from app.schemas import GEAR_SETUP_EQUIPMENT_SLOTS, INVENTORY_SIZE
@@ -153,17 +153,56 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
     q = query.strip().lower()
     if not q:
         return []
+
+    # A player typing a short, precise name -- like "Dom", the Doom of
+    # Mokhaiotl's pet -- almost always means an EXACT match, even when
+    # dozens of longer, unrelated names merely CONTAIN the same letters
+    # ("Saradomin brew", "Saradomin boots", "Saradomin coif", ...).
+    # Those "contains" matches can easily fill up the entire `limit` on
+    # their own from the tradeable-item tier alone, before the tier
+    # that actually holds "Dom" -- an untradeable pet, so only the
+    # item-id snapshot fallback three tiers down even knows about it --
+    # ever gets a chance to run at all. So: look for an exact
+    # (case-insensitive) name match across every tier FIRST, in the
+    # same priority order the three tiers already run in below
+    # (tradeable mapping, then known recipes, then the general item-id
+    # snapshot), and guarantee it as result #1 whenever one exists,
+    # entirely independent of whatever the normal startswith/contains
+    # scan below would have found on its own.
+    exact = None
+    for item_id, meta in mapping.items():
+        name = meta.get("name") or ""
+        if name.lower() == q:
+            exact = {"id": int(item_id), "name": name, "icon": item_icon_url(meta.get("icon")), "tradeable": True}
+            break
+    if exact is None:
+        recipe = find_recipe(q)
+        if recipe:
+            exact = {"id": None, "name": recipe["name"], "icon": item_icon_url(recipe.get("icon")), "tradeable": False}
+    if exact is None:
+        entry = find_item_by_exact_name(q)
+        if entry and entry.get("name"):
+            exact = {"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False}
+    exact_name_lower = exact["name"].lower() if exact else None
+    # One slot of `limit` is reserved for `exact` (inserted at the very
+    # end below) so the normal tiers below fill at most limit-1 more --
+    # otherwise a search with an exact match would return limit+1
+    # results instead of just bumping something off the end.
+    fill_limit = limit - 1 if exact else limit
+
     starts, contains = [], []
     for item_id, meta in mapping.items():
         name = meta.get("name") or ""
         low = name.lower()
+        if low == exact_name_lower:
+            continue  # already captured as `exact` above
         if low.startswith(q):
             starts.append((item_id, meta))
         elif q in low:
             contains.append((item_id, meta))
     starts.sort(key=lambda kv: len(kv[1].get("name") or ""))
     contains.sort(key=lambda kv: len(kv[1].get("name") or ""))
-    combined = (starts + contains)[:limit]
+    combined = (starts + contains)[:fill_limit]
     results = [
         {"id": int(item_id), "name": meta.get("name"), "icon": item_icon_url(meta.get("icon")), "tradeable": True}
         for item_id, meta in combined
@@ -174,11 +213,13 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
     # Exchange listing of its own, so it would never show up above, but
     # a player should still be able to find it by name and see its icon
     # rather than being told to type it in blind as an untradeable item.
-    # Names already matched as a real tradeable item above are skipped
-    # so nothing appears twice.
-    if len(results) < limit:
+    # Names already matched as a real tradeable item above (or as the
+    # exact match) are skipped so nothing appears twice.
+    if len(results) < fill_limit:
         seen_names = {r["name"].lower() for r in results}
-        for entry in search_recipe_names(q, limit - len(results), exclude=seen_names):
+        if exact_name_lower is not None:
+            seen_names.add(exact_name_lower)
+        for entry in search_recipe_names(q, fill_limit - len(results), exclude=seen_names):
             results.append({"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False})
 
     # Still short? Fall back to the broader item-id snapshot (see
@@ -188,13 +229,18 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
     # This is what lets search find literally any known OSRS item by
     # name, closing the gap the old "add as an untradeable item"
     # fallback used to paper over for exactly this case.
-    if len(results) < limit:
+    if len(results) < fill_limit:
         seen_names = {r["name"].lower() for r in results}
-        for entry in search_item_names(q, limit - len(results), exclude=seen_names):
+        if exact_name_lower is not None:
+            seen_names.add(exact_name_lower)
+        for entry in search_item_names(q, fill_limit - len(results), exclude=seen_names):
             if entry.get("name"):
                 results.append({"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False})
 
-    return results
+    if exact:
+        results.insert(0, exact)
+
+    return results[:limit]
 
 
 # Crystal armour (helm/body/legs) can be recolored to match any of the
