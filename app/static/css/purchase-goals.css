@@ -57,18 +57,25 @@
 
 /* Opaque, not the --panel-translucent used by cards elsewhere on this
    page -- this floats directly over the gear grid/summary list, and at
-   82% opacity the content underneath showed through distractingly. */
+   82% opacity the content underneath showed through distractingly.
+   Centered under the hamburger button (left: 50% + translateX(-50%))
+   rather than right-anchored to its edge, and min-width brought down
+   from 160px -- the small/all-caps item labels below don't need
+   nearly that much room, and 160px left it looking unnecessarily wide
+   next to a 36px trigger button. */
 .tracker-menu {
-  position: absolute; top: 44px; right: 0; z-index: 5;
-  background: var(--panel); border: 1px solid var(--border); min-width: 160px;
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5;
+  background: var(--panel); border: 1px solid var(--border); min-width: 128px;
   display: flex; flex-direction: column;
 }
 /* Same small/gray/all-caps text treatment as the "High to Low" / "Low
    to High" / "Custom" sort buttons (.sort-btn below) -- applied here
    and on .btn-secondary so every secondary control on this page reads
-   as one consistent family of text styling. */
+   as one consistent family of text styling. Centered (not left-aligned)
+   to match the menu itself now being centered under its trigger button
+   rather than hugging one edge. */
 .tracker-menu-item {
-  background: none; border: none; text-align: left; padding: 10px 14px;
+  background: none; border: none; text-align: center; padding: 10px 14px;
   color: var(--text-dim); font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
   cursor: pointer;
 }
