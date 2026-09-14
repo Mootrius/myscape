@@ -811,11 +811,14 @@ def _still_to_purchase_summary(
         for r, slot_type, slot in pending
     ]
 
-    # Independent of however the list above ended up sorted/reordered
-    # for display -- always the single cheapest purchasable item, so
-    # switching sort mode (or dragging a custom order around) never
-    # changes what's highlighted as the next thing to actually buy.
-    next_purchase = min(still_to_purchase, key=lambda item: item["cost"], default=None)
+    # Whatever sits at the top of the list above -- cheapest first in
+    # "low_to_high", priciest first in "high_to_low", or whatever the
+    # player last dragged to the top in "custom" -- is what's shown as
+    # the next thing to buy. This is deliberately just still_to_purchase[0]
+    # rather than a separately-computed cheapest item, so rearranging the
+    # list (switching sort mode, or dragging a row to the front in custom
+    # mode) always moves the highlighted next purchase along with it.
+    next_purchase = still_to_purchase[0] if still_to_purchase else None
     if next_purchase:
         cost = next_purchase["cost"]
         next_purchase = {
