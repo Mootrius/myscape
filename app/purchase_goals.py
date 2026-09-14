@@ -782,6 +782,8 @@ def _still_to_purchase_summary(
 
     if sort_mode == "high_to_low":
         pending.sort(key=lambda entry: entry[0]["cost"], reverse=True)
+    elif sort_mode == "alphabetical":
+        pending.sort(key=lambda entry: entry[0]["itemName"].casefold())
     elif sort_mode == "custom":
         # Anything not in the player's own saved order (new since they
         # last dragged something, or they've simply never reordered at
@@ -812,12 +814,13 @@ def _still_to_purchase_summary(
     ]
 
     # Whatever sits at the top of the list above -- cheapest first in
-    # "low_to_high", priciest first in "high_to_low", or whatever the
-    # player last dragged to the top in "custom" -- is what's shown as
-    # the next thing to buy. This is deliberately just still_to_purchase[0]
-    # rather than a separately-computed cheapest item, so rearranging the
-    # list (switching sort mode, or dragging a row to the front in custom
-    # mode) always moves the highlighted next purchase along with it.
+    # "low_to_high", priciest first in "high_to_low", first alphabetically
+    # in "alphabetical", or whatever the player last dragged to the top in
+    # "custom" -- is what's shown as the next thing to buy. This is
+    # deliberately just still_to_purchase[0] rather than a
+    # separately-computed cheapest item, so rearranging the list
+    # (switching sort mode, or dragging a row to the front in custom mode)
+    # always moves the highlighted next purchase along with it.
     next_purchase = still_to_purchase[0] if still_to_purchase else None
     if next_purchase:
         cost = next_purchase["cost"]

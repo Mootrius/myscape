@@ -1016,13 +1016,14 @@ def render_purchase_goals(player: Player) -> str:
       var STILL_TO_PURCHASE_SORT_MODES = [
         { key: 'high_to_low', label: 'High to Low' },
         { key: 'low_to_high', label: 'Low to High' },
+        { key: 'alphabetical', label: 'Alphabetical' },
         { key: 'custom', label: 'Custom' },
       ];
 
-      // The three buttons that replaced the old static "Still to
-      // purchase" label -- rebuilt every render (like the rest of this
-      // page) so the active one can track setup.stillToPurchaseSort,
-      // which changes server-side, not just on the client.
+      // The buttons that replaced the old static "Still to purchase"
+      // label -- rebuilt every render (like the rest of this page) so
+      // the active one can track setup.stillToPurchaseSort, which
+      // changes server-side, not just on the client.
       function renderSortButtons(setup) {
         var el = document.getElementById('pgSortButtons');
         if (!el) return;

@@ -644,7 +644,7 @@ def set_still_to_purchase_sort(
     db: Session = Depends(get_db),
     player: Player = Depends(get_current_player_from_session),
 ):
-    """Switches which of the three buttons above a setup's "Still to
+    """Switches which of the buttons above a setup's "Still to
     Purchase" list is active -- see STILL_TO_PURCHASE_SORT_MODES in
     app/schemas.py and _still_to_purchase_summary in
     app/purchase_goals.py for what each one actually does. Doesn't

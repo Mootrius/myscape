@@ -416,12 +416,12 @@ class MoveGearSlotItemRequest(BaseModel):
         return value
 
 
-STILL_TO_PURCHASE_SORT_MODES = ("low_to_high", "high_to_low", "custom")
+STILL_TO_PURCHASE_SORT_MODES = ("low_to_high", "high_to_low", "alphabetical", "custom")
 
 
 class SetStillToPurchaseSortRequest(BaseModel):
-    """Switches a setup's "Still to Purchase" list between the three
-    sort modes the three buttons above that list offer -- see
+    """Switches a setup's "Still to Purchase" list between the four
+    sort modes the buttons above that list offer -- see
     still_to_purchase_sort_mode on GearSetup in app/models.py."""
 
     sort_mode: str
