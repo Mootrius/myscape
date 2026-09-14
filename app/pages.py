@@ -953,7 +953,7 @@ def render_purchase_goals(player: Player) -> str:
       // ---- Gear/inventory slot picker --------------------------------------
 
       function openSlotPicker(slotType, slot) {
-        PG.picker = { slotType: slotType, slot: slot, query: '', selected: null };
+        PG.picker = { slotType: slotType, slot: slot, query: '' };
       }
 
       function renderSlotPicker() {
@@ -962,13 +962,15 @@ def render_purchase_goals(player: Player) -> str:
         var p = PG.picker;
         if (!p) { el.innerHTML = ''; return; }
 
-        // No "build from parts" option any more -- search now covers
-        // every known OSRS item (live Grand Exchange matches, known
-        // item-combination recipes, and every other named item from
-        // app/item_ids.py's snapshot, in that order -- see search_items
-        // in app/purchase_goals.py), and a combination item like
-        // "Neitiznot faceguard" is auto-expanded into its real parts
-        // server-side the moment it's picked (see
+        // No "build from parts" option any more, and no separate "Add"
+        // step either -- clicking a suggestion saves it immediately
+        // (see renderSlotSuggestions), so this is just the search box.
+        // Search itself covers every known OSRS item (live Grand
+        // Exchange matches, known item-combination recipes, and every
+        // other named item from app/item_ids.py's snapshot, in that
+        // order -- see search_items in app/purchase_goals.py), and a
+        // combination item like "Neitiznot faceguard" is auto-expanded
+        // into its real parts server-side the moment it's picked (see
         // expand_recipe_components in app/recipes.py), so nobody has to
         // know or type out what an item is made of, or fall back to
         // typing in an untradeable item blind.
@@ -976,9 +978,6 @@ def render_purchase_goals(player: Player) -> str:
           '<div class="search-box search-box-full">' +
           '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" value="' + esc(p.query) + '" />' +
           '  <div class="suggestions" id="slotSuggestions"></div>' +
-          '</div>' +
-          '<div class="gear-slot-picker-actions">' +
-          '  <button class="gspa-primary" id="slotAddBtn" type="button">Add</button>' +
           '</div>';
 
         el.innerHTML = '<div class="gear-slot-picker">' + body + '</div>';
@@ -991,15 +990,8 @@ def render_purchase_goals(player: Player) -> str:
         var input = document.getElementById('slotSearchInput');
         input.addEventListener('input', debounce(function () {
           p.query = input.value;
-          // Whatever was selected before no longer matches what's
-          // typed now -- Add/Add as supplies need a fresh pick.
-          p.selected = null;
           runSearch(input.value, function (results) { renderSlotSuggestions(input.value, results); });
         }, 200));
-        document.getElementById('slotAddBtn').addEventListener('click', function () {
-          if (!p.selected) { showError('Pick an item from the list first.'); return; }
-          saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName });
-        });
       }
 
       function renderSlotSuggestions(query, results) {
@@ -1037,18 +1029,15 @@ def render_purchase_goals(player: Player) -> str:
         box.innerHTML = rowsHtml;
         box.classList.add('show');
 
-        var input = document.getElementById('slotSearchInput');
         box.querySelectorAll('.suggestion[data-item-name]').forEach(function (row) {
           row.addEventListener('click', function () {
             var idAttr = row.getAttribute('data-item-id');
-            PG.picker.selected = {
-              itemId: idAttr !== null ? parseInt(idAttr, 10) : null,
-              itemName: row.getAttribute('data-item-name'),
-            };
-            PG.picker.query = PG.picker.selected.itemName;
-            if (input) input.value = PG.picker.selected.itemName;
             box.classList.remove('show');
             box.innerHTML = '';
+            saveSlot({
+              item_id: idAttr !== null ? parseInt(idAttr, 10) : null,
+              item_name: row.getAttribute('data-item-name'),
+            });
           });
         });
       }

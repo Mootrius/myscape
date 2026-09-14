@@ -266,9 +266,10 @@
 .search-box.search-box-full { flex: 1 1 100%; width: 100%; }
 .search-box input[type="text"] { width: 100%; }
 /* Opaque, not the --panel-translucent used by the picker's own outer
-   card -- this floats directly over the Add button right below it (see
-   .gear-slot-picker-actions), and a translucent background there just
-   lets that button ghost through it instead of being cleanly covered. */
+   card -- clicking a suggestion here saves it immediately (see
+   renderSlotSuggestions in app/pages.py), so there's nothing else in
+   the picker this could visually bleed into, but it stays opaque
+   anyway for a clean, unambiguous dropdown. */
 .suggestions {
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
   background: var(--panel); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
@@ -304,24 +305,6 @@
 .suggestion-empty {
   padding: 8px 10px; font-size: 13px; color: var(--text-faint); font-style: italic; cursor: default;
 }
-
-/* The single action under the slot picker's search box -- adding a
-   combined item like a Neitiznot faceguard needs no separate action of
-   its own, the server recognizes it by name and assembles it
-   automatically (see app/recipes.py). Still its own row/button (rather
-   than adding straight from a suggestion click) so a typed query can
-   be reviewed before it's saved. */
-.gear-slot-picker-actions { display: flex; gap: 8px; width: 100%; margin-top: 2px; }
-.gear-slot-picker-actions button {
-  flex: 1 1 0;
-  padding: 11px 12px;
-  font-size: 13.5px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  box-sizing: border-box;
-}
-.gspa-primary { background: var(--gold); color: #221c10; border: none; }
-.gspa-primary:hover { background: #ffab42; }
 
 .pg-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 40px 10px; }
 
