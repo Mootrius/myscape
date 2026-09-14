@@ -1936,7 +1936,12 @@ def render_loot_tracker(player: Player) -> str:
         var headerKills = selectedEntry ? selectedEntry.killCount : windowKills;
         document.getElementById('lootChartTotal').textContent = fmtGp(headerValue) + ' gp';
         document.getElementById('lootChartKills').textContent = (headerKills || 0).toLocaleString('en-US') + ' kc';
-        document.getElementById('lootChartTitle').textContent = selectedNpc || 'ALL NPCs';
+        // A selected NPC's own name is shown in ALL CAPS (e.g.
+        // "ZULRAH") -- uppercased here in JS rather than via a CSS
+        // text-transform on .loot-chart-title, since that would also
+        // force the "ALL NPCs" fallback into "ALL NPCS", capitalizing
+        // the "s" it's deliberately meant to keep lowercase.
+        document.getElementById('lootChartTitle').textContent = selectedNpc ? selectedNpc.toUpperCase() : 'ALL NPCs';
 
         var maxValue = niceMax(Math.max.apply(null, [0].concat(buckets.map(function (b) { return b.value; }))));
         var gridlineSteps = 4;

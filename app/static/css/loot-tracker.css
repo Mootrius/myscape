@@ -23,14 +23,16 @@
 .loot-chart-stats { display: flex; align-items: baseline; gap: 8px; }
 .loot-chart-total { font-size: 13px; color: var(--gold); font-variant-numeric: tabular-nums; }
 .loot-chart-kills { font-size: 12px; color: var(--text-faint); letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
-/* The selected NPC's name (or "ALL NPCs" when nothing's selected --
-   see renderBarChart in app/pages.py) -- absolutely centered on the
-   header rather than a third flex sibling, since the range control and
-   the stats either side of it aren't the same width and true centering
-   needs to ignore that instead of splitting the remaining space
-   evenly. Shown in its own literal case (no uppercase transform) so
-   "ALL NPCs" reads the way it's actually written, same as any selected
-   NPC's own name (e.g. "Zulrah", not "ZULRAH"). */
+/* The selected NPC's name in ALL CAPS (e.g. "ZULRAH"), or "ALL NPCs"
+   when nothing's selected -- see renderBarChart in app/pages.py --
+   absolutely centered on the header rather than a third flex sibling,
+   since the range control and the stats either side of it aren't the
+   same width and true centering needs to ignore that instead of
+   splitting the remaining space evenly. No CSS text-transform here on
+   purpose -- a selected NPC's name is uppercased in JS instead (see
+   renderBarChart), since a CSS uppercase transform would also turn
+   the "ALL NPCs" fallback into "ALL NPCS", capitalizing the "s" it's
+   deliberately meant to keep lowercase. */
 .loot-chart-title {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   font-size: 15px; color: var(--text-dim); letter-spacing: 0.03em;
