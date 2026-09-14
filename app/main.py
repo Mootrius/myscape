@@ -27,7 +27,7 @@ from app.database import get_db
 from app.limiter import limiter
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem
 from app.pages import render_dashboard, render_landing, render_login, render_purchase_goals, render_signup
-from app.purchase_goals import build_purchase_goals_state, get_mapping, search_items
+from app.purchase_goals import build_purchase_goals_state, get_mapping, is_crystal_armour_piece, search_items
 from app.recipes import expand_recipe_components
 from app.routers import auth, linking
 from app.schemas import (
@@ -494,7 +494,18 @@ def set_gear_slot(
                 {"itemId": c.item_id, "itemName": c.item_name or None, "quantity": c.quantity}
                 for c in payload.item.components
             ]
-        if payload.item.item_id is None and not payload.item.components and payload.item.item_name:
+        if (
+            payload.item.item_id is None
+            and not payload.item.components
+            and payload.item.item_name
+            and not is_crystal_armour_piece(payload.item.item_name)
+        ):
+            # Crystal helm/body/legs are skipped here -- the wiki's own
+            # recipe data for them is unreliable (see
+            # _crystal_armour_seed_price's docstring in
+            # app/purchase_goals.py), and they're priced against a
+            # Crystal armour seed directly at read time instead, so
+            # there's nothing useful to auto-expand into up front.
             mapping, _ = get_mapping()
             auto_components = expand_recipe_components(payload.item.item_name, mapping)
             if auto_components:

@@ -404,6 +404,53 @@ def _charged_item_price(name: Optional[str], prices: dict) -> Tuple[Optional[int
     return None, None
 
 
+# Crystal helm/body/legs (see _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE above for
+# the eight house colours each comes in) are made from a single Crystal
+# armour seed plus 50 Crystal shards sung together at a singing bowl --
+# no GE listing of their own, same shape as the charged weapons above.
+# The wiki's own item-combination recipe data for these three items
+# (app/data/recipes.json) is unreliable, though: for the plain/undyed
+# form specifically, it documents the *recolouring* recipe (turning an
+# already-owned Amlodd-coloured piece back to the default colour with a
+# Crystal of Meilyr) rather than how to acquire the piece in the first
+# place -- and since that recipe's own material is itself an
+# (also-recipe-having) coloured variant of the very same item, walking
+# it via _expand_materials terminates (the depth/seen guards see to
+# that) but bottoms out treating "Crystal helm" as one of its own,
+# unpriced (cost 0) components. Rather than trying to fix that data in
+# place, this bypasses the recipe/components path entirely for these
+# three items and, per how the user wants this priced, just pins them
+# to the Crystal armour seed's own live price (the 50 crystal shards
+# are comparatively minor and highly variable in value -- even the
+# wiki's own page for these prices them with a multi-line fallback
+# formula -- so left out, same simplification as the charged weapons'
+# uncharged-price-only pricing above).
+_CRYSTAL_ARMOUR_PIECE_NAMES = {"crystal helm", "crystal body", "crystal legs"}
+_CRYSTAL_ARMOUR_SEED_NAME = "Crystal armour seed"
+
+
+def is_crystal_armour_piece(name: Optional[str]) -> bool:
+    """True for "Crystal helm"/"Crystal body"/"Crystal legs", in any of
+    their eight house colours (e.g. "Crystal helm (ithell)") -- see
+    _CRYSTAL_ARMOUR_PIECE_NAMES above for why these specifically need
+    special handling."""
+    return _strip_cosmetic_item_suffix((name or "").strip()).strip().lower() in _CRYSTAL_ARMOUR_PIECE_NAMES
+
+
+def _crystal_armour_seed_price(name: Optional[str], prices: dict) -> Tuple[Optional[int], Optional[str]]:
+    """For a crystal helm/body/legs (any colour), returns the live price
+    of a Crystal armour seed -- same shape as unit_price_for,
+    (unit_price, price_source), both None if name isn't one of these
+    three items or the seed currently has no live price."""
+    if not is_crystal_armour_piece(name):
+        return None, None
+    for candidate_id in find_item_ids(_CRYSTAL_ARMOUR_SEED_NAME) or []:
+        unit_price, price_source = unit_price_for(candidate_id, prices)
+        if unit_price is not None:
+            return unit_price, price_source
+    return None, None
+
+
 def _untradeable_item_icon(name: str) -> Optional[str]:
     """An untradeable item obviously has no Grand Exchange icon of its
     own, but we may still know its real wiki icon regardless -- either
@@ -438,6 +485,24 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
         return None
     item_id = raw_item.get("itemId")
     components_raw = raw_item.get("components")
+
+    # Crystal helm/body/legs specifically -- checked first, ahead of
+    # both the combo and plain-untradeable branches below, so this
+    # takes over regardless of whatever (possibly still the old, wrong)
+    # components a setup saved earlier may already have stored for one
+    # -- see _crystal_armour_seed_price's docstring for why that data
+    # can't be trusted. Falls through to the normal handling below only
+    # if the seed itself currently has no live price to pin to.
+    if item_id is None:
+        name = raw_item.get("itemName") or ""
+        crystal_price, crystal_price_source = _crystal_armour_seed_price(name, prices)
+        if crystal_price is not None:
+            owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
+            return {
+                "itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False,
+                "unitPrice": crystal_price, "priceSource": crystal_price_source, "fullCost": crystal_price,
+                "cost": 0 if owned else crystal_price, "owned": owned, "components": None,
+            }
 
     if item_id is None and components_raw:
         name = raw_item.get("itemName") or "Combined item"
