@@ -24,14 +24,15 @@ only sync shape this needs, unlike every other synced source.
 This is a first pass, not the full old feature set:
 
 - A rolling last-24-hours bar chart (bucketed hourly, same shape as
-  the old tool's own chart), plus a per-NPC breakdown of that same
-  window -- a clickable "By NPC" row and a matching per-hour value
-  array for each one, so the chart can show one NPC's slice of each
-  bucket filled in while the bucket's own full height still shows as
-  an outline -- are here. Everything is scoped to the last 24 hours on
-  purpose for now; an all-time view (totals, a full per-source
-  breakdown, a scrollable history feed) is deliberately not built yet,
-  not because it's hard, just not what the page needs today.
+  the old tool's own chart), a clickable "By NPC" row (one box per NPC
+  killed in that window) that filters the chart down to that NPC's own
+  slice of each hour -- the rest of each bucket's height still shows as
+  an outline -- and an item panel beside it (all-NPCs by default, just
+  that NPC's own items once one is selected) are here. Everything is
+  scoped to the last 24 hours on purpose for now; an all-time view
+  (totals, a full per-source breakdown, a scrollable history feed) is
+  deliberately not built yet, not because it's hard, just not what the
+  page needs today.
 - The old tool's per-boss drop-table checklist ("pick Vorkath from a
   dropdown, see its full wiki drop table filled in as you go, with
   hand-curated backfill for kills from before Loot Logger was
@@ -141,13 +142,57 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict) -> Tuple[L
     return resolved, total_value
 
 
+def _add_item_totals(bucket: Dict[object, dict], items: List[dict], occurred_at: datetime) -> None:
+    """Folds one event's resolved items into a {itemKey: totals} dict
+    (itemId when there is one, else the item name -- the same fallback
+    _resolve_loot_items itself uses to name an item), summing quantity/
+    value and keeping the most recent drop time for that item. Shared
+    by the global (all-NPCs) and per-NPC item aggregations in
+    build_loot_state below, which differ only in which dict they fold
+    into.
+
+    Relies on the caller iterating events newest-first (see
+    build_loot_state's query ordering): the *first* time an item key is
+    seen is therefore already its most recent drop, so lastDroppedAt is
+    only ever set once here, never updated afterward."""
+    for it in items:
+        key = it["itemId"] if it["itemId"] is not None else it["itemName"]
+        totals = bucket.get(key)
+        if totals is None:
+            totals = {
+                "itemId": it["itemId"],
+                "itemName": it["itemName"],
+                "icon": it["icon"],
+                "quantity": 0,
+                "value": 0,
+                "lastDroppedAt": occurred_at,
+            }
+            bucket[key] = totals
+        totals["quantity"] += it["quantity"]
+        totals["value"] += it["value"]
+
+
+def _finalize_items(bucket: Dict[object, dict]) -> List[dict]:
+    """Turns one item-totals dict from _add_item_totals into the list
+    shape the frontend gets, with lastDroppedAt as an ISO string --
+    kept as a real datetime internally so future work could compare/
+    re-sort server-side, but the page itself sorts client-side (see
+    render_loot_tracker's sort tabs), so insertion order here doesn't
+    matter."""
+    out = []
+    for totals in bucket.values():
+        out.append({**totals, "lastDroppedAt": totals["lastDroppedAt"].isoformat()})
+    return out
+
+
 def build_loot_state(db: Session, player: Player) -> dict:
     """Everything the Loot Tracker page needs in one payload, all
     windowed to the last ROLLING_WINDOW_HOURS: the rolling bar chart's
-    24 hourly buckets, and a per-NPC breakdown of that same window (one
-    entry per NPC actually killed in it, plus that NPC's own 24-slot
-    hourly value array) -- see the module docstring for what this
-    covers today and what's still to come."""
+    24 hourly buckets, a per-NPC breakdown of that same window (one
+    entry per NPC actually killed in it, that NPC's own 24-slot hourly
+    value array, and that NPC's own item breakdown), and an all-NPCs
+    item breakdown for when nothing is selected -- see the module
+    docstring for what this covers today and what's still to come."""
     mapping, mapping_error = get_mapping()
     prices, prices_error = get_latest_prices()
 
@@ -157,7 +202,9 @@ def build_loot_state(db: Session, player: Player) -> dict:
 
     # Windowed at the query itself, not just in the totals below -- see
     # the module docstring. Still ordered desc so a tie in which bucket
-    # two same-hour events land in resolves the same way it always has.
+    # two same-hour events land in resolves the same way it always has,
+    # and so _add_item_totals's "first seen this item key = most recent
+    # drop" trick above holds.
     events = (
         db.query(LootEvent)
         .filter(LootEvent.player_id == player.id, LootEvent.occurred_at >= window_start)
@@ -178,14 +225,18 @@ def build_loot_state(db: Session, player: Player) -> dict:
             "killCount": 0,
         })
 
-    # Per-NPC totals/hourly breakdown for the "By NPC" row and its
-    # click-to-filter overlay on the chart -- npc_hourly[name][i] is
-    # always <= hourly_buckets[i]["value"], since it's that same
-    # bucket's NPC-only subset. Deliberately npc-only (source_type ==
-    # "npc") -- see the module docstring for why caskets/pickpockets
-    # still count toward hourly_buckets but never show up here.
+    # Per-NPC totals/hourly/item breakdown for the "By NPC" row, its
+    # click-to-filter overlay on the chart, and the item panel beside it
+    # -- npc_hourly[name][i] is always <= hourly_buckets[i]["value"],
+    # since it's that same bucket's NPC-only subset, and the same is
+    # true of each NPC's own item quantities against window_items below.
+    # Deliberately npc-only (source_type == "npc") -- see the module
+    # docstring for why caskets/pickpockets still count toward
+    # hourly_buckets but never show up in any of this.
     npc_totals: Dict[str, dict] = {}
     npc_hourly: Dict[str, List[int]] = {}
+    npc_items: Dict[str, Dict[object, dict]] = {}
+    window_item_totals: Dict[object, dict] = {}
 
     for event in events:
         if event.occurred_at is None:
@@ -201,7 +252,7 @@ def build_loot_state(db: Session, player: Player) -> dict:
         if not (0 <= idx < ROLLING_WINDOW_HOURS):
             continue
 
-        _items, event_value = _resolve_loot_items(event.items or [], mapping, prices)
+        items, event_value = _resolve_loot_items(event.items or [], mapping, prices)
         hourly_buckets[idx]["value"] += event_value
         hourly_buckets[idx]["killCount"] += 1
 
@@ -215,16 +266,25 @@ def build_loot_state(db: Session, player: Player) -> dict:
                     "combatLevel": event.combat_level,
                     "killCount": 0,
                     "value": 0,
+                    "lastKillAt": event.occurred_at,
                 }
                 npc_totals[name] = totals
                 npc_hourly[name] = [0] * ROLLING_WINDOW_HOURS
+                npc_items[name] = {}
             totals["killCount"] += 1
             totals["value"] += event_value
             npc_hourly[name][idx] += event_value
 
+            _add_item_totals(npc_items[name], items, event.occurred_at)
+            _add_item_totals(window_item_totals, items, event.occurred_at)
+
     # Same sort as the old tool's own "monsters" list: most-killed
-    # first, value as the tiebreaker.
+    # first, value as the tiebreaker. The frontend re-sorts this itself
+    # per its own sort tabs (high/low/alphabetical/recent) -- this
+    # ordering is just the payload's own default, not load-bearing.
     window_npcs = sorted(npc_totals.values(), key=lambda n: (-n["killCount"], -n["value"]))
+    for n in window_npcs:
+        n["lastKillAt"] = n["lastKillAt"].isoformat()
 
     return {
         "hourlyBuckets": hourly_buckets,
@@ -232,6 +292,8 @@ def build_loot_state(db: Session, player: Player) -> dict:
         "windowKills": sum(b["killCount"] for b in hourly_buckets),
         "windowNpcs": window_npcs,
         "npcHourlyValues": npc_hourly,
+        "windowItems": _finalize_items(window_item_totals),
+        "npcItems": {name: _finalize_items(items) for name, items in npc_items.items()},
         "pricesError": prices_error,
         "mappingError": mapping_error,
     }

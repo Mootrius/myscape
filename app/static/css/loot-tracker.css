@@ -86,3 +86,58 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
 .loot-npc-box.active .loot-npc-box-name { color: var(--text); }
+.loot-npc-box-value { font-size: 9.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
+.loot-npc-box.active .loot-npc-box-value { color: var(--gold); }
+
+/* ---------- two-column layout below the chart: the NPC panel (search
+   + sort + boxes, above) on the left, an item panel of the same shape
+   on the right -- see render_loot_tracker in app/pages.py. Stacks to a
+   single column once the panels would otherwise get too cramped to
+   read the search/sort row. ---------- */
+.loot-panels { display: flex; gap: 18px; align-items: flex-start; }
+.loot-panel { flex: 1 1 0; min-width: 0; }
+
+/* Search box + sort tabs share one row, matching how the search input
+   inherits myscape.css's own input[type="text"] styling (dark field,
+   full width) -- only the width/size here need overriding for this
+   compact toolbar context instead of the page's usual full-bleed
+   forms. */
+.loot-panel-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.loot-search { flex: 1 1 140px; min-width: 100px; padding: 8px 10px; font-size: 13px; }
+
+/* Mirrors purchase-goals.css's .gear-summary-sort/.sort-btn pattern
+   (kept as its own copy here rather than shared across files, per this
+   project's established per-page-CSS convention) -- a row of four
+   equal-width toggle buttons, one active at a time. */
+.loot-sort-tabs { display: flex; gap: 6px; flex: 2 1 260px; }
+.loot-sort-tab {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+}
+.loot-sort-tab:hover { border-color: var(--gold-dim); color: var(--text); }
+.loot-sort-tab.active { border-color: var(--gold); color: var(--gold); }
+
+@media (max-width: 640px) {
+  .loot-panels { flex-direction: column; }
+}
+
+/* ---------- item panel (below-right) -- one row per item, styled
+   after purchase-goals.css's .gear-summary-row (icon + name + a value
+   on the right; a quantity is added here since a single item can drop
+   more than once in the window, unlike a gear-setup component). Same
+   npc-scoped, 24h-windowed data as the NPC panel beside it -- see
+   windowItems/npcItems in app/loot.py's build_loot_state. ---------- */
+.loot-item-list { display: flex; flex-direction: column; gap: 6px; }
+.loot-item-row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.loot-item-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: none; }
+.loot-item-row-name { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loot-item-row-qty { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.loot-item-row-value { font-size: 12px; color: var(--gold); white-space: nowrap; font-variant-numeric: tabular-nums; }

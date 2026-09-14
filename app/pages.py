@@ -1579,14 +1579,29 @@ def render_loot_tracker(player: Player) -> str:
     see app/loot.py's build_loot_state).
 
     Everything on this page is scoped to the rolling last-24-hours
-    window: the bar chart, and the "By NPC" row below it that lets a
-    player click one NPC to see just that NPC's share of each hour's
-    loot filled in at the bottom of its bar, with the bar's own full
-    (all-sources) height still showing as an outline above it -- see
-    renderBarChart/renderNpcRow below, and build_loot_state in
-    app/loot.py for the matching hourlyBuckets/npcHourlyValues shape."""
+    window: the bar chart; the NPC panel below-left that lets a player
+    click one NPC to see just that NPC's share of each hour's loot
+    filled in at the bottom of its bar (the bar's own full all-sources
+    height still shows as an outline above it), searchable/sortable via
+    its own search box and sort tabs; and the item panel below-right,
+    which mirrors that same search/sort UI over either every item
+    dropped by every NPC in the window (nothing selected) or just the
+    selected NPC's own items -- see renderBarChart/renderNpcRow/
+    renderItemList below, and build_loot_state in app/loot.py for the
+    matching hourlyBuckets/npcHourlyValues/windowItems/npcItems shape."""
     extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
-    body = """
+
+    def _sort_tabs(tabs_id: str) -> str:
+        return f"""
+          <div class="loot-sort-tabs" id="{tabs_id}">
+            <button type="button" class="loot-sort-tab" data-sort="high">High to Low</button>
+            <button type="button" class="loot-sort-tab" data-sort="low">Low to High</button>
+            <button type="button" class="loot-sort-tab" data-sort="alpha">Alphabetical</button>
+            <button type="button" class="loot-sort-tab" data-sort="recent">Recent</button>
+          </div>
+        """
+
+    body = f"""
     <h2 class="page-title">Loot Tracker</h2>
     <div class="auth-error" id="lootError"></div>
     <p class="pg-empty" id="lootEmptyMsg">Loading&hellip;</p>
@@ -1602,16 +1617,87 @@ def render_loot_tracker(player: Player) -> str:
         </div>
         <div class="loot-bar-x-labels" id="lootBarXLabels"></div>
       </div>
-      <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
-        No NPC kills in the last 24 hours yet.
-      </p>
-      <div class="loot-npc-row" id="lootNpcRow"></div>
+      <div class="loot-panels">
+        <div class="loot-panel">
+          <div class="loot-panel-controls">
+            <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search NPCs&hellip;" autocomplete="off" />
+            {_sort_tabs("lootNpcSortTabs")}
+          </div>
+          <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
+            No NPC kills in the last 24 hours yet.
+          </p>
+          <div class="loot-npc-row" id="lootNpcRow"></div>
+        </div>
+        <div class="loot-panel">
+          <div class="loot-panel-controls">
+            <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search items&hellip;" autocomplete="off" />
+            {_sort_tabs("lootItemSortTabs")}
+          </div>
+          <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
+            No items dropped in the last 24 hours yet.
+          </p>
+          <div class="loot-item-list" id="lootItemList"></div>
+        </div>
+      </div>
     </div>
     """
     script = """
     (function () {
-      var state = { selectedNpc: null };
+      var state = { selectedNpc: null, npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '' };
       var lastData = null;
+
+      // Shared by both panels' search boxes -- a plain case-insensitive
+      // substring match against whichever name field the caller points
+      // it at (sourceName for NPCs, itemName for items).
+      function filterByName(list, query, nameKey) {
+        if (!query) return list;
+        var q = query.toLowerCase();
+        return list.filter(function (entry) {
+          return (entry[nameKey] || '').toLowerCase().indexOf(q) !== -1;
+        });
+      }
+
+      // Shared by both panels' sort tabs. 'high'/'low' sort by valueKey,
+      // 'alpha' by nameKey, 'recent' by recentKey (an ISO timestamp --
+      // lastKillAt for NPCs, lastDroppedAt for items) newest first.
+      // Never mutates the list it's given -- callers still hold the
+      // original (unsorted, unfiltered) array from lastData.
+      function sortEntries(list, sortMode, nameKey, valueKey, recentKey) {
+        var out = list.slice();
+        if (sortMode === 'low') {
+          out.sort(function (a, b) { return (a[valueKey] || 0) - (b[valueKey] || 0); });
+        } else if (sortMode === 'alpha') {
+          out.sort(function (a, b) { return (a[nameKey] || '').localeCompare(b[nameKey] || ''); });
+        } else if (sortMode === 'recent') {
+          out.sort(function (a, b) { return new Date(b[recentKey] || 0) - new Date(a[recentKey] || 0); });
+        } else {
+          out.sort(function (a, b) { return (b[valueKey] || 0) - (a[valueKey] || 0); });
+        }
+        return out;
+      }
+
+      // Toggles which sort-tab button looks active within one of the
+      // two .loot-sort-tabs containers -- shared by both panels since
+      // they're identical markup (see _sort_tabs in render_loot_tracker).
+      function updateSortTabs(containerId, activeSort) {
+        var container = document.getElementById(containerId);
+        var btns = container.querySelectorAll('.loot-sort-tab');
+        for (var i = 0; i < btns.length; i++) {
+          btns[i].classList.toggle('active', btns[i].getAttribute('data-sort') === activeSort);
+        }
+      }
+
+      // The item panel shows every NPC's items combined when nothing's
+      // selected, or just the selected NPC's own items once one is
+      // clicked in the NPC panel -- see build_loot_state's windowItems/
+      // npcItems in app/loot.py for how those two lists are computed.
+      function currentItems() {
+        if (!lastData) return [];
+        if (state.selectedNpc && lastData.npcItems && lastData.npcItems[state.selectedNpc]) {
+          return lastData.npcItems[state.selectedNpc];
+        }
+        return lastData.windowItems || [];
+      }
 
       function fmtGp(n) {
         n = n || 0;
@@ -1774,11 +1860,27 @@ def render_loot_tracker(player: Player) -> str:
       // every poll re-fetches/redraws it from scratch, which shows up
       // as a flash for any icon that isn't instant to (re)load -- not a
       // problem with that icon's own URL.
+      // The full NPC list from lastData is filtered by state.npcSearch
+      // and sorted by state.npcSort before every render -- so the
+      // dedup key below has to reflect the search/sort state too, not
+      // just which NPCs came back from the poll, or an in-place search
+      // keystroke would find an unchanged-looking key (same NPCs, same
+      // order coincidentally) and skip rebuilding.
       var lastNpcKey = null;
       function renderNpcRow(npcs) {
         var emptyEl = document.getElementById('lootNpcEmpty');
         var rowEl = document.getElementById('lootNpcRow');
         if (!npcs.length) {
+          emptyEl.textContent = 'No NPC kills in the last 24 hours yet.';
+          emptyEl.style.display = '';
+          rowEl.innerHTML = '';
+          lastNpcKey = null;
+          return;
+        }
+
+        var sorted = sortEntries(filterByName(npcs, state.npcSearch, 'sourceName'), state.npcSort, 'sourceName', 'value', 'lastKillAt');
+        if (!sorted.length) {
+          emptyEl.textContent = 'No NPCs match your search.';
           emptyEl.style.display = '';
           rowEl.innerHTML = '';
           lastNpcKey = null;
@@ -1786,27 +1888,84 @@ def render_loot_tracker(player: Player) -> str:
         }
         emptyEl.style.display = 'none';
 
-        var key = npcs.map(function (n) { return n.sourceName; }).join('|');
+        var key = state.npcSearch + '\\u0001' + state.npcSort + '\\u0001' + sorted.map(function (n) { return n.sourceName; }).join('|');
         if (key !== lastNpcKey) {
           lastNpcKey = key;
-          rowEl.innerHTML = npcs.map(function (n) {
+          rowEl.innerHTML = sorted.map(function (n) {
             var active = state.selectedNpc === n.sourceName;
             return '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
               escapeHtml(n.sourceName) + '" title="' + escapeHtml(n.sourceName) + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' +
               n.killCount + ' kill' + (n.killCount === 1 ? '' : 's') + '">' +
               iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
               '<div class="loot-npc-box-name">' + escapeHtml(n.sourceName) + '</div>' +
+              '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
             '</button>';
           }).join('');
           return;
         }
 
         var boxes = rowEl.children;
-        npcs.forEach(function (n, i) {
+        sorted.forEach(function (n, i) {
           var box = boxes[i];
           if (!box) return;
           box.classList.toggle('active', state.selectedNpc === n.sourceName);
           box.title = n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kill' + (n.killCount === 1 ? '' : 's');
+        });
+      }
+
+      // The item panel below-right -- either every item dropped by
+      // every NPC in the window (nothing selected) or just the
+      // selected NPC's own items (see currentItems above), filtered by
+      // state.itemSearch and sorted by state.itemSort the same way the
+      // NPC row is. Keyed on itemId (falling back to itemName for
+      // stackables/untradeables that share a name but no id, matching
+      // _add_item_totals's own key choice server-side) rather than
+      // array index, plus the selected NPC and search/sort state, so
+      // switching NPCs or search/sort always rebuilds (new icons) while
+      // an unchanged poll reuses the existing DOM (no icon flicker).
+      var lastItemKey = null;
+      function renderItemList(items) {
+        var emptyEl = document.getElementById('lootItemEmpty');
+        var listEl = document.getElementById('lootItemList');
+        if (!items.length) {
+          emptyEl.textContent = 'No items dropped in the last 24 hours yet.';
+          emptyEl.style.display = '';
+          listEl.innerHTML = '';
+          lastItemKey = null;
+          return;
+        }
+
+        var sorted = sortEntries(filterByName(items, state.itemSearch, 'itemName'), state.itemSort, 'itemName', 'value', 'lastDroppedAt');
+        if (!sorted.length) {
+          emptyEl.textContent = 'No items match your search.';
+          emptyEl.style.display = '';
+          listEl.innerHTML = '';
+          lastItemKey = null;
+          return;
+        }
+        emptyEl.style.display = 'none';
+
+        var key = (state.selectedNpc || '') + '\\u0001' + state.itemSearch + '\\u0001' + state.itemSort + '\\u0001' +
+          sorted.map(function (it) { return it.itemId != null ? it.itemId : it.itemName; }).join('|');
+        if (key !== lastItemKey) {
+          lastItemKey = key;
+          listEl.innerHTML = sorted.map(function (it) {
+            return '<div class="loot-item-row" title="' + escapeHtml(it.itemName) + ' \\u00d7 ' + fmtGp(it.quantity) +
+              ' \\u2014 ' + fmtGp(it.value) + ' gp">' +
+              iconImg(it.icon, it.itemName, 'loot-item-row-icon') +
+              '<div class="loot-item-row-name">' + escapeHtml(it.itemName) + '</div>' +
+              '<div class="loot-item-row-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
+              '<div class="loot-item-row-value">' + fmtGpCompact(it.value) + ' gp</div>' +
+            '</div>';
+          }).join('');
+          return;
+        }
+
+        var rows = listEl.children;
+        sorted.forEach(function (it, i) {
+          var row = rows[i];
+          if (!row) return;
+          row.title = it.itemName + ' \\u00d7 ' + fmtGp(it.quantity) + ' \\u2014 ' + fmtGp(it.value) + ' gp';
         });
       }
 
@@ -1817,7 +1976,33 @@ def render_loot_tracker(player: Player) -> str:
         state.selectedNpc = (state.selectedNpc === name) ? null : name;
         renderBarChart(lastData.hourlyBuckets || [], lastData.windowValue || 0, lastData.windowKills || 0, lastData.npcHourlyValues || {}, state.selectedNpc);
         renderNpcRow(lastData.windowNpcs || []);
+        renderItemList(currentItems());
       });
+
+      document.getElementById('lootNpcSearch').addEventListener('input', function (e) {
+        state.npcSearch = e.target.value;
+        if (lastData) renderNpcRow(lastData.windowNpcs || []);
+      });
+      document.getElementById('lootNpcSortTabs').addEventListener('click', function (e) {
+        var btn = e.target.closest('.loot-sort-tab');
+        if (!btn || !lastData) return;
+        state.npcSort = btn.getAttribute('data-sort');
+        updateSortTabs('lootNpcSortTabs', state.npcSort);
+        renderNpcRow(lastData.windowNpcs || []);
+      });
+      document.getElementById('lootItemSearch').addEventListener('input', function (e) {
+        state.itemSearch = e.target.value;
+        renderItemList(currentItems());
+      });
+      document.getElementById('lootItemSortTabs').addEventListener('click', function (e) {
+        var btn = e.target.closest('.loot-sort-tab');
+        if (!btn) return;
+        state.itemSort = btn.getAttribute('data-sort');
+        updateSortTabs('lootItemSortTabs', state.itemSort);
+        renderItemList(currentItems());
+      });
+      updateSortTabs('lootNpcSortTabs', state.npcSort);
+      updateSortTabs('lootItemSortTabs', state.itemSort);
 
       async function loadState() {
         var errorEl = document.getElementById('lootError');
@@ -1845,6 +2030,7 @@ def render_loot_tracker(player: Player) -> str:
           document.getElementById('lootBody').style.display = '';
           renderBarChart(data.hourlyBuckets || [], data.windowValue || 0, data.windowKills || 0, data.npcHourlyValues || {}, state.selectedNpc);
           renderNpcRow(npcs);
+          renderItemList(currentItems());
         } catch (err) {
           errorEl.textContent = 'Something went wrong loading your loot.';
           errorEl.classList.add('show');

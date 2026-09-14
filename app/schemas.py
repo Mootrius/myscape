@@ -625,7 +625,9 @@ class LootState(BaseModel):
     returns, all windowed to the last 24 hours: hourlyBuckets,
     windowValue, windowKills, windowNpcs (per-NPC totals),
     npcHourlyValues (per-NPC hourly arrays, keyed by NPC name),
-    pricesError/mappingError. See build_loot_state in app/loot.py."""
+    windowItems (all-NPCs item totals), npcItems (per-NPC item totals,
+    keyed by NPC name), pricesError/mappingError. See build_loot_state
+    in app/loot.py."""
 
     class Config:
         extra = "allow"
