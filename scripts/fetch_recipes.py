@@ -56,6 +56,38 @@ OUTPUT_PATH = pathlib.Path(__file__).resolve().parent.parent / "app" / "data" / 
 # uses_skill" rule.
 ALSO_ALLOWED_SKILL_SIGNATURE = ["Magic", "Runecraft"]
 
+# The three Doom of Mokhaiotl demonbane weapons are also genuine 1:1
+# item combinations (each is a Tormented synapse combined with one
+# other base item at an anvil/fletching bench), but each carries its
+# own DIFFERENT incidental skill tag instead of one shared signature
+# like ALSO_ALLOWED_SKILL_SIGNATURE above -- Emberlight is tagged
+# Smithing, Scorching bow is tagged Fletching, Purging staff is tagged
+# both Crafting and Smithing (verified individually against the wiki's
+# Recipe bucket when this was added). Allowed through by exact page
+# name instead of by skill tag, since none of those three tags alone is
+# safe to allow in general the way the Runecraft pair is -- each one
+# also covers plenty of real skilling recipes.
+ALSO_ALLOWED_PAGE_NAMES = {"Emberlight", "Scorching bow", "Purging staff"}
+
+# Emberlight's real materials (per the wiki) are a Tormented synapse
+# PLUS an Arclight -- but Arclight is itself untradeable with no recipe
+# of its own, and it's a prerequisite the player necessarily already
+# has the moment they're capable of making Emberlight at all (it's
+# consumed in the exchange, not bought), so including it as a tracked
+# material would only ever add an extra "is this owned?" check that
+# can make the whole combo look incomplete for a reason that has
+# nothing to do with money -- see the Neitiznot faceguard precedent,
+# where an unowned untradeable component (Helm of Neitiznot) already
+# does exactly that, which is correct there because the helm genuinely
+# is a separate acquisition step. Requested explicitly: price
+# Emberlight as just its Tormented synapse cost. Scorching bow and
+# Purging staff don't have this wrinkle -- Magic longbow (u), Iron bar,
+# and Battlestaff are all separately tradeable, so they're priced in
+# for real like any other material.
+MANUAL_MATERIAL_OVERRIDES = {
+    "emberlight": [{"name": "Tormented synapse", "quantity": 1}],
+}
+
 
 def fetch_page(offset: int) -> list:
     query = (
@@ -94,7 +126,8 @@ def main():
     index = {}
     for row in all_rows:
         uses_skill = row.get("uses_skill") or []
-        if uses_skill and uses_skill != ALSO_ALLOWED_SKILL_SIGNATURE:
+        page_name = (row.get("page_name") or "").strip()
+        if uses_skill and uses_skill != ALSO_ALLOWED_SKILL_SIGNATURE and page_name not in ALSO_ALLOWED_PAGE_NAMES:
             skilling += 1
             continue  # skilling recipe, not a pure item combination
         combos += 1
@@ -143,6 +176,11 @@ def main():
             continue
 
         key = out_name.lower()
+        # A curated correction beats whatever the wiki's raw materials
+        # list says for the handful of outputs in
+        # MANUAL_MATERIAL_OVERRIDES above (currently just Emberlight) --
+        # see that constant's comment for why.
+        parsed_materials = MANUAL_MATERIAL_OVERRIDES.get(key, parsed_materials)
         # First recipe seen for a given output name wins -- a handful of
         # items are documented with more than one way to obtain them
         # (e.g. via a quest reward as well as combining parts); the
