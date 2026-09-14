@@ -1801,32 +1801,34 @@ def render_loot_tracker(player: Player) -> str:
 
         var selectedValues = selectedNpc ? (npcHourlyValues[selectedNpc] || buckets.map(function () { return 0; })) : null;
 
-        // Only ever has something to show once an NPC is selected -- the
-        // outline marks the bucket's *total* so it's visible past
-        // wherever the selected NPC's own fill stops short of it, which
-        // means nothing at all when every NPC's loot is being shown
-        // together (the fill already covers the whole bucket then).
-        // Pinning it to 0% rather than the bucket total whenever nothing
-        // is selected is what makes selecting/deselecting an NPC grow
-        // the outline in and shrink it back out (the height transition
-        // below animates between these), instead of the box sitting at
-        // its full height the entire time with only its border-color
-        // fading in and out -- which is what it looked like before this
-        // depended on selectedNpc at all.
+        // The outline always sits at the bucket's *total* height and
+        // never itself animates or changes with selection -- only the
+        // solid fill below (see fillPct) grows/shrinks against it. With
+        // nothing selected, the fill's height equals the outline's (both
+        // are the bucket total), so the fill simply covers the outline
+        // completely and it's invisible -- nothing to distinguish from a
+        // plain solid bar. Selecting an NPC only changes the FILL's
+        // height (down to that NPC's share), which is what exposes the
+        // outline sitting above it -- so it reads as the bar shrinking
+        // down to reveal an outline that was quietly there the whole
+        // time, and deselecting reads as the bar growing back up to meet
+        // it again, rather than the outline itself doing any growing,
+        // shrinking, or fading of its own.
         function outlinePct(b) {
-          if (!selectedNpc) return 0;
           return maxValue > 0 ? Math.max(0, Math.min(100, (b.value / maxValue) * 100)) : 0;
         }
         // A bordered box still paints its border even at height:0 (the
         // same reason a 0x0 div with colored borders makes a CSS
         // triangle) -- so an hour with zero total loot would render a
-        // visible sliver of the outline's border color the instant an
-        // NPC got selected, despite its height correctly staying at 0%
-        // the whole time. Only turning the border on for an hour that
-        // actually has something to outline avoids that rather than
-        // trying to hide a 0-height box's border with more CSS.
+        // visible sliver of the outline's border color despite its
+        // height correctly staying at 0%. Only turning the border on for
+        // an hour that actually has something to outline avoids that.
+        // Deliberately NOT tied to whether an NPC is selected (unlike
+        // before) -- the whole point now is that the outline's own
+        // visibility never changes on selection, only the fill's height
+        // does.
         function outlineActive(b) {
-          return !!selectedNpc && b.value > 0;
+          return b.value > 0;
         }
         function fillValue(b, i) {
           return selectedNpc ? (selectedValues[i] || 0) : b.value;
