@@ -622,12 +622,14 @@ class LootSyncResponse(BaseModel):
 
 class LootState(BaseModel):
     """Documents (not enforced) the payload GET /api/players/me/loot
-    returns, all windowed to the last 24 hours: hourlyBuckets,
+    returns, scoped to the requested ?range= (or ?range=custom&start=
+    &end=, see read_loot in app/main.py): buckets, granularity
+    ("hourly"/"daily"/"weekly"/"monthly"), rangeStart/rangeEnd,
     windowValue, windowKills, windowNpcs (per-NPC totals),
-    npcHourlyValues (per-NPC hourly arrays, keyed by NPC name),
-    windowItems (all-NPCs item totals), npcItems (per-NPC item totals,
-    keyed by NPC name), pricesError/mappingError. See build_loot_state
-    in app/loot.py."""
+    npcBucketValues (per-NPC per-bucket value arrays, keyed by NPC
+    name), windowItems (all-NPCs item totals), npcItems (per-NPC item
+    totals, keyed by NPC name), pricesError/mappingError. See
+    build_loot_state in app/loot.py."""
 
     class Config:
         extra = "allow"

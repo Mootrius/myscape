@@ -23,16 +23,22 @@ only sync shape this needs, unlike every other synced source.
 
 This is a first pass, not the full old feature set:
 
-- A rolling last-24-hours bar chart (bucketed hourly, same shape as
-  the old tool's own chart), a clickable "By NPC" row (one box per NPC
-  killed in that window) that filters the chart down to that NPC's own
-  slice of each hour -- the rest of each bucket's height still shows as
-  an outline -- and an item panel beside it (all-NPCs by default, just
-  that NPC's own items once one is selected) are here. Everything is
-  scoped to the last 24 hours on purpose for now; an all-time view
-  (totals, a full per-source breakdown, a scrollable history feed) is
-  deliberately not built yet, not because it's hard, just not what the
-  page needs today.
+- A bar chart over a user-selected timerange (a handful of presets --
+  24 hours, 1 week, 1 month, 3/6 months, 1 year -- plus a CUSTOM
+  start/end pair), bucketed at a granularity that auto-scales to the
+  chosen span (hourly for a short range, daily/weekly/monthly for a
+  longer one -- see _bucket_plan below), a clickable "By NPC" row (one
+  box per NPC killed in that range) that filters the chart down to
+  that NPC's own slice of each bucket -- the rest of each bucket's
+  height still shows as an outline -- and an item panel beside it
+  (all-NPCs by default, just that NPC's own items once one is
+  selected) are here. Every part of the page (the chart, the header's
+  own kc/gp totals, the NPC panel, and the item panel) scopes together
+  to whichever range is currently selected, not just the chart in
+  isolation. An all-time view (a full per-source lifetime breakdown, a
+  scrollable history feed) beyond what the longest preset (1 year) or
+  a CUSTOM range already covers is deliberately not built yet, not
+  because it's hard, just not what the page needs today.
 - The old tool's per-boss drop-table checklist ("pick Vorkath from a
   dropdown, see its full wiki drop table filled in as you go, with
   hand-curated backfill for kills from before Loot Logger was
@@ -50,10 +56,10 @@ This is a first pass, not the full old feature set:
   source_type "npc") still count toward the chart's own totals, just
   never toward the "By NPC" row or its per-hour breakdown -- that one's
   NPCs only, by design (see build_loot_state below).
-- Computed fresh from this player's last-24-hours of LootEvent rows on
-  every read (the DB query itself is windowed, not just the totals),
-  same as Purchase Goals computes fresh from every bank/inventory/
-  equipment row -- fine at the scale this app runs at today.
+- Computed fresh from this player's LootEvent rows in the selected
+  range on every read (the DB query itself is windowed, not just the
+  totals), same as Purchase Goals computes fresh from every bank/
+  inventory/equipment row -- fine at the scale this app runs at today.
 """
 import re
 import urllib.parse
@@ -66,13 +72,88 @@ from sqlalchemy.orm import Session
 from app.models import LootEvent, Player
 from app.purchase_goals import COINS_ITEM_ID, ICON_PATH_BASE, get_latest_prices, get_mapping, item_icon_url
 
-# The rolling bar-chart window at the top of the page -- 24 hourly
-# buckets, oldest on the left, ending at "now" on the right. Ported
-# straight from the original single-user tool's build_npc_tracker/
-# build_loot_trackers (osrs_tracker.py), which bucket every kill/casket
-# the same way: not calendar-aligned hours, but 24 sliding one-hour
-# windows counting back from the moment the page is built.
-ROLLING_WINDOW_HOURS = 24
+# The timerange presets the chart's range button offers (see
+# render_loot_tracker in app/pages.py), each a fixed lookback from
+# "now" -- CUSTOM isn't listed here since it carries its own explicit
+# start/end instead of a lookback. "24h" is the range this page
+# originally hardcoded (see this module's old ROLLING_WINDOW_HOURS),
+# kept as the default so an unrecognized/missing ?range= behaves the
+# same as before this feature existed.
+DEFAULT_RANGE_KEY = "24h"
+
+RANGE_PRESETS: Dict[str, timedelta] = {
+    "24h": timedelta(hours=24),
+    "1w": timedelta(days=7),
+    "1m": timedelta(days=30),
+    "3m": timedelta(days=90),
+    "6m": timedelta(days=182),
+    "1y": timedelta(days=365),
+}
+
+# Above this many buckets, a bar chart just becomes unreadable
+# (indistinguishable hairline bars) -- a hard ceiling regardless of
+# what _bucket_plan's span-based math would otherwise produce, mostly
+# a guard against a pathological CUSTOM range (a multi-decade span
+# would still ask for "monthly" granularity, e.g. hundreds of bars).
+_MAX_BUCKETS = 400
+
+
+def resolve_range(range_key: Optional[str], start: Optional[datetime], end: Optional[datetime]) -> Tuple[datetime, datetime]:
+    """Turns GET /api/players/me/loot's ?range=/&start=/&end= query
+    params into a concrete (start, end) UTC pair. range_key="custom"
+    uses the given start/end verbatim (already parsed to tz-aware
+    datetimes by the caller -- see app/main.py's read_loot), swapping
+    them if end came in before start rather than erroring, since nothing
+    about a picked date range needs to be told "the wrong way around" --
+    it's an easy input to get backwards, not a request to reject.
+    Anything else (a recognized preset, or a missing/unrecognized key,
+    which falls back to DEFAULT_RANGE_KEY the same way an absent
+    ?range= always has since this page only ever had one window) is a
+    fixed lookback from "now"."""
+    if range_key == "custom" and start is not None and end is not None:
+        if end < start:
+            start, end = end, start
+        return start, end
+    delta = RANGE_PRESETS.get(range_key or DEFAULT_RANGE_KEY, RANGE_PRESETS[DEFAULT_RANGE_KEY])
+    now = datetime.now(timezone.utc)
+    return now - delta, now
+
+
+def _bucket_plan(start: datetime, end: datetime) -> Tuple[int, timedelta, str]:
+    """Chooses how many equal-width buckets to slice [start, end] into
+    for the bar chart, and what granularity label the frontend should
+    use to format each bucket's x-axis tick (see fmtBucketLabel in
+    render_loot_tracker's script) -- purely from the range's own span,
+    so a short range (like the original hardcoded 24-hour window) gets
+    hourly buckets and a long one gets coarser ones, and the chart
+    never tries to cram a year's worth of hourly bars into view.
+    Thresholds: <=2 days -> hourly, <=45 days -> daily, <=220 days ->
+    weekly, longer -> monthly (roughly 24h/1w/1m/3m-6m/1y, this page's
+    own presets, each landing solidly inside one band rather than
+    right on a boundary).
+
+    Bucket width is the span divided evenly by the bucket count -- NOT
+    calendar-aligned hours/days/weeks/months -- so this holds for a
+    CUSTOM range of any length, not just the presets: a 40-day custom
+    range still gets ~40 sensible daily-ish buckets rather than
+    snapping to calendar day boundaries."""
+    span = end - start
+    span_days = span.total_seconds() / 86400
+    if span_days <= 2:
+        granularity = "hourly"
+        raw = span.total_seconds() / 3600
+    elif span_days <= 45:
+        granularity = "daily"
+        raw = span_days
+    elif span_days <= 220:
+        granularity = "weekly"
+        raw = span_days / 7
+    else:
+        granularity = "monthly"
+        raw = span_days / 30
+    num_buckets = max(1, min(_MAX_BUCKETS, round(raw) or 1))
+    bucket_width = span / num_buckets
+    return num_buckets, bucket_width, granularity
 
 
 def _noted_id_fallback(item_id: int, mapping: dict) -> Optional[int]:
@@ -214,76 +295,79 @@ def _finalize_items(bucket: Dict[object, dict]) -> List[dict]:
     return out
 
 
-def build_loot_state(db: Session, player: Player) -> dict:
+def build_loot_state(db: Session, player: Player, start: datetime, end: datetime) -> dict:
     """Everything the Loot Tracker page needs in one payload, all
-    windowed to the last ROLLING_WINDOW_HOURS: the rolling bar chart's
-    24 hourly buckets, a per-NPC breakdown of that same window (one
-    entry per NPC actually killed in it, that NPC's own 24-slot hourly
-    value array, and that NPC's own item breakdown), and an all-NPCs
-    item breakdown for when nothing is selected -- see the module
-    docstring for what this covers today and what's still to come."""
+    scoped to [start, end) (see resolve_range, which turns the page's
+    range button/CUSTOM picker into this pair): the bar chart's own
+    buckets (count and granularity chosen by _bucket_plan from the
+    range's span), a per-NPC breakdown of that same range (one entry
+    per NPC actually killed in it, that NPC's own per-bucket value
+    array, and that NPC's own item breakdown), and an all-NPCs item
+    breakdown for when nothing is selected -- see the module docstring
+    for what this covers today and what's still to come."""
     mapping, mapping_error = get_mapping()
     prices, prices_error = get_latest_prices()
 
-    now = datetime.now(timezone.utc)
-    window = timedelta(hours=ROLLING_WINDOW_HOURS)
-    window_start = now - window
+    num_buckets, bucket_width, granularity = _bucket_plan(start, end)
+    bucket_seconds = bucket_width.total_seconds()
+    span_seconds = (end - start).total_seconds()
 
     # Windowed at the query itself, not just in the totals below -- see
     # the module docstring. Still ordered desc so a tie in which bucket
-    # two same-hour events land in resolves the same way it always has,
-    # and so _add_item_totals's "first seen this item key = most recent
-    # drop" trick above holds.
+    # two same-instant events land in resolves the same way it always
+    # has, and so _add_item_totals's "first seen this item key = most
+    # recent drop" trick above holds.
     events = (
         db.query(LootEvent)
-        .filter(LootEvent.player_id == player.id, LootEvent.occurred_at >= window_start)
+        .filter(LootEvent.player_id == player.id, LootEvent.occurred_at >= start, LootEvent.occurred_at <= end)
         .order_by(desc(LootEvent.occurred_at))
         .all()
     )
 
-    # 24 fixed one-hour windows computed once up front (oldest first,
-    # ending "now"), the same way the old tool built its own chart --
-    # see ROLLING_WINDOW_HOURS above.
-    hourly_buckets = []
-    for hours_ago in range(ROLLING_WINDOW_HOURS - 1, -1, -1):
-        bucket_end = now - timedelta(hours=hours_ago)
-        hourly_buckets.append({
-            "start": (bucket_end - timedelta(hours=1)).isoformat(),
-            "end": bucket_end.isoformat(),
+    # num_buckets equal-width slices covering [start, end) computed
+    # once up front (oldest first) -- see _bucket_plan for how
+    # num_buckets/bucket_width were chosen.
+    buckets = []
+    for i in range(num_buckets):
+        buckets.append({
+            "start": (start + bucket_width * i).isoformat(),
+            "end": (start + bucket_width * (i + 1)).isoformat(),
             "value": 0,
             "killCount": 0,
         })
 
-    # Per-NPC totals/hourly/item breakdown for the "By NPC" row, its
+    # Per-NPC totals/per-bucket/item breakdown for the "By NPC" row, its
     # click-to-filter overlay on the chart, and the item panel beside it
-    # -- npc_hourly[name][i] is always <= hourly_buckets[i]["value"],
+    # -- npc_bucket_values[name][i] is always <= buckets[i]["value"],
     # since it's that same bucket's NPC-only subset, and the same is
     # true of each NPC's own item quantities against window_items below.
     # Deliberately npc-only (source_type == "npc") -- see the module
-    # docstring for why caskets/pickpockets still count toward
-    # hourly_buckets but never show up in any of this.
+    # docstring for why caskets/pickpockets still count toward buckets
+    # but never show up in any of this.
     npc_totals: Dict[str, dict] = {}
-    npc_hourly: Dict[str, List[int]] = {}
+    npc_bucket_values: Dict[str, List[int]] = {}
     npc_items: Dict[str, Dict[object, dict]] = {}
     window_item_totals: Dict[object, dict] = {}
 
     for event in events:
         if event.occurred_at is None:
             continue
-        # The DB query above already excludes anything older than the
-        # window, but not a client clock skewed into the future --
-        # this still needs to guard idx below from going negative/past
-        # the last bucket.
-        age = now - event.occurred_at
-        if not (timedelta(0) <= age < window):
+        # The DB query above already excludes anything outside the
+        # range, but not a client clock skewed past `end` -- this still
+        # needs to guard idx below from going negative/past the last
+        # bucket.
+        offset = (event.occurred_at - start).total_seconds()
+        if not (0 <= offset <= span_seconds):
             continue
-        idx = (ROLLING_WINDOW_HOURS - 1) - int(age.total_seconds() // 3600)
-        if not (0 <= idx < ROLLING_WINDOW_HOURS):
+        idx = int(offset // bucket_seconds) if bucket_seconds > 0 else 0
+        if idx >= num_buckets:
+            idx = num_buckets - 1
+        if idx < 0:
             continue
 
         items, event_value = _resolve_loot_items(event.items or [], mapping, prices)
-        hourly_buckets[idx]["value"] += event_value
-        hourly_buckets[idx]["killCount"] += 1
+        buckets[idx]["value"] += event_value
+        buckets[idx]["killCount"] += 1
 
         if event.source_type == "npc":
             name = event.source_name
@@ -298,11 +382,11 @@ def build_loot_state(db: Session, player: Player) -> dict:
                     "lastKillAt": event.occurred_at,
                 }
                 npc_totals[name] = totals
-                npc_hourly[name] = [0] * ROLLING_WINDOW_HOURS
+                npc_bucket_values[name] = [0] * num_buckets
                 npc_items[name] = {}
             totals["killCount"] += 1
             totals["value"] += event_value
-            npc_hourly[name][idx] += event_value
+            npc_bucket_values[name][idx] += event_value
 
             _add_item_totals(npc_items[name], items, event.occurred_at)
             _add_item_totals(window_item_totals, items, event.occurred_at)
@@ -316,11 +400,14 @@ def build_loot_state(db: Session, player: Player) -> dict:
         n["lastKillAt"] = n["lastKillAt"].isoformat()
 
     return {
-        "hourlyBuckets": hourly_buckets,
-        "windowValue": sum(b["value"] for b in hourly_buckets),
-        "windowKills": sum(b["killCount"] for b in hourly_buckets),
+        "buckets": buckets,
+        "granularity": granularity,
+        "rangeStart": start.isoformat(),
+        "rangeEnd": end.isoformat(),
+        "windowValue": sum(b["value"] for b in buckets),
+        "windowKills": sum(b["killCount"] for b in buckets),
         "windowNpcs": window_npcs,
-        "npcHourlyValues": npc_hourly,
+        "npcBucketValues": npc_bucket_values,
         "windowItems": _finalize_items(window_item_totals),
         "npcItems": {name: _finalize_items(items) for name, items in npc_items.items()},
         "pricesError": prices_error,

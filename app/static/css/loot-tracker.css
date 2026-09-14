@@ -2,12 +2,12 @@
    the same --panel-2/--border/--gold tokens myscape.css and
    purchase-goals.css already define, rather than inventing a second
    palette for one more page. Everything on this page (the chart, the
-   "By NPC" row) is scoped to a rolling last-24-hours window -- see
-   app/loot.py's module docstring for why there's no all-time view
-   here. */
+   "By NPC" row, the item panel) scopes together to whichever range is
+   currently selected via the range button below -- see app/loot.py's
+   module docstring. */
 
-/* ---------- rolling 24h bar chart, at the top of the page -- ported
-   in spirit from the original single-user tool's Loot Tracker chart
+/* ---------- bar chart, at the top of the page -- ported in spirit
+   from the original single-user tool's Loot Tracker chart
    (osrs_tracker_ui.html's .vorkath-chart/.bar-* classes), restyled
    onto this site's own panel/border/gold tokens instead of that
    tool's own palette. ---------- */
@@ -15,19 +15,80 @@
   background: var(--panel-2); border: 1px solid var(--border);
   padding: 18px 22px 14px; margin-bottom: 18px;
 }
-.loot-chart-header { position: relative; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.loot-chart-header { position: relative; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+/* Right side: kc + gp grouped together (see render_loot_tracker's
+   task -- these two used to sit on opposite ends of the header, with
+   a hardcoded "LAST 24H" filling the left slot the range button now
+   occupies instead). */
+.loot-chart-stats { display: flex; align-items: baseline; gap: 8px; }
 .loot-chart-total { font-size: 13px; color: var(--gold); font-variant-numeric: tabular-nums; }
-.loot-chart-kills { font-size: 12px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
+.loot-chart-kills { font-size: 12px; color: var(--text-faint); letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
 /* The selected NPC's name (or "ALL NPCs" when nothing's selected --
    see renderBarChart in app/pages.py) -- absolutely centered on the
-   header rather than a third flex sibling, since the kills/total text
-   either side of it aren't the same width and true centering needs to
-   ignore that instead of splitting the remaining space evenly. */
+   header rather than a third flex sibling, since the range control and
+   the stats either side of it aren't the same width and true centering
+   needs to ignore that instead of splitting the remaining space
+   evenly. Shown in its own literal case (no uppercase transform) so
+   "ALL NPCs" reads the way it's actually written, same as any selected
+   NPC's own name (e.g. "Zulrah", not "ZULRAH"). */
 .loot-chart-title {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  font-size: 15px; color: var(--text-dim); letter-spacing: 0.03em; text-transform: uppercase;
-  white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis;
+  font-size: 15px; color: var(--text-dim); letter-spacing: 0.03em;
+  white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis;
 }
+
+/* ---------- range button (presets + CUSTOM date pair) -- replaces the
+   old hardcoded "LAST 24H" text in the chart header's left slot. A
+   plain dropdown menu, same open/close-on-outside-click pattern as
+   Purchase Goals' own .tracker-menu-wrap/#setupMenu. ---------- */
+.loot-chart-range { position: relative; z-index: 2; }
+.loot-range-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px;
+  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; white-space: nowrap;
+}
+.loot-range-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.loot-range-caret { font-size: 9px; color: var(--text-faint); }
+.loot-range-menu {
+  position: absolute; top: calc(100% + 4px); left: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 132px; padding: 6px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.loot-range-option {
+  padding: 6px 8px;
+  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; text-align: left;
+  color: var(--text-dim);
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius);
+  cursor: pointer;
+}
+.loot-range-option:hover { color: var(--text); background: var(--panel); }
+.loot-range-option.active { color: var(--gold); border-color: var(--gold-dim); }
+.loot-range-custom {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--border);
+}
+.loot-range-custom-field {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
+}
+.loot-range-custom-field input[type="date"] {
+  padding: 5px 6px; font-size: 12px; color: var(--text);
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  color-scheme: dark;
+}
+.loot-range-apply {
+  padding: 6px 8px;
+  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--gold);
+  background: var(--panel); border: 1px solid var(--gold-dim); border-radius: var(--radius);
+  cursor: pointer;
+}
+.loot-range-apply:hover { border-color: var(--gold); }
 
 /* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
    themselves (not on .loot-bar-plot -- padding there would be a no-op

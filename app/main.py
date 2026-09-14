@@ -25,7 +25,7 @@ from app.auth import (
 )
 from app.database import get_db
 from app.limiter import limiter
-from app.loot import build_loot_state, sync_loot_events
+from app.loot import build_loot_state, resolve_range, sync_loot_events
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem, RunePouchItem
 from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_purchase_goals, render_signup
 from app.purchase_goals import (
@@ -461,14 +461,42 @@ def sync_loot(
 
 
 @app.get("/api/players/me/loot")
-def read_loot(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
-    """The combined state the Loot Tracker page polls -- the rolling
-    24-hour bar chart's buckets and a per-NPC breakdown of that same
-    window, computed fresh from this player's synced LootEvent rows.
+def read_loot(
+    range: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """The combined state the Loot Tracker page polls -- the bar
+    chart's buckets and a per-NPC breakdown of the same range,
+    computed fresh from this player's synced LootEvent rows. `range`
+    is one of app/loot.py's RANGE_PRESETS keys ("24h", "1w", "1m",
+    "3m", "6m", "1y") or "custom", in which case `start`/`end` are
+    plain "YYYY-MM-DD" dates (as the page's native date inputs send
+    them) naming the first and last calendar day to include, both
+    inclusive -- widened here to that day's full 00:00:00-23:59:59.999999
+    UTC span before being handed to resolve_range, since a bare date
+    on its own is a day, not an instant. An unrecognized/missing
+    `range`, or a `custom` missing either date, falls back to
+    resolve_range's own default (the page's original 24-hour window).
     Not pinned to a Pydantic response_model for the same reason GET
     /api/gear-setups above isn't -- see LootState's docstring in
     app/schemas.py. See build_loot_state in app/loot.py."""
-    return build_loot_state(db, player)
+    start_dt = None
+    end_dt = None
+    if range == "custom":
+        try:
+            if start:
+                start_dt = datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            if end:
+                end_dt = datetime.strptime(end, "%Y-%m-%d").replace(
+                    hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc
+                )
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start/end must be YYYY-MM-DD dates.")
+    range_start, range_end = resolve_range(range, start_dt, end_dt)
+    return build_loot_state(db, player, range_start, range_end)
 
 
 @app.get("/api/items/search", response_model=ItemSearchResponse)

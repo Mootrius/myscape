@@ -1595,19 +1595,22 @@ def render_loot_tracker(player: Player) -> str:
     what's deliberately not yet). Same shape as render_purchase_goals
     above: a thin server-rendered shell, everything below it drawn
     client-side from one polled JSON payload (GET /api/players/me/loot,
-    see app/loot.py's build_loot_state).
+    see app/loot.py's build_loot_state), re-polled from scratch
+    whenever the range button picks a new range.
 
-    Everything on this page is scoped to the rolling last-24-hours
-    window: the bar chart; the NPC panel below-left that lets a player
-    click one NPC to see just that NPC's share of each hour's loot
-    filled in at the bottom of its bar (the bar's own full all-sources
-    height still shows as an outline above it), searchable/sortable via
-    its own search box and sort tabs; and the item panel below-right,
-    which mirrors that same search/sort UI over either every item
-    dropped by every NPC in the window (nothing selected) or just the
-    selected NPC's own items -- see renderBarChart/renderNpcRow/
-    renderItemList below, and build_loot_state in app/loot.py for the
-    matching hourlyBuckets/npcHourlyValues/windowItems/npcItems shape."""
+    Everything on this page scopes together to whichever range is
+    currently selected (see the range button up top -- presets plus a
+    CUSTOM start/end date pair): the bar chart; the NPC panel
+    below-left that lets a player click one NPC to see just that NPC's
+    share of each bucket's loot filled in at the bottom of its bar (the
+    bar's own full all-sources height still shows as an outline above
+    it), searchable/sortable via its own search box and sort tabs; and
+    the item panel below-right, which mirrors that same search/sort UI
+    over either every item dropped by every NPC in the range (nothing
+    selected) or just the selected NPC's own items -- see
+    renderBarChart/renderNpcRow/renderItemList below, and
+    build_loot_state in app/loot.py for the matching buckets/
+    npcBucketValues/windowItems/npcItems shape."""
     extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
 
     def _sort_tabs(tabs_id: str, count_label: str) -> str:
@@ -1642,9 +1645,34 @@ def render_loot_tracker(player: Player) -> str:
     <div id="lootBody" style="display:none;">
       <div class="loot-chart-card">
         <div class="loot-chart-header">
-          <div class="loot-chart-kills" id="lootChartKills">LAST 24H &middot; 0 KILLS</div>
+          <div class="loot-chart-range" id="lootChartRange">
+            <button type="button" class="loot-range-btn" id="lootRangeBtn">
+              <span id="lootRangeBtnLabel">24 HOURS</span> <span class="loot-range-caret">&darr;</span>
+            </button>
+            <div class="loot-range-menu" id="lootRangeMenu" style="display:none;">
+              <button type="button" class="loot-range-option" data-range="1y">1 YEAR</button>
+              <button type="button" class="loot-range-option" data-range="6m">6 MONTHS</button>
+              <button type="button" class="loot-range-option" data-range="3m">3 MONTHS</button>
+              <button type="button" class="loot-range-option" data-range="1m">1 MONTH</button>
+              <button type="button" class="loot-range-option" data-range="1w">1 WEEK</button>
+              <button type="button" class="loot-range-option active" data-range="24h">24 HOURS</button>
+              <button type="button" class="loot-range-option" data-range="custom">CUSTOM</button>
+              <div class="loot-range-custom" id="lootRangeCustom" style="display:none;">
+                <label class="loot-range-custom-field">Start
+                  <input type="date" id="lootRangeStart" />
+                </label>
+                <label class="loot-range-custom-field">End
+                  <input type="date" id="lootRangeEnd" />
+                </label>
+                <button type="button" class="loot-range-apply" id="lootRangeApply">Apply</button>
+              </div>
+            </div>
+          </div>
           <div class="loot-chart-title" id="lootChartTitle">ALL NPCs</div>
-          <div class="loot-chart-total" id="lootChartTotal">0 gp</div>
+          <div class="loot-chart-stats">
+            <div class="loot-chart-kills" id="lootChartKills">0 kc</div>
+            <div class="loot-chart-total" id="lootChartTotal">0 gp</div>
+          </div>
         </div>
         <div class="loot-bar-plot">
           <div class="loot-bar-gridlines" id="lootBarGridlines"></div>
@@ -1659,7 +1687,7 @@ def render_loot_tracker(player: Player) -> str:
             {_sort_tabs("lootNpcSortTabs", "KC")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
-            No NPC kills in the last 24 hours yet.
+            No NPC kills in this range yet.
           </p>
           <div class="loot-npc-row" id="lootNpcRow"></div>
         </div>
@@ -1669,7 +1697,7 @@ def render_loot_tracker(player: Player) -> str:
             {_sort_tabs("lootItemSortTabs", "Qty")}
           </div>
           <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
-            No items dropped in the last 24 hours yet.
+            No items dropped in this range yet.
           </p>
           <div class="loot-item-list" id="lootItemList"></div>
         </div>
@@ -1678,8 +1706,16 @@ def render_loot_tracker(player: Player) -> str:
     """
     script = """
     (function () {
-      var state = { selectedNpc: null, npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '' };
+      var state = {
+        selectedNpc: null, npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '',
+        rangeKey: '24h', customStart: null, customEnd: null,
+      };
       var lastData = null;
+
+      var RANGE_LABELS = {
+        '24h': '24 HOURS', '1w': '1 WEEK', '1m': '1 MONTH',
+        '3m': '3 MONTHS', '6m': '6 MONTHS', '1y': '1 YEAR', 'custom': 'CUSTOM',
+      };
 
       // Shared by both panels' search boxes -- a plain case-insensitive
       // substring match against whichever name field the caller points
@@ -1777,6 +1813,46 @@ def render_loot_tracker(player: Player) -> str:
         return new Date(isoString).toLocaleTimeString('en-US', { hour: 'numeric' });
       }
 
+      // A bucket's x-axis tick, formatted per the range's own
+      // granularity (see _bucket_plan in app/loot.py, which picks
+      // granularity from the selected range's span) -- hourly still
+      // shows a clock time (unchanged from the original 24-hour-only
+      // chart), daily/weekly a short date, monthly just the month.
+      function fmtBucketLabel(granularity, isoString) {
+        if (!isoString) return '';
+        var d = new Date(isoString);
+        if (granularity === 'hourly') return d.toLocaleTimeString('en-US', { hour: 'numeric' });
+        if (granularity === 'monthly') return d.toLocaleDateString('en-US', { month: 'short' });
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+
+      // Whether an ISO timestamp is close enough to this moment to
+      // treat as "now" -- used to decide whether the chart's last bar
+      // gets labeled "NOW" (true for every preset, which always end at
+      // the moment the page asked for them) or its own real date/time
+      // (a CUSTOM range whose end isn't today would otherwise
+      // mislabel its last bucket as happening right now).
+      function isNowish(isoString) {
+        if (!isoString) return false;
+        return Math.abs(new Date(isoString).getTime() - Date.now()) < 5 * 60 * 1000;
+      }
+
+      // 'YYYY-MM-DD' (a <input type="date"> value) -> a short display
+      // date, for the range button's own label once a CUSTOM range is
+      // applied.
+      function fmtDateShort(isoDate) {
+        if (!isoDate) return '';
+        var d = new Date(isoDate + 'T00:00:00');
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+
+      function rangeButtonLabel() {
+        if (state.rangeKey === 'custom' && state.customStart && state.customEnd) {
+          return fmtDateShort(state.customStart) + ' \\u2013 ' + fmtDateShort(state.customEnd);
+        }
+        return RANGE_LABELS[state.rangeKey] || RANGE_LABELS['24h'];
+      }
+
       // The OSRS Wiki's article title for an item is (almost always)
       // just its in-game name -- the same name this page already gets
       // back as itemName -- with spaces URL-encoded, same as this
@@ -1808,10 +1884,13 @@ def render_loot_tracker(player: Player) -> str:
         return div.innerHTML;
       }
 
-      // Rolling last-24-hours bar chart, bucketed hourly (oldest on the
-      // left, ending at "now" on the right) -- ported from the original
-      // single-user tool's Loot Tracker chart (renderVorkathBarChart),
-      // summed across every source by default. When an NPC is selected
+      // Bar chart over the currently-selected range, bucketed at
+      // whatever granularity that range's span calls for (see
+      // _bucket_plan in app/loot.py -- hourly for a short range like
+      // the original 24-hour-only chart, coarser for a longer one),
+      // oldest on the left -- ported from the original single-user
+      // tool's Loot Tracker chart (renderVorkathBarChart), summed
+      // across every source by default. When an NPC is selected
       // (state.selectedNpc, set by renderNpcRow's click handler below)
       // each bar instead shows two layers: a full-height outline at the
       // bucket's own total value (so the scale/shape of the whole chart
@@ -1819,17 +1898,19 @@ def render_loot_tracker(player: Player) -> str:
       // that NPC's share of the same bucket. maxValue is always derived
       // from the total buckets, never the selected NPC's own values, so
       // the axis stays put when switching NPCs. Reuses the existing
-      // bar-col elements when the bucket count hasn't changed (it's
-      // always the same 24 hourly slots on every 10s poll) so the CSS
+      // bar-col elements when the bucket count hasn't changed (the same
+      // range keeps the same bucket count on every 10s poll) so the CSS
       // height transition actually animates between polls instead of
-      // snapping.
-      function renderBarChart(buckets, windowValue, windowKills, npcHourlyValues, selectedNpc, windowNpcs) {
+      // snapping -- a range change does change the bucket count, which
+      // is exactly when a full rebuild (and a fresh grow-in) is right.
+      function renderBarChart(buckets, windowValue, windowKills, npcBucketValues, selectedNpc, windowNpcs, granularity, rangeEnd) {
         buckets = buckets || [];
-        npcHourlyValues = npcHourlyValues || {};
-        // With an NPC selected, the header's gp/kill numbers switch to
+        npcBucketValues = npcBucketValues || {};
+        granularity = granularity || 'hourly';
+        // With an NPC selected, the header's gp/kc numbers switch to
         // just that NPC's own totals (already sitting right on its
         // windowNpcs entry -- value/killCount, the same numbers its own
-        // NPC box shows) instead of the whole window's -- otherwise
+        // NPC box shows) instead of the whole range's -- otherwise
         // selecting Guard would still show every other NPC's loot
         // summed in up top while the chart itself only fills in Guard's
         // share, which reads as a mismatch.
@@ -1839,8 +1920,7 @@ def render_loot_tracker(player: Player) -> str:
         var headerValue = selectedEntry ? selectedEntry.value : windowValue;
         var headerKills = selectedEntry ? selectedEntry.killCount : windowKills;
         document.getElementById('lootChartTotal').textContent = fmtGp(headerValue) + ' gp';
-        document.getElementById('lootChartKills').textContent =
-          'last 24h \\u00b7 ' + (headerKills || 0).toLocaleString('en-US') + ' kill' + (headerKills === 1 ? '' : 's');
+        document.getElementById('lootChartKills').textContent = (headerKills || 0).toLocaleString('en-US') + ' kc';
         document.getElementById('lootChartTitle').textContent = selectedNpc || 'ALL NPCs';
 
         var maxValue = niceMax(Math.max.apply(null, [0].concat(buckets.map(function (b) { return b.value; }))));
@@ -1855,7 +1935,7 @@ def render_loot_tracker(player: Player) -> str:
         }
         gridlinesEl.innerHTML = stepsHtml;
 
-        var selectedValues = selectedNpc ? (npcHourlyValues[selectedNpc] || buckets.map(function () { return 0; })) : null;
+        var selectedValues = selectedNpc ? (npcBucketValues[selectedNpc] || buckets.map(function () { return 0; })) : null;
 
         // The outline always sits at the bucket's *total* height and
         // never itself animates or changes with selection -- only the
@@ -1923,17 +2003,26 @@ def render_loot_tracker(player: Player) -> str:
           });
         }
 
-        // Labeling every hour would be unreadable at 24 bars -- every
-        // 4th hour, plus the chart always ends at "now".
+        // Labeling every single bucket would be unreadable once there
+        // are more than a handful -- aim for roughly one label every
+        // ~1/7th of the chart's width (24 hourly buckets: every 4th,
+        // same spacing the original 24-hour-only chart always used;
+        // scales the same way for whatever bucket count the selected
+        // range's granularity produced). The last bucket gets "NOW"
+        // only when the range's own end is actually close to now (see
+        // isNowish) -- true for every preset, but not necessarily for
+        // a CUSTOM range picked in the past.
+        var labelStep = Math.max(1, Math.ceil(buckets.length / 7));
+        var endIsNow = isNowish(rangeEnd);
         document.getElementById('lootBarXLabels').innerHTML = buckets.map(function (b, i) {
-          if (i === buckets.length - 1) return '<div class="loot-bar-x-label now">NOW</div>';
-          var label = (i % 4 === 0) ? fmtClock(b.start) : '';
+          if (i === buckets.length - 1 && endIsNow) return '<div class="loot-bar-x-label now">NOW</div>';
+          var label = (i % labelStep === 0) ? fmtBucketLabel(granularity, b.start) : '';
           return '<div class="loot-bar-x-label">' + label + '</div>';
         }).join('');
       }
 
       // The clickable "By NPC" row -- one box per NPC killed in the
-      // last 24 hours, each toggling state.selectedNpc (clicking the
+      // selected range, each toggling state.selectedNpc (clicking the
       // already-active one clears it back to "all sources") and
       // re-rendering the chart/row from the last-polled data, with no
       // extra fetch needed.
@@ -1957,7 +2046,7 @@ def render_loot_tracker(player: Player) -> str:
         var emptyEl = document.getElementById('lootNpcEmpty');
         var rowEl = document.getElementById('lootNpcRow');
         if (!npcs.length) {
-          emptyEl.textContent = 'No NPC kills in the last 24 hours yet.';
+          emptyEl.textContent = 'No NPC kills in this range yet.';
           emptyEl.style.display = '';
           rowEl.innerHTML = '';
           lastNpcKey = null;
@@ -2026,7 +2115,7 @@ def render_loot_tracker(player: Player) -> str:
         var emptyEl = document.getElementById('lootItemEmpty');
         var listEl = document.getElementById('lootItemList');
         if (!items.length) {
-          emptyEl.textContent = 'No items dropped in the last 24 hours yet.';
+          emptyEl.textContent = 'No items dropped in this range yet.';
           emptyEl.style.display = '';
           listEl.innerHTML = '';
           lastItemKey = null;
@@ -2077,12 +2166,20 @@ def render_loot_tracker(player: Player) -> str:
         });
       }
 
+      function rerenderChart(data) {
+        renderBarChart(
+          data.buckets || [], data.windowValue || 0, data.windowKills || 0,
+          data.npcBucketValues || {}, state.selectedNpc, data.windowNpcs || [],
+          data.granularity, data.rangeEnd
+        );
+      }
+
       document.getElementById('lootNpcRow').addEventListener('click', function (e) {
         var btn = e.target.closest('.loot-npc-box');
         if (!btn || !lastData) return;
         var name = btn.getAttribute('data-npc');
         state.selectedNpc = (state.selectedNpc === name) ? null : name;
-        renderBarChart(lastData.hourlyBuckets || [], lastData.windowValue || 0, lastData.windowKills || 0, lastData.npcHourlyValues || {}, state.selectedNpc, lastData.windowNpcs || []);
+        rerenderChart(lastData);
         renderNpcRow(lastData.windowNpcs || []);
         renderItemList(currentItems());
       });
@@ -2112,10 +2209,88 @@ def render_loot_tracker(player: Player) -> str:
       updateSortTabs('lootNpcSortTabs', state.npcSort);
       updateSortTabs('lootItemSortTabs', state.itemSort);
 
+      // ---- Range button (presets + CUSTOM date pair) -----------------------
+      //
+      // Picking a preset applies (and reloads) immediately; picking
+      // CUSTOM instead just reveals the two date inputs + Apply button
+      // inline in the same menu -- nothing changes until Apply is
+      // clicked with both dates filled in, same as how a browser's own
+      // date pickers don't commit until you're done with them.
+
+      function updateRangeMenuActive() {
+        var opts = document.querySelectorAll('#lootRangeMenu .loot-range-option');
+        for (var i = 0; i < opts.length; i++) {
+          opts[i].classList.toggle('active', opts[i].getAttribute('data-range') === state.rangeKey);
+        }
+        document.getElementById('lootRangeBtnLabel').textContent = rangeButtonLabel();
+      }
+
+      function closeRangeMenu() {
+        document.getElementById('lootRangeMenu').style.display = 'none';
+        document.getElementById('lootRangeCustom').style.display = 'none';
+      }
+
+      document.getElementById('lootRangeBtn').addEventListener('click', function () {
+        var menu = document.getElementById('lootRangeMenu');
+        var opening = menu.style.display === 'none';
+        menu.style.display = opening ? 'flex' : 'none';
+        if (!opening) document.getElementById('lootRangeCustom').style.display = 'none';
+      });
+      document.addEventListener('click', function (e) {
+        var wrap = document.getElementById('lootChartRange');
+        if (wrap && !wrap.contains(e.target)) closeRangeMenu();
+      });
+      document.getElementById('lootRangeMenu').addEventListener('click', function (e) {
+        var opt = e.target.closest('.loot-range-option');
+        if (!opt) return;
+        var key = opt.getAttribute('data-range');
+        if (key === 'custom') {
+          var startInput = document.getElementById('lootRangeStart');
+          var endInput = document.getElementById('lootRangeEnd');
+          if (!startInput.value || !endInput.value) {
+            var today = new Date();
+            var weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            var toIsoDate = function (d) { return d.toISOString().slice(0, 10); };
+            if (!startInput.value) startInput.value = state.customStart || toIsoDate(weekAgo);
+            if (!endInput.value) endInput.value = state.customEnd || toIsoDate(today);
+          }
+          document.getElementById('lootRangeCustom').style.display = 'flex';
+          return;
+        }
+        state.rangeKey = key;
+        state.selectedNpc = null;
+        closeRangeMenu();
+        updateRangeMenuActive();
+        loadState();
+      });
+      document.getElementById('lootRangeApply').addEventListener('click', function () {
+        var startVal = document.getElementById('lootRangeStart').value;
+        var endVal = document.getElementById('lootRangeEnd').value;
+        if (!startVal || !endVal) return;
+        state.rangeKey = 'custom';
+        state.customStart = startVal;
+        state.customEnd = endVal;
+        state.selectedNpc = null;
+        closeRangeMenu();
+        updateRangeMenuActive();
+        loadState();
+      });
+      updateRangeMenuActive();
+
+      function lootUrl() {
+        var params = new URLSearchParams();
+        params.set('range', state.rangeKey);
+        if (state.rangeKey === 'custom' && state.customStart && state.customEnd) {
+          params.set('start', state.customStart);
+          params.set('end', state.customEnd);
+        }
+        return '/api/players/me/loot?' + params.toString();
+      }
+
       async function loadState() {
         var errorEl = document.getElementById('lootError');
         try {
-          var res = await fetch('/api/players/me/loot');
+          var res = await fetch(lootUrl());
           if (!res.ok) {
             errorEl.textContent = 'Could not load your loot. Please refresh.';
             errorEl.classList.add('show');
@@ -2125,10 +2300,11 @@ def render_loot_tracker(player: Player) -> str:
           var data = await res.json();
           lastData = data;
 
-          // The selected NPC may have aged out of the window on a later
-          // poll (its last kill in the last 24h just fell off the back
-          // of the rolling window) -- fall back to "all sources" rather
-          // than silently showing a flat/empty fill for it forever.
+          // The selected NPC may have aged out of the range on a later
+          // poll (its last kill in range just fell off the back of a
+          // rolling preset like 24 HOURS) -- fall back to "all sources"
+          // rather than silently showing a flat/empty fill for it
+          // forever.
           var npcs = data.windowNpcs || [];
           if (state.selectedNpc && !npcs.some(function (n) { return n.sourceName === state.selectedNpc; })) {
             state.selectedNpc = null;
@@ -2136,7 +2312,7 @@ def render_loot_tracker(player: Player) -> str:
 
           document.getElementById('lootEmptyMsg').style.display = 'none';
           document.getElementById('lootBody').style.display = '';
-          renderBarChart(data.hourlyBuckets || [], data.windowValue || 0, data.windowKills || 0, data.npcHourlyValues || {}, state.selectedNpc, data.windowNpcs || []);
+          rerenderChart(data);
           renderNpcRow(npcs);
           renderItemList(currentItems());
         } catch (err) {
