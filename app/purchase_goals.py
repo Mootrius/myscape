@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from app.item_ids import find_item_icon, find_item_ids
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player
 from app.recipes import find_recipe, search_recipe_names
 from app.schemas import EQUIPMENT_SLOTS, INVENTORY_SIZE
@@ -205,10 +206,29 @@ def _take_owned(pool_by_id: dict, pool_by_name: dict, item_id: Optional[int], it
     """Claim up to qty units of an item from the shared "already own"
     pool (built from bank+inventory+equipment -- see
     _build_owned_pools below), returning how many were actually
-    available. A tradeable item is matched by its real item id; an
-    untradeable item (no id) falls back to a case-insensitive match on
-    whatever name was recorded for it. Pools are mutated in place so a
-    physical item can only satisfy one requirement, not several."""
+    available. Pools are mutated in place so a physical item can only
+    satisfy one requirement, not several.
+
+    A tradeable item is matched by its real item id, which is exact by
+    definition. An untradeable item (no id passed in) is matched by its
+    real game item id too when we know one -- see app/item_ids.py,
+    which covers every item in the game, not just GE-tradeable ones --
+    since an id either is or isn't the same physical item, with no room
+    for the kind of near-miss that breaks a name comparison (an
+    apostrophe encoded differently, incidental whitespace, a
+    capitalization difference between however the RuneLite plugin
+    reported it and however a gear slot names it). Only when an item
+    isn't in that id snapshot at all (e.g. something added to the game
+    since it was last generated) does this fall back to the original
+    case-insensitive name match, exactly as before -- once id data IS
+    available for a name, matching sticks to ids alone rather than also
+    dipping into the name pool for whatever's left unmatched, since
+    pool_by_id and pool_by_name are built from the very same physical
+    items (see _build_owned_pools) and mixing the two for one call
+    risks claiming the same physical item twice over. An item can have
+    more than one real id (a quest-reward variant, a minigame-only
+    version, etc.) -- owning it under any of them counts, and this
+    tries them in order until qty is satisfied or they're exhausted."""
     if qty <= 0:
         return 0
     if item_id is not None:
@@ -217,6 +237,20 @@ def _take_owned(pool_by_id: dict, pool_by_name: dict, item_id: Optional[int], it
         if take:
             pool_by_id[item_id] = avail - take
         return take
+
+    candidate_ids = find_item_ids(item_name)
+    if candidate_ids:
+        remaining = qty
+        for candidate_id in candidate_ids:
+            if remaining <= 0:
+                break
+            avail = pool_by_id.get(candidate_id, 0)
+            take = min(avail, remaining)
+            if take:
+                pool_by_id[candidate_id] = avail - take
+                remaining -= take
+        return qty - remaining
+
     key = _normalize_item_name(item_name)
     if not key:
         return 0
@@ -234,7 +268,7 @@ def _resolve_gear_component(raw_component: dict, mapping: dict, prices: dict, po
         name = raw_component.get("itemName") or "Unknown item"
         owned_qty = _take_owned(pool_by_id, pool_by_name, None, name, qty)
         return {
-            "itemId": None, "itemName": name, "icon": None, "quantity": qty,
+            "itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "quantity": qty,
             "unitPrice": None, "fullCost": 0, "cost": 0,
             "ownedQty": owned_qty, "owned": owned_qty >= qty,
         }
@@ -262,7 +296,7 @@ def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, pri
     if comp_id is None:
         name = raw_component.get("itemName") or "Unknown item"
         return {
-            "itemId": None, "itemName": name, "icon": None, "quantity": qty,
+            "itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "quantity": qty,
             "unitPrice": None, "fullCost": 0, "cost": 0, "ownedQty": qty, "owned": True,
         }
     meta = mapping.get(str(comp_id), {})
@@ -279,16 +313,21 @@ def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, pri
 
 def _untradeable_item_icon(name: str) -> Optional[str]:
     """An untradeable item obviously has no Grand Exchange icon of its
-    own, but if its name matches a known item-combination recipe (see
-    app/recipes.py) we already know its real wiki icon -- the same one
-    the search suggestion showed before it was ever added to a slot.
-    Without this, every untradeable/combo slot would fall back to the
-    frontend's plain text-abbreviation placeholder even for an item we
-    can picture perfectly well, which is exactly the gap that made
-    Avernic treads (max) (and friends) look broken once actually placed
-    into a slot despite showing correctly in search."""
+    own, but we may still know its real wiki icon regardless -- either
+    because it's a known item-combination recipe's output (see
+    app/recipes.py, checked first since that's the more specific,
+    already-loaded lookup) or, more generally, because it's simply a
+    known OSRS item at all (see app/item_ids.py, which covers every
+    item in the game, tradeable or not). Without this, every
+    untradeable/combo slot would fall back to the frontend's plain
+    text-abbreviation placeholder even for an item we can picture
+    perfectly well, which is exactly the gap that made Avernic treads
+    (max) (and friends) look broken once actually placed into a slot
+    despite showing correctly in search."""
     recipe = find_recipe(name)
-    return item_icon_url(recipe.get("icon")) if recipe else None
+    if recipe and recipe.get("icon"):
+        return item_icon_url(recipe["icon"])
+    return item_icon_url(find_item_icon(name))
 
 
 def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dict, pool_by_id: dict, pool_by_name: dict) -> Optional[dict]:
