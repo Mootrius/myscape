@@ -733,8 +733,21 @@ def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[d
     # it. Without this, those slots priced fine (fullCost/cost were
     # already correct) but still showed "n/a" in the Still to Purchase
     # list and could never become the highlighted next-purchase target.
+    #
+    # A combo (components is not None) used to count as purchasable just
+    # for HAVING a components list, regardless of whether any of them
+    # actually had a real price -- so a combo built entirely from other
+    # untradeable items with no special-case price of their own (Keris
+    # partisan of the sun: itself untradeable, made from Keris partisan
+    # + Jewel of the Sun, both *also* untradeable) summed to a fullCost
+    # of 0 and was still marked purchasable, making it sort as the
+    # cheapest possible item and win Next Purchase outright at "0 gp".
+    # fullCost > 0 means at least one component actually resolved to a
+    # real price, which is what "purchasable" is meant to capture here.
     purchasable = (
-        resolved["tradeable"] or resolved.get("components") is not None or resolved.get("unitPrice") is not None
+        resolved["tradeable"]
+        or resolved.get("unitPrice") is not None
+        or (resolved.get("components") is not None and resolved.get("fullCost", 0) > 0)
     )
     resolved["purchasable"] = purchasable
     resolved["affordable"] = (
@@ -746,7 +759,15 @@ def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[d
 def _still_to_purchase_summary(equipment: dict, inventory: list, coins: int) -> Tuple[List[dict], Optional[dict]]:
     pending = [r for r in equipment.values() if r and not r["owned"]]
     pending += [r for r in inventory if r and not r["owned"]]
-    pending.sort(key=lambda r: (0 if r["purchasable"] else 1, r["cost"]))
+    # Fully untradeable -- itself has no GE listing, and (for a combo)
+    # none of its components do either, so purchasable is False and
+    # there's no live price to ever pin this to (see the fullCost > 0
+    # check in _mark_slot_affordability). That's not a "still need to
+    # buy this for n/a" line, it's just not a real purchase target at
+    # all, so it's left out of the list entirely rather than shown with
+    # a "n/a" cost -- Keris partisan of the sun is the reported case.
+    pending = [r for r in pending if r["purchasable"]]
+    pending.sort(key=lambda r: r["cost"])
 
     still_to_purchase = [
         {
@@ -756,7 +777,9 @@ def _still_to_purchase_summary(equipment: dict, inventory: list, coins: int) -> 
         for r in pending
     ]
 
-    next_purchase = next((item for item in still_to_purchase if item["purchasable"]), None)
+    # Every remaining row is purchasable now that the unpriceable ones
+    # were filtered out above, so this is just "the cheapest one".
+    next_purchase = still_to_purchase[0] if still_to_purchase else None
     if next_purchase:
         cost = next_purchase["cost"]
         next_purchase = {

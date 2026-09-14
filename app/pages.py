@@ -936,7 +936,7 @@ def render_purchase_goals(player: Player) -> str:
             : '<span class="gear-summary-row-cost na">n/a</span>';
           return '<div class="' + rowCls + '">' +
             (item.icon ? '<img class="gear-summary-row-icon" src="' + esc(item.icon) + '" alt="" />' : '<span class="gear-summary-row-icon"></span>') +
-            '<span class="gear-summary-row-name">' + esc(item.itemName) + (item.isCombo ? ' (combo)' : '') + '</span>' +
+            '<span class="gear-summary-row-name">' + esc(item.itemName) + '</span>' +
             costHtml +
             '</div>';
         }).join('');
