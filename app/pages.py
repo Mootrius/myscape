@@ -497,8 +497,8 @@ def render_purchase_goals(player: Player) -> str:
         </button>
         <div class="tracker-menu" id="setupMenu" style="display:none;">
           <button class="tracker-menu-item" id="menuNewSetup" type="button">New setup</button>
-          <button class="tracker-menu-item" id="menuRenameSetup" type="button">Rename</button>
-          <button class="tracker-menu-item danger" id="menuDeleteSetup" type="button">Delete</button>
+          <button class="tracker-menu-item" id="menuRenameSetup" type="button">Rename setup</button>
+          <button class="tracker-menu-item danger" id="menuDeleteSetup" type="button">Delete setup</button>
         </div>
       </div>
     </div>
@@ -963,8 +963,10 @@ def render_purchase_goals(player: Player) -> str:
           '    <input type="text" id="iconSearchInput" placeholder="Search for an item to use as this setup\\'s icon" autocomplete="off" />' +
           '    <div class="suggestions" id="iconSuggestions"></div>' +
           '  </div>' +
-          '  <button class="link" id="iconClearBtn" type="button">Clear icon</button>' +
-          '  <button class="link" id="iconCancelBtn" type="button">Cancel</button>' +
+          '  <div class="gear-icon-picker-actions">' +
+          '    <button class="link" id="iconClearBtn" type="button">Clear icon</button>' +
+          '    <button class="link" id="iconCancelBtn" type="button">Cancel</button>' +
+          '  </div>' +
           '</div>';
         var input = document.getElementById('iconSearchInput');
         input.addEventListener('input', debounce(function () { runSearch(input.value, renderIconSuggestions); }, 200));

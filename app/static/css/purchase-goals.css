@@ -86,8 +86,8 @@
 .overlay-amount { font-size: 23px; font-weight: normal; color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .overlay-progress { flex: 1; min-width: 60px; }
 .progress-track { height: 9px; background: #100e0b; border-radius: 0; overflow: hidden; border: 1px solid var(--border); }
-.progress-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); border-radius: 0; transition: width 0.5s ease; }
-.progress-fill.funded-fill { background: linear-gradient(90deg, #4c7a44, var(--green)); }
+.progress-fill { height: 100%; background: var(--gold); border-radius: 0; transition: width 0.5s ease; }
+.progress-fill.funded-fill { background: var(--green); }
 .progress-track.overlay-track { height: 16px; }
 
 .overlay-icon-wrap {
@@ -258,6 +258,12 @@
   width: 100%;
   box-sizing: border-box;
 }
+
+/* Stacks "Clear icon" above "Cancel" (rather than side by side, which
+   read as two competing actions of equal weight) in the setup-icon
+   picker -- the two are wrapped in their own column so they act as one
+   flex child of .gear-icon-picker instead of two. */
+.gear-icon-picker-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 
 .search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
 /* The slot picker's own search box (as opposed to the setup-icon
