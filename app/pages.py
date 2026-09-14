@@ -574,6 +574,32 @@ def render_purchase_goals(player: Player) -> str:
         stateVersion: 0,
       };
 
+      // Remembers which gear setup was last active across a page refresh
+      // -- without this, every reload silently fell back to whichever
+      // setup happens to be first, discarding whatever the player was
+      // actually looking at. Plain localStorage rather than anything
+      // server-side since this is purely which setup a given browser
+      // last had open, not data that needs to sync across devices or
+      // follow the player's account -- and it's deliberately NOT scoped
+      // per player: if a different player ever logs in on the same
+      // browser, the stored id simply won't match any of their setups
+      // and loadState's own fallback below lands on their first setup
+      // instead, exactly as it always did. Wrapped in try/catch since
+      // localStorage can throw (private browsing in some browsers,
+      // storage disabled/full) -- losing this one convenience is fine,
+      // it should never break the page.
+      var ACTIVE_SETUP_STORAGE_KEY = 'myscape:purchaseGoals:activeSetupId';
+      function loadStoredActiveSetupId() {
+        try { return localStorage.getItem(ACTIVE_SETUP_STORAGE_KEY); } catch (e) { return null; }
+      }
+      function setActiveSetupId(id) {
+        PG.activeSetupId = id;
+        try {
+          if (id) localStorage.setItem(ACTIVE_SETUP_STORAGE_KEY, id);
+          else localStorage.removeItem(ACTIVE_SETUP_STORAGE_KEY);
+        } catch (e) { /* ignore -- see comment above */ }
+      }
+
       function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
           return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -679,7 +705,17 @@ def render_purchase_goals(player: Player) -> str:
         PG.stateVersion++;
         PG.data = data;
         if (!PG.activeSetupId || !data.gearSetups.some(function (s) { return s.id === PG.activeSetupId; })) {
-          PG.activeSetupId = data.gearSetups.length ? data.gearSetups[0].id : null;
+          // On first load (or if whatever was active just vanished --
+          // deleted from another tab, say), prefer the last setup this
+          // browser had open (see setActiveSetupId above) over just
+          // defaulting to the first one, falling back to the first only
+          // when there's no usable stored id (never set, or it no
+          // longer matches any of this player's setups).
+          var stored = loadStoredActiveSetupId();
+          var resolved = (stored && data.gearSetups.some(function (s) { return s.id === stored; }))
+            ? stored
+            : (data.gearSetups.length ? data.gearSetups[0].id : null);
+          setActiveSetupId(resolved);
         }
         render();
       }
@@ -711,7 +747,7 @@ def render_purchase_goals(player: Player) -> str:
         }).join('');
         row.querySelectorAll('[data-setup-id]').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            PG.activeSetupId = btn.getAttribute('data-setup-id');
+            setActiveSetupId(btn.getAttribute('data-setup-id'));
             PG.picker = null;
             PG.iconPicker = false;
             render();
@@ -1453,7 +1489,7 @@ def render_purchase_goals(player: Player) -> str:
         if (!setup) return;
         if (!window.confirm('Delete "' + setup.name + '"? This cannot be undone.')) return;
         const data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id), { method: 'DELETE' });
-        if (data) { PG.stateVersion++; PG.data = data; PG.activeSetupId = data.gearSetups.length ? data.gearSetups[0].id : null; render(); }
+        if (data) { PG.stateVersion++; PG.data = data; setActiveSetupId(data.gearSetups.length ? data.gearSetups[0].id : null); render(); }
       });
 
       function openNameForm(mode, initialValue) {
@@ -1484,7 +1520,7 @@ def render_purchase_goals(player: Player) -> str:
             PG.stateVersion++;
             PG.data = data;
             var created = data.gearSetups.find(function (s) { return s.name === name; }) || data.gearSetups[data.gearSetups.length - 1];
-            PG.activeSetupId = created ? created.id : PG.activeSetupId;
+            if (created) setActiveSetupId(created.id);
             render();
           }
         } else if (mode === 'rename') {
