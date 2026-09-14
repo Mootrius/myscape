@@ -1604,11 +1604,22 @@ def render_loot_tracker(player: Player) -> str:
     matching hourlyBuckets/npcHourlyValues/windowItems/npcItems shape."""
     extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
 
-    def _sort_tabs(tabs_id: str) -> str:
+    def _sort_tabs(tabs_id: str, count_label: str) -> str:
+        # count_label names whichever secondary number that panel's own
+        # boxes show beside gp -- "KC" for the NPC panel, "Qty" for the
+        # item panel -- so its two new count-based tabs read naturally on
+        # each side (data-sort stays the same generic "count-high"/
+        # "count-low" either way; see sortEntries in the script below for
+        # which field that actually sorts by per panel). The gp tabs are
+        # now explicitly labeled too (used to just say "High to Low"),
+        # since leaving them unlabeled next to a second sortable number
+        # would make it unclear which one they sort by.
         return f"""
           <div class="loot-sort-tabs" id="{tabs_id}">
-            <button type="button" class="loot-sort-tab" data-sort="high">High to Low</button>
-            <button type="button" class="loot-sort-tab" data-sort="low">Low to High</button>
+            <button type="button" class="loot-sort-tab" data-sort="high">GP High to Low</button>
+            <button type="button" class="loot-sort-tab" data-sort="low">GP Low to High</button>
+            <button type="button" class="loot-sort-tab" data-sort="count-high">{count_label} High to Low</button>
+            <button type="button" class="loot-sort-tab" data-sort="count-low">{count_label} Low to High</button>
             <button type="button" class="loot-sort-tab" data-sort="alpha">Alphabetical</button>
             <button type="button" class="loot-sort-tab" data-sort="recent">Recent</button>
           </div>
@@ -1635,7 +1646,7 @@ def render_loot_tracker(player: Player) -> str:
         <div class="loot-panel">
           <div class="loot-panel-controls">
             <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search NPCs&hellip;" autocomplete="off" />
-            {_sort_tabs("lootNpcSortTabs")}
+            {_sort_tabs("lootNpcSortTabs", "KC")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
             No NPC kills in the last 24 hours yet.
@@ -1645,7 +1656,7 @@ def render_loot_tracker(player: Player) -> str:
         <div class="loot-panel">
           <div class="loot-panel-controls">
             <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search items&hellip;" autocomplete="off" />
-            {_sort_tabs("lootItemSortTabs")}
+            {_sort_tabs("lootItemSortTabs", "Qty")}
           </div>
           <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
             No items dropped in the last 24 hours yet.
@@ -1671,15 +1682,22 @@ def render_loot_tracker(player: Player) -> str:
         });
       }
 
-      // Shared by both panels' sort tabs. 'high'/'low' sort by valueKey,
-      // 'alpha' by nameKey, 'recent' by recentKey (an ISO timestamp --
-      // lastKillAt for NPCs, lastDroppedAt for items) newest first.
-      // Never mutates the list it's given -- callers still hold the
-      // original (unsorted, unfiltered) array from lastData.
-      function sortEntries(list, sortMode, nameKey, valueKey, recentKey) {
+      // Shared by both panels' sort tabs. 'high'/'low' sort by valueKey
+      // (gp), 'count-high'/'count-low' sort by countKey (killCount for
+      // NPCs, quantity for items -- each panel's own secondary number,
+      // see _sort_tabs' count_label in app/pages.py for the matching tab
+      // labels), 'alpha' by nameKey, 'recent' by recentKey (an ISO
+      // timestamp -- lastKillAt for NPCs, lastDroppedAt for items)
+      // newest first. Never mutates the list it's given -- callers still
+      // hold the original (unsorted, unfiltered) array from lastData.
+      function sortEntries(list, sortMode, nameKey, valueKey, recentKey, countKey) {
         var out = list.slice();
         if (sortMode === 'low') {
           out.sort(function (a, b) { return (a[valueKey] || 0) - (b[valueKey] || 0); });
+        } else if (sortMode === 'count-high') {
+          out.sort(function (a, b) { return (b[countKey] || 0) - (a[countKey] || 0); });
+        } else if (sortMode === 'count-low') {
+          out.sort(function (a, b) { return (a[countKey] || 0) - (b[countKey] || 0); });
         } else if (sortMode === 'alpha') {
           out.sort(function (a, b) { return (a[nameKey] || '').localeCompare(b[nameKey] || ''); });
         } else if (sortMode === 'recent') {
@@ -1779,12 +1797,24 @@ def render_loot_tracker(player: Player) -> str:
       // always the same 24 hourly slots on every 10s poll) so the CSS
       // height transition actually animates between polls instead of
       // snapping.
-      function renderBarChart(buckets, windowValue, windowKills, npcHourlyValues, selectedNpc) {
+      function renderBarChart(buckets, windowValue, windowKills, npcHourlyValues, selectedNpc, windowNpcs) {
         buckets = buckets || [];
         npcHourlyValues = npcHourlyValues || {};
-        document.getElementById('lootChartTotal').textContent = fmtGp(windowValue) + ' gp';
+        // With an NPC selected, the header's gp/kill numbers switch to
+        // just that NPC's own totals (already sitting right on its
+        // windowNpcs entry -- value/killCount, the same numbers its own
+        // NPC box shows) instead of the whole window's -- otherwise
+        // selecting Guard would still show every other NPC's loot
+        // summed in up top while the chart itself only fills in Guard's
+        // share, which reads as a mismatch.
+        var selectedEntry = selectedNpc && windowNpcs
+          ? windowNpcs.filter(function (n) { return n.sourceName === selectedNpc; })[0]
+          : null;
+        var headerValue = selectedEntry ? selectedEntry.value : windowValue;
+        var headerKills = selectedEntry ? selectedEntry.killCount : windowKills;
+        document.getElementById('lootChartTotal').textContent = fmtGp(headerValue) + ' gp';
         document.getElementById('lootChartKills').textContent =
-          'last 24h \\u00b7 ' + (windowKills || 0).toLocaleString('en-US') + ' kill' + (windowKills === 1 ? '' : 's');
+          'last 24h \\u00b7 ' + (headerKills || 0).toLocaleString('en-US') + ' kill' + (headerKills === 1 ? '' : 's');
         document.getElementById('lootChartTitle').textContent = selectedNpc || 'ALL NPCs';
 
         var maxValue = niceMax(Math.max.apply(null, [0].concat(buckets.map(function (b) { return b.value; }))));
@@ -1908,7 +1938,7 @@ def render_loot_tracker(player: Player) -> str:
           return;
         }
 
-        var sorted = sortEntries(filterByName(npcs, state.npcSearch, 'sourceName'), state.npcSort, 'sourceName', 'value', 'lastKillAt');
+        var sorted = sortEntries(filterByName(npcs, state.npcSearch, 'sourceName'), state.npcSort, 'sourceName', 'value', 'lastKillAt', 'killCount');
         if (!sorted.length) {
           emptyEl.textContent = 'No NPCs match your search.';
           emptyEl.style.display = '';
@@ -1977,7 +2007,7 @@ def render_loot_tracker(player: Player) -> str:
           return;
         }
 
-        var sorted = sortEntries(filterByName(items, state.itemSearch, 'itemName'), state.itemSort, 'itemName', 'value', 'lastDroppedAt');
+        var sorted = sortEntries(filterByName(items, state.itemSearch, 'itemName'), state.itemSort, 'itemName', 'value', 'lastDroppedAt', 'quantity');
         if (!sorted.length) {
           emptyEl.textContent = 'No items match your search.';
           emptyEl.style.display = '';
@@ -2026,7 +2056,7 @@ def render_loot_tracker(player: Player) -> str:
         if (!btn || !lastData) return;
         var name = btn.getAttribute('data-npc');
         state.selectedNpc = (state.selectedNpc === name) ? null : name;
-        renderBarChart(lastData.hourlyBuckets || [], lastData.windowValue || 0, lastData.windowKills || 0, lastData.npcHourlyValues || {}, state.selectedNpc);
+        renderBarChart(lastData.hourlyBuckets || [], lastData.windowValue || 0, lastData.windowKills || 0, lastData.npcHourlyValues || {}, state.selectedNpc, lastData.windowNpcs || []);
         renderNpcRow(lastData.windowNpcs || []);
         renderItemList(currentItems());
       });
@@ -2080,7 +2110,7 @@ def render_loot_tracker(player: Player) -> str:
 
           document.getElementById('lootEmptyMsg').style.display = 'none';
           document.getElementById('lootBody').style.display = '';
-          renderBarChart(data.hourlyBuckets || [], data.windowValue || 0, data.windowKills || 0, data.npcHourlyValues || {}, state.selectedNpc);
+          renderBarChart(data.hourlyBuckets || [], data.windowValue || 0, data.windowKills || 0, data.npcHourlyValues || {}, state.selectedNpc, data.windowNpcs || []);
           renderNpcRow(npcs);
           renderItemList(currentItems());
         } catch (err) {

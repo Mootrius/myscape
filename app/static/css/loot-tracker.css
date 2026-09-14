@@ -149,28 +149,38 @@
    from depending on its own content, which containment requires. */
 .loot-panel { flex: 1 1 0; min-width: 0; container-type: inline-size; }
 
-/* Search box + sort tabs share one row, matching how the search input
-   inherits myscape.css's own input[type="text"] styling (dark field,
-   full width) -- only the width/size here need overriding for this
-   compact toolbar context instead of the page's usual full-bleed
-   forms. */
-.loot-panel-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-/* Fixed height (rather than matching padding/font-size to the sort
-   tabs beside it) so the two controls line up exactly regardless of
-   their different font sizes -- box-sizing: border-box (set globally
-   in myscape.css) means padding/border count toward this height
-   instead of adding to it. */
-.loot-search { flex: 1 1 140px; min-width: 100px; height: 34px; padding: 0 10px; font-size: 13px; }
+/* Search box on its own full-width row, sort tabs on a second row below
+   -- used to share one row (see the old flex-wrap version this
+   replaced), but six sort tabs (GP/count/alphabetical/recent, each
+   high-to-low pairs -- see _sort_tabs in app/pages.py) no longer fit
+   beside the search box without cramping both, so each control now
+   gets the panel's full width on its own line instead. */
+.loot-panel-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.loot-search { width: 100%; height: 34px; padding: 0 10px; font-size: 13px; }
 
 /* Mirrors purchase-goals.css's .gear-summary-sort/.sort-btn pattern
    (kept as its own copy here rather than shared across files, per this
-   project's established per-page-CSS convention) -- a row of four
-   equal-width toggle buttons, one active at a time. */
-.loot-sort-tabs { display: flex; gap: 6px; flex: 2 1 260px; }
+   project's established per-page-CSS convention) -- equal-width toggle
+   buttons, one active at a time, sized by padding alone (no explicit
+   height) so it matches .sort-btn's own box model exactly -- height
+   used to be pinned to 34px to line up with the search box beside it,
+   but now that each sits on its own row (see .loot-panel-controls
+   above) that's no longer needed, and this is shorter, matching how
+   the Purchase Goals page's own sort row looks.
+
+   Six tabs (gp/count/alphabetical/recent, each with a high-to-low
+   pair -- see _sort_tabs in app/pages.py) no longer fit on one line at
+   this panel's width without wrapping each button's own label onto two
+   lines, which was the real reason the height stopped matching
+   .sort-btn (a wrapped two-line label needs roughly the padded height
+   of two lines, not one) -- letting the row itself wrap into two rows
+   of three (flex-wrap here, flex-basis fixed to a third of the row on
+   each tab) keeps every label on one line instead, which is what
+   actually keeps the height matched. */
+.loot-sort-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .loot-sort-tab {
-  flex: 1; height: 34px;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0 4px;
+  flex: 0 0 calc((100% - 12px) / 3);
+  padding: 6px 4px;
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
