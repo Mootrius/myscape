@@ -329,6 +329,81 @@ def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, pri
     }
 
 
+# A handful of top-end weapons/staves exist as two separate real OSRS
+# items -- an "uncharged" form that IS Grand Exchange tradeable, and a
+# "charged" form (filled with its consumable resource -- blood runes,
+# zulrah scales, coins, etc.) that can never be traded and so has no GE
+# listing of its own. The charged form still has its own real, permanent
+# item id (see app/data/item_ids.json), so _take_owned already matches
+# it correctly -- the only gap was that _resolve_gear_slot_item's plain-
+# untradeable branch had nothing to price it against, leaving it at
+# unitPrice: null / cost: 0 even though it's easily the most expensive
+# thing in the setup.
+#
+# The wiki also documents a "(full)" recharge recipe for a few of these
+# (uncharged item + the full rune/coin cost to fill it), but that's
+# deliberately NOT used here -- it would price in the entire recharge
+# cost on top of the uncharged item, when charges are a separate,
+# variable, consumed resource rather than a one-time acquisition cost.
+# Instead this pins the charged item's displayed price to its uncharged
+# counterpart's live price alone, exactly as asked.
+#
+# Keys are lowercased charged-item names (as the plugin/game itself
+# names them); values are the uncharged counterpart's real name, spelled
+# exactly as it appears in app/data/item_ids.json so find_item_ids can
+# resolve it to a real item id. Every pair below was verified directly
+# against that snapshot rather than assumed from the naming pattern,
+# since the convention isn't consistent across items (some are
+# "X (uncharged)", tridents are "Uncharged X", a few bowfa-family bows
+# are "X (u)", and the blowpipe is "X (empty)"). Scoped to weapons/
+# staves specifically, matching what was asked -- other items that also
+# happen to have an "(uncharged)" name (jewellery, ammo-slot charges,
+# degradable armour, etc.) work on a different mechanic and aren't
+# included here.
+CHARGED_TO_UNCHARGED_ITEM_NAME: Dict[str, str] = {
+    "scythe of vitur": "Scythe of Vitur (uncharged)",
+    "corrupted scythe of vitur": "Corrupted scythe of vitur (uncharged)",
+    "holy scythe of vitur": "Holy scythe of vitur (uncharged)",
+    "sanguine scythe of vitur": "Sanguine scythe of vitur (uncharged)",
+    "sanguinesti staff": "Sanguinesti staff (uncharged)",
+    "holy sanguinesti staff": "Holy sanguinesti staff (uncharged)",
+    "tumeken's shadow": "Tumeken's shadow (uncharged)",
+    "corrupted tumeken's shadow": "Corrupted tumeken's shadow (uncharged)",
+    "toxic staff of the dead": "Toxic staff (uncharged)",
+    "warped sceptre": "Warped sceptre (uncharged)",
+    "toxic blowpipe": "Toxic blowpipe (empty)",
+    "trident of the seas": "Uncharged trident",
+    "trident of the swamp": "Uncharged toxic trident",
+    "venator bow": "Venator bow (uncharged)",
+    "echo venator bow": "Echo venator bow (uncharged)",
+    "lithic sceptre": "Lithic sceptre (uncharged)",
+    "pharaoh's sceptre": "Pharaoh's sceptre (uncharged)",
+    "tonalztics of ralos": "Tonalztics of Ralos (uncharged)",
+    "craw's bow": "Craw's bow (u)",
+    "webweaver bow": "Webweaver bow (u)",
+    "thammaron's sceptre": "Thammaron's sceptre (u)",
+    "accursed sceptre": "Accursed sceptre (u)",
+}
+
+
+def _charged_item_price(name: Optional[str], prices: dict) -> Tuple[Optional[int], Optional[str]]:
+    """For a charged weapon (see CHARGED_TO_UNCHARGED_ITEM_NAME above),
+    returns the live price of its uncharged counterpart -- same shape as
+    unit_price_for, (unit_price, price_source), both None if name isn't
+    a known charged variant or its uncharged counterpart has no current
+    price. A name can resolve to more than one real item id (e.g. a
+    Pharaoh's sceptre's several charge-count variants); every id is
+    tried in turn until one has a live GE price."""
+    uncharged_name = CHARGED_TO_UNCHARGED_ITEM_NAME.get((name or "").strip().lower())
+    if not uncharged_name:
+        return None, None
+    for candidate_id in find_item_ids(uncharged_name) or []:
+        unit_price, price_source = unit_price_for(candidate_id, prices)
+        if unit_price is not None:
+            return unit_price, price_source
+    return None, None
+
+
 def _untradeable_item_icon(name: str) -> Optional[str]:
     """An untradeable item obviously has no Grand Exchange icon of its
     own, but we may still know its real wiki icon regardless -- either
@@ -388,10 +463,17 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
     if item_id is None:
         name = raw_item.get("itemName") or "Untradeable item"
         owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
+        # No GE listing of its own -- but if this is a known charged
+        # weapon variant (Scythe of Vitur, Toxic blowpipe, Trident of
+        # the Seas, etc.), price it against its uncharged counterpart's
+        # live price instead of leaving it at 0. See
+        # CHARGED_TO_UNCHARGED_ITEM_NAME for the full list and reasoning.
+        unit_price, price_source = _charged_item_price(name, prices)
+        price = unit_price if unit_price is not None else 0
         return {
             "itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False,
-            "unitPrice": None, "priceSource": None, "fullCost": 0,
-            "cost": 0, "owned": owned, "components": None,
+            "unitPrice": unit_price, "priceSource": price_source, "fullCost": price,
+            "cost": 0 if owned else price, "owned": owned, "components": None,
         }
     meta = mapping.get(str(item_id), {})
     name = raw_item.get("itemName") or meta.get("name") or f"Item #{item_id}"
