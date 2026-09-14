@@ -87,23 +87,46 @@
    edge across the panel. flex-grow/shrink: 0 keeps that size constant
    whether the current row has 1 box or 8 -- a lightly-filled row just
    ends early and leaves empty space, rather than the boxes growing to
-   fill it (that stretchy behavior is what this replaces). Deliberately
-   rectangular (taller than wide), via aspect-ratio: 3/4 -- the mirror
-   image of the item box's own aspect-ratio: 1/1 below. Pinning the
-   ratio (rather than just letting the icon+kc+gp stack happen to come
-   out taller) keeps the box's shape steady even for an NPC whose wiki
-   icon 404s and disappears (see iconImg in the script below) --
-   content is vertically centered inside whatever space that leaves
-   rather than the box collapsing to fit it. */
+   fill it (that stretchy behavior is what this replaces).
+
+   Height is pinned to exactly two item boxes stacked plus the 8px gap
+   between them (see .loot-item-list's own gap below), so the two
+   panels' rows line up visually even though the panels hold different
+   box counts per row (4 vs 6). Both boxes are square/rectangular
+   derived from the SAME panel width (the two panels are always equal
+   width -- see .loot-panels above), so an item box's height is
+   (panelWidth - 40px) / 6 (its own flex-basis formula, since it's
+   square) -- two of those plus 8px gives the height formula below,
+   expressed in cqw units against .loot-panel's own width (see its
+   container-type: inline-size above) since a CSS height can't
+   otherwise be computed from a width percentage. aspect-ratio is a
+   fallback for browsers without container-query support (that height
+   calc becomes invalid there and is dropped, leaving this instead) --
+   not an exact match to the item-box math, but keeps the same
+   taller-than-wide shape. content is vertically centered inside
+   whatever space that leaves rather than the box collapsing to fit
+   it, same as before. */
 .loot-npc-box {
-  flex: 0 0 calc((100% - 30px) / 4); aspect-ratio: 3 / 4; box-sizing: border-box;
+  flex: 0 0 calc((100% - 30px) / 4); box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 10px 8px; cursor: pointer;
 }
+/* aspect-ratio and the cqw-based height below must not both apply at
+   once -- a flex item with a fixed flex-basis (its width) plus BOTH an
+   explicit height AND an aspect-ratio ends up with the aspect-ratio
+   also pulling on the width (observed in testing: the box came out
+   wider than its flex-basis), so these are split by feature query
+   instead of just letting the second declaration "win". */
+@supports not (container-type: inline-size) {
+  .loot-npc-box { aspect-ratio: 3 / 4; }
+}
+@supports (container-type: inline-size) {
+  .loot-npc-box { height: calc((100cqw - 40px) / 3 + 8px); }
+}
 .loot-npc-box:hover { border-color: var(--gold-dim); }
 .loot-npc-box.active { border-color: var(--gold); }
-.loot-npc-box-icon { width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; }
+.loot-npc-box-icon { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
 .loot-npc-box-kc {
   font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.15;
   font-variant-numeric: tabular-nums;
@@ -118,7 +141,13 @@
    single column once the panels would otherwise get too cramped to
    read the search/sort row. ---------- */
 .loot-panels { display: flex; gap: 18px; align-items: flex-start; }
-.loot-panel { flex: 1 1 0; min-width: 0; }
+/* container-type: inline-size turns this panel into a query container
+   so .loot-npc-box below can size its height off this panel's own
+   width (via cqw units) -- the two panels are always equal width (see
+   .loot-panels above), so that's the same width the item panel's
+   boxes are sized from. min-width: 0 already keeps this panel's width
+   from depending on its own content, which containment requires. */
+.loot-panel { flex: 1 1 0; min-width: 0; container-type: inline-size; }
 
 /* Search box + sort tabs share one row, matching how the search input
    inherits myscape.css's own input[type="text"] styling (dark field,
