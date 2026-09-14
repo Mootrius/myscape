@@ -12,7 +12,17 @@
    onto this site's own panel/border/gold tokens instead of that
    tool's own palette. ---------- */
 .loot-chart-card {
-  background: var(--panel-2); border: 1px solid var(--border);
+  /* panel-translucent, not panel-2 -- matches every other top-level
+     "card" on the site (.dash-card in myscape.css, .gear-summary/
+     .pg-gear-frame/.overlay-card in purchase-goals.css): a translucent
+     card frame, with fully-opaque panel-2 reserved for the boxes
+     living inside it (see .loot-npc-box/.loot-item-box below). This
+     card used panel-2 directly, the same shade as those inner boxes,
+     which is what made it (and, by not having any card behind them at
+     all, the NPC/item boxes further down the page too -- see
+     .loot-panel below) read as noticeably lighter than the rest of
+     the site. */
+  background: var(--panel-translucent); border: 1px solid var(--border);
   padding: 18px 22px 14px; margin-bottom: 18px;
 }
 .loot-chart-header { position: relative; display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
@@ -209,8 +219,23 @@
    width (via cqw units) -- the two panels are always equal width (see
    .loot-panels above), so that's the same width the item panel's
    boxes are sized from. min-width: 0 already keeps this panel's width
-   from depending on its own content, which containment requires. */
-.loot-panel { flex: 1 1 0; min-width: 0; container-type: inline-size; }
+   from depending on its own content, which containment requires.
+
+   The translucent card background/border/padding matches every other
+   top-level card on the site (see .loot-chart-card above for the same
+   fix, and its comment for why). box-sizing: border-box keeps this
+   panel's own rendered width unaffected by adding that padding+border
+   (so the two panels stay exactly equal width, same as before);
+   .loot-npc-box's cqw height formula below is unaffected either way,
+   since cqw is based on this container's content box, which is the
+   same box the row of boxes inside it actually lays out against --
+   confirmed by measurement after this change, box width/height still
+   match what the formulas predict from that content width. */
+.loot-panel {
+  flex: 1 1 0; min-width: 0; container-type: inline-size; box-sizing: border-box;
+  background: var(--panel-translucent); border: 1px solid var(--border);
+  padding: 16px 18px;
+}
 
 /* Search box on its own full-width row, sort tabs on a second row below
    -- used to share one row (see the old flex-wrap version this
