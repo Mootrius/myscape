@@ -323,6 +323,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
    dragging a row's text doesn't just select it instead the way plain
    text in a draggable box normally would. */
 .gear-summary-row.draggable { cursor: grab; user-select: none; }
+/* Same filter: brightness() hover feedback as .gear-slot on the gear
+   grid (see the comment above it) -- only while draggable (i.e. only
+   in "custom" sort mode), since these rows aren't grabbable at all in
+   the other two sort modes and shouldn't look interactive there. */
+.gear-summary-row.draggable:hover { filter: brightness(1.18); }
 .gear-summary-row.draggable.dragging { opacity: 0.4; cursor: grabbing; }
 .gear-summary-row.draggable.drag-over { outline: 2px dashed var(--gold); outline-offset: -2px; }
 
