@@ -1576,7 +1576,15 @@ def render_loot_tracker(player: Player) -> str:
     what's deliberately not yet). Same shape as render_purchase_goals
     above: a thin server-rendered shell, everything below it drawn
     client-side from one polled JSON payload (GET /api/players/me/loot,
-    see app/loot.py's build_loot_state)."""
+    see app/loot.py's build_loot_state).
+
+    Everything on this page is scoped to the rolling last-24-hours
+    window: the bar chart, and the "By NPC" row below it that lets a
+    player click one NPC to see just that NPC's share of each hour's
+    loot filled in at the bottom of its bar, with the bar's own full
+    (all-sources) height still showing as an outline above it -- see
+    renderBarChart/renderNpcRow below, and build_loot_state in
+    app/loot.py for the matching hourlyBuckets/npcHourlyValues shape."""
     extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
     body = """
     <h2 class="page-title">Loot Tracker</h2>
@@ -1585,7 +1593,7 @@ def render_loot_tracker(player: Player) -> str:
     <div id="lootBody" style="display:none;">
       <div class="loot-chart-card">
         <div class="loot-chart-header">
-          <div class="loot-chart-kills" id="lootChartKills">0 kills &middot; last 24h</div>
+          <div class="loot-chart-kills" id="lootChartKills">LAST 24H &middot; 0 KILLS</div>
           <div class="loot-chart-total" id="lootChartTotal">0 gp</div>
         </div>
         <div class="loot-bar-plot">
@@ -1594,58 +1602,21 @@ def render_loot_tracker(player: Player) -> str:
         </div>
         <div class="loot-bar-x-labels" id="lootBarXLabels"></div>
       </div>
-      <div class="loot-section-title">Most recent kill</div>
-      <div class="loot-recent-kill" id="lootRecentKill"></div>
-      <div class="loot-totals">
-        <div class="loot-total-card">
-          <img class="loot-total-icon" src="/static/img/icon-coins.png" alt="Coins" />
-          <div class="loot-total-body">
-            <div class="loot-total-label">Total loot value</div>
-            <div class="loot-total-amount" id="lootTotalValue">0</div>
-          </div>
-        </div>
-        <div class="loot-total-card">
-          <div class="loot-total-body">
-            <div class="loot-total-label">Loot events logged</div>
-            <div class="loot-total-amount" id="lootKillCount">0</div>
-          </div>
-        </div>
-      </div>
-      <div class="loot-columns">
-        <div class="loot-column">
-          <h3>By source</h3>
-          <p class="loot-column-empty" id="lootSourcesEmpty" style="display:none;">
-            Nothing synced yet -- go get some kills in, with the plugin linked and running.
-          </p>
-          <div class="loot-source-list" id="lootSourceList"></div>
-        </div>
-        <div class="loot-column">
-          <h3>Recent loot</h3>
-          <p class="loot-column-empty" id="lootRecentEmpty" style="display:none;">Nothing here yet.</p>
-          <div class="loot-recent-list" id="lootRecentList"></div>
-        </div>
-      </div>
+      <div class="loot-section-title">By NPC</div>
+      <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
+        No NPC kills in the last 24 hours yet.
+      </p>
+      <div class="loot-npc-row" id="lootNpcRow"></div>
     </div>
     """
     script = """
     (function () {
-      var COINS_ICON = '/static/img/icon-coins.png';
+      var state = { selectedNpc: null };
+      var lastData = null;
 
       function fmtGp(n) {
         n = n || 0;
         return n.toLocaleString('en-US');
-      }
-
-      function timeAgo(isoString) {
-        if (!isoString) return '';
-        var then = new Date(isoString).getTime();
-        var diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
-        if (diffSec < 60) return diffSec + 's ago';
-        var diffMin = Math.floor(diffSec / 60);
-        if (diffMin < 60) return diffMin + 'm ago';
-        var diffHr = Math.floor(diffMin / 60);
-        if (diffHr < 24) return diffHr + 'h ago';
-        return Math.floor(diffHr / 24) + 'd ago';
       }
 
       // Compact axis-label form of a gp amount -- "12.4k" / "3.1M" -- so
@@ -1679,19 +1650,42 @@ def render_loot_tracker(player: Player) -> str:
         return new Date(isoString).toLocaleTimeString('en-US', { hour: 'numeric' });
       }
 
-      // Rolling last-24-hours bar chart of all loot value, bucketed
-      // hourly (oldest on the left, ending at "now" on the right) --
-      // ported from the original single-user tool's Loot Tracker chart
-      // (renderVorkathBarChart), just summed across every source instead
-      // of one NPC at a time. Reuses the existing bar-col/bar-fill
-      // elements when the bucket count hasn't changed (it's always the
-      // same 24 hourly slots on every 10s poll) so the CSS height
-      // transition actually animates between polls instead of snapping.
-      function renderBarChart(buckets, windowValue, windowKills) {
+      function iconImg(src, alt, cls) {
+        if (!src) return '';
+        // Quietly hidden on a 404 (a guessed NPC/item wiki filename that
+        // doesn't exist) rather than showing a broken-image icon -- same
+        // treatment item icons already get elsewhere on the site.
+        return '<img class="' + cls + '" src="' + src + '" alt="" loading="lazy" ' +
+          'onerror="this.style.display=\\'none\\'" />';
+      }
+
+      function escapeHtml(s) {
+        var div = document.createElement('div');
+        div.textContent = s == null ? '' : String(s);
+        return div.innerHTML;
+      }
+
+      // Rolling last-24-hours bar chart, bucketed hourly (oldest on the
+      // left, ending at "now" on the right) -- ported from the original
+      // single-user tool's Loot Tracker chart (renderVorkathBarChart),
+      // summed across every source by default. When an NPC is selected
+      // (state.selectedNpc, set by renderNpcRow's click handler below)
+      // each bar instead shows two layers: a full-height outline at the
+      // bucket's own total value (so the scale/shape of the whole chart
+      // never changes), with a solid fill at the bottom sized to just
+      // that NPC's share of the same bucket. maxValue is always derived
+      // from the total buckets, never the selected NPC's own values, so
+      // the axis stays put when switching NPCs. Reuses the existing
+      // bar-col elements when the bucket count hasn't changed (it's
+      // always the same 24 hourly slots on every 10s poll) so the CSS
+      // height transition actually animates between polls instead of
+      // snapping.
+      function renderBarChart(buckets, windowValue, windowKills, npcHourlyValues, selectedNpc) {
         buckets = buckets || [];
+        npcHourlyValues = npcHourlyValues || {};
         document.getElementById('lootChartTotal').textContent = fmtGp(windowValue) + ' gp';
         document.getElementById('lootChartKills').textContent =
-          (windowKills || 0).toLocaleString('en-US') + ' kill' + (windowKills === 1 ? '' : 's') + ' \\u00b7 last 24h';
+          'last 24h \\u00b7 ' + (windowKills || 0).toLocaleString('en-US') + ' kill' + (windowKills === 1 ? '' : 's');
 
         var maxValue = niceMax(Math.max.apply(null, [0].concat(buckets.map(function (b) { return b.value; }))));
         var gridlineSteps = 4;
@@ -1705,27 +1699,45 @@ def render_loot_tracker(player: Player) -> str:
         }
         gridlinesEl.innerHTML = stepsHtml;
 
-        var barsEl = document.getElementById('lootBarBars');
-        var existingCols = barsEl.children;
-        function pctFor(b) {
+        var selectedValues = selectedNpc ? (npcHourlyValues[selectedNpc] || buckets.map(function () { return 0; })) : null;
+
+        function outlinePct(b) {
           return maxValue > 0 ? Math.max(0, Math.min(100, (b.value / maxValue) * 100)) : 0;
         }
-        function titleFor(b) {
+        function fillValue(b, i) {
+          return selectedNpc ? (selectedValues[i] || 0) : b.value;
+        }
+        function fillPct(b, i) {
+          var v = fillValue(b, i);
+          return maxValue > 0 ? Math.max(0, Math.min(100, (v / maxValue) * 100)) : 0;
+        }
+        function titleFor(b, i) {
+          if (selectedNpc) {
+            return selectedNpc + ': ' + fmtGp(fillValue(b, i)) + ' gp \\u00b7 hour total ' + fmtGp(b.value) + ' gp';
+          }
           return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount + ' kill' + (b.killCount === 1 ? '' : 's') : '');
         }
+
+        var barsEl = document.getElementById('lootBarBars');
+        var existingCols = barsEl.children;
         if (existingCols.length !== buckets.length) {
-          barsEl.innerHTML = buckets.map(function (b) {
-            return '<div class="loot-bar-col" title="' + titleFor(b) + '">' +
-              '<div class="loot-bar-fill' + (b.value > 0 ? ' has-value' : '') + '" style="height:' + pctFor(b) + '%;"></div>' +
+          barsEl.innerHTML = buckets.map(function (b, i) {
+            return '<div class="loot-bar-col" title="' + titleFor(b, i) + '">' +
+              '<div class="loot-bar-outline' + (selectedNpc ? ' active' : '') + '" style="height:' + outlinePct(b) + '%;"></div>' +
+              '<div class="loot-bar-fill' + (fillPct(b, i) > 0 ? ' has-value' : '') + '" style="height:' + fillPct(b, i) + '%;"></div>' +
             '</div>';
           }).join('');
         } else {
           buckets.forEach(function (b, i) {
             var col = existingCols[i];
-            col.title = titleFor(b);
+            col.title = titleFor(b, i);
+            var outline = col.querySelector('.loot-bar-outline');
+            outline.style.height = outlinePct(b) + '%';
+            outline.classList.toggle('active', !!selectedNpc);
             var fill = col.querySelector('.loot-bar-fill');
-            fill.style.height = pctFor(b) + '%';
-            fill.classList.toggle('has-value', b.value > 0);
+            var fp = fillPct(b, i);
+            fill.style.height = fp + '%';
+            fill.classList.toggle('has-value', fp > 0);
           });
         }
 
@@ -1738,96 +1750,39 @@ def render_loot_tracker(player: Player) -> str:
         }).join('');
       }
 
-      function renderRecentKill(kill) {
-        var el = document.getElementById('lootRecentKill');
-        if (!kill) {
-          el.innerHTML = '<div class="loot-recent-kill-empty">No loot logged yet.</div>';
-          return;
-        }
-        var items = (kill.items || []).slice().sort(function (a, b) { return b.value - a.value; });
-        var itemsHtml = items.map(function (it) {
-          return '<span class="loot-recent-kill-item" title="' + escapeHtml(it.itemName) + ' x' + it.quantity + '">' +
-            iconImg(it.icon, it.itemName, 'loot-recent-kill-item-icon') +
-            '<span class="loot-recent-kill-item-qty">' + it.quantity + '</span>' +
-          '</span>';
-        }).join('');
-        el.innerHTML =
-          '<div class="loot-recent-kill-portrait-wrap">' +
-            iconImg(kill.icon, kill.sourceName, 'loot-recent-kill-portrait') +
-            '<div class="loot-recent-kill-overlay">' +
-              '<span class="loot-recent-kill-name">' + escapeHtml(kill.sourceName) + '</span>' +
-              '<span class="loot-recent-kill-time">' + timeAgo(kill.occurredAt) + '</span>' +
-            '</div>' +
-          '</div>' +
-          '<div class="loot-recent-kill-items-col">' +
-            '<div class="loot-recent-kill-value">' + fmtGp(kill.value) + ' gp</div>' +
-            '<div class="loot-recent-kill-items">' + itemsHtml + '</div>' +
-          '</div>';
-      }
-
-      function iconImg(src, alt, cls) {
-        if (!src) return '';
-        // Quietly hidden on a 404 (a guessed NPC/item wiki filename that
-        // doesn't exist) rather than showing a broken-image icon -- same
-        // treatment item icons already get elsewhere on the site.
-        return '<img class="' + cls + '" src="' + src + '" alt="" loading="lazy" ' +
-          'onerror="this.style.display=\\'none\\'" />';
-      }
-
-      function renderSourceList(sourceTotals) {
-        var emptyEl = document.getElementById('lootSourcesEmpty');
-        var listEl = document.getElementById('lootSourceList');
-        if (!sourceTotals.length) {
+      // The clickable "By NPC" row -- one box per NPC killed in the
+      // last 24 hours, each toggling state.selectedNpc (clicking the
+      // already-active one clears it back to "all sources") and
+      // re-rendering the chart/row from the last-polled data, with no
+      // extra fetch needed.
+      function renderNpcRow(npcs) {
+        var emptyEl = document.getElementById('lootNpcEmpty');
+        var rowEl = document.getElementById('lootNpcRow');
+        if (!npcs.length) {
           emptyEl.style.display = '';
-          listEl.innerHTML = '';
+          rowEl.innerHTML = '';
           return;
         }
         emptyEl.style.display = 'none';
-        listEl.innerHTML = sourceTotals.map(function (s) {
-          return '<div class="loot-source-row">' +
-            iconImg(s.icon, s.sourceName, 'loot-source-icon') +
-            '<div class="loot-source-name">' + escapeHtml(s.sourceName) +
-              '<span class="loot-source-count">&times;' + s.count + '</span></div>' +
-            '<div class="loot-source-value">' + fmtGp(s.value) + '</div>' +
-          '</div>';
+        rowEl.innerHTML = npcs.map(function (n) {
+          var active = state.selectedNpc === n.sourceName;
+          return '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
+            escapeHtml(n.sourceName) + '" title="' + escapeHtml(n.sourceName) + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' +
+            n.killCount + ' kill' + (n.killCount === 1 ? '' : 's') + '">' +
+            iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
+            '<div class="loot-npc-box-name">' + escapeHtml(n.sourceName) + '</div>' +
+          '</button>';
         }).join('');
       }
 
-      function renderRecentList(recentLoot) {
-        var emptyEl = document.getElementById('lootRecentEmpty');
-        var listEl = document.getElementById('lootRecentList');
-        if (!recentLoot.length) {
-          emptyEl.style.display = '';
-          listEl.innerHTML = '';
-          return;
-        }
-        emptyEl.style.display = 'none';
-        listEl.innerHTML = recentLoot.map(function (e) {
-          var itemsHtml = (e.items || []).map(function (it) {
-            return '<span class="loot-recent-item" title="' + escapeHtml(it.itemName) + ' x' + it.quantity + '">' +
-              iconImg(it.icon, it.itemName, 'loot-recent-item-icon') +
-              '<span class="loot-recent-item-qty">' + it.quantity + '</span>' +
-            '</span>';
-          }).join('');
-          return '<div class="loot-recent-row">' +
-            iconImg(e.icon, e.sourceName, 'loot-recent-icon') +
-            '<div class="loot-recent-body">' +
-              '<div class="loot-recent-top">' +
-                '<span class="loot-recent-name">' + escapeHtml(e.sourceName) + '</span>' +
-                '<span class="loot-recent-time">' + timeAgo(e.occurredAt) + '</span>' +
-              '</div>' +
-              '<div class="loot-recent-items">' + itemsHtml + '</div>' +
-            '</div>' +
-            '<div class="loot-recent-value">' + fmtGp(e.value) + '</div>' +
-          '</div>';
-        }).join('');
-      }
-
-      function escapeHtml(s) {
-        var div = document.createElement('div');
-        div.textContent = s == null ? '' : String(s);
-        return div.innerHTML;
-      }
+      document.getElementById('lootNpcRow').addEventListener('click', function (e) {
+        var btn = e.target.closest('.loot-npc-box');
+        if (!btn || !lastData) return;
+        var name = btn.getAttribute('data-npc');
+        state.selectedNpc = (state.selectedNpc === name) ? null : name;
+        renderBarChart(lastData.hourlyBuckets || [], lastData.windowValue || 0, lastData.windowKills || 0, lastData.npcHourlyValues || {}, state.selectedNpc);
+        renderNpcRow(lastData.windowNpcs || []);
+      });
 
       async function loadState() {
         var errorEl = document.getElementById('lootError');
@@ -1840,15 +1795,21 @@ def render_loot_tracker(player: Player) -> str:
           }
           errorEl.classList.remove('show');
           var data = await res.json();
+          lastData = data;
+
+          // The selected NPC may have aged out of the window on a later
+          // poll (its last kill in the last 24h just fell off the back
+          // of the rolling window) -- fall back to "all sources" rather
+          // than silently showing a flat/empty fill for it forever.
+          var npcs = data.windowNpcs || [];
+          if (state.selectedNpc && !npcs.some(function (n) { return n.sourceName === state.selectedNpc; })) {
+            state.selectedNpc = null;
+          }
 
           document.getElementById('lootEmptyMsg').style.display = 'none';
           document.getElementById('lootBody').style.display = '';
-          document.getElementById('lootTotalValue').textContent = fmtGp(data.totalValue);
-          document.getElementById('lootKillCount').textContent = (data.killCount || 0).toLocaleString('en-US');
-          renderBarChart(data.hourlyBuckets || [], data.windowValue || 0, data.windowKills || 0);
-          renderRecentKill((data.recentLoot || [])[0]);
-          renderSourceList(data.sourceTotals || []);
-          renderRecentList(data.recentLoot || []);
+          renderBarChart(data.hourlyBuckets || [], data.windowValue || 0, data.windowKills || 0, data.npcHourlyValues || {}, state.selectedNpc);
+          renderNpcRow(npcs);
         } catch (err) {
           errorEl.textContent = 'Something went wrong loading your loot.';
           errorEl.classList.add('show');

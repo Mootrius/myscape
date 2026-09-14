@@ -23,10 +23,15 @@ only sync shape this needs, unlike every other synced source.
 
 This is a first pass, not the full old feature set:
 
-- An all-time GP total, a per-source (NPC/casket/pickpocket) value+
-  count breakdown, a recent-loot feed, and a rolling last-24-hours bar
-  chart (bucketed hourly, same shape as the old tool's own chart) are
-  all here.
+- A rolling last-24-hours bar chart (bucketed hourly, same shape as
+  the old tool's own chart), plus a per-NPC breakdown of that same
+  window -- a clickable "By NPC" row and a matching per-hour value
+  array for each one, so the chart can show one NPC's slice of each
+  bucket filled in while the bucket's own full height still shows as
+  an outline -- are here. Everything is scoped to the last 24 hours on
+  purpose for now; an all-time view (totals, a full per-source
+  breakdown, a scrollable history feed) is deliberately not built yet,
+  not because it's hard, just not what the page needs today.
 - The old tool's per-boss drop-table checklist ("pick Vorkath from a
   dropdown, see its full wiki drop table filled in as you go, with
   hand-curated backfill for kills from before Loot Logger was
@@ -40,12 +45,14 @@ This is a first pass, not the full old feature set:
 - Every clue casket comes through as source_name "Casket" with no
   tier, whatever tier it actually was -- a real limitation of the
   RuneLite event this reads (see LootEvent's docstring), not something
-  this module works around yet.
-- Computed fresh from every LootEvent row on every read, same as
-  Purchase Goals computes fresh from every bank/inventory/equipment
-  row -- fine at the scale this app runs at today; a player with a
-  very long kill history is a reasonable place to eventually add
-  pagination or precomputed totals, not a concern for this first pass.
+  this module works around yet. Caskets (and anything else that isn't
+  source_type "npc") still count toward the chart's own totals, just
+  never toward the "By NPC" row or its per-hour breakdown -- that one's
+  NPCs only, by design (see build_loot_state below).
+- Computed fresh from this player's last-24-hours of LootEvent rows on
+  every read (the DB query itself is windowed, not just the totals),
+  same as Purchase Goals computes fresh from every bank/inventory/
+  equipment row -- fine at the scale this app runs at today.
 """
 import re
 import urllib.parse
@@ -57,11 +64,6 @@ from sqlalchemy.orm import Session
 
 from app.models import LootEvent, Player
 from app.purchase_goals import COINS_ITEM_ID, ICON_PATH_BASE, get_latest_prices, get_mapping, item_icon_url
-
-# How many of the most recent loot events the "Recent Loot" feed shows --
-# not a cap on how much history is stored or counted toward totals
-# below, just how much the frontend renders at once.
-RECENT_LOOT_LIMIT = 100
 
 # The rolling bar-chart window at the top of the page -- 24 hourly
 # buckets, oldest on the left, ending at "now" on the right. Ported
@@ -140,36 +142,32 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict) -> Tuple[L
 
 
 def build_loot_state(db: Session, player: Player) -> dict:
-    """Everything the Loot Tracker page needs in one payload: an
-    all-time GP total, a per-source (NPC/casket/pickpocket) breakdown
-    sorted by value, and the most recent RECENT_LOOT_LIMIT events --
-    see the module docstring for what this covers today and what's
-    still to come."""
+    """Everything the Loot Tracker page needs in one payload, all
+    windowed to the last ROLLING_WINDOW_HOURS: the rolling bar chart's
+    24 hourly buckets, and a per-NPC breakdown of that same window (one
+    entry per NPC actually killed in it, plus that NPC's own 24-slot
+    hourly value array) -- see the module docstring for what this
+    covers today and what's still to come."""
     mapping, mapping_error = get_mapping()
     prices, prices_error = get_latest_prices()
 
+    now = datetime.now(timezone.utc)
+    window = timedelta(hours=ROLLING_WINDOW_HOURS)
+    window_start = now - window
+
+    # Windowed at the query itself, not just in the totals below -- see
+    # the module docstring. Still ordered desc so a tie in which bucket
+    # two same-hour events land in resolves the same way it always has.
     events = (
         db.query(LootEvent)
-        .filter(LootEvent.player_id == player.id)
+        .filter(LootEvent.player_id == player.id, LootEvent.occurred_at >= window_start)
         .order_by(desc(LootEvent.occurred_at))
         .all()
     )
 
-    total_value = 0
-    source_totals: Dict[str, dict] = {}
-    recent_loot = []
-
-    # Rolling last-24-hours bar chart, bucketed hourly -- see
-    # ROLLING_WINDOW_HOURS above. Built the same way the old tool built
-    # it: 24 fixed windows computed once up front (oldest first, ending
-    # "now"), then every event that falls inside the window adds into
-    # whichever bucket its occurred_at lands in. An event older than the
-    # window (or, in principle, timestamped slightly in the future by a
-    # client clock) just doesn't match any bucket and is skipped here --
-    # it's still counted in totalValue/sourceTotals/recentLoot above,
-    # only the chart itself is windowed.
-    now = datetime.now(timezone.utc)
-    window = timedelta(hours=ROLLING_WINDOW_HOURS)
+    # 24 fixed one-hour windows computed once up front (oldest first,
+    # ending "now"), the same way the old tool built its own chart --
+    # see ROLLING_WINDOW_HOURS above.
     hourly_buckets = []
     for hours_ago in range(ROLLING_WINDOW_HOURS - 1, -1, -1):
         bucket_end = now - timedelta(hours=hours_ago)
@@ -180,51 +178,60 @@ def build_loot_state(db: Session, player: Player) -> dict:
             "killCount": 0,
         })
 
+    # Per-NPC totals/hourly breakdown for the "By NPC" row and its
+    # click-to-filter overlay on the chart -- npc_hourly[name][i] is
+    # always <= hourly_buckets[i]["value"], since it's that same
+    # bucket's NPC-only subset. Deliberately npc-only (source_type ==
+    # "npc") -- see the module docstring for why caskets/pickpockets
+    # still count toward hourly_buckets but never show up here.
+    npc_totals: Dict[str, dict] = {}
+    npc_hourly: Dict[str, List[int]] = {}
+
     for event in events:
-        items, event_value = _resolve_loot_items(event.items or [], mapping, prices)
-        total_value += event_value
+        if event.occurred_at is None:
+            continue
+        # The DB query above already excludes anything older than the
+        # window, but not a client clock skewed into the future --
+        # this still needs to guard idx below from going negative/past
+        # the last bucket.
+        age = now - event.occurred_at
+        if not (timedelta(0) <= age < window):
+            continue
+        idx = (ROLLING_WINDOW_HOURS - 1) - int(age.total_seconds() // 3600)
+        if not (0 <= idx < ROLLING_WINDOW_HOURS):
+            continue
 
-        key = f"{event.source_type}:{event.source_name}"
-        bucket = source_totals.get(key)
-        if bucket is None:
-            bucket = {
-                "sourceName": event.source_name,
-                "sourceType": event.source_type,
-                "icon": npc_icon_url(event.source_name),
-                "count": 0,
-                "value": 0,
-            }
-            source_totals[key] = bucket
-        bucket["count"] += 1
-        bucket["value"] += event_value
+        _items, event_value = _resolve_loot_items(event.items or [], mapping, prices)
+        hourly_buckets[idx]["value"] += event_value
+        hourly_buckets[idx]["killCount"] += 1
 
-        if len(recent_loot) < RECENT_LOOT_LIMIT:
-            recent_loot.append({
-                "sourceName": event.source_name,
-                "sourceType": event.source_type,
-                "icon": npc_icon_url(event.source_name),
-                "combatLevel": event.combat_level,
-                "occurredAt": event.occurred_at.isoformat() if event.occurred_at else None,
-                "items": items,
-                "value": event_value,
-            })
+        if event.source_type == "npc":
+            name = event.source_name
+            totals = npc_totals.get(name)
+            if totals is None:
+                totals = {
+                    "sourceName": name,
+                    "icon": npc_icon_url(name),
+                    "combatLevel": event.combat_level,
+                    "killCount": 0,
+                    "value": 0,
+                }
+                npc_totals[name] = totals
+                npc_hourly[name] = [0] * ROLLING_WINDOW_HOURS
+            totals["killCount"] += 1
+            totals["value"] += event_value
+            npc_hourly[name][idx] += event_value
 
-        if event.occurred_at is not None:
-            age = now - event.occurred_at
-            if timedelta(0) <= age < window:
-                idx = (ROLLING_WINDOW_HOURS - 1) - int(age.total_seconds() // 3600)
-                if 0 <= idx < ROLLING_WINDOW_HOURS:
-                    hourly_buckets[idx]["value"] += event_value
-                    hourly_buckets[idx]["killCount"] += 1
+    # Same sort as the old tool's own "monsters" list: most-killed
+    # first, value as the tiebreaker.
+    window_npcs = sorted(npc_totals.values(), key=lambda n: (-n["killCount"], -n["value"]))
 
     return {
-        "totalValue": total_value,
-        "killCount": len(events),
-        "sourceTotals": sorted(source_totals.values(), key=lambda s: s["value"], reverse=True),
-        "recentLoot": recent_loot,
         "hourlyBuckets": hourly_buckets,
         "windowValue": sum(b["value"] for b in hourly_buckets),
         "windowKills": sum(b["killCount"] for b in hourly_buckets),
+        "windowNpcs": window_npcs,
+        "npcHourlyValues": npc_hourly,
         "pricesError": prices_error,
         "mappingError": mapping_error,
     }

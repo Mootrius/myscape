@@ -1,20 +1,23 @@
 /* Loot Tracker page -- see render_loot_tracker in app/pages.py. Reuses
    the same --panel-2/--border/--gold tokens myscape.css and
    purchase-goals.css already define, rather than inventing a second
-   palette for one more page. */
+   palette for one more page. Everything on this page (the chart, the
+   "By NPC" row) is scoped to a rolling last-24-hours window -- see
+   app/loot.py's module docstring for why there's no all-time view
+   here. */
 
-/* ---------- rolling 24h bar chart + most-recent-kill, at the top of
-   the page -- ported in spirit from the original single-user tool's
-   Loot Tracker chart (osrs_tracker_ui.html's .vorkath-chart/.bar-*
-   classes), restyled onto this site's own panel/border/gold tokens
-   instead of that tool's own palette. ---------- */
+/* ---------- rolling 24h bar chart, at the top of the page -- ported
+   in spirit from the original single-user tool's Loot Tracker chart
+   (osrs_tracker_ui.html's .vorkath-chart/.bar-* classes), restyled
+   onto this site's own panel/border/gold tokens instead of that
+   tool's own palette. ---------- */
 .loot-chart-card {
   background: var(--panel-2); border: 1px solid var(--border);
   padding: 18px 22px 14px; margin-bottom: 18px;
 }
 .loot-chart-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
 .loot-chart-total { font-size: 13px; color: var(--gold); font-variant-numeric: tabular-nums; }
-.loot-chart-kills { font-size: 12px; color: var(--text-faint); }
+.loot-chart-kills { font-size: 12px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
 
 /* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
    themselves (not on .loot-bar-plot -- padding there would be a no-op
@@ -29,113 +32,58 @@
   transform: translateY(-50%); font-size: 10px; color: var(--text-faint);
 }
 .loot-bar-bars { position: absolute; inset: 0 0 0 10px; display: flex; align-items: flex-end; gap: 3px; }
-.loot-bar-col { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
-.loot-bar-fill { width: 100%; background: var(--gold-dim); transition: height 0.5s ease, background-color 0.5s ease; }
+
+/* Each column layers two bottom-anchored pieces: a full-height outline
+   at the bucket's own total (always drawn, only actually visible --
+   `.active`'s border-color -- once an NPC is selected) behind a solid
+   fill sized to whatever that bar should show filled in (the bucket's
+   full total when nothing's selected, or just the selected NPC's
+   share of it -- see renderBarChart in app/pages.py). Both anchor to
+   the column's bottom edge via position:absolute rather than the old
+   single-bar flex layout, so the fill can sit at a different height
+   than the outline around it. */
+.loot-bar-col { flex: 1 1 0; height: 100%; position: relative; }
+.loot-bar-outline {
+  position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box;
+  border: 1px solid transparent;
+  transition: height 0.5s ease, border-color 0.5s ease;
+}
+.loot-bar-outline.active { border-color: var(--gold-dim); }
+.loot-bar-fill {
+  position: absolute; left: 0; right: 0; bottom: 0; background: var(--gold-dim);
+  transition: height 0.5s ease, background-color 0.5s ease;
+}
 .loot-bar-fill.has-value { background: var(--gold); }
 .loot-bar-x-labels { display: flex; gap: 3px; padding-left: 10px; margin-top: 6px; }
 .loot-bar-x-label { flex: 1 1 0; text-align: center; font-size: 9px; color: var(--text-faint); white-space: nowrap; }
 .loot-bar-x-label.now { text-align: right; }
 
 .loot-section-title { font-size: 15px; color: var(--text-dim); margin: 0 0 10px; }
-
-.loot-recent-kill {
-  display: flex; align-items: flex-start; gap: 14px;
-  background: var(--panel-2); border: 1px solid var(--border);
-  padding: 10px 20px; margin-bottom: 18px;
-}
-.loot-recent-kill-empty { color: var(--text-faint); font-size: 13px; }
-
-/* The portrait now doubles as a backdrop for the name/time overlay
-   (below), so it's sized up from the old plain-icon 48px to leave that
-   text room to sit on top of it instead of overflowing its edges. */
-.loot-recent-kill-portrait-wrap {
-  position: relative; flex: 0 0 auto; width: 72px; height: 72px;
-  display: flex; align-items: center; justify-content: center;
-}
-.loot-recent-kill-portrait { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: pixelated; }
-
-/* Name + time-ago sit directly over the top of the portrait image
-   (rather than in a separate text column beside it) -- a thin dark
-   text-outline (no background box) keeps them legible over whatever
-   the icon's own art looks like at that spot, same treatment as the
-   item-quantity numbers below. */
-.loot-recent-kill-overlay {
-  position: absolute; top: 2px; left: 2px; right: 2px;
-  display: flex; align-items: baseline; gap: 5px; overflow: hidden;
-  pointer-events: none;
-}
-.loot-recent-kill-name {
-  font-size: 11px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
-}
-.loot-recent-kill-time {
-  font-size: 9.5px; color: var(--text-dim); white-space: nowrap; flex: none;
-  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
-}
-
-/* The gp value sits above the item icons, both right-aligned into the
-   card's top-right corner. */
-.loot-recent-kill-items-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.loot-recent-kill-value { font-size: 15px; color: var(--gold); font-variant-numeric: tabular-nums; }
-.loot-recent-kill-items { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-.loot-recent-kill-item {
-  position: relative; display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px;
-}
-.loot-recent-kill-item-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; }
-/* A slight text outline instead of the "Recent loot" list's solid
-   background box (.loot-recent-item-qty) -- lighter-weight treatment
-   for this one card. */
-.loot-recent-kill-item-qty {
-  position: absolute; bottom: -2px; right: -2px; font-size: 9px; color: #fff; font-weight: 600;
-  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
-}
-
-.loot-totals { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.loot-total-card {
-  display: flex; align-items: center; gap: 12px;
-  background: var(--panel-2); border: 1px solid var(--border);
-  padding: 14px 18px; flex: 1 1 220px;
-}
-.loot-total-icon { width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated; flex: none; }
-.loot-total-label { font-size: 12.5px; color: var(--text-muted); }
-.loot-total-amount { font-size: 22px; color: var(--gold); font-weight: 600; margin-top: 2px; }
-
-.loot-columns { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
-.loot-column { flex: 1 1 320px; min-width: 280px; }
-.loot-column h3 { margin: 0 0 10px; font-size: 15px; color: var(--text-dim); }
 .loot-column-empty { color: var(--text-faint); font-size: 13px; }
 
-.loot-source-list, .loot-recent-list { display: flex; flex-direction: column; gap: 6px; }
-
-.loot-source-row {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--panel-2); border: 1px solid var(--border);
-  padding: 8px 10px;
+/* ---------- "By NPC" row -- one clickable box per NPC killed in the
+   last 24 hours (see renderNpcRow in app/pages.py), styled after
+   Purchase Goals' own gear-setup icon row (.tracker-icon-btn in
+   purchase-goals.css) since it's the same pattern: a row of icon
+   buttons, one active/selected at a time. Kept as its own copy here
+   rather than sharing that class across stylesheets, matching how
+   this page's CSS file has stayed self-contained so far. A visible
+   name label (not just an icon + tooltip, unlike the Purchase Goals
+   version) is deliberate -- NPC portraits are guessed wiki filenames
+   that 404 far more often than a player's own chosen setup icons (see
+   npc_icon_url's docstring in app/loot.py), so a label is needed here
+   to keep an unlucky box from just being blank. ---------- */
+.loot-npc-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.loot-npc-box {
+  width: 68px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 6px 6px; cursor: pointer;
 }
-.loot-source-icon { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; flex: none; }
-.loot-source-name { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.loot-source-count { color: var(--text-faint); margin-left: 6px; font-size: 11.5px; }
-.loot-source-value { font-size: 12.5px; color: var(--gold); white-space: nowrap; }
-
-.loot-recent-row {
-  display: flex; align-items: flex-start; gap: 10px;
-  background: var(--panel-2); border: 1px solid var(--border);
-  padding: 8px 10px;
+.loot-npc-box:hover { border-color: var(--gold-dim); }
+.loot-npc-box.active { border-color: var(--gold); }
+.loot-npc-box-icon { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; }
+.loot-npc-box-name {
+  font-size: 10px; color: var(--text-dim); text-align: center; line-height: 1.15;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
-.loot-recent-icon { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; flex: none; margin-top: 2px; }
-.loot-recent-body { flex: 1; min-width: 0; }
-.loot-recent-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.loot-recent-name { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.loot-recent-time { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
-.loot-recent-items { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.loot-recent-item {
-  position: relative; display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border);
-}
-.loot-recent-item-icon { width: 20px; height: 20px; object-fit: contain; image-rendering: pixelated; }
-.loot-recent-item-qty {
-  position: absolute; bottom: -2px; right: -2px; font-size: 9px; color: var(--text-dim);
-  background: var(--panel); padding: 0 2px; line-height: 1.3;
-}
-.loot-recent-value { font-size: 12.5px; color: var(--gold); white-space: nowrap; flex: none; align-self: center; }
+.loot-npc-box.active .loot-npc-box-name { color: var(--text); }

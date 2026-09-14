@@ -154,7 +154,10 @@ header {
    at the top of their .wrap content, below the site header. Shared
    here (rather than duplicated per-page-feature CSS file) since any
    dashboard sub-page can use it the same way. */
-.page-title { font-size: 22px; font-weight: normal; letter-spacing: 0.02em; margin: 0 0 20px; }
+.page-title {
+  font-size: 22px; font-weight: normal; letter-spacing: 0.04em; margin: 0 0 20px;
+  text-align: center; text-transform: uppercase;
+}
 
 .nav-side { display: flex; align-items: center; font-size: 15px; }
 

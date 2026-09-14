@@ -622,9 +622,10 @@ class LootSyncResponse(BaseModel):
 
 class LootState(BaseModel):
     """Documents (not enforced) the payload GET /api/players/me/loot
-    returns: totalValue, killCount, sourceTotals (per NPC/event,
-    sorted by value), recentLoot, pricesError/mappingError. See
-    build_loot_state in app/loot.py."""
+    returns, all windowed to the last 24 hours: hourlyBuckets,
+    windowValue, windowKills, windowNpcs (per-NPC totals),
+    npcHourlyValues (per-NPC hourly arrays, keyed by NPC name),
+    pricesError/mappingError. See build_loot_state in app/loot.py."""
 
     class Config:
         extra = "allow"

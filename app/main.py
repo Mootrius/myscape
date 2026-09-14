@@ -462,12 +462,12 @@ def sync_loot(
 
 @app.get("/api/players/me/loot")
 def read_loot(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
-    """The combined state the Loot Tracker page polls -- an all-time GP
-    total, a per-source breakdown, and a recent-loot feed, all computed
-    fresh from this player's synced LootEvent rows. Not pinned to a
-    Pydantic response_model for the same reason GET /api/gear-setups
-    above isn't -- see LootState's docstring in app/schemas.py. See
-    build_loot_state in app/loot.py."""
+    """The combined state the Loot Tracker page polls -- the rolling
+    24-hour bar chart's buckets and a per-NPC breakdown of that same
+    window, computed fresh from this player's synced LootEvent rows.
+    Not pinned to a Pydantic response_model for the same reason GET
+    /api/gear-setups above isn't -- see LootState's docstring in
+    app/schemas.py. See build_loot_state in app/loot.py."""
     return build_loot_state(db, player)
 
 
