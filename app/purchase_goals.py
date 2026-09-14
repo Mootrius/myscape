@@ -578,7 +578,18 @@ def resolve_gear_setup_icon(raw_icon: Optional[dict], mapping: dict) -> Optional
 def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[dict]:
     if resolved is None:
         return None
-    purchasable = resolved["tradeable"] or resolved.get("components") is not None
+    # A plain-untradeable item can still carry a real unitPrice -- a
+    # charged weapon priced off its uncharged counterpart, or crystal
+    # armour priced off a Crystal armour seed (see _charged_item_price
+    # and _crystal_armour_seed_price) -- and that's just as much a real,
+    # actionable savings target as anything actually GE-buyable, even
+    # though there's no direct "buy this exact item" GE listing behind
+    # it. Without this, those slots priced fine (fullCost/cost were
+    # already correct) but still showed "n/a" in the Still to Purchase
+    # list and could never become the highlighted next-purchase target.
+    purchasable = (
+        resolved["tradeable"] or resolved.get("components") is not None or resolved.get("unitPrice") is not None
+    )
     resolved["purchasable"] = purchasable
     resolved["affordable"] = (
         not resolved["owned"] and purchasable and resolved["cost"] > 0 and coins >= resolved["cost"]
