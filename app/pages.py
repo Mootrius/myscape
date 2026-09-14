@@ -286,6 +286,21 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{escape(title)}</title>
+  <!-- Preloaded as early as possible in <head>, ahead of the
+       stylesheet that actually declares @font-face for it (see
+       myscape.css) -- the site's whole look rides on this one pixel
+       font, set as the body's font-family there, and
+       without a preload hint the browser doesn't discover it needs
+       this file until it's parsed the CSS AND gone to paint text,
+       by which point it's already painted once with a fallback
+       system font and has to re-paint everything once the real font
+       arrives -- that's the flash of the wrong font swapping to the
+       right one on navigation. crossorigin is required here even
+       though this is same-origin -- fonts are always fetched in
+       anonymous CORS mode, and a preload missing it is treated as a
+       different request from the @font-face one, so the browser
+       fetches the file twice instead of reusing this one. -->
+  <link rel="preload" href="/static/fonts/RuneScapePlain11.otf" as="font" type="font/otf" crossorigin />
   <link rel="icon" href="/static/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png" />

@@ -9,7 +9,20 @@
 @font-face {
   font-family: 'RuneScapePlain11';
   src: url('/static/fonts/RuneScapePlain11.otf') format('opentype');
-  font-display: swap;
+  /* swap -- the usual default -- paints text in the fallback system
+     font immediately, then re-paints in RuneScapePlain11 once it's
+     loaded. That re-paint is exactly the flicker on navigation: this
+     is a full server-rendered page nav (not a SPA route change), so
+     every click to a new page repeats the same fallback-then-swap
+     flash. `optional` instead gives the browser a very short window
+     (Chromium: ~100ms) to use the font if it's already available (see
+     the <link rel="preload"> for this file in _shell(), app/pages.py,
+     which kicks off the fetch as early as possible so it's normally
+     done well inside that window) and otherwise just renders with the
+     fallback for that one paint and moves on -- no later swap, so no
+     flicker, at the cost of a rare cold-cache first load falling back
+     to the system font instead of waiting for RuneScapePlain11. */
+  font-display: optional;
 }
 
 :root {
