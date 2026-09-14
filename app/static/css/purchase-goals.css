@@ -63,9 +63,14 @@
   background: var(--panel); border: 1px solid var(--border); min-width: 160px;
   display: flex; flex-direction: column;
 }
+/* Same small/gray/all-caps text treatment as the "High to Low" / "Low
+   to High" / "Custom" sort buttons (.sort-btn below) -- applied here
+   and on .btn-secondary so every secondary control on this page reads
+   as one consistent family of text styling. */
 .tracker-menu-item {
   background: none; border: none; text-align: left; padding: 10px 14px;
-  color: var(--text); font-size: 13px; cursor: pointer;
+  color: var(--text-dim); font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  cursor: pointer;
 }
 .tracker-menu-item:hover { background: var(--panel-2); color: var(--gold); }
 .tracker-menu-item.danger:hover { color: var(--red); }
@@ -85,7 +90,9 @@
    outweighs a single class here and the width: 100% below loses. */
 button.primary#pgNameSave, .pg-setup-form-save {
   width: auto; flex: 0 0 auto;
-  padding: 10px 22px; font-size: 14px; margin-top: 0;
+  padding: 0 22px; height: 32px; margin-top: 0;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 
 /* A plain bordered "box" button for secondary actions that sit beside a
@@ -93,10 +100,17 @@ button.primary#pgNameSave, .pg-setup-form-save {
    button.link (myscape.css) renders as bare text, which read as an
    afterthought next to a real button; this gives it the same visual
    weight as everything else in these rows. */
+/* height: 32px (rather than relying on padding + line-height to land
+   there) is a fixed, explicit target -- .search-box input[type="text"]
+   below is shortened to this same 32px so a search bar sitting next to
+   one of these lines up with it exactly, instead of the two drifting
+   out of sync if either one's font-size or padding changes later. */
 .btn-secondary {
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--text-dim); font-family: inherit;
-  padding: 10px 18px; font-size: 13px;
+  padding: 0 16px; height: 32px;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer;
 }
 .btn-secondary:hover { border-color: var(--gold-dim); color: var(--text); }
@@ -339,7 +353,13 @@ button.primary#pgNameSave, .pg-setup-form-save {
    picker's) takes its whole row -- see the "Search for an item" input
    in .gear-slot-picker. */
 .search-box.search-box-full { flex: 1 1 100%; width: 100%; }
-.search-box input[type="text"] { width: 100%; }
+/* Shorter than the site-wide input height (myscape.css's padding: 12px
+   14px) so this lines up with the 32px-tall buttons beside/near it --
+   .btn-secondary's Clear/Cancel here, and (via this same .search-box
+   class) the gear-slot picker's "Search for an item" box below the
+   setup, shortened to match even though it has no buttons of its own
+   beside it, so both search bars on this page stay the same height. */
+.search-box input[type="text"] { width: 100%; height: 32px; padding: 0 14px; }
 /* Opaque, not the --panel-translucent used by the picker's own outer
    card -- clicking a suggestion here saves it immediately (see
    renderSlotSuggestions in app/pages.py), so there's nothing else in
