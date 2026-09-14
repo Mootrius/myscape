@@ -3,9 +3,55 @@
    purchase-goals.css already define, rather than inventing a second
    palette for one more page. */
 
-.loot-header { margin-bottom: 18px; }
-.loot-header h2 { margin: 0; }
-.loot-header .subtitle { margin-top: 4px; }
+/* ---------- rolling 24h bar chart + most-recent-kill, at the top of
+   the page -- ported in spirit from the original single-user tool's
+   Loot Tracker chart (osrs_tracker_ui.html's .vorkath-chart/.bar-*
+   classes), restyled onto this site's own panel/border/gold tokens
+   instead of that tool's own palette. ---------- */
+.loot-chart-card {
+  background: var(--panel-2); border: 1px solid var(--border);
+  padding: 18px 22px 14px; margin-bottom: 18px;
+}
+.loot-chart-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.loot-chart-total { font-size: 20px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.loot-chart-kills { font-size: 12px; color: var(--text-faint); }
+
+/* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
+   themselves (not on .loot-bar-plot -- padding there would be a no-op
+   for absolutely-positioned children), with gridline labels
+   right-aligned just left of it -- same layout as the original tool's
+   bar-gridlines/bar-bars. */
+.loot-bar-plot { position: relative; height: 150px; }
+.loot-bar-gridlines { position: absolute; inset: 0 0 0 10px; }
+.loot-bar-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); }
+.loot-bar-gridline-label {
+  position: absolute; top: 0; left: -34px; width: 30px; text-align: right;
+  transform: translateY(-50%); font-size: 10px; color: var(--text-faint);
+}
+.loot-bar-bars { position: absolute; inset: 0 0 0 10px; display: flex; align-items: flex-end; gap: 3px; }
+.loot-bar-col { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
+.loot-bar-fill { width: 100%; background: var(--gold-dim); transition: height 0.5s ease, background-color 0.5s ease; }
+.loot-bar-fill.has-value { background: var(--gold); }
+.loot-bar-x-labels { display: flex; gap: 3px; padding-left: 10px; margin-top: 6px; }
+.loot-bar-x-label { flex: 1 1 0; text-align: center; font-size: 9px; color: var(--text-faint); white-space: nowrap; }
+.loot-bar-x-label.now { text-align: right; }
+
+.loot-section-title { font-size: 15px; color: var(--text-dim); margin: 0 0 10px; }
+
+.loot-recent-kill {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  padding: 10px 20px; margin-bottom: 18px;
+}
+.loot-recent-kill-empty { color: var(--text-faint); font-size: 13px; }
+.loot-recent-kill-portrait-wrap { flex: 0 0 auto; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; }
+.loot-recent-kill-portrait { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: pixelated; }
+.loot-recent-kill-info { flex: 0 0 auto; }
+.loot-recent-kill-name { font-size: 13px; color: var(--text); }
+.loot-recent-kill-time { font-size: 11px; color: var(--text-faint); }
+.loot-recent-kill-value { font-size: 15px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.loot-recent-kill-items { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.loot-recent-kill-item-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; }
 
 .loot-totals { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 .loot-total-card {

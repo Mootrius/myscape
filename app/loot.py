@@ -24,7 +24,9 @@ only sync shape this needs, unlike every other synced source.
 This is a first pass, not the full old feature set:
 
 - An all-time GP total, a per-source (NPC/casket/pickpocket) value+
-  count breakdown, and a recent-loot feed are all here.
+  count breakdown, a recent-loot feed, and a rolling last-24-hours bar
+  chart (bucketed hourly, same shape as the old tool's own chart) are
+  all here.
 - The old tool's per-boss drop-table checklist ("pick Vorkath from a
   dropdown, see its full wiki drop table filled in as you go, with
   hand-curated backfill for kills from before Loot Logger was
@@ -47,6 +49,7 @@ This is a first pass, not the full old feature set:
 """
 import re
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import desc
@@ -59,6 +62,14 @@ from app.purchase_goals import COINS_ITEM_ID, ICON_PATH_BASE, get_latest_prices,
 # not a cap on how much history is stored or counted toward totals
 # below, just how much the frontend renders at once.
 RECENT_LOOT_LIMIT = 100
+
+# The rolling bar-chart window at the top of the page -- 24 hourly
+# buckets, oldest on the left, ending at "now" on the right. Ported
+# straight from the original single-user tool's build_npc_tracker/
+# build_loot_trackers (osrs_tracker.py), which bucket every kill/casket
+# the same way: not calendar-aligned hours, but 24 sliding one-hour
+# windows counting back from the moment the page is built.
+ROLLING_WINDOW_HOURS = 24
 
 
 def sell_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[str]]:
@@ -148,6 +159,27 @@ def build_loot_state(db: Session, player: Player) -> dict:
     source_totals: Dict[str, dict] = {}
     recent_loot = []
 
+    # Rolling last-24-hours bar chart, bucketed hourly -- see
+    # ROLLING_WINDOW_HOURS above. Built the same way the old tool built
+    # it: 24 fixed windows computed once up front (oldest first, ending
+    # "now"), then every event that falls inside the window adds into
+    # whichever bucket its occurred_at lands in. An event older than the
+    # window (or, in principle, timestamped slightly in the future by a
+    # client clock) just doesn't match any bucket and is skipped here --
+    # it's still counted in totalValue/sourceTotals/recentLoot above,
+    # only the chart itself is windowed.
+    now = datetime.now(timezone.utc)
+    window = timedelta(hours=ROLLING_WINDOW_HOURS)
+    hourly_buckets = []
+    for hours_ago in range(ROLLING_WINDOW_HOURS - 1, -1, -1):
+        bucket_end = now - timedelta(hours=hours_ago)
+        hourly_buckets.append({
+            "start": (bucket_end - timedelta(hours=1)).isoformat(),
+            "end": bucket_end.isoformat(),
+            "value": 0,
+            "killCount": 0,
+        })
+
     for event in events:
         items, event_value = _resolve_loot_items(event.items or [], mapping, prices)
         total_value += event_value
@@ -177,11 +209,22 @@ def build_loot_state(db: Session, player: Player) -> dict:
                 "value": event_value,
             })
 
+        if event.occurred_at is not None:
+            age = now - event.occurred_at
+            if timedelta(0) <= age < window:
+                idx = (ROLLING_WINDOW_HOURS - 1) - int(age.total_seconds() // 3600)
+                if 0 <= idx < ROLLING_WINDOW_HOURS:
+                    hourly_buckets[idx]["value"] += event_value
+                    hourly_buckets[idx]["killCount"] += 1
+
     return {
         "totalValue": total_value,
         "killCount": len(events),
         "sourceTotals": sorted(source_totals.values(), key=lambda s: s["value"], reverse=True),
         "recentLoot": recent_loot,
+        "hourlyBuckets": hourly_buckets,
+        "windowValue": sum(b["value"] for b in hourly_buckets),
+        "windowKills": sum(b["killCount"] for b in hourly_buckets),
         "pricesError": prices_error,
         "mappingError": mapping_error,
     }

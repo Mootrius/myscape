@@ -1578,13 +1578,22 @@ def render_loot_tracker(player: Player) -> str:
     see app/loot.py's build_loot_state)."""
     extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
     body = """
-    <div class="loot-header">
-      <h2>Loot Tracker</h2>
-      <p class="subtitle">Every kill, casket, and pickpocket your linked RuneLite client has synced.</p>
-    </div>
     <div class="auth-error" id="lootError"></div>
     <p class="pg-empty" id="lootEmptyMsg">Loading&hellip;</p>
     <div id="lootBody" style="display:none;">
+      <div class="loot-chart-card">
+        <div class="loot-chart-header">
+          <div class="loot-chart-total" id="lootChartTotal">0 gp</div>
+          <div class="loot-chart-kills" id="lootChartKills">0 kills &middot; last 24h</div>
+        </div>
+        <div class="loot-bar-plot">
+          <div class="loot-bar-gridlines" id="lootBarGridlines"></div>
+          <div class="loot-bar-bars" id="lootBarBars"></div>
+        </div>
+        <div class="loot-bar-x-labels" id="lootBarXLabels"></div>
+      </div>
+      <div class="loot-section-title">Most recent kill</div>
+      <div class="loot-recent-kill" id="lootRecentKill"></div>
       <div class="loot-totals">
         <div class="loot-total-card">
           <img class="loot-total-icon" src="/static/img/icon-coins.png" alt="Coins" />
@@ -1635,6 +1644,116 @@ def render_loot_tracker(player: Player) -> str:
         var diffHr = Math.floor(diffMin / 60);
         if (diffHr < 24) return diffHr + 'h ago';
         return Math.floor(diffHr / 24) + 'd ago';
+      }
+
+      // Compact axis-label form of a gp amount -- "12.4k" / "3.1M" -- so
+      // the bar chart's gridline labels stay readable in a narrow gutter.
+      // Ported from the original tool's fmtGpCompact.
+      function fmtGpCompact(n) {
+        var sign = n < 0 ? '-' : '';
+        var abs = Math.abs(n || 0);
+        if (abs >= 1e6) return sign + (abs / 1e6).toFixed(abs >= 1e7 ? 0 : 1).replace(/\\.0$/, '') + 'M';
+        if (abs >= 1e3) return sign + (abs / 1e3).toFixed(abs >= 1e4 ? 0 : 1).replace(/\\.0$/, '') + 'k';
+        return sign + Math.round(abs).toLocaleString('en-US');
+      }
+
+      // Rounds a chart's max value up to a "nice" number (1/2/5 x a power
+      // of ten) so the gridlines land on clean values. Same as the
+      // original tool's niceMax.
+      function niceMax(value) {
+        if (!value || value <= 0) return 100;
+        var magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+        var normalized = value / magnitude;
+        var niceNormalized;
+        if (normalized <= 1) niceNormalized = 1;
+        else if (normalized <= 2) niceNormalized = 2;
+        else if (normalized <= 5) niceNormalized = 5;
+        else niceNormalized = 10;
+        return niceNormalized * magnitude;
+      }
+
+      function fmtClock(isoString) {
+        if (!isoString) return '';
+        return new Date(isoString).toLocaleTimeString('en-US', { hour: 'numeric' });
+      }
+
+      // Rolling last-24-hours bar chart of all loot value, bucketed
+      // hourly (oldest on the left, ending at "now" on the right) --
+      // ported from the original single-user tool's Loot Tracker chart
+      // (renderVorkathBarChart), just summed across every source instead
+      // of one NPC at a time. Reuses the existing bar-col/bar-fill
+      // elements when the bucket count hasn't changed (it's always the
+      // same 24 hourly slots on every 10s poll) so the CSS height
+      // transition actually animates between polls instead of snapping.
+      function renderBarChart(buckets, windowValue, windowKills) {
+        buckets = buckets || [];
+        document.getElementById('lootChartTotal').textContent = fmtGp(windowValue) + ' gp';
+        document.getElementById('lootChartKills').textContent =
+          (windowKills || 0).toLocaleString('en-US') + ' kill' + (windowKills === 1 ? '' : 's') + ' \\u00b7 last 24h';
+
+        var maxValue = niceMax(Math.max.apply(null, [0].concat(buckets.map(function (b) { return b.value; }))));
+        var gridlineSteps = 4;
+        var gridlinesEl = document.getElementById('lootBarGridlines');
+        var stepsHtml = '';
+        for (var i = 0; i <= gridlineSteps; i++) {
+          var frac = i / gridlineSteps;
+          stepsHtml += '<div class="loot-bar-gridline" style="bottom:' + (frac * 100).toFixed(2) + '%;">' +
+            '<div class="loot-bar-gridline-label">' + fmtGpCompact(maxValue * frac) + '</div>' +
+          '</div>';
+        }
+        gridlinesEl.innerHTML = stepsHtml;
+
+        var barsEl = document.getElementById('lootBarBars');
+        var existingCols = barsEl.children;
+        function pctFor(b) {
+          return maxValue > 0 ? Math.max(0, Math.min(100, (b.value / maxValue) * 100)) : 0;
+        }
+        function titleFor(b) {
+          return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount + ' kill' + (b.killCount === 1 ? '' : 's') : '');
+        }
+        if (existingCols.length !== buckets.length) {
+          barsEl.innerHTML = buckets.map(function (b) {
+            return '<div class="loot-bar-col" title="' + titleFor(b) + '">' +
+              '<div class="loot-bar-fill' + (b.value > 0 ? ' has-value' : '') + '" style="height:' + pctFor(b) + '%;"></div>' +
+            '</div>';
+          }).join('');
+        } else {
+          buckets.forEach(function (b, i) {
+            var col = existingCols[i];
+            col.title = titleFor(b);
+            var fill = col.querySelector('.loot-bar-fill');
+            fill.style.height = pctFor(b) + '%';
+            fill.classList.toggle('has-value', b.value > 0);
+          });
+        }
+
+        // Labeling every hour would be unreadable at 24 bars -- every
+        // 4th hour, plus the chart always ends at "now".
+        document.getElementById('lootBarXLabels').innerHTML = buckets.map(function (b, i) {
+          if (i === buckets.length - 1) return '<div class="loot-bar-x-label now">NOW</div>';
+          var label = (i % 4 === 0) ? fmtClock(b.start) : '';
+          return '<div class="loot-bar-x-label">' + label + '</div>';
+        }).join('');
+      }
+
+      function renderRecentKill(kill) {
+        var el = document.getElementById('lootRecentKill');
+        if (!kill) {
+          el.innerHTML = '<div class="loot-recent-kill-empty">No loot logged yet.</div>';
+          return;
+        }
+        var items = (kill.items || []).slice().sort(function (a, b) { return b.value - a.value; });
+        var itemsHtml = items.map(function (it) {
+          return iconImg(it.icon, it.itemName, 'loot-recent-kill-item-icon');
+        }).join('');
+        el.innerHTML =
+          '<div class="loot-recent-kill-portrait-wrap">' + iconImg(kill.icon, kill.sourceName, 'loot-recent-kill-portrait') + '</div>' +
+          '<div class="loot-recent-kill-info">' +
+            '<div class="loot-recent-kill-name">' + escapeHtml(kill.sourceName) + '</div>' +
+            '<div class="loot-recent-kill-time">' + timeAgo(kill.occurredAt) + '</div>' +
+            '<div class="loot-recent-kill-value">' + fmtGp(kill.value) + ' gp</div>' +
+          '</div>' +
+          '<div class="loot-recent-kill-items">' + itemsHtml + '</div>';
       }
 
       function iconImg(src, alt, cls) {
@@ -1717,6 +1836,8 @@ def render_loot_tracker(player: Player) -> str:
           document.getElementById('lootBody').style.display = '';
           document.getElementById('lootTotalValue').textContent = fmtGp(data.totalValue);
           document.getElementById('lootKillCount').textContent = (data.killCount || 0).toLocaleString('en-US');
+          renderBarChart(data.hourlyBuckets || [], data.windowValue || 0, data.windowKills || 0);
+          renderRecentKill((data.recentLoot || [])[0]);
           renderSourceList(data.sourceTotals || []);
           renderRecentList(data.recentLoot || []);
         } catch (err) {
