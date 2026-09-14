@@ -13,24 +13,26 @@ from pydantic import BaseModel, field_validator
 # this list is mirrored on the plugin side). This is specifically the
 # set of slots the RuneLite plugin can ever report worn equipment in
 # (see EquipmentItemIn.check_slot and MAX_EQUIPMENT_ITEMS below) -- for
-# a gear SETUP's own slots (which also include the 4 misc slots below),
+# a gear SETUP's own slots (which also include the 8 misc slots below),
 # use GEAR_SETUP_EQUIPMENT_SLOTS instead.
 EQUIPMENT_SLOTS = [
     "head", "cape", "neck", "ammo", "weapon", "body",
     "shield", "legs", "hands", "boots", "ring",
 ]
-# Four extra, purely app-side planning slots on the equipment doll --
+# Eight extra, purely app-side planning slots on the equipment doll --
 # not real OSRS equipment slots (the RuneLite plugin never reports
 # worn equipment in these, so they're excluded from EQUIPMENT_SLOTS
 # above), for whatever a player wants to plan around buying alongside a
 # setup's real gear: runes for a rune pouch, teleports for the setup's
-# activity, and so on. Ownership still resolves the same generic way
-# as every other slot (see _build_owned_pools in app/purchase_goals.py
-# -- it's just a bank/inventory/equipment/potion-storage total by item,
-# with no per-slot special-casing), so any item works here.
-MISC_EQUIPMENT_SLOTS = ["misc1", "misc2", "misc3", "misc4"]
+# activity, and so on. Rendered as two rows of 4 below the paperdoll
+# (see .gear-doll-misc in purchase-goals.css). Ownership still resolves
+# the same generic way as every other slot (see _build_owned_pools in
+# app/purchase_goals.py -- it's just a bank/inventory/equipment/potion-
+# storage total by item, with no per-slot special-casing), so any item
+# works here.
+MISC_EQUIPMENT_SLOTS = ["misc1", "misc2", "misc3", "misc4", "misc5", "misc6", "misc7", "misc8"]
 # All slots a gear setup's equipment dict can use -- the 11 real slots
-# plus the 4 misc ones above. Used for validating/iterating a SETUP's
+# plus the 8 misc ones above. Used for validating/iterating a SETUP's
 # own slots (set_gear_slot, move_gear_slot_item, build_gear_setups);
 # EQUIPMENT_SLOTS alone remains what the real RuneLite equipment sync
 # is validated against.

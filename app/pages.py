@@ -746,13 +746,14 @@ def render_purchase_goals(player: Player) -> str:
 
         updateOverlay(setup);
 
-        // The 11 real paperdoll slots and the 4 misc slots (runes,
+        // The 11 real paperdoll slots and the 8 misc slots (runes,
         // teleports, whatever else a setup needs beyond its actual gear
-        // -- see MISC_EQUIPMENT_SLOTS in app/schemas.py) render as two
-        // separate grids stacked in one flex column (see .gear-doll in
-        // purchase-goals.css) rather than one combined grid, so the misc
-        // row can be sized/positioned independently of the paperdoll
-        // shape above it.
+        // -- see MISC_EQUIPMENT_SLOTS in app/schemas.py), the latter
+        // rendered two rows of 4, render as two separate grids stacked
+        // in one flex column (see .gear-doll in purchase-goals.css)
+        // rather than one combined grid, so the misc block can be
+        // sized/positioned independently of the paperdoll shape above
+        // it.
         var doll = '<div class="gear-doll">' +
           '<div class="gear-doll-slots">' + MAIN_EQUIPMENT_SLOTS.map(function (slotName) {
             return slotHtml(setup.equipment[slotName], 'equipment', slotName, 'slot-' + slotName);
@@ -832,12 +833,14 @@ def render_purchase_goals(player: Player) -> str:
       }
 
       var MAIN_EQUIPMENT_SLOTS = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'boots', 'ring'];
-      // Four extra planning-only slots (runes for a rune pouch,
-      // teleports, whatever else a setup needs beyond its actual gear)
-      // -- see MISC_EQUIPMENT_SLOTS in app/schemas.py, which this
-      // mirrors client-side same as MAIN_EQUIPMENT_SLOTS above mirrors
-      // that file's EQUIPMENT_SLOTS.
-      var MISC_EQUIPMENT_SLOTS = ['misc1', 'misc2', 'misc3', 'misc4'];
+      // Eight extra planning-only slots (runes for a rune pouch,
+      // teleports, whatever else a setup needs beyond its actual gear),
+      // rendered as two rows of 4 below the paperdoll (see
+      // .gear-doll-misc in purchase-goals.css) -- see
+      // MISC_EQUIPMENT_SLOTS in app/schemas.py, which this mirrors
+      // client-side same as MAIN_EQUIPMENT_SLOTS above mirrors that
+      // file's EQUIPMENT_SLOTS.
+      var MISC_EQUIPMENT_SLOTS = ['misc1', 'misc2', 'misc3', 'misc4', 'misc5', 'misc6', 'misc7', 'misc8'];
 
       function slotClasses(resolved) {
         var cls = 'gear-slot';

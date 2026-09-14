@@ -300,8 +300,8 @@ class GearSetup(Base):
 
     `equipment` is a dict keyed by slot name (only filled slots are
     present) -- see GEAR_SETUP_EQUIPMENT_SLOTS in app/schemas.py for the
-    full set of 15 keys it may use: the 11 real, RuneLite-reportable
-    equipment slots plus 4 "misc" planning-only slots (runes for a rune
+    full set of 19 keys it may use: the 11 real, RuneLite-reportable
+    equipment slots plus 8 "misc" planning-only slots (runes for a rune
     pouch, teleports, or any other item a setup needs beyond its actual
     gear) that exist only here, never in the real equipment-sync table
     (see EquipmentItem below). `inventory` is a list of exactly 28
