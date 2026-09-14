@@ -391,7 +391,7 @@ def render_signup() -> str:
     body = """
     <div class="auth-shell">
       <div class="auth-card">
-        <h2>Sign up</h2>
+        <h2>SIGN UP</h2>
         <div class="auth-error" id="formError"></div>
         <form id="signupForm">
           <div class="field">
@@ -402,9 +402,9 @@ def render_signup() -> str:
             <label for="password">Password</label>
             <input type="password" id="password" name="password" placeholder="At least 8 characters" required minlength="8" />
           </div>
-          <button class="primary" type="submit">Sign up</button>
+          <button class="primary" type="submit">SIGN UP</button>
         </form>
-        <div class="auth-switch">Already have an account? <a href="/login">Log in</a></div>
+        <div class="auth-switch">Already have an account? <a href="/login">LOG IN</a></div>
       </div>
     </div>
     """
@@ -446,7 +446,7 @@ def render_login() -> str:
     body = """
     <div class="auth-shell">
       <div class="auth-card">
-        <h2>Log in</h2>
+        <h2>LOG IN</h2>
         <div class="auth-error" id="formError"></div>
         <form id="loginForm">
           <div class="field">
@@ -457,9 +457,9 @@ def render_login() -> str:
             <label for="password">Password</label>
             <input type="password" id="password" name="password" placeholder="Your password" required />
           </div>
-          <button class="primary" type="submit">Log in</button>
+          <button class="primary" type="submit">LOG IN</button>
         </form>
-        <div class="auth-switch">Don't have an account? <a href="/signup">Sign up</a></div>
+        <div class="auth-switch">Don't have an account? <a href="/signup">SIGN UP</a></div>
       </div>
     </div>
     """
