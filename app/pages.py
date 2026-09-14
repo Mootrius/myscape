@@ -865,15 +865,37 @@ def render_purchase_goals(player: Player) -> str:
               window.open(itemWikiUrl(itemName), '_blank', 'noopener');
               return;
             }
-            if (PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot)) {
-              PG.picker = null;
-            } else {
+            var opening = !(PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot));
+            if (opening) {
               openSlotPicker(slotType, slot);
+            } else {
+              PG.picker = null;
             }
             PG.iconPicker = false;
             renderContent();
+            if (opening) {
+              scrollPickerIntoView();
+            }
           });
         });
+      }
+
+      // Smoothly scrolls the just-opened slot picker's search box into
+      // view -- the picker renders directly below the gear/inventory
+      // grid, which can easily sit below the fold (a shorter viewport,
+      // or the page having been scrolled down to reach the slot that
+      // was clicked), so without this a player could click an empty
+      // slot and not notice anything happened. scrollIntoView's
+      // 'nearest' block only scrolls the minimum amount actually needed
+      // to bring it into view -- a no-op when it's already visible,
+      // rather than jumping the page around on every click. Called
+      // right after renderContent() rebuilds #pgSlotPicker, so the
+      // search input already exists in the DOM by the time this runs.
+      function scrollPickerIntoView() {
+        var target = document.getElementById('slotSearchInput') || document.getElementById('pgSlotPicker');
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
       }
 
       // Only the "still to purchase" list + empty message -- the
