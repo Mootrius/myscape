@@ -490,7 +490,14 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
 
 def resolve_gear_setup_icon(raw_icon: Optional[dict], mapping: dict) -> Optional[dict]:
     """Resolve a setup's display-only icon -- just a name + icon URL, no
-    price/ownership attached since it never affects cost."""
+    price/ownership attached since it never affects cost. An untradeable
+    icon pick (a pet, a quest reward, anything with no GE listing --
+    "Tumeken's guardian" being the reported case) used to always come
+    back with icon: None here, falling back to the frontend's plain
+    text-abbreviation placeholder even when we know its real wiki icon
+    perfectly well -- the same gap _untradeable_item_icon already closes
+    for gear-slot items (see its docstring), just never wired up here
+    too."""
     if not raw_icon:
         return None
     item_id = raw_icon.get("itemId")
@@ -500,7 +507,7 @@ def resolve_gear_setup_icon(raw_icon: Optional[dict], mapping: dict) -> Optional
         icon = item_icon_url(meta.get("icon"))
         return {"itemId": item_id, "itemName": name, "icon": icon, "tradeable": True}
     name = raw_icon.get("itemName") or "Item"
-    return {"itemId": None, "itemName": name, "icon": None, "tradeable": False}
+    return {"itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False}
 
 
 def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[dict]:
