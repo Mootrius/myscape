@@ -1,17 +1,26 @@
 """One-off script: fetch the OSRS Wiki's Bucket:Recipe table in full,
 keep only entries shaped like a pure item combination -- no uses_skill
 (e.g. Neitiznot faceguard = Helm of Neitiznot + Basilisk jaw -- see the
-research notes in the conversation this was built from) and an output
-quantity of exactly 1 (excludes batch-crafting recipes like "5 poisoned
-arrows from a batch of unfinished ones", where the listed material
-quantities are for the whole batch, not per unit, and dividing them out
-isn't something this script tries to do) -- and write a compact
-{outputNameLower: {"name":..., "icon":..., "materials": [...]}} JSON
-index to app/data/recipes.json for the app to bundle/ship. Keyed by the
-recipe's OUTPUT name rather than the wiki page name, since one page can
-document several output variants (e.g. "Adamant arrow" documents both
-plain and poisoned arrows as separate rows) and it's the output name a
-player would actually search for.
+research notes in the conversation this was built from), OR the exact
+uses_skill pair ["Magic", "Runecraft"] (see ALSO_ALLOWED_SKILL_SIGNATURE
+below) -- and an output quantity of exactly 1 (excludes batch-crafting
+recipes like "5 poisoned arrows from a batch of unfinished ones", where
+the listed material quantities are for the whole batch, not per unit,
+and dividing them out isn't something this script tries to do) -- and
+write a compact {outputNameLower: {"name":..., "icon":...,
+"materials": [...]}} JSON index to app/data/recipes.json for the app to
+bundle/ship. Keyed by the recipe's OUTPUT name rather than the wiki
+page name, since one page can document several output variants (e.g.
+"Adamant arrow" documents both plain and poisoned arrows as separate
+rows) and it's the output name a player would actually search for.
+
+Recipes are resolved recursively at lookup time, not here (see
+expand_recipe_components in app/recipes.py) -- some combination items
+are themselves built from other combination items (e.g. Avernic treads
+(max) is built by combining in Primordial/Pegasian/Eternal boots one at
+a time, each of which is itself a combination of a base boot + an
+elite crystal), so this snapshot only needs to record one level of
+"what this specific output is made of" and let the app walk the chain.
 
 Run with: python scripts/fetch_recipes.py (from the repo root).
 
@@ -30,6 +39,22 @@ API = "https://oldschool.runescape.wiki/api.php"
 USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 PAGE_SIZE = 5000
 OUTPUT_PATH = pathlib.Path(__file__).resolve().parent.parent / "app" / "data" / "recipes.json"
+
+# A handful of genuine item-combination recipes (combine a base item +
+# an upgrade item at an altar/ritual) also carry this exact skill
+# signature, apparently because the ritual itself grants a small flavor
+# XP reward (200 Magic + 200 Runecraft) -- Eternal/Pegasian/Primordial
+# boots, the full Avernic treads upgrade chain, and the Ecumenical key.
+# Verified against every one of the ~210 Runecraft-tagged rows in the
+# wiki's Recipe table (as of when this was written): this exact pair,
+# in this exact order, appears on exactly those 11 items and nothing
+# else -- no true skilling recipe (runecrafting runes, enchanting,
+# etc.) uses this precise combination, so allowing it through doesn't
+# risk pulling in real skilling content. If the wiki ever reorganizes
+# this data and that stops being true, re-verify before trusting it
+# again -- this is a narrow, checked exception, not a general "ignore
+# uses_skill" rule.
+ALSO_ALLOWED_SKILL_SIGNATURE = ["Magic", "Runecraft"]
 
 
 def fetch_page(offset: int) -> list:
@@ -68,7 +93,8 @@ def main():
     skipped_batch_yield = 0
     index = {}
     for row in all_rows:
-        if row.get("uses_skill"):
+        uses_skill = row.get("uses_skill") or []
+        if uses_skill and uses_skill != ALSO_ALLOWED_SKILL_SIGNATURE:
             skilling += 1
             continue  # skilling recipe, not a pure item combination
         combos += 1

@@ -98,23 +98,82 @@ def _build_name_to_id(mapping: dict) -> Dict[str, int]:
     return by_name
 
 
+# Some combination items are themselves built from other combination
+# items rather than straight from the Grand Exchange -- e.g. Avernic
+# treads (max) is built by combining in Primordial, Pegasian, and
+# Eternal boots one at a time, and the intermediate "partway combined"
+# treads at each step (e.g. "Avernic treads (pr)(pe)") have no GE
+# listing of their own, so pricing the finished item correctly means
+# walking all the way down to real, purchasable materials. This caps
+# how many such untradeable-and-itself-a-recipe hops _expand_materials
+# will follow before giving up and leaving whatever's left as a bare
+# named component -- real recipe chains in the game are at most 2-3
+# deep, so this is a generous safety margin against a data glitch
+# (or, in principle, a cycle) causing runaway recursion, not a limit
+# anything legitimate should ever hit.
+MAX_RECIPE_DEPTH = 8
+
+
+def _expand_materials(materials: List[dict], name_to_id: Dict[str, int], depth: int, seen: set) -> List[dict]:
+    """Recursively resolves a raw materials list into a flat list of
+    components in the shape a gear slot expects -- {"itemId": int|None,
+    "itemName": str, "quantity": int}. A material that's itself
+    GE-tradeable resolves directly to that item id and is left there
+    (even if it also happens to have its own recipe -- if you can just
+    buy the finished item, there's no reason to price it as if it were
+    built from scratch). A material that ISN'T tradeable but does have
+    its own known recipe gets walked one level deeper instead, with its
+    sub-materials' quantities scaled by how many of it this level
+    needed. Anything left over (untradeable with no recipe of its own)
+    is kept as a bare named component, exactly like a manually-built
+    combo already supports for a plain untradeable item. Same-name
+    results are merged/summed so a material needed at more than one
+    level (e.g. Demon tear, consumed at every step of the Avernic
+    treads upgrade chain) shows up as one combined line instead of
+    several duplicates."""
+    merged: Dict[str, dict] = {}
+
+    def add(item_id: Optional[int], item_name: str, quantity: int):
+        key = item_name.lower()
+        if key in merged:
+            merged[key]["quantity"] += quantity
+        else:
+            merged[key] = {"itemId": item_id, "itemName": item_name, "quantity": quantity}
+
+    for m in materials:
+        mat_name = (m.get("name") or "").strip()
+        if not mat_name:
+            continue
+        qty = m.get("quantity") or 1
+        key = mat_name.lower()
+        item_id = name_to_id.get(key)
+
+        if item_id is None and depth < MAX_RECIPE_DEPTH and key not in seen:
+            sub_recipe = get_recipe_index().get(key)
+            if sub_recipe:
+                sub_components = _expand_materials(sub_recipe["materials"], name_to_id, depth + 1, seen | {key})
+                for comp in sub_components:
+                    add(comp["itemId"], comp["itemName"], comp["quantity"] * qty)
+                continue
+
+        add(item_id, mat_name, qty)
+
+    return list(merged.values())
+
+
 def expand_recipe_components(item_name: str, mapping: dict) -> Optional[List[dict]]:
     """If item_name matches a known combination recipe, returns the
-    components list in the raw storage shape a gear slot expects (see
-    GearComponentIn in app/schemas.py) -- {"itemId": int|None,
-    "itemName": str, "quantity": int} per material, with each material
-    resolved to a real item id when it's itself GE-tradeable and left
-    as a name-only (untradeable) reference otherwise, exactly like a
-    manually-built combo already supports. Returns None when item_name
-    isn't a recognized recipe, so the caller can fall back to storing it
-    as a plain untradeable item."""
+    fully-resolved components list in the raw storage shape a gear slot
+    expects (see GearComponentIn in app/schemas.py) -- {"itemId":
+    int|None, "itemName": str, "quantity": int} per material -- walking
+    down through any untradeable intermediate combinations along the
+    way (see _expand_materials) until everything left is either a real,
+    priceable Grand Exchange item or a plain named (untradeable) one,
+    exactly like a manually-built combo already supports. Returns None
+    when item_name isn't a recognized recipe at all, so the caller can
+    fall back to storing it as a plain untradeable item."""
     recipe = find_recipe(item_name)
     if not recipe:
         return None
     name_to_id = _build_name_to_id(mapping)
-    components = []
-    for m in recipe["materials"]:
-        mat_name = m.get("name") or ""
-        item_id = name_to_id.get(mat_name.strip().lower())
-        components.append({"itemId": item_id, "itemName": mat_name, "quantity": m.get("quantity") or 1})
-    return components
+    return _expand_materials(recipe["materials"], name_to_id, depth=0, seen={item_name.strip().lower()})
