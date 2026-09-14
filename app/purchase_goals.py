@@ -370,6 +370,7 @@ CHARGED_TO_UNCHARGED_ITEM_NAME: Dict[str, str] = {
     "tumeken's shadow": "Tumeken's shadow (uncharged)",
     "corrupted tumeken's shadow": "Corrupted tumeken's shadow (uncharged)",
     "toxic staff of the dead": "Toxic staff (uncharged)",
+    "eye of ayak": "Eye of Ayak (uncharged)",
     "warped sceptre": "Warped sceptre (uncharged)",
     "toxic blowpipe": "Toxic blowpipe (empty)",
     "trident of the seas": "Uncharged trident",
