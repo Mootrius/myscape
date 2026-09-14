@@ -142,6 +142,19 @@ def _footer(player: Optional[Player]) -> str:
 def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "", extra_head: str = "") -> str:
     nav_left, nav_right = _nav_sides(player)
     shared_script = """
+    // See myscape.css's own `user-select: none` for the text-selection
+    // half of "nothing on the page is grabbable" -- this is the other
+    // half, for images specifically: -webkit-user-drag there stops
+    // WebKit's native image-drag ghost, but Firefox has no CSS knob for
+    // it at all, only preventDefault() on the drag's own dragstart
+    // event. Delegated on document (rather than one listener per <img>)
+    // so it also covers every icon injected later by a page's own
+    // script (gear-slot icons, NPC/item boxes, search results, etc.),
+    // not just whatever <img> tags happened to be in the initial HTML.
+    document.addEventListener('dragstart', (e) => {
+      if (e.target.tagName === 'IMG') e.preventDefault();
+    });
+
     document.getElementById('logoutBtn')?.addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
       window.location.href = '/';
@@ -1788,17 +1801,30 @@ def render_loot_tracker(player: Player) -> str:
 
         var selectedValues = selectedNpc ? (npcHourlyValues[selectedNpc] || buckets.map(function () { return 0; })) : null;
 
+        // Only ever has something to show once an NPC is selected -- the
+        // outline marks the bucket's *total* so it's visible past
+        // wherever the selected NPC's own fill stops short of it, which
+        // means nothing at all when every NPC's loot is being shown
+        // together (the fill already covers the whole bucket then).
+        // Pinning it to 0% rather than the bucket total whenever nothing
+        // is selected is what makes selecting/deselecting an NPC grow
+        // the outline in and shrink it back out (the height transition
+        // below animates between these), instead of the box sitting at
+        // its full height the entire time with only its border-color
+        // fading in and out -- which is what it looked like before this
+        // depended on selectedNpc at all.
         function outlinePct(b) {
+          if (!selectedNpc) return 0;
           return maxValue > 0 ? Math.max(0, Math.min(100, (b.value / maxValue) * 100)) : 0;
         }
         // A bordered box still paints its border even at height:0 (the
         // same reason a 0x0 div with colored borders makes a CSS
-        // triangle) -- so an hour with zero total loot rendered a
-        // visible sliver of the outline's border color once selecting
-        // an NPC made that border non-transparent. Only turning the
-        // border on for an hour that actually has something to outline
-        // avoids that rather than trying to hide a 0-height box's
-        // border with more CSS.
+        // triangle) -- so an hour with zero total loot would render a
+        // visible sliver of the outline's border color the instant an
+        // NPC got selected, despite its height correctly staying at 0%
+        // the whole time. Only turning the border on for an hour that
+        // actually has something to outline avoids that rather than
+        // trying to hide a 0-height box's border with more CSS.
         function outlineActive(b) {
           return !!selectedNpc && b.value > 0;
         }

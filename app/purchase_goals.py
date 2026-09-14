@@ -266,7 +266,36 @@ def _normalize_item_name(name: Optional[str]) -> str:
     return _strip_cosmetic_item_suffix((name or "").strip()).strip().lower()
 
 
-def _take_owned(pool_by_id: dict, pool_by_name: dict, item_id: Optional[int], item_name: Optional[str], qty: int) -> int:
+def _noted_counterpart_id(item_id: int, mapping: dict) -> Optional[int]:
+    """Given a tradeable item's own (unnoted) item id, returns its noted
+    counterpart's id -- unnoted_id + 1, OSRS's own structural convention
+    for linking every notable item to its note (the same convention
+    _noted_id_fallback in app/loot.py relies on for pricing, confirmed
+    live against the wiki API: e.g. Adamantite ore is 449 unnoted / 450
+    noted). Only returns it when item_id itself is a known tradeable
+    item (mapping confirms it -- true by construction here, since every
+    caller's item_id already came from mapping/search_items) AND
+    item_id + 1 is NOT separately listed in mapping -- a noted item's id
+    is never listed there at all (same fact loot.py's fallback relies
+    on in the other direction), so finding item_id + 1 present as its
+    own distinct mapping entry means it's some other real item, not this
+    one's note, and crediting it toward ownership would be wrong."""
+    if str(item_id) not in mapping:
+        return None
+    candidate = item_id + 1
+    if str(candidate) in mapping:
+        return None
+    return candidate
+
+
+def _take_owned(
+    pool_by_id: dict,
+    pool_by_name: dict,
+    item_id: Optional[int],
+    item_name: Optional[str],
+    qty: int,
+    mapping: Optional[dict] = None,
+) -> int:
     """Claim up to qty units of an item from the shared "already own"
     pool (built from bank+inventory+equipment+potion storage -- see
     _build_owned_pools below), returning how many were actually
@@ -292,7 +321,17 @@ def _take_owned(pool_by_id: dict, pool_by_name: dict, item_id: Optional[int], it
     risks claiming the same physical item twice over. An item can have
     more than one real id (a quest-reward variant, a minigame-only
     version, etc.) -- owning it under any of them counts, and this
-    tries them in order until qty is satisfied or they're exhausted."""
+    tries them in order until qty is satisfied or they're exhausted.
+
+    A gear slot's required item id is always the UNNOTED canonical id
+    (it's configured via search_items, which only ever returns that
+    one -- see get_mapping's docstring), but a player's bank can easily
+    hold the same item noted (its own, separate item id --
+    unnoted_id + 1, see _noted_counterpart_id). Without this, a noted
+    copy sitting right there in the bank never counted toward owning
+    the unnoted slot at all -- once the exact id comes up short, and a
+    `mapping` was passed in, this also checks the noted counterpart's
+    id before giving up on that unit."""
     if qty <= 0:
         return 0
     if item_id is not None:
@@ -300,6 +339,15 @@ def _take_owned(pool_by_id: dict, pool_by_name: dict, item_id: Optional[int], it
         take = min(avail, qty)
         if take:
             pool_by_id[item_id] = avail - take
+        remaining = qty - take
+        if remaining > 0 and mapping is not None:
+            noted_id = _noted_counterpart_id(item_id, mapping)
+            if noted_id is not None:
+                avail_noted = pool_by_id.get(noted_id, 0)
+                take_noted = min(avail_noted, remaining)
+                if take_noted:
+                    pool_by_id[noted_id] = avail_noted - take_noted
+                    take += take_noted
         return take
 
     candidate_ids = find_item_ids(item_name)
@@ -341,7 +389,7 @@ def _resolve_gear_component(raw_component: dict, mapping: dict, prices: dict, po
     icon = item_icon_url(meta.get("icon"))
     unit_price, _ = unit_price_for(comp_id, prices)
     price = unit_price if unit_price is not None else 0
-    owned_qty = _take_owned(pool_by_id, pool_by_name, comp_id, name, qty)
+    owned_qty = _take_owned(pool_by_id, pool_by_name, comp_id, name, qty, mapping)
     remaining = max(qty - owned_qty, 0)
     return {
         "itemId": comp_id, "itemName": name, "icon": icon, "quantity": qty,
@@ -737,7 +785,7 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
     icon = item_icon_url(meta.get("icon"))
     unit_price, price_source = unit_price_for(item_id, prices)
     price = unit_price if unit_price is not None else 0
-    owned = _take_owned(pool_by_id, pool_by_name, item_id, name, 1) >= 1
+    owned = _take_owned(pool_by_id, pool_by_name, item_id, name, 1, mapping) >= 1
     return {
         "itemId": item_id, "itemName": name, "icon": icon, "tradeable": True,
         "unitPrice": unit_price, "priceSource": price_source, "fullCost": price,

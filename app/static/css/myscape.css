@@ -44,6 +44,34 @@
 
 * { box-sizing: border-box; }
 
+/* Site-wide: nothing on the page should be text-highlightable or
+   image-draggable. A lot of the UI here is drag/click-heavy (gear
+   setup slots and their drag-and-drop reordering, sort tabs, NPC/item
+   boxes, search results) and an accidental text selection -- or an
+   image starting to drag -- mid-click just gets in the way of that
+   instead of doing anything useful. Inputs/textareas/contenteditable
+   are explicitly carved back out since selecting text you've typed
+   (to copy or edit it) is exactly the normal, expected behavior
+   there. See _shell()'s shared_script in app/pages.py for the other
+   half of this -- a dragstart handler on <img>, since -webkit-user-drag
+   below is WebKit-only and doesn't stop Firefox's own native image
+   drag. */
+* {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+input, textarea, [contenteditable], [contenteditable] * {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-touch-callout: none;
+}
+
 /* min-height + flex column is what actually pins <footer> (see below) to
    the true bottom of the viewport on a short page (e.g. the dashboard
    with just its two "coming soon" cards) instead of it sitting right
