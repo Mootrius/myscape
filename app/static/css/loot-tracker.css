@@ -15,9 +15,19 @@
   background: var(--panel-2); border: 1px solid var(--border);
   padding: 18px 22px 14px; margin-bottom: 18px;
 }
-.loot-chart-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.loot-chart-header { position: relative; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
 .loot-chart-total { font-size: 13px; color: var(--gold); font-variant-numeric: tabular-nums; }
 .loot-chart-kills { font-size: 12px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
+/* The selected NPC's name (or "ALL NPCs" when nothing's selected --
+   see renderBarChart in app/pages.py) -- absolutely centered on the
+   header rather than a third flex sibling, since the kills/total text
+   either side of it aren't the same width and true centering needs to
+   ignore that instead of splitting the remaining space evenly. */
+.loot-chart-title {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-size: 12px; color: var(--text-dim); letter-spacing: 0.03em;
+  white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
    themselves (not on .loot-bar-plot -- padding there would be a no-op
@@ -66,12 +76,10 @@
    purchase-goals.css) since it's the same pattern: a row of icon
    buttons, one active/selected at a time. Kept as its own copy here
    rather than sharing that class across stylesheets, matching how
-   this page's CSS file has stayed self-contained so far. A visible
-   name label (not just an icon + tooltip, unlike the Purchase Goals
-   version) is deliberate -- NPC portraits are guessed wiki filenames
-   that 404 far more often than a player's own chosen setup icons (see
-   npc_icon_url's docstring in app/loot.py), so a label is needed here
-   to keep an unlucky box from just being blank. ---------- */
+   this page's CSS file has stayed self-contained so far. No name
+   label -- identity is icon + tooltip only (same as the Purchase
+   Goals version), with kill count and gp value as the two visible
+   lines instead. ---------- */
 .loot-npc-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .loot-npc-box {
   width: 68px; display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -81,11 +89,11 @@
 .loot-npc-box:hover { border-color: var(--gold-dim); }
 .loot-npc-box.active { border-color: var(--gold); }
 .loot-npc-box-icon { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; }
-.loot-npc-box-name {
+.loot-npc-box-kc {
   font-size: 10px; color: var(--text-dim); text-align: center; line-height: 1.15;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+  font-variant-numeric: tabular-nums;
 }
-.loot-npc-box.active .loot-npc-box-name { color: var(--text); }
+.loot-npc-box.active .loot-npc-box-kc { color: var(--text); }
 .loot-npc-box-value { font-size: 9.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
 .loot-npc-box.active .loot-npc-box-value { color: var(--gold); }
 
@@ -103,7 +111,12 @@
    compact toolbar context instead of the page's usual full-bleed
    forms. */
 .loot-panel-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-.loot-search { flex: 1 1 140px; min-width: 100px; padding: 8px 10px; font-size: 13px; }
+/* Fixed height (rather than matching padding/font-size to the sort
+   tabs beside it) so the two controls line up exactly regardless of
+   their different font sizes -- box-sizing: border-box (set globally
+   in myscape.css) means padding/border count toward this height
+   instead of adding to it. */
+.loot-search { flex: 1 1 140px; min-width: 100px; height: 34px; padding: 0 10px; font-size: 13px; }
 
 /* Mirrors purchase-goals.css's .gear-summary-sort/.sort-btn pattern
    (kept as its own copy here rather than shared across files, per this
@@ -111,8 +124,9 @@
    equal-width toggle buttons, one active at a time. */
 .loot-sort-tabs { display: flex; gap: 6px; flex: 2 1 260px; }
 .loot-sort-tab {
-  flex: 1;
-  padding: 8px 4px;
+  flex: 1; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
@@ -126,18 +140,18 @@
   .loot-panels { flex-direction: column; }
 }
 
-/* ---------- item panel (below-right) -- one row per item, styled
-   after purchase-goals.css's .gear-summary-row (icon + name + a value
-   on the right; a quantity is added here since a single item can drop
-   more than once in the window, unlike a gear-setup component). Same
-   npc-scoped, 24h-windowed data as the NPC panel beside it -- see
-   windowItems/npcItems in app/loot.py's build_loot_state. ---------- */
-.loot-item-list { display: flex; flex-direction: column; gap: 6px; }
-.loot-item-row {
-  display: flex; align-items: center; gap: 10px; padding: 7px 10px;
-  background: var(--panel-2); border: 1px solid var(--border);
+/* ---------- item panel (below-right) -- same small-box grid as the
+   NPC panel beside it (.loot-npc-box above) rather than a list of long
+   rows: just an icon, the quantity dropped, and its gp value, with the
+   item's name available on hover only (same identity-by-tooltip
+   convention as the NPC boxes). Same npc-scoped, 24h-windowed data --
+   see windowItems/npcItems in app/loot.py's build_loot_state. ---------- */
+.loot-item-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.loot-item-box {
+  width: 68px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 6px 6px;
 }
-.loot-item-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: none; }
-.loot-item-row-name { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.loot-item-row-qty { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.loot-item-row-value { font-size: 12px; color: var(--gold); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.loot-item-box-icon { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; }
+.loot-item-box-qty { font-size: 10px; color: var(--text-dim); text-align: center; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.loot-item-box-value { font-size: 9.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }

@@ -1609,6 +1609,7 @@ def render_loot_tracker(player: Player) -> str:
       <div class="loot-chart-card">
         <div class="loot-chart-header">
           <div class="loot-chart-kills" id="lootChartKills">LAST 24H &middot; 0 KILLS</div>
+          <div class="loot-chart-title" id="lootChartTitle">ALL NPCs</div>
           <div class="loot-chart-total" id="lootChartTotal">0 gp</div>
         </div>
         <div class="loot-bar-plot">
@@ -1771,6 +1772,7 @@ def render_loot_tracker(player: Player) -> str:
         document.getElementById('lootChartTotal').textContent = fmtGp(windowValue) + ' gp';
         document.getElementById('lootChartKills').textContent =
           'last 24h \\u00b7 ' + (windowKills || 0).toLocaleString('en-US') + ' kill' + (windowKills === 1 ? '' : 's');
+        document.getElementById('lootChartTitle').textContent = selectedNpc || 'ALL NPCs';
 
         var maxValue = niceMax(Math.max.apply(null, [0].concat(buckets.map(function (b) { return b.value; }))));
         var gridlineSteps = 4;
@@ -1888,28 +1890,40 @@ def render_loot_tracker(player: Player) -> str:
         }
         emptyEl.style.display = 'none';
 
+        function npcTitle(n) {
+          return n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kill' + (n.killCount === 1 ? '' : 's');
+        }
+
         var key = state.npcSearch + '\\u0001' + state.npcSort + '\\u0001' + sorted.map(function (n) { return n.sourceName; }).join('|');
         if (key !== lastNpcKey) {
           lastNpcKey = key;
           rowEl.innerHTML = sorted.map(function (n) {
             var active = state.selectedNpc === n.sourceName;
             return '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
-              escapeHtml(n.sourceName) + '" title="' + escapeHtml(n.sourceName) + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' +
-              n.killCount + ' kill' + (n.killCount === 1 ? '' : 's') + '">' +
+              escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
               iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
-              '<div class="loot-npc-box-name">' + escapeHtml(n.sourceName) + '</div>' +
+              '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
               '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
             '</button>';
           }).join('');
           return;
         }
 
+        // Same NPC set/order as last render (key unchanged) -- reuse
+        // the existing boxes (and their <img> icons, avoiding the
+        // flicker) but still refresh the kc/value text and title in
+        // place, since a later poll can bump those numbers for an NPC
+        // that's still sorted into the same slot.
         var boxes = rowEl.children;
         sorted.forEach(function (n, i) {
           var box = boxes[i];
           if (!box) return;
           box.classList.toggle('active', state.selectedNpc === n.sourceName);
-          box.title = n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kill' + (n.killCount === 1 ? '' : 's');
+          box.title = npcTitle(n);
+          var kcEl = box.querySelector('.loot-npc-box-kc');
+          if (kcEl) kcEl.textContent = n.killCount + ' kc';
+          var valEl = box.querySelector('.loot-npc-box-value');
+          if (valEl) valEl.textContent = fmtGpCompact(n.value) + ' gp';
         });
       }
 
@@ -1945,27 +1959,37 @@ def render_loot_tracker(player: Player) -> str:
         }
         emptyEl.style.display = 'none';
 
+        function itemTitle(it) {
+          return it.itemName + ' \\u00d7 ' + fmtGp(it.quantity) + ' \\u2014 ' + fmtGp(it.value) + ' gp';
+        }
+
         var key = (state.selectedNpc || '') + '\\u0001' + state.itemSearch + '\\u0001' + state.itemSort + '\\u0001' +
           sorted.map(function (it) { return it.itemId != null ? it.itemId : it.itemName; }).join('|');
         if (key !== lastItemKey) {
           lastItemKey = key;
           listEl.innerHTML = sorted.map(function (it) {
-            return '<div class="loot-item-row" title="' + escapeHtml(it.itemName) + ' \\u00d7 ' + fmtGp(it.quantity) +
-              ' \\u2014 ' + fmtGp(it.value) + ' gp">' +
-              iconImg(it.icon, it.itemName, 'loot-item-row-icon') +
-              '<div class="loot-item-row-name">' + escapeHtml(it.itemName) + '</div>' +
-              '<div class="loot-item-row-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
-              '<div class="loot-item-row-value">' + fmtGpCompact(it.value) + ' gp</div>' +
+            return '<div class="loot-item-box" title="' + escapeHtml(itemTitle(it)) + '">' +
+              iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
+              '<div class="loot-item-box-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
+              '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
             '</div>';
           }).join('');
           return;
         }
 
-        var rows = listEl.children;
+        // Same reasoning as renderNpcRow's reuse branch above: the item
+        // set/order didn't change, so keep the existing icons, but
+        // still refresh the qty/value text and title in case a later
+        // poll bumped either for an item still sorted into this slot.
+        var boxes = listEl.children;
         sorted.forEach(function (it, i) {
-          var row = rows[i];
-          if (!row) return;
-          row.title = it.itemName + ' \\u00d7 ' + fmtGp(it.quantity) + ' \\u2014 ' + fmtGp(it.value) + ' gp';
+          var box = boxes[i];
+          if (!box) return;
+          box.title = itemTitle(it);
+          var qtyEl = box.querySelector('.loot-item-box-qty');
+          if (qtyEl) qtyEl.textContent = '\\u00d7' + fmtGpCompact(it.quantity);
+          var valEl = box.querySelector('.loot-item-box-value');
+          if (valEl) valEl.textContent = fmtGpCompact(it.value) + ' gp';
         });
       }
 
