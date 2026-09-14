@@ -77,6 +77,7 @@ class Player(Base):
     inventory_items = relationship("InventoryItem", back_populates="player", cascade="all, delete-orphan")
     equipment_items = relationship("EquipmentItem", back_populates="player", cascade="all, delete-orphan")
     potion_storage_items = relationship("PotionStorageItem", back_populates="player", cascade="all, delete-orphan")
+    rune_pouch_items = relationship("RunePouchItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
 
 
@@ -274,6 +275,55 @@ class PotionStorageItem(Base):
     player = relationship("Player", back_populates="potion_storage_items")
 
     __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_potion_storage_items_player_item"),)
+
+
+class RunePouchItem(Base):
+    """The player's current Rune Pouch contents -- same full-snapshot,
+    delete-and-replace model as Bank/Inventory/Equipment/
+    PotionStorageItem above. Synced by POST /api/players/me/rune-pouch
+    (see MyscapeClient#syncRunePouch in the Mootrius/myscape-plugin
+    repo).
+
+    A Rune Pouch (regular or Divine) is a single inventory item whose
+    contents RuneLite can't read as part of a normal inventory scan --
+    the pouch itself shows up as one InventoryItem entry, but the runes
+    held inside it are exposed only through a separate set of varbits
+    (see MyscapePlugin#readRunePouchItems there). Before this table
+    existed, those runes were invisible to Purchase Goals entirely: the
+    plugin only ever read the bank/inventory/equipment/potion-storage
+    sources, and a rune pouch's contents fit none of them, so a setup
+    needing (for example) fire runes would keep listing them as still
+    to buy even while a full pouch of them sat in the player's own
+    inventory.
+
+    Deliberately its own table rather than folded into
+    InventoryItem's payload: /api/players/me/inventory caps the number
+    of *distinct* item entries per sync (MAX_INVENTORY_ITEMS), and a
+    stocked pouch can add several more distinct entries on top of an
+    otherwise-normal inventory -- routing it through its own endpoint,
+    the same way Potion Storage already does, means a full pouch can
+    never cause an otherwise-valid inventory sync to be rejected.
+
+    See _build_owned_pools in app/purchase_goals.py, which folds this
+    table into the same owned-item pool as bank/inventory/equipment/
+    potion-storage with no special-casing needed.
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above -- kept for consistency, even though every rune
+    is itself GE-tradeable in practice."""
+
+    __tablename__ = "rune_pouch_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="rune_pouch_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_rune_pouch_items_player_item"),)
 
 
 class GearSetup(Base):

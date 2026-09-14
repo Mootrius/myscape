@@ -293,6 +293,52 @@ class PotionStorageOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+# -- Rune pouch: identical shape to Bank/Inventory/Potion Storage above,
+# just a separate container -- see RunePouchItem's docstring in
+# app/models.py for why this exists. ----------------------------------
+
+class RunePouchItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class RunePouchSyncRequest(BaseModel):
+    items: List[RunePouchItemIn]
+
+
+class RunePouchSyncResponse(BaseModel):
+    item_count: int
+
+
+class RunePouchItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class RunePouchOut(BaseModel):
+    items: List[RunePouchItemOut]
+    updated_at: Optional[datetime] = None
+
+
 # -- Item search (backs the gear-setup slot picker's search box). ---------
 
 class ItemSearchResult(BaseModel):

@@ -38,7 +38,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.item_ids import find_item_by_exact_name, find_item_icon, find_item_ids, search_item_names
-from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem
+from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem, RunePouchItem
 from app.recipes import find_recipe, search_recipe_names
 from app.schemas import GEAR_SETUP_EQUIPMENT_SLOTS, INVENTORY_SIZE
 
@@ -879,18 +879,24 @@ def _still_to_purchase_summary(
 
 
 def _build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict[str, int]]:
-    """Combines bank+inventory+equipment+potion storage into the same
-    shape Maintrius's own load_character_snapshot() produced
+    """Combines bank+inventory+equipment+potion storage+rune pouch into
+    the same shape Maintrius's own load_character_snapshot() produced
     (totalsById/totalsByName) -- the "everything currently owned" pool
     every gear setup checks itself against independently (see
     build_gear_setups, which takes a fresh copy of this per setup).
 
-    Potion storage (added alongside PotionStorageItem in app/models.py)
-    slots in here with zero special-casing: the plugin already reports
-    it in the exact same item-id/quantity shape as bank/inventory/
-    equipment (see MyscapePlugin#readPotionStorageItems in the
-    Mootrius/myscape-plugin repo), so it just needs its own query
-    added, same as the other three."""
+    Potion storage and the rune pouch (added alongside PotionStorageItem
+    and RunePouchItem in app/models.py) slot in here with zero special-
+    casing: the plugin already reports each in the exact same item-id/
+    quantity shape as bank/inventory/equipment (see
+    MyscapePlugin#readPotionStorageItems and #readRunePouchItems in the
+    Mootrius/myscape-plugin repo), so each just needs its own query
+    added, same as the other two. Runes owned only inside a pouch would
+    otherwise never show up here at all -- RuneLite's normal inventory
+    scan reports the pouch itself as a single item, not what's stored
+    inside it -- so without this, a setup needing (for example) fire
+    runes would keep listing them as still to buy even while a full
+    pouch of them sat in the player's own inventory."""
     pool_by_id: Dict[int, int] = {}
     pool_by_name: Dict[str, int] = {}
 
@@ -907,6 +913,8 @@ def _build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dic
     for item in db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
     for item in db.query(PotionStorageItem).filter(PotionStorageItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(RunePouchItem).filter(RunePouchItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
 
     return pool_by_id, pool_by_name

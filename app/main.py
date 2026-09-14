@@ -25,7 +25,7 @@ from app.auth import (
 )
 from app.database import get_db
 from app.limiter import limiter
-from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem
+from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem, RunePouchItem
 from app.pages import render_dashboard, render_landing, render_login, render_purchase_goals, render_signup
 from app.purchase_goals import (
     build_purchase_goals_state,
@@ -62,6 +62,10 @@ from app.schemas import (
     PotionStorageSyncRequest,
     PotionStorageSyncResponse,
     RenameGearSetupRequest,
+    RunePouchOut,
+    RunePouchItemOut,
+    RunePouchSyncRequest,
+    RunePouchSyncResponse,
     SetGearSetupIconRequest,
     SetGearSlotRequest,
     SetStillToPurchaseOrderRequest,
@@ -85,6 +89,13 @@ MAX_EQUIPMENT_ITEMS = len(EQUIPMENT_SLOTS)
 # in the Mootrius/myscape-plugin repo), so this is a generous multiple
 # of the real ceiling, not a round-number guess either.
 MAX_POTION_STORAGE_ITEMS = 200
+# A Rune Pouch (regular or Divine) has at most 6 slots (see
+# MyscapePlugin's RUNE_POUCH_TYPE_VARBITS in the Mootrius/myscape-plugin
+# repo, read defensively at 6 even though only 3-4 are used in-game
+# today), each holding a single rune type -- so 6 is the real ceiling,
+# not a round-number guess. Left with a little headroom in case Jagex
+# ever ships a bigger pouch before this constant is revisited.
+MAX_RUNE_POUCH_ITEMS = 10
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
 if not SESSION_SECRET_KEY:
@@ -365,6 +376,56 @@ def read_potion_storage(db: Session = Depends(get_db), player: Player = Depends(
     )
     updated_at = items[0].updated_at if items else None
     return PotionStorageOut(items=[PotionStorageItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/rune-pouch", response_model=RunePouchSyncResponse)
+def sync_rune_pouch(
+    payload: RunePouchSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for a Rune
+    Pouch's contents instead -- see MyscapeClient#syncRunePouch in the
+    Mootrius/myscape-plugin repo. Full replace, never a merge. Unlike
+    bank/inventory/equipment, a Rune Pouch's contents aren't part of any
+    ItemContainer the plugin can just read directly -- see
+    MyscapePlugin#readRunePouchItems there for how it actually reads
+    this (the pouch itself is one inventory item; what's stored inside
+    it comes from a separate set of varbits) -- but the resulting shape
+    and this endpoint's contract are identical, so nothing here needs to
+    know the difference. Deliberately its own endpoint rather than
+    folded into /inventory's payload: see RunePouchItem's docstring in
+    app/models.py for why."""
+    if len(payload.items) > MAX_RUNE_POUCH_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_RUNE_POUCH_ITEMS}).",
+        )
+
+    db.query(RunePouchItem).filter(RunePouchItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(RunePouchItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    db.commit()
+
+    return RunePouchSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/rune-pouch", response_model=RunePouchOut)
+def read_rune_pouch(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the rune
+    pouch instead."""
+    items = (
+        db.query(RunePouchItem)
+        .filter(RunePouchItem.player_id == player.id)
+        .order_by(RunePouchItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return RunePouchOut(items=[RunePouchItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
 @app.get("/api/items/search", response_model=ItemSearchResponse)
