@@ -810,13 +810,6 @@ def render_purchase_goals(player: Player) -> str:
         return cls;
       }
 
-      function slotBadge(resolved) {
-        if (!resolved) return '';
-        if (resolved.components) return '<span class="gear-slot-combo-badge" title="Combined item">C</span>';
-        if (!resolved.tradeable) return '<span class="gear-slot-untradeable-badge" title="Untradeable -- matched by its real item id when known, by name otherwise">?</span>';
-        return '';
-      }
-
       function itemWikiUrl(itemName) {
         return 'https://oldschool.runescape.wiki/w/' + encodeURIComponent(String(itemName).replace(/ /g, '_'));
       }
@@ -827,16 +820,14 @@ def render_purchase_goals(player: Player) -> str:
         var inner = resolved && resolved.icon
           ? '<img class="gear-slot-icon" src="' + esc(resolved.icon) + '" alt="" />'
           : (resolved ? '<span class="tracker-icon-fallback">' + esc(resolved.itemName || '?').slice(0, 6) + '</span>' : '');
-        var title = resolved
-          ? esc(resolved.itemName) + (resolved.cost ? ' -- ' + formatGp(resolved.cost) + ' gp' : '') + ' -- click to view on the wiki'
-          : 'Empty slot';
+        var title = resolved ? esc(resolved.itemName) : 'Empty slot';
         var itemNameAttr = resolved ? ' data-item-name="' + esc(resolved.itemName) + '"' : '';
         // The remove ("x") button only ever shows up on hover (see
         // .gear-slot-remove in purchase-goals.css) and only exists at all
         // when the slot is filled -- an empty slot has nothing to remove.
         var removeBtn = resolved ? '<button class="gear-slot-remove" type="button" title="Remove item">&times;</button>' : '';
         return '<div class="' + cls + '" data-slot-type="' + slotType + '" data-slot="' + esc(slot) + '"' + itemNameAttr + ' title="' + title + '">' +
-          inner + slotBadge(resolved) + removeBtn + '</div>';
+          inner + removeBtn + '</div>';
       }
 
       function wireSlotClicks() {
@@ -1051,17 +1042,15 @@ def render_purchase_goals(player: Player) -> str:
 
         var rowsHtml = results.map(function (r) {
           // Combination items (e.g. "Neitiznot faceguard") have no
-          // Grand Exchange listing of their own -- no data-item-id, and
-          // a small "combo" tag so it's clear this isn't a live-priced
-          // match, but it's still a normal, icon-bearing, click-to-
-          // select suggestion. The server auto-detects and prices these
-          // from their real components once selected -- see
-          // app/recipes.py -- so nobody has to already know or type out
-          // what an item is made of just to find it.
+          // Grand Exchange listing of their own -- no data-item-id --
+          // but are still a normal, icon-bearing, click-to-select
+          // suggestion like any other. The server auto-detects and
+          // prices these from their real components once selected --
+          // see app/recipes.py -- so nobody has to already know or type
+          // out what an item is made of just to find it.
           var idAttr = r.id != null ? ' data-item-id="' + r.id + '"' : '';
-          var comboTag = r.id == null ? '<span class="suggestion-combo-tag">combo</span>' : '';
           return '<div class="suggestion" data-item-name="' + esc(r.name) + '"' + idAttr + '>' +
-            (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span>' + comboTag + '</div>';
+            (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span></div>';
         }).join('');
 
         // No match at all -- search now spans live Grand Exchange
