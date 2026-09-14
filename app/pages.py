@@ -657,11 +657,12 @@ def render_purchase_goals(player: Player) -> str:
       // formatGp on its own, plus the ' gp' unit -- kept as its own
       // wrapper rather than baking the suffix into formatGp itself,
       // since formatGp is also used where a caller builds its own
-      // surrounding text that already ends in " gp" (see pgNpAmount
-      // below, "1,234 / 5,678 gp") or wants the bare number alone (the
-      // "still to purchase" list's per-item cost). Used for the coins
-      // counter and the setup's total-cost/goal amount on the overlay
-      // bar -- see the two tickNumberText calls below.
+      // surrounding text that already ends in " gp" on its own (see
+      // pgNpAmount below, "1,234 / 5,678 gp") and would otherwise
+      // double up ("5,678 gp gp"). Used for the coins counter and the
+      // setup's total-cost/goal amount on the overlay bar (the two
+      // tickNumberText calls below), and each still-to-purchase item's
+      // own cost in the list.
       function formatGpLabel(n) {
         return formatGp(n) + ' gp';
       }
@@ -1219,7 +1220,7 @@ def render_purchase_goals(player: Player) -> str:
         listEl.innerHTML = setup.stillToPurchase.map(function (item) {
           var rowCls = 'gear-summary-row' + (item.purchasable ? '' : ' unpurchasable') + (customMode ? ' draggable' : '');
           var costHtml = item.purchasable
-            ? '<span class="gear-summary-row-cost">' + formatGp(item.cost) + '</span>'
+            ? '<span class="gear-summary-row-cost">' + formatGpLabel(item.cost) + '</span>'
             : '<span class="gear-summary-row-cost na">n/a</span>';
           var draggableAttr = customMode ? ' draggable="true"' : '';
           var slotAttrs = ' data-slot-type="' + esc(item.slotType) + '" data-slot="' + esc(item.slot) + '"';
