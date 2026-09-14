@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player
-from app.recipes import search_recipe_names
+from app.recipes import find_recipe, search_recipe_names
 from app.schemas import EQUIPMENT_SLOTS, INVENTORY_SIZE
 
 # OSRS's own item id for coins -- used to read "gp in the bank" straight
@@ -277,6 +277,20 @@ def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, pri
     }
 
 
+def _untradeable_item_icon(name: str) -> Optional[str]:
+    """An untradeable item obviously has no Grand Exchange icon of its
+    own, but if its name matches a known item-combination recipe (see
+    app/recipes.py) we already know its real wiki icon -- the same one
+    the search suggestion showed before it was ever added to a slot.
+    Without this, every untradeable/combo slot would fall back to the
+    frontend's plain text-abbreviation placeholder even for an item we
+    can picture perfectly well, which is exactly the gap that made
+    Avernic treads (max) (and friends) look broken once actually placed
+    into a slot despite showing correctly in search."""
+    recipe = find_recipe(name)
+    return item_icon_url(recipe.get("icon")) if recipe else None
+
+
 def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dict, pool_by_id: dict, pool_by_name: dict) -> Optional[dict]:
     """Turn a stored slot item (or None, for an empty slot) into the
     priced/iconed shape the frontend renders. See GearSlotItemIn's
@@ -301,19 +315,20 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
             }
         name = raw_item.get("itemName") or "Supplies item"
         return {
-            "itemId": None, "itemName": name, "icon": None, "tradeable": False,
+            "itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False,
             "unitPrice": None, "priceSource": None, "fullCost": 0,
             "cost": 0, "owned": True, "supplies": True, "components": None,
         }
 
     if item_id is None and components_raw:
         name = raw_item.get("itemName") or "Combined item"
+        icon = _untradeable_item_icon(name)
         whole_owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
         if whole_owned:
             components = [_resolve_gear_component_display_only(c, mapping, prices) for c in components_raw]
             total_full = sum(c["fullCost"] for c in components)
             return {
-                "itemId": None, "itemName": name, "icon": None, "tradeable": False,
+                "itemId": None, "itemName": name, "icon": icon, "tradeable": False,
                 "unitPrice": None, "priceSource": None, "fullCost": total_full,
                 "cost": 0, "owned": True, "components": components,
             }
@@ -321,7 +336,7 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
         total_full = sum(c["fullCost"] for c in components)
         total_cost = sum(c["cost"] for c in components)
         return {
-            "itemId": None, "itemName": name, "icon": None, "tradeable": False,
+            "itemId": None, "itemName": name, "icon": icon, "tradeable": False,
             "unitPrice": None, "priceSource": None, "fullCost": total_full,
             "cost": total_cost, "owned": total_cost == 0 and all(c["owned"] for c in components),
             "components": components,
@@ -330,7 +345,7 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
         name = raw_item.get("itemName") or "Untradeable item"
         owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
         return {
-            "itemId": None, "itemName": name, "icon": None, "tradeable": False,
+            "itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False,
             "unitPrice": None, "priceSource": None, "fullCost": 0,
             "cost": 0, "owned": owned, "components": None,
         }
