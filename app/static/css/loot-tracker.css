@@ -168,18 +168,16 @@
    above) that's no longer needed, and this is shorter, matching how
    the Purchase Goals page's own sort row looks.
 
-   Six tabs (gp/count/alphabetical/recent, each with a high-to-low
-   pair -- see _sort_tabs in app/pages.py) no longer fit on one line at
-   this panel's width without wrapping each button's own label onto two
-   lines, which was the real reason the height stopped matching
-   .sort-btn (a wrapped two-line label needs roughly the padded height
-   of two lines, not one) -- letting the row itself wrap into two rows
-   of three (flex-wrap here, flex-basis fixed to a third of the row on
-   each tab) keeps every label on one line instead, which is what
-   actually keeps the height matched. */
-.loot-sort-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+   All six tabs (gp/count/alphabetical/recent, each with a high-to-low
+   pair -- see _sort_tabs in app/pages.py) fit on one line now that the
+   gp/count ones are a short "label + arrow" (e.g. "GP ↓") instead
+   of spelled-out "High to Low"/"Low to High" -- the full text used to
+   wrap each of those buttons onto two lines at this width, which was
+   both harder to scan and taller than intended (that's what previously
+   forced these onto two wrapped rows of three; no longer needed). */
+.loot-sort-tabs { display: flex; gap: 6px; }
 .loot-sort-tab {
-  flex: 0 0 calc((100% - 12px) / 3);
+  flex: 1;
   padding: 6px 4px;
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);

@@ -1098,9 +1098,14 @@ def render_purchase_goals(player: Player) -> str:
 
       // ---- Still to Purchase: sort mode buttons + drag-to-reorder ----------
 
+      // 'Low to High'/'High to Low' read as a plain "GP" label plus an
+      // arrow showing which direction that sorts -- up for ascending
+      // (cheapest first), down for descending (priciest first) -- same
+      // shorthand the Loot Tracker's own sort tabs use now (see
+      // _sort_tabs in app/pages.py).
       var STILL_TO_PURCHASE_SORT_MODES = [
-        { key: 'low_to_high', label: 'Low to High' },
-        { key: 'high_to_low', label: 'High to Low' },
+        { key: 'low_to_high', label: 'GP \\u2191', title: 'GP, low to high' },
+        { key: 'high_to_low', label: 'GP \\u2193', title: 'GP, high to low' },
         { key: 'alphabetical', label: 'Alphabetical' },
         { key: 'custom', label: 'Custom' },
       ];
@@ -1115,7 +1120,8 @@ def render_purchase_goals(player: Player) -> str:
         var mode = setup.stillToPurchaseSort || 'low_to_high';
         el.innerHTML = STILL_TO_PURCHASE_SORT_MODES.map(function (m) {
           var cls = 'sort-btn' + (m.key === mode ? ' active' : '');
-          return '<button type="button" class="' + cls + '" data-sort-mode="' + m.key + '">' + m.label + '</button>';
+          var titleAttr = m.title ? ' title="' + m.title + '"' : '';
+          return '<button type="button" class="' + cls + '" data-sort-mode="' + m.key + '"' + titleAttr + '>' + m.label + '</button>';
         }).join('');
         el.querySelectorAll('.sort-btn').forEach(function (btn) {
           btn.addEventListener('click', function () {
@@ -1610,16 +1616,20 @@ def render_loot_tracker(player: Player) -> str:
         # item panel -- so its two new count-based tabs read naturally on
         # each side (data-sort stays the same generic "count-high"/
         # "count-low" either way; see sortEntries in the script below for
-        # which field that actually sorts by per panel). The gp tabs are
-        # now explicitly labeled too (used to just say "High to Low"),
-        # since leaving them unlabeled next to a second sortable number
-        # would make it unclear which one they sort by.
+        # which field that actually sorts by per panel). Labeled as the
+        # metric name plus an arrow (down for descending/high-to-low, up
+        # for ascending/low-to-high -- same shorthand Purchase Goals'
+        # own sort buttons use now, see STILL_TO_PURCHASE_SORT_MODES)
+        # rather than spelling out "High to Low"/"Low to High" -- with
+        # six tabs sharing one row, the full text wrapped each button
+        # onto two lines, which was both harder to scan and taller than
+        # intended.
         return f"""
           <div class="loot-sort-tabs" id="{tabs_id}">
-            <button type="button" class="loot-sort-tab" data-sort="high">GP High to Low</button>
-            <button type="button" class="loot-sort-tab" data-sort="low">GP Low to High</button>
-            <button type="button" class="loot-sort-tab" data-sort="count-high">{count_label} High to Low</button>
-            <button type="button" class="loot-sort-tab" data-sort="count-low">{count_label} Low to High</button>
+            <button type="button" class="loot-sort-tab" data-sort="high" title="GP, high to low">GP &darr;</button>
+            <button type="button" class="loot-sort-tab" data-sort="low" title="GP, low to high">GP &uarr;</button>
+            <button type="button" class="loot-sort-tab" data-sort="count-high" title="{count_label}, high to low">{count_label} &darr;</button>
+            <button type="button" class="loot-sort-tab" data-sort="count-low" title="{count_label}, low to high">{count_label} &uarr;</button>
             <button type="button" class="loot-sort-tab" data-sort="alpha">Alphabetical</button>
             <button type="button" class="loot-sort-tab" data-sort="recent">Recent</button>
           </div>
