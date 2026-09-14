@@ -812,9 +812,8 @@ def render_purchase_goals(player: Player) -> str:
 
       function slotBadge(resolved) {
         if (!resolved) return '';
-        if (resolved.supplies) return '<span class="gear-slot-supplies-badge" title="Supplies -- always counted as owned">S</span>';
         if (resolved.components) return '<span class="gear-slot-combo-badge" title="Combined item">C</span>';
-        if (!resolved.tradeable) return '<span class="gear-slot-untradeable-badge" title="Untradeable -- matched by name">?</span>';
+        if (!resolved.tradeable) return '<span class="gear-slot-untradeable-badge" title="Untradeable -- matched by its real item id when known, by name otherwise">?</span>';
         return '';
       }
 
@@ -963,21 +962,22 @@ def render_purchase_goals(player: Player) -> str:
         var p = PG.picker;
         if (!p) { el.innerHTML = ''; return; }
 
-        // No "build from parts" option any more -- if what's searched
-        // isn't a live GE-tradeable match, picking the "add as
-        // untradeable" fallback below still works exactly the same, and
-        // the server checks the name against known item-combination
-        // recipes (e.g. "Neitiznot faceguard" -> Helm of Neitiznot +
-        // Basilisk jaw) and auto-expands it there -- see
-        // expand_recipe_components in app/recipes.py -- so nobody has
-        // to know or type out what an item is made of.
+        // No "build from parts" option any more -- search now covers
+        // every known OSRS item (live Grand Exchange matches, known
+        // item-combination recipes, and every other named item from
+        // app/item_ids.py's snapshot, in that order -- see search_items
+        // in app/purchase_goals.py), and a combination item like
+        // "Neitiznot faceguard" is auto-expanded into its real parts
+        // server-side the moment it's picked (see
+        // expand_recipe_components in app/recipes.py), so nobody has to
+        // know or type out what an item is made of, or fall back to
+        // typing in an untradeable item blind.
         var body = '' +
           '<div class="search-box search-box-full">' +
           '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" value="' + esc(p.query) + '" />' +
           '  <div class="suggestions" id="slotSuggestions"></div>' +
           '</div>' +
           '<div class="gear-slot-picker-actions">' +
-          '  <button class="gspa-secondary" id="slotAddSuppliesBtn" type="button">Add as supplies</button>' +
           '  <button class="gspa-primary" id="slotAddBtn" type="button">Add</button>' +
           '</div>';
 
@@ -999,10 +999,6 @@ def render_purchase_goals(player: Player) -> str:
         document.getElementById('slotAddBtn').addEventListener('click', function () {
           if (!p.selected) { showError('Pick an item from the list first.'); return; }
           saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName });
-        });
-        document.getElementById('slotAddSuppliesBtn').addEventListener('click', function () {
-          if (!p.selected) { showError('Pick an item from the list first.'); return; }
-          saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName, supplies: true });
         });
       }
 
@@ -1027,15 +1023,15 @@ def render_purchase_goals(player: Player) -> str:
             (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span>' + comboTag + '</div>';
         }).join('');
 
-        // No match at all, tradeable or otherwise -- offer to add
-        // exactly what was typed as an untradeable item instead,
-        // matched by name rather than id (see _take_owned in
-        // app/purchase_goals.py). This is now the rare fallback rather
-        // than the main path for combination gear, since those show up
-        // as normal suggestions above.
+        // No match at all -- search now spans live Grand Exchange
+        // items, known item-combination recipes, and every other named
+        // item in the game (see search_items in
+        // app/purchase_goals.py), so this should be rare -- a typo, or
+        // something genuinely not in the game. Nothing left to fall
+        // back to, so this is just a plain, non-interactive message
+        // rather than an "add it blind" escape hatch.
         if (!results.length) {
-          rowsHtml = '<div class="suggestion suggestion-add-untradeable" data-untradeable-name="' + esc(trimmed) + '">' +
-            '<span class="suggestion-add-icon">+</span><span>Add &ldquo;' + esc(trimmed) + '&rdquo; as an untradeable item</span></div>';
+          rowsHtml = '<div class="suggestion-empty">No items found</div>';
         }
 
         box.innerHTML = rowsHtml;
@@ -1051,16 +1047,6 @@ def render_purchase_goals(player: Player) -> str:
             };
             PG.picker.query = PG.picker.selected.itemName;
             if (input) input.value = PG.picker.selected.itemName;
-            box.classList.remove('show');
-            box.innerHTML = '';
-          });
-        });
-        box.querySelectorAll('.suggestion-add-untradeable').forEach(function (row) {
-          row.addEventListener('click', function () {
-            var name = row.getAttribute('data-untradeable-name');
-            PG.picker.selected = { itemId: null, itemName: name };
-            PG.picker.query = name;
-            if (input) input.value = name;
             box.classList.remove('show');
             box.innerHTML = '';
           });

@@ -1,5 +1,6 @@
 """One-off script: fetch the OSRS Wiki's Bucket:Infobox_item table in
-full and build a {itemNameLower: {"ids": [int, ...], "icon": str|None}}
+full and build a
+{itemNameLower: {"name": str, "ids": [int, ...], "icon": str|None}}
 JSON index to app/data/item_ids.json for the app to bundle/ship.
 
 This exists to fix a specific class of bug: an untradeable item (no
@@ -29,6 +30,14 @@ owning it. One item page can also appear more than once with different
 `image` values across those variants; whichever version the wiki marks
 `default_version` (or the first one seen, if none is marked) is used
 for the icon, since that's the one a player would recognize.
+
+`name` keeps the original, properly-cased spelling the wiki uses (the
+dict key itself is lowercased, for case-insensitive lookup) -- needed
+so a search suggestion built from this snapshot (see
+search_item_names in app/item_ids.py, the final fallback tier in
+app/purchase_goals.py's search_items once neither the GE mapping nor a
+known recipe matches) can display "Zulrah's scales" rather than
+"zulrah's scales".
 
 Run with: python scripts/fetch_item_ids.py (from the repo root).
 
@@ -134,7 +143,7 @@ def main():
     for key, entry in index.items():
         if not entry["ids"]:
             continue
-        final_index[key] = {"ids": sorted(entry["ids"]), "icon": entry["icon"]}
+        final_index[key] = {"name": entry["name"], "ids": sorted(entry["ids"]), "icon": entry["icon"]}
 
     print(f"final item index entries: {len(final_index)}")
 

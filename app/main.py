@@ -25,7 +25,7 @@ from app.auth import (
 )
 from app.database import get_db
 from app.limiter import limiter
-from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player
+from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem
 from app.pages import render_dashboard, render_landing, render_login, render_purchase_goals, render_signup
 from app.purchase_goals import build_purchase_goals_state, get_mapping, search_items
 from app.recipes import expand_recipe_components
@@ -48,6 +48,10 @@ from app.schemas import (
     InventorySyncResponse,
     ItemSearchResponse,
     PlayerOut,
+    PotionStorageOut,
+    PotionStorageItemOut,
+    PotionStorageSyncRequest,
+    PotionStorageSyncResponse,
     RenameGearSetupRequest,
     SetGearSetupIconRequest,
     SetGearSlotRequest,
@@ -64,6 +68,12 @@ MAX_BANK_ITEMS = 2000
 # guess, so anything over is definitely malformed.
 MAX_INVENTORY_ITEMS = INVENTORY_SIZE
 MAX_EQUIPMENT_ITEMS = len(EQUIPMENT_SLOTS)
+# Potion Storage supports a few dozen distinct potion types, and the
+# plugin reports at most two rows per type (a full-dose count plus one
+# leftover partial-dose item -- see MyscapePlugin#readPotionStorageItems
+# in the Mootrius/myscape-plugin repo), so this is a generous multiple
+# of the real ceiling, not a round-number guess either.
+MAX_POTION_STORAGE_ITEMS = 200
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
 if not SESSION_SECRET_KEY:
@@ -297,6 +307,55 @@ def read_equipment(db: Session = Depends(get_db), player: Player = Depends(get_c
     return EquipmentOut(items=[EquipmentItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
+@app.post("/api/players/me/potion-storage", response_model=PotionStorageSyncResponse)
+def sync_potion_storage(
+    payload: PotionStorageSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Player-Owned-House Potion Storage instead -- see
+    MyscapeClient#syncPotionStorage in the Mootrius/myscape-plugin repo.
+    Full replace, never a merge. Unlike bank/inventory/equipment,
+    Potion Storage isn't an ItemContainer the plugin can just read
+    directly -- see MyscapePlugin#readPotionStorageItems there for how
+    it actually reads this -- but the resulting shape and this
+    endpoint's contract are identical, so nothing here needs to know
+    the difference. This is also what replaced the old "supplies"
+    gear-slot flag: see PotionStorageItem's docstring in app/models.py
+    for why that flag existed and why it's gone now."""
+    if len(payload.items) > MAX_POTION_STORAGE_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_POTION_STORAGE_ITEMS}).",
+        )
+
+    db.query(PotionStorageItem).filter(PotionStorageItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(PotionStorageItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    db.commit()
+
+    return PotionStorageSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/potion-storage", response_model=PotionStorageOut)
+def read_potion_storage(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for potion
+    storage instead."""
+    items = (
+        db.query(PotionStorageItem)
+        .filter(PotionStorageItem.player_id == player.id)
+        .order_by(PotionStorageItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return PotionStorageOut(items=[PotionStorageItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
 @app.get("/api/items/search", response_model=ItemSearchResponse)
 def item_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
     """Backs the gear-setup slot picker's search box (see
@@ -320,7 +379,7 @@ def list_gear_setups(db: Session = Depends(get_db), player: Player = Depends(get
     app/purchase_goals.py's build_purchase_goals_state, ported from
     Maintrius's own build_state in osrs_tracker.py) -- every one of the
     player's gear setups, fully priced/owned-checked against their
-    synced bank+inventory+equipment, plus their current coins and
+    synced bank+inventory+equipment+potion storage, plus their current coins and
     whatever wiki price/mapping errors are in effect. Not pinned to a
     Pydantic response_model (see GearSetupsState's docstring in
     app/schemas.py) since the shape is too dynamic/nested to usefully
@@ -412,17 +471,17 @@ def set_gear_slot(
     """Fills (or, with item omitted/null, clears) one equipment or
     inventory slot of a gear setup -- see SetGearSlotRequest/
     GearSlotItemIn in app/schemas.py for the validated shape (plain
-    tradeable, plain untradeable, composed "combo", or "supplies") and
+    tradeable, plain untradeable, or composed "combo") and
     _handle_set_gear_slot in Maintrius's own osrs_tracker.py for the
     original this ports. Stores exactly what was sent, unresolved --
     pricing/ownership is computed fresh on every read, not here (see
     app/purchase_goals.py) -- with one addition: a plain untradeable
-    item (no item_id, no components, not marked as supplies) is checked
-    against the known item-combination recipes (app/recipes.py) and,
-    on a match, is auto-expanded into a "combo" here before it's ever
-    persisted. This is what lets someone search for and select e.g.
-    "Neitiznot faceguard" directly instead of having to know it's built
-    from a Helm of Neitiznot + a Basilisk jaw and build it from parts
+    item (no item_id, no components) is checked against the known
+    item-combination recipes (app/recipes.py) and, on a match, is
+    auto-expanded into a "combo" here before it's ever persisted. This
+    is what lets someone search for and select e.g. "Neitiznot
+    faceguard" directly instead of having to know it's built from a
+    Helm of Neitiznot + a Basilisk jaw and build it from parts
     themselves -- the frontend never has to know the difference."""
     setup = _get_owned_gear_setup(db, player, setup_id)
 
@@ -435,9 +494,7 @@ def set_gear_slot(
                 {"itemId": c.item_id, "itemName": c.item_name or None, "quantity": c.quantity}
                 for c in payload.item.components
             ]
-        if payload.item.supplies:
-            stored_item["supplies"] = True
-        elif payload.item.item_id is None and not payload.item.components and payload.item.item_name:
+        if payload.item.item_id is None and not payload.item.components and payload.item.item_name:
             mapping, _ = get_mapping()
             auto_components = expand_recipe_components(payload.item.item_name, mapping)
             if auto_components:

@@ -76,6 +76,7 @@ class Player(Base):
     bank_items = relationship("BankItem", back_populates="player", cascade="all, delete-orphan")
     inventory_items = relationship("InventoryItem", back_populates="player", cascade="all, delete-orphan")
     equipment_items = relationship("EquipmentItem", back_populates="player", cascade="all, delete-orphan")
+    potion_storage_items = relationship("PotionStorageItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
 
 
@@ -233,26 +234,67 @@ class EquipmentItem(Base):
     __table_args__ = (UniqueConstraint("player_id", "slot", name="uq_equipment_items_player_slot"),)
 
 
+class PotionStorageItem(Base):
+    """The player's current Player-Owned-House Potion Storage contents
+    -- same full-snapshot, delete-and-replace model as Bank/Inventory/
+    EquipmentItem above. Synced by POST /api/players/me/potion-storage
+    (see MyscapeClient#syncPotionStorage in the Mootrius/myscape-plugin
+    repo).
+
+    This closes the gap the old "supplies" gear-slot flag used to paper
+    over: potions kept in the Costume Room's Potion Storage were
+    previously invisible to this plugin entirely (it only ever read
+    the bank/inventory/equipment ItemContainers, and Potion Storage
+    isn't one), so a gear slot needing a potion could never actually be
+    recognized as owned even when it was, sitting safely in storage.
+    "Supplies" worked around that by letting a slot be marked
+    always-owned regardless of what was actually held. Now that the
+    plugin reads Potion Storage directly (see
+    MyscapePlugin#readPotionStorageItems there, which decomposes the
+    stored dose totals into real item ids the same way withdrawing them
+    would), that workaround is gone and potions are matched for real,
+    the same as everything else -- see _build_owned_pools in
+    app/purchase_goals.py, which folds this table into the same pool as
+    bank/inventory/equipment with no special-casing needed.
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above, even though every potion item id is itself
+    GE-tradeable in practice -- kept for consistency with the other
+    three tables rather than because it's ever actually needed here."""
+
+    __tablename__ = "potion_storage_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="potion_storage_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_potion_storage_items_player_item"),)
+
+
 class GearSetup(Base):
     """A named, saveable equipment+inventory loadout the player is
     planning/saving toward -- the Purchase Goals feature, ported from
     the original single-user Maintrius tool's "gear setups" (see
     build_gear_setups in that repo's osrs_tracker.py). A player can have
     any number of these (Vorkath, Raids, a skilling setup, ...); each is
-    checked off independently against the player's current
-    bank+inventory+equipment, not against each other, so the same owned
-    item can cover more than one setup's need for it.
+    checked off independently against the player's current bank+
+    inventory+equipment+potion storage, not against each other, so the
+    same owned item can cover more than one setup's need for it.
 
     `equipment` and `inventory` are stored as opaque JSON blobs rather
     than normalized rows, deliberately mirroring how Maintrius itself
     stores a setup (as a JSON file) -- a slot's contents are one of
     several different shapes (a plain tradeable item, an untradeable
-    item, a "combo" item composed of multiple parts, or a "supplies"
-    item always assumed owned; see _resolve_gear_slot_item in the
-    original repo), which is exactly the kind of polymorphic, mostly-
-    write-then-read-whole structure JSON suits better than a rigid
-    table. All the actual pricing/ownership computation happens fresh
-    on every read (see app/purchase_goals.py), not stored here -- these
+    item, or a "combo" item composed of multiple parts; see
+    _resolve_gear_slot_item in the original repo), which is exactly the
+    kind of polymorphic, mostly-write-then-read-whole structure JSON
+    suits better than a rigid table. All the actual pricing/ownership
+    computation happens fresh on every read (see app/purchase_goals.py), not stored here -- these
     columns hold only what the player actually chose to put in each
     slot.
 

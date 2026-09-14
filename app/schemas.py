@@ -225,6 +225,52 @@ class EquipmentOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+# -- Potion storage: identical shape to Bank/Inventory above, just a
+# separate container -- see PotionStorageItem's docstring in
+# app/models.py for why this exists. ---------------------------------
+
+class PotionStorageItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class PotionStorageSyncRequest(BaseModel):
+    items: List[PotionStorageItemIn]
+
+
+class PotionStorageSyncResponse(BaseModel):
+    item_count: int
+
+
+class PotionStorageItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class PotionStorageOut(BaseModel):
+    items: List[PotionStorageItemOut]
+    updated_at: Optional[datetime] = None
+
+
 # -- Item search (backs the gear-setup slot picker's search box). ---------
 
 class ItemSearchResult(BaseModel):
@@ -294,23 +340,29 @@ class GearComponentIn(BaseModel):
 
 class GearSlotItemIn(BaseModel):
     """What's stored in one gear-setup slot (equipment or inventory).
-    See _resolve_gear_slot_item's docstring in the original Maintrius
-    tool's osrs_tracker.py for the full rationale behind these four
-    shapes -- ported here as validation on the way in:
+    See _resolve_gear_slot_item's docstring in app/purchase_goals.py
+    for the full rationale behind these three shapes -- ported here as
+    validation on the way in:
 
-    - Plain tradeable: item_id set, no components, not supplies.
+    - Plain tradeable: item_id set, no components.
     - Plain untradeable: item_id None, item_name set, no components.
     - Composed ("combo"): item_id None, components is a non-empty list
       -- costs the sum of its components rather than having its own
       price.
-    - Supplies: supplies=True on any of the above (never combined with
-      components) -- always assumed owned, never counted toward cost.
+
+    A fourth shape, "supplies" (always assumed owned regardless of
+    what was actually held, never counted toward cost), used to exist
+    here as a manual escape hatch for potions -- the plugin had no way
+    to see what was sitting in Potion Storage, so there was no way to
+    ever recognize a stored potion as genuinely owned. Now that the
+    plugin reads Potion Storage directly (see PotionStorageItem's
+    docstring in app/models.py), ownership is checked for real instead,
+    and that shape is gone.
     """
 
     item_id: Optional[int] = None
     item_name: Optional[str] = None
     components: Optional[List[GearComponentIn]] = None
-    supplies: bool = False
 
     @field_validator("item_name")
     @classmethod
@@ -329,13 +381,6 @@ class GearSlotItemIn(BaseModel):
                 raise ValueError("a composed item cannot also have a tradeable item_id.")
             if len(value) == 0:
                 raise ValueError("components must be a non-empty list.")
-        return value
-
-    @field_validator("supplies")
-    @classmethod
-    def check_supplies(cls, value, info):
-        if value and info.data.get("components"):
-            raise ValueError("a supplies item cannot also be a composed item.")
         return value
 
 

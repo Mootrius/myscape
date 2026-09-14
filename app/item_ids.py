@@ -63,3 +63,35 @@ def find_item_icon(item_name: str) -> Optional[str]:
         return None
     entry = get_item_index().get(item_name.strip().lower())
     return entry.get("icon") if entry else None
+
+
+def search_item_names(query: str, limit: int, exclude: Optional[set] = None) -> List[dict]:
+    """Fuzzy-searches this snapshot by name, using the same
+    startswith-then-contains scheme as search_items in
+    app/purchase_goals.py and search_recipe_names in app/recipes.py --
+    the final fallback tier in search_items, once neither a live
+    Grand Exchange match nor a known combination recipe covers the
+    query, so that a genuinely untradeable, non-combined item (a quest
+    reward, a minigame-only item, anything else this snapshot covers
+    but the other two don't) can still be found by name and shown with
+    its real icon rather than being unfindable. `exclude` is a set of
+    already-used lowercased names to skip, so nothing already matched
+    by an earlier tier is suggested twice. Returns raw entries --
+    {"name": str, "icon": str|None (a wiki image filename, not yet a
+    full URL)}."""
+    q = (query or "").strip().lower()
+    if not q:
+        return []
+    exclude = exclude or set()
+    starts, contains = [], []
+    for key, entry in get_item_index().items():
+        if key in exclude:
+            continue
+        if key.startswith(q):
+            starts.append(entry)
+        elif q in key:
+            contains.append(entry)
+    starts.sort(key=lambda e: len(e.get("name") or ""))
+    contains.sort(key=lambda e: len(e.get("name") or ""))
+    combined = (starts + contains)[:limit]
+    return [{"name": e.get("name"), "icon": e.get("icon")} for e in combined]

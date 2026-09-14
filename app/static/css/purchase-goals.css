@@ -199,19 +199,14 @@
 .gear-slot.owned .gear-slot-untradeable-badge, .gear-slot.owned .gear-slot-combo-badge {
   border-color: var(--green); color: var(--green);
 }
-.gear-slot-supplies-badge {
-  position: absolute; bottom: -6px; right: -6px; width: 15px; height: 15px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700;
-  background: var(--panel-2); border: 1px solid var(--green); color: var(--green); line-height: 1;
-}
 .gear-slot.owned { border-color: var(--green); }
 .gear-slot.not-owned { border-color: var(--red); }
 .gear-slot.affordable { border-color: var(--amber); }
 
 /* Hover-only "remove item" button -- top-right corner, opposite the
-   tradeable/combo/supplies badges (bottom-right, always visible), so the
-   two never collide. Hidden until the slot itself is hovered, since it's
-   a destructive shortcut, not something that should always be on screen. */
+   untradeable/combo badges (bottom-right, always visible), so the two
+   never collide. Hidden until the slot itself is hovered, since it's a
+   destructive shortcut, not something that should always be on screen. */
 .gear-slot-remove {
   display: none;
   position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; z-index: 2;
@@ -271,10 +266,9 @@
 .search-box.search-box-full { flex: 1 1 100%; width: 100%; }
 .search-box input[type="text"] { width: 100%; }
 /* Opaque, not the --panel-translucent used by the picker's own outer
-   card -- this floats directly over the "Add as supplies"/Add buttons
-   right below it (see .gear-slot-picker-actions), and a translucent
-   background there just lets those buttons ghost through it instead of
-   being cleanly covered. */
+   card -- this floats directly over the Add button right below it (see
+   .gear-slot-picker-actions), and a translucent background there just
+   lets that button ghost through it instead of being cleanly covered. */
 .suggestions {
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
   background: var(--panel); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
@@ -300,24 +294,23 @@
   color: var(--text-faint); border: 1px solid var(--border); border-radius: 3px; padding: 2px 5px;
 }
 
-/* The "no match -- add it as untradeable instead" row that replaces
-   the search results when the query matches nothing at all, tradeable
-   or recipe -- styled as an action, not an item, so it doesn't look
-   like a real search result. */
-.suggestion-add-untradeable { color: var(--gold-dim); font-style: italic; }
-.suggestion-add-untradeable:hover { color: var(--gold); }
-.suggestion-add-icon {
-  width: 22px; height: 22px; flex: none; border: 1px dashed currentColor;
-  display: flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1;
+/* The "no match" row that replaces the search results when the query
+   matches nothing at all -- search now spans live Grand Exchange
+   items, known combination recipes, and every other named item in the
+   game (see search_items in app/purchase_goals.py), so this is a rare
+   dead end (a typo, or something genuinely not in the game), not an
+   action -- plain muted text, not clickable, not styled like a real
+   search result. */
+.suggestion-empty {
+  padding: 8px 10px; font-size: 13px; color: var(--text-faint); font-style: italic; cursor: default;
 }
 
-/* The two equal-height actions under the slot picker's search box: add
-   what's selected as supplies, or add it plainly (a combined item like
-   a Neitiznot faceguard needs no separate action any more -- the
-   server recognizes it by name and assembles it automatically, see
-   app/recipes.py). Deliberately plain bordered/filled buttons (not
-   .link text buttons) so both render at the same height regardless of
-   which one carries the primary gold treatment. */
+/* The single action under the slot picker's search box -- adding a
+   combined item like a Neitiznot faceguard needs no separate action of
+   its own, the server recognizes it by name and assembles it
+   automatically (see app/recipes.py). Still its own row/button (rather
+   than adding straight from a suggestion click) so a typed query can
+   be reviewed before it's saved. */
 .gear-slot-picker-actions { display: flex; gap: 8px; width: 100%; margin-top: 2px; }
 .gear-slot-picker-actions button {
   flex: 1 1 0;
@@ -329,8 +322,6 @@
 }
 .gspa-primary { background: var(--gold); color: #221c10; border: none; }
 .gspa-primary:hover { background: #ffab42; }
-.gspa-secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
-.gspa-secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
 
 .pg-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 40px 10px; }
 

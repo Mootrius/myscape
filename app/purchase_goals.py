@@ -4,10 +4,11 @@ ported from the original single-user Maintrius tool's osrs_tracker.py
 there for the code this is a direct port of). The mechanic is unchanged;
 only where the inputs come from has:
 
-- Character data (bank/inventory/equipment) came from three JSON files a
-  separate RuneLite Character Exporter plugin wrote to disk; here it
-  comes from the BankItem/InventoryItem/EquipmentItem tables this app's
-  own plugin syncs (see app/main.py's sync endpoints).
+- Character data (bank/inventory/equipment/potion storage) came from
+  JSON files a separate RuneLite Character Exporter plugin wrote to
+  disk; here it comes from the BankItem/InventoryItem/EquipmentItem/
+  PotionStorageItem tables this app's own plugin syncs (see
+  app/main.py's sync endpoints).
 - Item mapping/prices came from local JSON file caches with a
   last-fetched timestamp; here the exact same OSRS Wiki Real-time Prices
   API is fetched into in-memory, process-level caches instead (this app
@@ -18,10 +19,14 @@ only where the inputs come from has:
   here each is a GearSetup row (see app/models.py), scoped to the
   player who owns it.
 
-Everything about the actual mechanic -- the four slot-item shapes (plain
-tradeable, plain untradeable, composed "combo", "supplies"), the
-owned-pool bookkeeping, the affordability/still-to-purchase/next-purchase
-computation -- is unchanged from the original.
+Everything about the actual mechanic -- the three slot-item shapes
+(plain tradeable, plain untradeable, composed "combo"), the owned-pool
+bookkeeping, the affordability/still-to-purchase/next-purchase
+computation -- is unchanged from the original. (A fourth shape,
+"supplies" -- always assumed owned, a manual workaround for potions the
+plugin couldn't yet see in Potion Storage -- existed here too, but is
+gone now that the plugin reads Potion Storage for real; see
+PotionStorageItem's docstring in app/models.py.)
 """
 import json
 import re
@@ -32,8 +37,8 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.item_ids import find_item_icon, find_item_ids
-from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player
+from app.item_ids import find_item_icon, find_item_ids, search_item_names
+from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem
 from app.recipes import find_recipe, search_recipe_names
 from app.schemas import EQUIPMENT_SLOTS, INVENTORY_SIZE
 
@@ -176,6 +181,19 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
         for entry in search_recipe_names(q, limit - len(results), exclude=seen_names):
             results.append({"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False})
 
+    # Still short? Fall back to the broader item-id snapshot (see
+    # app/item_ids.py), which covers every item in the game -- tradeable
+    # or not, recipe output or not (a quest reward, a minigame-only
+    # item, anything else neither of the two tiers above knows about).
+    # This is what lets search find literally any known OSRS item by
+    # name, closing the gap the old "add as an untradeable item"
+    # fallback used to paper over for exactly this case.
+    if len(results) < limit:
+        seen_names = {r["name"].lower() for r in results}
+        for entry in search_item_names(q, limit - len(results), exclude=seen_names):
+            if entry.get("name"):
+                results.append({"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False})
+
     return results
 
 
@@ -204,7 +222,7 @@ def _normalize_item_name(name: Optional[str]) -> str:
 
 def _take_owned(pool_by_id: dict, pool_by_name: dict, item_id: Optional[int], item_name: Optional[str], qty: int) -> int:
     """Claim up to qty units of an item from the shared "already own"
-    pool (built from bank+inventory+equipment -- see
+    pool (built from bank+inventory+equipment+potion storage -- see
     _build_owned_pools below), returning how many were actually
     available. Pools are mutated in place so a physical item can only
     satisfy one requirement, not several.
@@ -333,31 +351,18 @@ def _untradeable_item_icon(name: str) -> Optional[str]:
 def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dict, pool_by_id: dict, pool_by_name: dict) -> Optional[dict]:
     """Turn a stored slot item (or None, for an empty slot) into the
     priced/iconed shape the frontend renders. See GearSlotItemIn's
-    docstring in app/schemas.py for the four possible shapes -- this is
-    a direct port of Maintrius's own _resolve_gear_slot_item."""
+    docstring in app/schemas.py for the three possible shapes -- this
+    is a direct port of Maintrius's own _resolve_gear_slot_item.
+
+    A stored item may still carry a leftover "supplies" key from before
+    that shape was removed (see PotionStorageItem's docstring in
+    app/models.py) -- there's nothing to do about that here, it's
+    simply ignored, and the item resolves normally based on its actual
+    item id/components exactly as if that key had never been set."""
     if not raw_item:
         return None
     item_id = raw_item.get("itemId")
     components_raw = raw_item.get("components")
-
-    if raw_item.get("supplies"):
-        if item_id is not None:
-            meta = mapping.get(str(item_id), {})
-            name = raw_item.get("itemName") or meta.get("name") or f"Item #{item_id}"
-            icon = item_icon_url(meta.get("icon"))
-            unit_price, price_source = unit_price_for(item_id, prices)
-            price = unit_price if unit_price is not None else 0
-            return {
-                "itemId": item_id, "itemName": name, "icon": icon, "tradeable": True,
-                "unitPrice": unit_price, "priceSource": price_source, "fullCost": price,
-                "cost": 0, "owned": True, "supplies": True, "components": None,
-            }
-        name = raw_item.get("itemName") or "Supplies item"
-        return {
-            "itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False,
-            "unitPrice": None, "priceSource": None, "fullCost": 0,
-            "cost": 0, "owned": True, "supplies": True, "components": None,
-        }
 
     if item_id is None and components_raw:
         name = raw_item.get("itemName") or "Combined item"
@@ -452,11 +457,18 @@ def _still_to_purchase_summary(equipment: dict, inventory: list, coins: int) -> 
 
 
 def _build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict[str, int]]:
-    """Combines bank+inventory+equipment into the same shape Maintrius's
-    own load_character_snapshot() produced (totalsById/totalsByName) --
-    the "everything currently owned" pool every gear setup checks itself
-    against independently (see build_gear_setups, which takes a fresh
-    copy of this per setup)."""
+    """Combines bank+inventory+equipment+potion storage into the same
+    shape Maintrius's own load_character_snapshot() produced
+    (totalsById/totalsByName) -- the "everything currently owned" pool
+    every gear setup checks itself against independently (see
+    build_gear_setups, which takes a fresh copy of this per setup).
+
+    Potion storage (added alongside PotionStorageItem in app/models.py)
+    slots in here with zero special-casing: the plugin already reports
+    it in the exact same item-id/quantity shape as bank/inventory/
+    equipment (see MyscapePlugin#readPotionStorageItems in the
+    Mootrius/myscape-plugin repo), so it just needs its own query
+    added, same as the other three."""
     pool_by_id: Dict[int, int] = {}
     pool_by_name: Dict[str, int] = {}
 
@@ -471,6 +483,8 @@ def _build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dic
     for item in db.query(InventoryItem).filter(InventoryItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
     for item in db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(PotionStorageItem).filter(PotionStorageItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
 
     return pool_by_id, pool_by_name
