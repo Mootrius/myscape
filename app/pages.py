@@ -554,7 +554,7 @@ def render_purchase_goals(player: Player) -> str:
     <div class="overlay-card" id="pgOverlay" style="display:none;">
       <div class="overlay-side overlay-source">
         <img class="overlay-icon" src="/static/img/icon-coins.png" alt="Coins" />
-        <span class="overlay-amount" id="pgCoinsAmount">0</span>
+        <span class="overlay-amount" id="pgCoinsAmount">0 gp</span>
       </div>
       <div class="overlay-progress">
         <div class="progress-track overlay-track"><div class="progress-fill" id="pgOverlayFill" style="width:0%;"></div></div>
@@ -564,7 +564,7 @@ def render_purchase_goals(player: Player) -> str:
           <img class="overlay-icon" id="pgOverlayIconImg" alt="" style="display:none;" />
           <span class="overlay-icon-placeholder" id="pgOverlayIconPlaceholder">+</span>
         </div>
-        <span class="overlay-amount" id="pgCostAmount">0</span>
+        <span class="overlay-amount" id="pgCostAmount">0 gp</span>
       </div>
     </div>
     <div id="pgIconPicker"></div>
@@ -652,6 +652,18 @@ def render_purchase_goals(player: Player) -> str:
       function formatGp(n) {
         n = Math.round(n || 0);
         return n.toLocaleString('en-US');
+      }
+
+      // formatGp on its own, plus the ' gp' unit -- kept as its own
+      // wrapper rather than baking the suffix into formatGp itself,
+      // since formatGp is also used where a caller builds its own
+      // surrounding text that already ends in " gp" (see pgNpAmount
+      // below, "1,234 / 5,678 gp") or wants the bare number alone (the
+      // "still to purchase" list's per-item cost). Used for the coins
+      // counter and the setup's total-cost/goal amount on the overlay
+      // bar -- see the two tickNumberText calls below.
+      function formatGpLabel(n) {
+        return formatGp(n) + ' gp';
       }
 
       // Ticks an element's text from whatever it currently shows to a new
@@ -875,8 +887,8 @@ def render_purchase_goals(player: Player) -> str:
       // smoothly rather than popping or flickering on every poll.
       function updateOverlay(setup) {
         var pct = Math.max(0, Math.min(100, setup.progressPct));
-        tickNumberText(document.getElementById('pgCoinsAmount'), PG.data.coins, formatGp);
-        tickNumberText(document.getElementById('pgCostAmount'), setup.totalCost, formatGp);
+        tickNumberText(document.getElementById('pgCoinsAmount'), PG.data.coins, formatGpLabel);
+        tickNumberText(document.getElementById('pgCostAmount'), setup.totalCost, formatGpLabel);
 
         var fillEl = document.getElementById('pgOverlayFill');
         fillEl.style.width = pct + '%';
