@@ -1777,6 +1777,22 @@ def render_loot_tracker(player: Player) -> str:
         return new Date(isoString).toLocaleTimeString('en-US', { hour: 'numeric' });
       }
 
+      // The OSRS Wiki's article title for an item is (almost always)
+      // just its in-game name -- the same name this page already gets
+      // back as itemName -- with spaces URL-encoded, same as this
+      // file's own icon URLs already do server-side (see
+      // item_icon_url/ICON_PATH_BASE in app/purchase_goals.py, which
+      // percent-encodes the icon filename the same way); MediaWiki
+      // normalizes a %20 the same as an underscore, so this needs no
+      // separate space-to-underscore step. A name that isn't actually
+      // an article title (a rare mismatch) lands on the wiki's own
+      // search results for it rather than a dead link, since
+      // Special:Search redirects straight to an exact-title match same
+      // as visiting the article directly would.
+      function wikiItemUrl(name) {
+        return 'https://oldschool.runescape.wiki/w/Special:Search?search=' + encodeURIComponent(name || '') + '&go=Go';
+      }
+
       function iconImg(src, alt, cls) {
         if (!src) return '';
         // Quietly hidden on a 404 (a guessed NPC/item wiki filename that
@@ -2036,11 +2052,11 @@ def render_loot_tracker(player: Player) -> str:
         if (key !== lastItemKey) {
           lastItemKey = key;
           listEl.innerHTML = sorted.map(function (it) {
-            return '<div class="loot-item-box" title="' + escapeHtml(itemTitle(it)) + '">' +
+            return '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" title="' + escapeHtml(itemTitle(it)) + '">' +
               iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
               '<div class="loot-item-box-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
               '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
-            '</div>';
+            '</a>';
           }).join('');
           return;
         }

@@ -213,7 +213,14 @@
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 4px;
+  /* An <a> now (clicking an item opens its OSRS Wiki page in a new tab
+     -- see wikiItemUrl in the script below), so the browser's default
+     link styling (blue, underlined) needs resetting back to how this
+     box always looked; :hover mirrors .loot-npc-box's own for the same
+     "this is clickable" affordance. */
+  color: inherit; text-decoration: none; cursor: pointer;
 }
+.loot-item-box:hover { border-color: var(--gold-dim); }
 .loot-item-box-icon { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
