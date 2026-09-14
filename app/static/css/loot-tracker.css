@@ -25,7 +25,7 @@
    ignore that instead of splitting the remaining space evenly. */
 .loot-chart-title {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  font-size: 12px; color: var(--text-dim); letter-spacing: 0.03em;
+  font-size: 15px; color: var(--text-dim); letter-spacing: 0.03em; text-transform: uppercase;
   white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis;
 }
 

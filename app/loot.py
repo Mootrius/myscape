@@ -75,15 +75,44 @@ from app.purchase_goals import COINS_ITEM_ID, ICON_PATH_BASE, get_latest_prices,
 ROLLING_WINDOW_HOURS = 24
 
 
-def sell_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[str]]:
+def _noted_id_fallback(item_id: int, mapping: dict) -> Optional[int]:
+    """A noted item (some monster drops and clue caskets hand out ores
+    and similar stackables noted, so they stack in the kill inventory
+    instead of taking a slot each) has its own item id, but the wiki's
+    mapping/price APIs only ever carry data under the UNNOTED id --
+    notes trade at the same price as the unnoted item anyway, so there
+    being no separate listing for the noted id isn't a bug on the
+    wiki's end. OSRS's item definitions always place a notable item's
+    noted id at exactly unnoted_id + 1 (that's how the game links every
+    notable item to its own note, not a guess), so unnoted_id is
+    item_id - 1. Only returns it once mapping confirms item_id - 1 is
+    itself a real, known tradeable item AND item_id is NOT already one
+    (both true) -- otherwise a merely-untradeable item (a quest item,
+    say) would silently borrow whatever unrelated item happens to sit
+    at the neighboring id."""
+    if str(item_id) in mapping:
+        return None
+    candidate = item_id - 1
+    if str(candidate) in mapping:
+        return candidate
+    return None
+
+
+def sell_price_for(item_id: int, prices: dict, mapping: Optional[dict] = None) -> Tuple[Optional[int], Optional[str]]:
     """What a dropped item is actually worth right now if sold -- the
     mirror of app/purchase_goals.py's unit_price_for, which prefers the
     instant-BUY ("high") price since Purchase Goals is about the cost
     to acquire something. Loot value is the opposite direction: what a
     kill actually netted is what selling its drops would return, not
     what buying them back would cost -- so this prefers instant-sell
-    ("low") instead, same as the original tool's own sell_price_for."""
+    ("low") instead, same as the original tool's own sell_price_for.
+    Falls back to a noted item's unnoted counterpart's price when
+    given `mapping` -- see _noted_id_fallback."""
     p = prices.get(str(item_id))
+    if not p and mapping is not None:
+        unnoted_id = _noted_id_fallback(item_id, mapping)
+        if unnoted_id is not None:
+            p = prices.get(str(unnoted_id))
     if not p:
         return None, None
     if p.get("low") is not None:
@@ -93,12 +122,12 @@ def sell_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[
     return None, None
 
 
-def _item_value(item_id: Optional[int], quantity: int, prices: dict) -> int:
+def _item_value(item_id: Optional[int], quantity: int, prices: dict, mapping: Optional[dict] = None) -> int:
     if item_id is None:
         return 0
     if item_id == COINS_ITEM_ID:
         return quantity
-    unit_price, _src = sell_price_for(item_id, prices)
+    unit_price, _src = sell_price_for(item_id, prices, mapping)
     return (unit_price or 0) * quantity
 
 
@@ -129,7 +158,7 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict) -> Tuple[L
         item_name = raw.get("item_name") or meta.get("name") or (
             f"Item #{item_id}" if item_id is not None else "Unknown item"
         )
-        value = _item_value(item_id, quantity, prices)
+        value = _item_value(item_id, quantity, prices, mapping)
         total_value += value
         icon = item_icon_url(meta.get("icon")) if meta.get("icon") else item_icon_url(item_name)
         resolved.append({
