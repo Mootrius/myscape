@@ -112,8 +112,8 @@
    pixels by JS right after the gear-frame renders (see renderContent
    in app/pages.py) to the frame's own rendered width -- without that,
    this column has no width of its own to speak of, so the slot
-   picker's search box/combo-builder fields (which would happily fill
-   any space they're given) stretch it out past the frame, which in
+   picker's search box (which would happily fill any space it's
+   given) stretches it out past the frame, which in
    turn shoves .pg-summary-col out of the row entirely. Pinning the
    width forces the picker to wrap its own contents inside the frame's
    width instead. `max-width: 100%` is the narrow-viewport fallback,
@@ -266,8 +266,8 @@
 
 .search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
 /* The slot picker's own search box (as opposed to the setup-icon
-   picker's, or a combo-builder row's) takes its whole row -- see the
-   "Search for an item" input in .gear-slot-picker. */
+   picker's) takes its whole row -- see the "Search for an item" input
+   in .gear-slot-picker. */
 .search-box.search-box-full { flex: 1 1 100%; width: 100%; }
 .search-box input[type="text"] { width: 100%; }
 .suggestions {
@@ -293,10 +293,12 @@
   display: flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1;
 }
 
-/* The three equal-height actions under the slot picker's search box:
-   switch to building a combo, add what's selected as supplies, or add
-   it plainly. Deliberately plain bordered/filled buttons (not .link
-   text buttons) so all three render at the same height regardless of
+/* The two equal-height actions under the slot picker's search box: add
+   what's selected as supplies, or add it plainly (a combined item like
+   a Neitiznot faceguard needs no separate action any more -- the
+   server recognizes it by name and assembles it automatically, see
+   app/recipes.py). Deliberately plain bordered/filled buttons (not
+   .link text buttons) so both render at the same height regardless of
    which one carries the primary gold treatment. */
 .gear-slot-picker-actions { display: flex; gap: 8px; width: 100%; margin-top: 2px; }
 .gear-slot-picker-actions button {
@@ -311,24 +313,6 @@
 .gspa-primary:hover { background: #ffab42; }
 .gspa-secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
 .gspa-secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
-
-.gear-combo-builder {
-  width: 100%; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 10px;
-}
-.gear-combo-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.gear-combo-label { font-size: 12px; color: var(--text-faint); white-space: nowrap; }
-.gear-combo-header input[type="text"] { flex: 1 1 220px; min-width: 160px; }
-.gear-combo-rows { display: flex; flex-direction: column; gap: 8px; }
-.gear-combo-row { display: flex; align-items: center; gap: 8px; }
-.gear-combo-row-search { flex: 1 1 auto; min-width: 160px; }
-.gear-combo-qty { width: 56px !important; flex-shrink: 0; }
-.gear-combo-row-remove {
-  background: none; border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 0; width: 30px; height: 30px; font-size: 13px; cursor: pointer; line-height: 1; flex-shrink: 0;
-}
-.gear-combo-row-remove:hover { border-color: var(--red); color: var(--red); }
-.gear-combo-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
 .pg-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 40px 10px; }
 

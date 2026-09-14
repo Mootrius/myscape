@@ -27,7 +27,8 @@ from app.database import get_db
 from app.limiter import limiter
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player
 from app.pages import render_dashboard, render_landing, render_login, render_purchase_goals, render_signup
-from app.purchase_goals import build_purchase_goals_state, search_items
+from app.purchase_goals import build_purchase_goals_state, get_mapping, search_items
+from app.recipes import expand_recipe_components
 from app.routers import auth, linking
 from app.schemas import (
     BankOut,
@@ -415,7 +416,14 @@ def set_gear_slot(
     _handle_set_gear_slot in Maintrius's own osrs_tracker.py for the
     original this ports. Stores exactly what was sent, unresolved --
     pricing/ownership is computed fresh on every read, not here (see
-    app/purchase_goals.py)."""
+    app/purchase_goals.py) -- with one addition: a plain untradeable
+    item (no item_id, no components, not marked as supplies) is checked
+    against the known item-combination recipes (app/recipes.py) and,
+    on a match, is auto-expanded into a "combo" here before it's ever
+    persisted. This is what lets someone search for and select e.g.
+    "Neitiznot faceguard" directly instead of having to know it's built
+    from a Helm of Neitiznot + a Basilisk jaw and build it from parts
+    themselves -- the frontend never has to know the difference."""
     setup = _get_owned_gear_setup(db, player, setup_id)
 
     if payload.item is None:
@@ -429,6 +437,11 @@ def set_gear_slot(
             ]
         if payload.item.supplies:
             stored_item["supplies"] = True
+        elif payload.item.item_id is None and not payload.item.components and payload.item.item_name:
+            mapping, _ = get_mapping()
+            auto_components = expand_recipe_components(payload.item.item_name, mapping)
+            if auto_components:
+                stored_item["components"] = auto_components
 
     if payload.slot_type == "equipment":
         if payload.slot not in EQUIPMENT_SLOTS:

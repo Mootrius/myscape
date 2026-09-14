@@ -562,7 +562,6 @@ def render_purchase_goals(player: Player) -> str:
         iconPicker: false,  // true while the setup-icon picker is open
         nameFormMode: null, // 'new' | 'rename' | null
         pollTimer: null,
-        comboSeq: 0,
       };
 
       function esc(s) {
@@ -955,15 +954,7 @@ def render_purchase_goals(player: Player) -> str:
       // ---- Gear/inventory slot picker --------------------------------------
 
       function openSlotPicker(slotType, slot) {
-        PG.picker = {
-          slotType: slotType, slot: slot, mode: 'search',
-          query: '', selected: null,
-          comboName: '', comboRows: [newComboRow()], supplies: false,
-        };
-      }
-
-      function newComboRow() {
-        return { seq: ++PG.comboSeq, itemId: null, itemName: '', quantity: 1 };
+        PG.picker = { slotType: slotType, slot: slot, query: '', selected: null };
       }
 
       function renderSlotPicker() {
@@ -972,146 +963,47 @@ def render_purchase_goals(player: Player) -> str:
         var p = PG.picker;
         if (!p) { el.innerHTML = ''; return; }
 
-        // Only shown in combo mode, as a way back -- in search mode the
-        // equivalent switch is one of the three action buttons below
-        // instead (see gear-slot-picker-actions), alongside Add and
-        // Add as supplies.
-        var modeToggle = p.mode === 'combo'
-          ? '<div class="gear-combo-header"><button class="link" id="pickerModeToggle" type="button">Search for a single item instead</button></div>'
-          : '';
-
-        var body;
-        if (p.mode === 'search') {
-          body = '' +
-            '<div class="search-box search-box-full">' +
-            '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" value="' + esc(p.query) + '" />' +
-            '  <div class="suggestions" id="slotSuggestions"></div>' +
-            '</div>' +
-            '<div class="gear-slot-picker-actions">' +
-            '  <button class="gspa-secondary" id="pickerBuildComboBtn" type="button">Build from parts</button>' +
-            '  <button class="gspa-secondary" id="slotAddSuppliesBtn" type="button">Add as supplies</button>' +
-            '  <button class="gspa-primary" id="slotAddBtn" type="button">Add</button>' +
-            '</div>';
-        } else {
-          body = '' +
-            '<div class="gear-combo-builder">' +
-            '  <div class="gear-combo-header">' +
-            '    <span class="gear-combo-label">Combined item name:</span>' +
-            '    <input type="text" id="comboNameInput" value="' + esc(p.comboName) + '" placeholder="e.g. Neitiznot faceguard" />' +
-            '  </div>' +
-            '  <div class="gear-combo-rows">' +
-            p.comboRows.map(function (row) {
-              return '' +
-                '<div class="gear-combo-row" data-row-seq="' + row.seq + '">' +
-                '  <div class="search-box gear-combo-row-search">' +
-                '    <input type="text" class="combo-row-input" data-row-seq="' + row.seq + '" placeholder="Component item" value="' + esc(row.itemName) + '" autocomplete="off" />' +
-                '    <div class="suggestions" id="comboSuggestions-' + row.seq + '"></div>' +
-                '  </div>' +
-                '  <input type="number" class="gear-combo-qty combo-row-qty" data-row-seq="' + row.seq + '" min="1" value="' + row.quantity + '" />' +
-                '  <button class="gear-combo-row-remove" data-row-seq="' + row.seq + '" type="button" title="Remove component">&times;</button>' +
-                '</div>';
-            }).join('') +
-            '  </div>' +
-            '  <div class="gear-combo-actions">' +
-            '    <button class="link" id="comboAddRowBtn" type="button">+ Add component</button>' +
-            '    <button class="primary" id="comboSaveBtn" type="button">Save combo</button>' +
-            '  </div>' +
-            '</div>';
-        }
-
-        // The "always owned" toggle only applies to a combo build now --
-        // search mode has its own dedicated "Add as supplies" button
-        // instead (see gear-slot-picker-actions above), which needs no
-        // separate toggle since it's just another action on whatever's
-        // currently selected.
-        var suppliesRow = p.mode === 'combo'
-          ? '<div class="gear-combo-header"><label class="gear-combo-label"><input type="checkbox" id="suppliesToggle"' + (p.supplies ? ' checked' : '') + ' /> Always count as owned (supplies)</label></div>'
-          : '';
-
-        el.innerHTML = '' +
-          '<div class="gear-slot-picker">' +
-          modeToggle +
-          body +
-          suppliesRow +
+        // No "build from parts" option any more -- if what's searched
+        // isn't a live GE-tradeable match, picking the "add as
+        // untradeable" fallback below still works exactly the same, and
+        // the server checks the name against known item-combination
+        // recipes (e.g. "Neitiznot faceguard" -> Helm of Neitiznot +
+        // Basilisk jaw) and auto-expands it there -- see
+        // expand_recipe_components in app/recipes.py -- so nobody has
+        // to know or type out what an item is made of.
+        var body = '' +
+          '<div class="search-box search-box-full">' +
+          '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" value="' + esc(p.query) + '" />' +
+          '  <div class="suggestions" id="slotSuggestions"></div>' +
+          '</div>' +
+          '<div class="gear-slot-picker-actions">' +
+          '  <button class="gspa-secondary" id="slotAddSuppliesBtn" type="button">Add as supplies</button>' +
+          '  <button class="gspa-primary" id="slotAddBtn" type="button">Add</button>' +
           '</div>';
+
+        el.innerHTML = '<div class="gear-slot-picker">' + body + '</div>';
 
         wireSlotPickerEvents();
       }
 
       function wireSlotPickerEvents() {
         var p = PG.picker;
-        document.getElementById('pickerModeToggle')?.addEventListener('click', function () {
-          p.mode = 'search';
-          renderSlotPicker();
+        var input = document.getElementById('slotSearchInput');
+        input.addEventListener('input', debounce(function () {
+          p.query = input.value;
+          // Whatever was selected before no longer matches what's
+          // typed now -- Add/Add as supplies need a fresh pick.
+          p.selected = null;
+          runSearch(input.value, function (results) { renderSlotSuggestions(input.value, results); });
+        }, 200));
+        document.getElementById('slotAddBtn').addEventListener('click', function () {
+          if (!p.selected) { showError('Pick an item from the list first.'); return; }
+          saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName });
         });
-        document.getElementById('suppliesToggle')?.addEventListener('change', function (e) { p.supplies = e.target.checked; });
-
-        if (p.mode === 'search') {
-          var input = document.getElementById('slotSearchInput');
-          input.addEventListener('input', debounce(function () {
-            p.query = input.value;
-            // Whatever was selected before no longer matches what's
-            // typed now -- Add/Add as supplies need a fresh pick.
-            p.selected = null;
-            runSearch(input.value, function (results) { renderSlotSuggestions(input.value, results); });
-          }, 200));
-          document.getElementById('pickerBuildComboBtn').addEventListener('click', function () {
-            p.mode = 'combo';
-            renderSlotPicker();
-          });
-          document.getElementById('slotAddBtn').addEventListener('click', function () {
-            if (!p.selected) { showError('Pick an item from the list first.'); return; }
-            saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName });
-          });
-          document.getElementById('slotAddSuppliesBtn').addEventListener('click', function () {
-            if (!p.selected) { showError('Pick an item from the list first.'); return; }
-            saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName, supplies: true });
-          });
-        } else {
-          document.getElementById('comboNameInput').addEventListener('input', function (e) { p.comboName = e.target.value; });
-          document.getElementById('comboAddRowBtn').addEventListener('click', function () {
-            p.comboRows.push(newComboRow());
-            renderSlotPicker();
-          });
-          document.querySelectorAll('.gear-combo-row-remove').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              var seq = parseInt(btn.getAttribute('data-row-seq'), 10);
-              if (p.comboRows.length <= 1) return;
-              p.comboRows = p.comboRows.filter(function (r) { return r.seq !== seq; });
-              renderSlotPicker();
-            });
-          });
-          document.querySelectorAll('.combo-row-qty').forEach(function (inp) {
-            inp.addEventListener('input', function () {
-              var seq = parseInt(inp.getAttribute('data-row-seq'), 10);
-              var row = p.comboRows.find(function (r) { return r.seq === seq; });
-              if (row) row.quantity = Math.max(1, parseInt(inp.value, 10) || 1);
-            });
-          });
-          document.querySelectorAll('.combo-row-input').forEach(function (inp) {
-            var seq = parseInt(inp.getAttribute('data-row-seq'), 10);
-            inp.addEventListener('input', debounce(function () {
-              var row = p.comboRows.find(function (r) { return r.seq === seq; });
-              if (row) { row.itemName = inp.value; row.itemId = null; }
-              runSearch(inp.value, function (results) { renderComboSuggestions(seq, results); });
-            }, 200));
-          });
-          document.getElementById('comboSaveBtn').addEventListener('click', function () {
-            var name = (p.comboName || '').trim();
-            var components = p.comboRows
-              .filter(function (r) { return (r.itemName || '').trim(); })
-              .map(function (r) {
-                return r.itemId != null
-                  ? { item_id: r.itemId, item_name: r.itemName, quantity: r.quantity }
-                  : { item_id: null, item_name: r.itemName.trim(), quantity: r.quantity };
-              });
-            if (!name || !components.length) {
-              showError('A combined item needs a name and at least one component.');
-              return;
-            }
-            saveSlot({ item_id: null, item_name: name, components: components, supplies: p.supplies });
-          });
-        }
+        document.getElementById('slotAddSuppliesBtn').addEventListener('click', function () {
+          if (!p.selected) { showError('Pick an item from the list first.'); return; }
+          saveSlot({ item_id: p.selected.itemId, item_name: p.selected.itemName, supplies: true });
+        });
       }
 
       function renderSlotSuggestions(query, results) {
@@ -1157,27 +1049,6 @@ def render_purchase_goals(player: Player) -> str:
             if (input) input.value = name;
             box.classList.remove('show');
             box.innerHTML = '';
-          });
-        });
-      }
-
-      function renderComboSuggestions(seq, results) {
-        var box = document.getElementById('comboSuggestions-' + seq);
-        if (!box) return;
-        if (!results.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
-        box.innerHTML = results.map(function (r) {
-          return '<div class="suggestion" data-item-id="' + r.id + '" data-item-name="' + esc(r.name) + '">' +
-            (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span></div>';
-        }).join('');
-        box.classList.add('show');
-        box.querySelectorAll('.suggestion').forEach(function (rowEl) {
-          rowEl.addEventListener('click', function () {
-            var row = PG.picker.comboRows.find(function (r) { return r.seq === seq; });
-            if (row) {
-              row.itemId = parseInt(rowEl.getAttribute('data-item-id'), 10);
-              row.itemName = rowEl.getAttribute('data-item-name');
-            }
-            renderSlotPicker();
           });
         });
       }
@@ -1305,8 +1176,8 @@ def render_purchase_goals(player: Player) -> str:
       loadState();
       PG.pollTimer = setInterval(function () {
         // Skip a background refresh while the player has an editor open --
-        // an in-flight rename/slot-pick/combo-build shouldn't get yanked
-        // out from under them by a poll landing mid-edit.
+        // an in-flight rename/slot-pick shouldn't get yanked out from
+        // under them by a poll landing mid-edit.
         if (PG.picker || PG.iconPicker || PG.nameFormMode) return;
         loadState();
       }, 5000);
