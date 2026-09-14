@@ -270,9 +270,15 @@
    in .gear-slot-picker. */
 .search-box.search-box-full { flex: 1 1 100%; width: 100%; }
 .search-box input[type="text"] { width: 100%; }
+/* Opaque, not the --panel-translucent used by the picker's own outer
+   card -- this floats directly over the "Add as supplies"/Add buttons
+   right below it (see .gear-slot-picker-actions), and a translucent
+   background there just lets those buttons ghost through it instead of
+   being cleanly covered. */
 .suggestions {
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
-  background: var(--panel-translucent); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
 }
 .suggestions.show { display: block; }
 .suggestion {
@@ -282,10 +288,22 @@
 .suggestion:hover, .suggestion.active { background: var(--panel-2); }
 .suggestion img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
 
-/* The "no tradeable match -- add it as untradeable instead" row that
-   replaces the search results when the query matches nothing in the
-   OSRS Wiki's (tradeable-only) price mapping -- styled as an action,
-   not an item, so it doesn't look like a real search result. */
+/* Marks a search suggestion as a known item-combination recipe (e.g.
+   "Neitiznot faceguard") rather than a live Grand Exchange match --
+   still a normal, icon-bearing, click-to-select row (see
+   app/recipes.py), just flagged so it's clear it isn't itself
+   tradeable before picking it. margin-left: auto pushes it to the row's
+   right edge without needing the name span next to it to declare its
+   own flex-grow. */
+.suggestion-combo-tag {
+  flex: none; margin-left: auto; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-faint); border: 1px solid var(--border); border-radius: 3px; padding: 2px 5px;
+}
+
+/* The "no match -- add it as untradeable instead" row that replaces
+   the search results when the query matches nothing at all, tradeable
+   or recipe -- styled as an action, not an item, so it doesn't look
+   like a real search result. */
 .suggestion-add-untradeable { color: var(--gold-dim); font-style: italic; }
 .suggestion-add-untradeable:hover { color: var(--gold); }
 .suggestion-add-icon {

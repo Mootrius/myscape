@@ -33,6 +33,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player
+from app.recipes import search_recipe_names
 from app.schemas import EQUIPMENT_SLOTS, INVENTORY_SIZE
 
 # OSRS's own item id for coins -- used to read "gp in the bank" straight
@@ -157,10 +158,24 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
     starts.sort(key=lambda kv: len(kv[1].get("name") or ""))
     contains.sort(key=lambda kv: len(kv[1].get("name") or ""))
     combined = (starts + contains)[:limit]
-    return [
-        {"id": int(item_id), "name": meta.get("name"), "icon": item_icon_url(meta.get("icon"))}
+    results = [
+        {"id": int(item_id), "name": meta.get("name"), "icon": item_icon_url(meta.get("icon")), "tradeable": True}
         for item_id, meta in combined
     ]
+
+    # Fill any remaining slots with known item-combination recipes (see
+    # app/recipes.py) -- e.g. "Neitiznot faceguard" has no Grand
+    # Exchange listing of its own, so it would never show up above, but
+    # a player should still be able to find it by name and see its icon
+    # rather than being told to type it in blind as an untradeable item.
+    # Names already matched as a real tradeable item above are skipped
+    # so nothing appears twice.
+    if len(results) < limit:
+        seen_names = {r["name"].lower() for r in results}
+        for entry in search_recipe_names(q, limit - len(results), exclude=seen_names):
+            results.append({"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False})
+
+    return results
 
 
 # Crystal armour (helm/body/legs) can be recolored to match any of the

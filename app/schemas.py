@@ -228,9 +228,15 @@ class EquipmentOut(BaseModel):
 # -- Item search (backs the gear-setup slot picker's search box). ---------
 
 class ItemSearchResult(BaseModel):
-    id: int
+    # id is None for a known item-combination recipe match (e.g.
+    # "Neitiznot faceguard" -- see app/recipes.py) that has no Grand
+    # Exchange listing of its own to carry a real item id; tradeable is
+    # False in exactly that case, so the frontend can tell the two
+    # apart without guessing from id alone.
+    id: Optional[int] = None
     name: str
     icon: Optional[str] = None
+    tradeable: bool = True
 
 
 class ItemSearchResponse(BaseModel):

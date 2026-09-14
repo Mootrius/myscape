@@ -1,9 +1,17 @@
 """One-off script: fetch the OSRS Wiki's Bucket:Recipe table in full,
-keep only entries with no uses_skill (pure item-combination recipes,
-e.g. Neitiznot faceguard = Helm of Neitiznot + Basilisk jaw -- see the
-research notes in the conversation this was built from), and write a
-compact {itemNameLower: [{"name":..., "quantity":...}, ...]} JSON index
-to app/data/recipes.json for the app to bundle/ship.
+keep only entries shaped like a pure item combination -- no uses_skill
+(e.g. Neitiznot faceguard = Helm of Neitiznot + Basilisk jaw -- see the
+research notes in the conversation this was built from) and an output
+quantity of exactly 1 (excludes batch-crafting recipes like "5 poisoned
+arrows from a batch of unfinished ones", where the listed material
+quantities are for the whole batch, not per unit, and dividing them out
+isn't something this script tries to do) -- and write a compact
+{outputNameLower: {"name":..., "icon":..., "materials": [...]}} JSON
+index to app/data/recipes.json for the app to bundle/ship. Keyed by the
+recipe's OUTPUT name rather than the wiki page name, since one page can
+document several output variants (e.g. "Adamant arrow" documents both
+plain and poisoned arrows as separate rows) and it's the output name a
+player would actually search for.
 
 Run with: python scripts/fetch_recipes.py (from the repo root).
 
@@ -55,7 +63,9 @@ def main():
 
     combos = 0
     skilling = 0
-    no_output = 0
+    skipped_no_materials = 0
+    skipped_no_output = 0
+    skipped_batch_yield = 0
     index = {}
     for row in all_rows:
         if row.get("uses_skill"):
@@ -66,14 +76,33 @@ def main():
             prod = json.loads(row.get("production_json") or "{}")
         except json.JSONDecodeError:
             continue
+
         materials = prod.get("materials") or []
         if not materials:
-            no_output += 1
+            skipped_no_materials += 1
             continue
-        name = row.get("page_name") or (prod.get("output") or {}).get("name")
-        if not name:
+
+        output = prod.get("output") or {}
+        out_name = (output.get("name") or row.get("page_name") or "").strip()
+        if not out_name:
+            skipped_no_output += 1
             continue
-        key = name.strip().lower()
+
+        # Anything other than a 1-for-1 combination (e.g. "5 poisoned
+        # arrows" from a batch of materials) isn't something we can
+        # price correctly here -- the listed material quantities are
+        # for the whole batch, not per output unit, and this script
+        # doesn't attempt that division. This also naturally excludes
+        # almost everything that isn't gear/equipment, which tends to
+        # be exactly the kind of true 1:1 assembly this feature is for.
+        try:
+            out_qty = int(float(output.get("quantity") or 1))
+        except (TypeError, ValueError):
+            out_qty = 1
+        if out_qty != 1:
+            skipped_batch_yield += 1
+            continue
+
         parsed_materials = []
         for m in materials:
             mat_name = (m.get("name") or "").strip()
@@ -84,11 +113,25 @@ def main():
             except (TypeError, ValueError):
                 qty = 1
             parsed_materials.append({"name": mat_name, "quantity": max(qty, 1)})
-        if parsed_materials:
-            index[key] = parsed_materials
+        if not parsed_materials:
+            continue
+
+        key = out_name.lower()
+        # First recipe seen for a given output name wins -- a handful of
+        # items are documented with more than one way to obtain them
+        # (e.g. via a quest reward as well as combining parts); the
+        # first one the wiki returns is as good a pick as any, and
+        # stability matters more than which one here.
+        index.setdefault(key, {
+            "name": out_name,
+            "icon": output.get("image") or None,
+            "materials": parsed_materials,
+        })
 
     print(f"combination-shaped rows (no uses_skill): {combos}")
-    print(f"  of which had no materials/output (skipped): {no_output}")
+    print(f"  of which had no materials at all (skipped): {skipped_no_materials}")
+    print(f"  of which had no output name (skipped): {skipped_no_output}")
+    print(f"  of which were a batch yield, not 1:1 (skipped): {skipped_batch_yield}")
     print(f"  skilling recipes (excluded): {skilling}")
     print(f"final recipe index entries: {len(index)}")
 

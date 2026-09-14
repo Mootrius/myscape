@@ -1013,13 +1013,26 @@ def render_purchase_goals(player: Player) -> str:
         if (!trimmed) { box.classList.remove('show'); box.innerHTML = ''; return; }
 
         var rowsHtml = results.map(function (r) {
-          return '<div class="suggestion" data-item-id="' + r.id + '" data-item-name="' + esc(r.name) + '">' +
-            (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span></div>';
+          // Combination items (e.g. "Neitiznot faceguard") have no
+          // Grand Exchange listing of their own -- no data-item-id, and
+          // a small "combo" tag so it's clear this isn't a live-priced
+          // match, but it's still a normal, icon-bearing, click-to-
+          // select suggestion. The server auto-detects and prices these
+          // from their real components once selected -- see
+          // app/recipes.py -- so nobody has to already know or type out
+          // what an item is made of just to find it.
+          var idAttr = r.id != null ? ' data-item-id="' + r.id + '"' : '';
+          var comboTag = r.id == null ? '<span class="suggestion-combo-tag">combo</span>' : '';
+          return '<div class="suggestion" data-item-name="' + esc(r.name) + '"' + idAttr + '>' +
+            (r.icon ? '<img src="' + esc(r.icon) + '" alt="" />' : '') + '<span>' + esc(r.name) + '</span>' + comboTag + '</div>';
         }).join('');
 
-        // No live-priced (tradeable) match at all -- offer to add exactly
-        // what was typed as an untradeable item instead, matched by name
-        // rather than id (see _take_owned in app/purchase_goals.py).
+        // No match at all, tradeable or otherwise -- offer to add
+        // exactly what was typed as an untradeable item instead,
+        // matched by name rather than id (see _take_owned in
+        // app/purchase_goals.py). This is now the rare fallback rather
+        // than the main path for combination gear, since those show up
+        // as normal suggestions above.
         if (!results.length) {
           rowsHtml = '<div class="suggestion suggestion-add-untradeable" data-untradeable-name="' + esc(trimmed) + '">' +
             '<span class="suggestion-add-icon">+</span><span>Add &ldquo;' + esc(trimmed) + '&rdquo; as an untradeable item</span></div>';
@@ -1029,10 +1042,11 @@ def render_purchase_goals(player: Player) -> str:
         box.classList.add('show');
 
         var input = document.getElementById('slotSearchInput');
-        box.querySelectorAll('.suggestion[data-item-id]').forEach(function (row) {
+        box.querySelectorAll('.suggestion[data-item-name]').forEach(function (row) {
           row.addEventListener('click', function () {
+            var idAttr = row.getAttribute('data-item-id');
             PG.picker.selected = {
-              itemId: parseInt(row.getAttribute('data-item-id'), 10),
+              itemId: idAttr !== null ? parseInt(idAttr, 10) : null,
               itemName: row.getAttribute('data-item-name'),
             };
             PG.picker.query = PG.picker.selected.itemName;
