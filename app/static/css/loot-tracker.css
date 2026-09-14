@@ -15,7 +15,7 @@
   background: var(--panel-2); border: 1px solid var(--border);
   padding: 18px 22px 14px; margin-bottom: 18px;
 }
-.loot-chart-header { position: relative; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.loot-chart-header { position: relative; display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
 /* Right side: kc + gp grouped together (see render_loot_tracker's
    task -- these two used to sit on opposite ends of the header, with
    a hardcoded "LAST 24H" filling the left slot the range button now
