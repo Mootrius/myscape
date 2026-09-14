@@ -81,20 +81,28 @@
    Goals version), with kill count and gp value as the two visible
    lines instead. ---------- */
 .loot-npc-row { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Deliberately rectangular (taller than wide), via aspect-ratio: 3/4
+   -- the mirror image of the item box's own aspect-ratio: 1/1 below.
+   Pinning the ratio (rather than just letting the icon+kc+gp stack
+   happen to come out taller) keeps the box's shape steady even for an
+   NPC whose wiki icon 404s and disappears (see iconImg in the script
+   below) -- content is vertically centered inside whatever space that
+   leaves rather than the box collapsing to fit it. */
 .loot-npc-box {
-  width: 68px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 84px; aspect-ratio: 3 / 4; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px 6px 6px; cursor: pointer;
+  padding: 10px 8px; cursor: pointer;
 }
 .loot-npc-box:hover { border-color: var(--gold-dim); }
 .loot-npc-box.active { border-color: var(--gold); }
-.loot-npc-box-icon { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; }
+.loot-npc-box-icon { width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; }
 .loot-npc-box-kc {
-  font-size: 10px; color: var(--text-dim); text-align: center; line-height: 1.15;
+  font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 .loot-npc-box.active .loot-npc-box-kc { color: var(--text); }
-.loot-npc-box-value { font-size: 9.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
+.loot-npc-box-value { font-size: 10.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
 .loot-npc-box.active .loot-npc-box-value { color: var(--gold); }
 
 /* ---------- two-column layout below the chart: the NPC panel (search
@@ -146,12 +154,18 @@
    item's name available on hover only (same identity-by-tooltip
    convention as the NPC boxes). Same npc-scoped, 24h-windowed data --
    see windowItems/npcItems in app/loot.py's build_loot_state. ---------- */
-.loot-item-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.loot-item-list { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Square regardless of content -- aspect-ratio: 1/1 ties the height to
+   the width instead of letting the icon+qty+gp stack decide it, same
+   idea as the NPC box's own aspect-ratio: 3/4 above (which pins it to
+   taller-than-wide instead). Smaller than the NPC box beside it,
+   matching how much less there is to show per item. */
 .loot-item-box {
-  width: 68px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 56px; aspect-ratio: 1 / 1; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px 6px 6px;
+  padding: 4px;
 }
-.loot-item-box-icon { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; }
-.loot-item-box-qty { font-size: 10px; color: var(--text-dim); text-align: center; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.loot-item-box-value { font-size: 9.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
+.loot-item-box-icon { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
+.loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
+.loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
