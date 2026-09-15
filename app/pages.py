@@ -1844,18 +1844,32 @@ def render_loot_tracker(player: Player) -> str:
         return sign + Math.round(abs).toLocaleString('en-US');
       }
 
-      // Rounds a chart's max value up to a "nice" number (1/2/5 x a power
-      // of ten) so the gridlines land on clean values. Same as the
-      // original tool's niceMax.
-      function niceMax(value) {
+      // Rounds a chart's max value up to a "nice" number (a step x a
+      // power of ten) so the gridlines land on clean values -- and,
+      // via targetFrac, scales that ceiling so the tallest bar sits
+      // close to a fixed height fraction of the axis instead of
+      // wherever the nearest nice ceiling happens to land. The old
+      // version (targetFrac defaulting to 1, with just 1/2/5/10
+      // steps) rounded the raw value straight up to the next step, so
+      // a bar just under a round number sat right at the top of the
+      // chart while one just over a round number landed barely above
+      // half -- a big, poll-to-poll inconsistency. Dividing by
+      // targetFrac before rounding, plus a finer step table so each
+      // rounding "hop" is smaller, keeps the tallest bar's height in
+      // a tight band centered under targetFrac (worst case in the low
+      // 60s% for a 0.8 target, typically closer to 70-80%) rather
+      // than the old 50-100% swing.
+      function niceMax(value, targetFrac) {
+        targetFrac = targetFrac || 1;
         if (!value || value <= 0) return 100;
-        var magnitude = Math.pow(10, Math.floor(Math.log10(value)));
-        var normalized = value / magnitude;
-        var niceNormalized;
-        if (normalized <= 1) niceNormalized = 1;
-        else if (normalized <= 2) niceNormalized = 2;
-        else if (normalized <= 5) niceNormalized = 5;
-        else niceNormalized = 10;
+        var target = value / targetFrac;
+        var magnitude = Math.pow(10, Math.floor(Math.log10(target)));
+        var normalized = target / magnitude;
+        var steps = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+        var niceNormalized = steps[steps.length - 1];
+        for (var i = 0; i < steps.length; i++) {
+          if (normalized <= steps[i]) { niceNormalized = steps[i]; break; }
+        }
         return niceNormalized * magnitude;
       }
 
@@ -1979,7 +1993,10 @@ def render_loot_tracker(player: Player) -> str:
         // the "s" it's deliberately meant to keep lowercase.
         document.getElementById('lootChartTitle').textContent = selectedNpc ? selectedNpc.toUpperCase() : 'ALL NPCs';
 
-        var maxValue = niceMax(Math.max.apply(null, [0].concat(buckets.map(function (b) { return b.value; }))));
+        // 0.8 target so the tallest bucket's bar consistently lands
+        // around 4/5 up the axis instead of anywhere from half height
+        // to flush with the top -- see niceMax's comment.
+        var maxValue = niceMax(Math.max.apply(null, [0].concat(buckets.map(function (b) { return b.value; }))), 0.8);
         var gridlineSteps = 4;
         var gridlinesEl = document.getElementById('lootBarGridlines');
         var stepsHtml = '';
