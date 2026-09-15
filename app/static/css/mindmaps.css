@@ -484,8 +484,23 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   font-family: inherit; font-size: 11px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; padding: 0;
-  opacity: 0; pointer-events: none; transition: opacity 0.12s ease;
+  opacity: 0; pointer-events: none;
 }
+/* No transition on that opacity toggle (deliberately -- this used to
+   fade in over 0.12s). Every node lives inside .mm-world, which is
+   itself an actively-transformed layer (see the wheel-zoom fix above
+   for the full mechanism), and a CSS transition on ANY property of an
+   element inside that shared layer gets Chrome to auto-promote/demote
+   that element to its own compositing layer for the transition's
+   duration -- which forces a repaint of the whole shared .mm-world
+   layer around it. With a transition here, that promote-on-hover-in /
+   demote-on-hover-out pair fired on literally every mouse-over of a
+   node in Edit Mode, which is exactly what was blurring every other
+   node's text for half a second and then clearing. An instant
+   opacity flip needs no such layer, so there's nothing to promote or
+   demote -- same "hard cut instead of an animated property" fix as
+   the note flip-card above, applied here for the same underlying
+   reason rather than by preference. */
 /* Edge buttons show while hovering the node itself, but NOT while
    hovering the popover below it (color swatches, or the "add shared
    child" button -- see .mm-node-popover below) -- the popover is

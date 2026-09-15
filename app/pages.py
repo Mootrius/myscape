@@ -3316,12 +3316,25 @@ def render_mindmaps(player: Player) -> str:
       // event for wheelSettleMs), via the same debounce shape as
       // endPan -- a real gesture never leaves a 200ms gap between
       // ticks, so this doesn't clip a slow, deliberate scroll either.
+      // Now that each tick applies instantly (no transition to blend
+      // consecutive ticks into a smooth-looking ramp), a FIXED step per
+      // tick is what actually made zooming feel chunky/stepped once the
+      // transition above stopped papering over it -- a trackpad fires
+      // many small ticks per gesture, and each one used to jump the
+      // exact same 0.12 regardless of how small that tick's own
+      // deltaY was. Scaling the step by deltaY (exponentially, so it
+      // composes the same way repeated multiplication should) instead
+      // makes a gentle trackpad scroll produce many tiny, smooth steps
+      // and a single sharp mouse-wheel notch (deltaY ~100) land close
+      // to the old fixed step's size, rather than every tick jumping
+      // the same amount no matter how fast or slow the input was.
+      var wheelZoomSensitivity = 0.0013;
       var wheelSettleTimer = null;
       var wheelSettleMs = 200;
       canvasEl.addEventListener('wheel', function (e) {
         e.preventDefault();
         mmWorldEl.style.transitionDuration = '0s';
-        setZoom(MM.zoom + (e.deltaY < 0 ? 0.12 : -0.12));
+        setZoom(MM.zoom * Math.exp(-e.deltaY * wheelZoomSensitivity));
         clearTimeout(wheelSettleTimer);
         wheelSettleTimer = setTimeout(function () {
           mmWorldEl.style.transitionDuration = ''; // hand back to .mm-world's own smooth-zoom transition
