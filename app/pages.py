@@ -2466,6 +2466,52 @@ def render_mindmaps(player: Player) -> str:
       // shows them.
       var NODE_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'white'];
 
+      // Everything below mirrors app/mindmaps.py's own goal-type
+      // constants exactly (GOAL_TYPE_BY_COLOR, KC_ACTIVITY_TYPES,
+      // SKILL_NAMES, DIARY_AREAS, DIARY_TIERS) -- there's no endpoint
+      // that hands these lists to the client, since they're small,
+      // fixed, and only ever used to build the goal-criteria form
+      // below (renderGoalFieldsHtml), not validated here at all (the
+      // server re-validates everything via clean_goal regardless of
+      // what this form happens to submit). If a color/skill/area/tier
+      // is ever added on the server, this list needs the same addition.
+      var GOAL_TYPE_BY_COLOR = {
+        gray: 'manual', red: 'kc', orange: 'item', yellow: 'gp',
+        green: 'skill', blue: 'quest', purple: 'diary', white: null,
+      };
+      // [value, label] pairs -- source_type strings LootEvent already
+      // stores (see app/loot.py), not free-form text, so a kc goal's
+      // "activity" field is a picklist rather than a typed field.
+      var KC_ACTIVITY_TYPES = [
+        ['npc', 'NPC / boss kill'],
+        ['pickpocket', 'Pickpocket'],
+        ['event', 'Clue casket / minigame reward'],
+      ];
+      var SKILL_NAMES = [
+        'attack', 'defence', 'strength', 'hitpoints', 'ranged', 'prayer', 'magic',
+        'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
+        'smithing', 'mining', 'herblore', 'agility', 'thieving', 'slayer', 'farming',
+        'runecraft', 'hunter', 'construction',
+      ];
+      var DIARY_AREAS = [
+        'ardougne', 'desert', 'falador', 'fremennik', 'kandarin', 'karamja',
+        'kourend_kebos', 'lumbridge_draynor', 'morytania', 'varrock',
+        'western_provinces', 'wilderness',
+      ];
+      // A couple of these need their own label rather than a
+      // mechanical underscore-to-space/title-case conversion (the
+      // in-game diary names really are "Kourend & Kebos" and
+      // "Lumbridge & Draynor", not "Kourend Kebos").
+      var DIARY_AREA_LABELS = {
+        ardougne: 'Ardougne', desert: 'Desert', falador: 'Falador',
+        fremennik: 'Fremennik', kandarin: 'Kandarin', karamja: 'Karamja',
+        kourend_kebos: 'Kourend & Kebos', lumbridge_draynor: 'Lumbridge & Draynor',
+        morytania: 'Morytania', varrock: 'Varrock',
+        western_provinces: 'Western Provinces', wilderness: 'Wilderness',
+      };
+      var DIARY_TIERS = ['easy', 'medium', 'hard', 'elite'];
+      function titleCase(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
       var MM = {
         data: null,
         activeMindmapId: null,
@@ -2497,7 +2543,16 @@ def render_mindmaps(player: Player) -> str:
         // has no meaning against a different one's node tree.
         undoStack: [],
         redoStack: [],
+        // Off by default -- a fresh visit (or a fresh browser) always
+        // opens in view-only mode; see setEditMode below for what
+        // toggling this actually changes. Loaded from storage right
+        // after this object literal (loadStoredEditMode is a hoisted
+        // function declaration, so the forward reference below is
+        // fine even though its own definition sits further down next
+        // to the other per-browser storage helpers).
+        editMode: false,
       };
+      MM.editMode = loadStoredEditMode();
 
       // Same "remember what was open across a reload" convenience as
       // Purchase Goals' own ACTIVE_SETUP_STORAGE_KEY (see
@@ -2518,6 +2573,48 @@ def render_mindmaps(player: Player) -> str:
           if (id) localStorage.setItem(ACTIVE_MINDMAP_STORAGE_KEY, id);
           else localStorage.removeItem(ACTIVE_MINDMAP_STORAGE_KEY);
         } catch (e) { /* ignore -- see comment above */ }
+      }
+
+      // Edit Mode -- the toggle in the mindmap switcher menu (see
+      // renderMenu/mmMenuEditToggle) that splits the canvas into two
+      // very different interaction modes:
+      //
+      //   - OFF (the default): the player can pan/zoom/select a node
+      //     to look at it, and -- the one exception -- still click a
+      //     GRAY node's "Mark complete" toggle (see
+      //     renderNodePopoverHtml), since checking off a manual goal
+      //     isn't "editing" the tree the way changing its structure or
+      //     criteria is. Renaming, recoloring, adding/deleting nodes,
+      //     and filling in a trackable goal's criteria are all
+      //     unavailable.
+      //   - ON: everything above, plus the full editor -- contenteditable
+      //     labels, the edge "+" buttons, color swatches, delete, the
+      //     per-color goal criteria form, and multi-select/shared-child.
+      //
+      // Persisted per-browser (not per-player) the same way
+      // ACTIVE_MINDMAP_STORAGE_KEY is, so leaving and coming back
+      // doesn't silently drop the player into the other mode.
+      var EDIT_MODE_STORAGE_KEY = 'myscape:mindmaps:editMode';
+      function loadStoredEditMode() {
+        try { return localStorage.getItem(EDIT_MODE_STORAGE_KEY) === '1'; } catch (e) { return false; }
+      }
+      function setEditMode(on) {
+        if (on === MM.editMode) return;
+        commitActiveLabelIfEditing();
+        MM.editMode = on;
+        try {
+          if (on) localStorage.setItem(EDIT_MODE_STORAGE_KEY, '1');
+          else localStorage.removeItem(EDIT_MODE_STORAGE_KEY);
+        } catch (e) { /* ignore -- see ACTIVE_MINDMAP_STORAGE_KEY's own comment */ }
+        // Leaving edit mode drops a 2+ multi-select down to just its
+        // anchor -- shared-child selection has no meaning once the
+        // "Add shared child" action that used it is no longer
+        // reachable, so nothing should linger looking selected with
+        // no available action attached to it.
+        if (!on && MM.multiSelectIds.size > 1) {
+          MM.multiSelectIds = MM.selectedNodeId ? new Set([MM.selectedNodeId]) : new Set();
+        }
+        render();
       }
 
       function esc(s) {
@@ -2905,7 +3002,11 @@ def render_mindmaps(player: Player) -> str:
         if (alreadyJustThis) return;
         MM.selectedNodeId = id;
         MM.multiSelectIds = new Set(id ? [id] : []);
-        MM.focusNodeId = id; // focus + select this node's text on the next render, if any
+        // Only worth focusing/text-selecting outside Edit Mode's off
+        // -- the label isn't contenteditable then (see renderCanvas),
+        // so there'd be nothing for a browser focus/selection to
+        // actually land in.
+        MM.focusNodeId = (MM.editMode && id) ? id : null;
         render();
       }
 
@@ -2965,7 +3066,11 @@ def render_mindmaps(player: Player) -> str:
         // delegation below) -- only a plain click on the node itself
         // (its body/label) selects it.
         if (e.target.closest('.mm-edge-btn') || e.target.closest('[data-role="popover"]')) return;
-        if (e.shiftKey) { extendMultiSelect(el.getAttribute('data-node-id')); return; }
+        // Shift-click multi-select only means anything in Edit Mode
+        // (its one use is "Add shared child" -- see
+        // addSharedChildSelected), so outside Edit Mode a shift-click
+        // just falls through to a plain select instead.
+        if (e.shiftKey && MM.editMode) { extendMultiSelect(el.getAttribute('data-node-id')); return; }
         selectNode(el.getAttribute('data-node-id'));
       });
 
@@ -2997,7 +3102,32 @@ def render_mindmaps(player: Player) -> str:
         var swatch = e.target.closest('.mm-swatch');
         if (swatch) { updateSelectedNode({ color: swatch.getAttribute('data-color') }); return; }
         if (e.target.closest('[data-role="delete"]')) { deleteSelectedNode(); return; }
-        if (e.target.closest('[data-role="add-shared-child"]')) addSharedChildSelected();
+        if (e.target.closest('[data-role="add-shared-child"]')) { addSharedChildSelected(); return; }
+        // The gray-node manual "Complete" toggle -- available whether
+        // or not Edit Mode is on (see MM.editMode's own comment), so
+        // this isn't gated on it here either. Reads the CURRENT node's
+        // own goal fresh off selectedNode() (not anything cached from
+        // when the popover was drawn) so double-clicking it quickly
+        // toggles back and forth correctly rather than sending the
+        // same value twice.
+        if (e.target.closest('[data-role="manual-toggle"]')) {
+          var toggleNode = selectedNode();
+          if (toggleNode) saveSelectedNodeGoal({ manualComplete: !(toggleNode.goal && toggleNode.goal.manualComplete) });
+          return;
+        }
+        // A trackable goal's criteria form (kc/item/gp/skill/quest/
+        // diary -- see renderGoalFieldsHtml) -- Edit Mode only, since
+        // this is only ever rendered there in the first place, but the
+        // save button existing at all already implies that.
+        if (e.target.closest('[data-role="goal-save"]')) {
+          var fieldsWrap = e.target.closest('[data-role="goal-fields"]');
+          var goal = {};
+          fieldsWrap.querySelectorAll('[data-goal-field]').forEach(function (input) {
+            var val = (input.value || '').trim();
+            if (val !== '') goal[input.getAttribute('data-goal-field')] = val;
+          });
+          saveSelectedNodeGoal(goal);
+        }
       });
 
       // Committing an in-node text edit fires on focusout (bubbles,
@@ -3046,34 +3176,49 @@ def render_mindmaps(player: Player) -> str:
           var isAnchor = n.id === MM.selectedNodeId;
           var isRoot = n.parentId === null;
           var selectedCls = isSelected ? ' selected' : '';
+          // Filled solid once the goal's actually met (see
+          // evaluate_completion in app/mindmaps.py -- computed fresh
+          // server-side on every read, never something this script
+          // derives itself), outlined otherwise -- see the
+          // .mm-node-<color>.completed rules in mindmaps.css.
+          var completedCls = n.completed ? ' completed' : '';
           // Only the sole selected node is ever contenteditable --
           // typing directly into a node is how its text changes now
           // (see the focusout/keydown delegation above), and that's
           // ambiguous the moment more than one node is selected, so
           // editing is off for all of them until the selection is back
-          // down to just one.
-          var editableAttr = (isSelected && MM.multiSelectIds.size === 1) ? ' contenteditable="true" spellcheck="false"' : '';
+          // down to just one. Also Edit-Mode-only, same as every other
+          // structural change -- see MM.editMode's own comment.
+          var editableAttr = (MM.editMode && isSelected && MM.multiSelectIds.size === 1) ? ' contenteditable="true" spellcheck="false"' : '';
           // The root is the one node every mindmap always keeps, so it
           // can't get a parent (which would just bury it under a new,
           // equally permanent root) or a sibling (it has no parent to
           // share one under) -- only its "add child" edge button shows.
           // The backend enforces the same rule; this just keeps the
           // dead-end options from ever being offered in the first place.
-          // The popover below the anchor node is the color swatches +
-          // delete when it's the only thing selected, or the "add
-          // shared child" button once a second node's been shift-added
-          // -- see MM.selectedNodeId's own comment for why it's always
-          // the anchor's popover, never every selected node's own.
-          var popoverHtml = '';
-          if (isAnchor && MM.multiSelectIds.size === 1) popoverHtml = renderColorPopoverHtml(n);
-          else if (isAnchor && MM.multiSelectIds.size >= 2) popoverHtml = renderSharedChildPopoverHtml();
-          return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + '" data-node-id="' + esc(n.id) + '" ' +
-            'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
-            '<div class="mm-node-label" data-role="label"' + editableAttr + '>' + esc(n.text) + '</div>' +
+          // Edge buttons only ever change the tree's structure, so
+          // they're Edit-Mode-only too.
+          var edgeButtonsHtml = !MM.editMode ? '' :
             (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-top" data-relation="parent" title="Add parent">+</button>') +
             '<button type="button" class="mm-edge-btn mm-edge-bottom" data-relation="child" title="Add child">+</button>' +
             (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-left" data-relation="sibling" data-before="1" title="Add sibling">+</button>') +
-            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-right" data-relation="sibling" data-before="0" title="Add sibling">+</button>') +
+            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-right" data-relation="sibling" data-before="0" title="Add sibling">+</button>');
+          // The popover below the anchor node is the color swatches +
+          // goal-criteria form + delete when it's the only thing
+          // selected (see renderNodePopoverHtml -- also how the
+          // outside-Edit-Mode gray "Mark complete" toggle shows up), or
+          // the "add shared child" button once a second node's been
+          // shift-added (Edit-Mode-only -- see the pointerdown
+          // delegation above) -- see MM.selectedNodeId's own comment
+          // for why it's always the anchor's popover, never every
+          // selected node's own.
+          var popoverHtml = '';
+          if (isAnchor && MM.multiSelectIds.size === 1) popoverHtml = renderNodePopoverHtml(n);
+          else if (isAnchor && MM.multiSelectIds.size >= 2) popoverHtml = renderSharedChildPopoverHtml();
+          return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + completedCls + '" data-node-id="' + esc(n.id) + '" ' +
+            'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
+            '<div class="mm-node-label" data-role="label"' + editableAttr + '>' + esc(n.text) + '</div>' +
+            edgeButtonsHtml +
             popoverHtml +
             '</div>';
         }).join('');
@@ -3180,29 +3325,112 @@ def render_mindmaps(player: Player) -> str:
           '<div class="mm-menu-divider"></div>' +
           '<button type="button" class="mm-menu-item" id="mmMenuNew">New mindmap</button>' +
           '<button type="button" class="mm-menu-item" id="mmMenuRename">Rename mindmap</button>' +
-          '<button type="button" class="mm-menu-item danger" id="mmMenuDelete">Delete mindmap</button>';
+          '<button type="button" class="mm-menu-item danger" id="mmMenuDelete">Delete mindmap</button>' +
+          '<div class="mm-menu-divider"></div>' +
+          '<button type="button" class="mm-menu-item mm-menu-edit-toggle' + (MM.editMode ? ' active' : '') + '" id="mmMenuEditToggle">' +
+          'Edit Mode: ' + (MM.editMode ? 'On' : 'Off') + '</button>';
       }
 
-      // The selected node's color swatches + delete action, shown as a
-      // popover anchored right below the node itself -- replaces the
-      // old toolbar's swatch row and +Parent/+Child/+Sibling/Delete
-      // buttons (the add-relative ones are now the edge buttons above;
-      // delete didn't have anywhere else to go once the toolbar was
-      // removed, so it lives here too). The root node has no delete
-      // action, same rule the backend already enforces. Shares its
-      // outer .mm-node-popover shell/position with
+      // The selected node's color swatches + per-color goal-criteria
+      // form + delete action, shown as a popover anchored right below
+      // the node itself -- replaces the old toolbar's swatch row and
+      // +Parent/+Child/+Sibling/Delete buttons (the add-relative ones
+      // are now the edge buttons above; delete didn't have anywhere
+      // else to go once the toolbar was removed, so it lives here
+      // too). All Edit-Mode-only, EXCEPT the gray node's manual
+      // "Mark complete" toggle (see renderGoalFieldsHtml), which is
+      // also the only thing this popover ever shows OUTSIDE Edit Mode
+      // -- see MM.editMode's own comment for why. The root node has no
+      // delete action, same rule the backend already enforces. Shares
+      // its outer .mm-node-popover shell/position with
       // renderSharedChildPopoverHtml below -- only one of the two is
       // ever shown for a given node (see renderCanvas), depending on
       // whether it's the sole selected node or the anchor of several.
-      function renderColorPopoverHtml(node) {
+      function renderNodePopoverHtml(node) {
+        if (!MM.editMode) {
+          // Nothing to show for a non-gray node while just viewing --
+          // there's no action available on it at all outside Edit Mode.
+          if (GOAL_TYPE_BY_COLOR[node.color] !== 'manual') return '';
+          return '<div class="mm-node-popover" data-role="popover">' + renderGoalFieldsHtml(node) + '</div>';
+        }
         var swatches = NODE_COLORS.map(function (c) {
           var activeCls = (c === node.color) ? ' active' : '';
           return '<button type="button" class="mm-swatch mm-swatch-' + c + activeCls + '" data-color="' + c + '" title="' + c + '"></button>';
         }).join('');
         var isRoot = node.parentId === null;
-        return '<div class="mm-node-popover" data-role="popover">' +
+        return '<div class="mm-node-popover mm-node-popover-wide" data-role="popover">' +
           '<div class="mm-color-popover-swatches">' + swatches + '</div>' +
+          renderGoalFieldsHtml(node) +
           (isRoot ? '' : '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>') +
+          '</div>';
+      }
+
+      // The current color's goal-criteria fields, prefilled from the
+      // node's own `goal` (see clean_goal/default_goal in
+      // app/mindmaps.py for the exact shape each type stores) --
+      // "gray"/manual is just the one-button toggle (available whether
+      // or not Edit Mode is on), "white"/null (the root) has nothing
+      // trackable to fill in at all, and the rest get a small form
+      // ending in a "Save goal" button that PATCHes .../goal with
+      // whatever's currently in these inputs (see the goal-save click
+      // delegation above) -- read fresh off the DOM at save time, not
+      // tracked here, so there's no extra state to keep in sync with
+      // what the player's actually typed.
+      function renderGoalFieldsHtml(node) {
+        var goal = node.goal || {};
+        var type = GOAL_TYPE_BY_COLOR[node.color];
+        if (type === 'manual') {
+          var label = (goal.manualComplete ? 'Mark incomplete' : 'Mark complete');
+          return '<button type="button" class="btn-secondary mm-manual-toggle-btn" data-role="manual-toggle">' + esc(label) + '</button>';
+        }
+        if (!type) return '';
+        var fields = '';
+        if (type === 'kc') {
+          fields =
+            '<select class="mm-goal-input" data-goal-field="activityType">' +
+              KC_ACTIVITY_TYPES.map(function (o) {
+                return '<option value="' + o[0] + '"' + (goal.activityType === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+              }).join('') +
+            '</select>' +
+            '<input class="mm-goal-input" type="text" data-goal-field="sourceName" placeholder="NPC / boss / activity name" maxlength="80" value="' + esc(goal.sourceName || '') + '">' +
+            '<input class="mm-goal-input" type="number" data-goal-field="targetCount" placeholder="Target count" min="1" value="' + esc(goal.targetCount != null ? goal.targetCount : '') + '">';
+        } else if (type === 'item') {
+          fields =
+            '<input class="mm-goal-input" type="text" data-goal-field="itemName" placeholder="Item name" maxlength="80" value="' + esc(goal.itemName || '') + '">' +
+            '<input class="mm-goal-input" type="number" data-goal-field="targetQty" placeholder="Target quantity" min="1" value="' + esc(goal.targetQty != null ? goal.targetQty : '') + '">';
+        } else if (type === 'gp') {
+          fields =
+            '<input class="mm-goal-input" type="number" data-goal-field="targetGp" placeholder="Target gp (coins + platinum)" min="1" value="' + esc(goal.targetGp != null ? goal.targetGp : '') + '">';
+        } else if (type === 'skill') {
+          fields =
+            '<select class="mm-goal-input" data-goal-field="skill">' +
+              SKILL_NAMES.map(function (sk) {
+                return '<option value="' + sk + '"' + (goal.skill === sk ? ' selected' : '') + '>' + esc(titleCase(sk)) + '</option>';
+              }).join('') +
+            '</select>' +
+            '<select class="mm-goal-input" data-goal-field="metric">' +
+              '<option value="level"' + (goal.metric === 'level' ? ' selected' : '') + '>Level (2-99)</option>' +
+              '<option value="xp"' + (goal.metric === 'xp' ? ' selected' : '') + '>Experience</option>' +
+            '</select>' +
+            '<input class="mm-goal-input" type="number" data-goal-field="target" placeholder="Target" value="' + esc(goal.target != null ? goal.target : '') + '">';
+        } else if (type === 'quest') {
+          fields =
+            '<input class="mm-goal-input" type="text" data-goal-field="questName" placeholder="Quest or miniquest name" maxlength="80" value="' + esc(goal.questName || '') + '">';
+        } else if (type === 'diary') {
+          fields =
+            '<select class="mm-goal-input" data-goal-field="area">' +
+              DIARY_AREAS.map(function (a) {
+                return '<option value="' + a + '"' + (goal.area === a ? ' selected' : '') + '>' + esc(DIARY_AREA_LABELS[a]) + '</option>';
+              }).join('') +
+            '</select>' +
+            '<select class="mm-goal-input" data-goal-field="tier">' +
+              DIARY_TIERS.map(function (t) {
+                return '<option value="' + t + '"' + (goal.tier === t ? ' selected' : '') + '>' + esc(titleCase(t)) + '</option>';
+              }).join('') +
+            '</select>';
+        }
+        return '<div class="mm-goal-fields" data-role="goal-fields">' + fields +
+          '<button type="button" class="btn-secondary mm-goal-save-btn" data-role="goal-save">Save goal</button>' +
           '</div>';
       }
 
@@ -3303,6 +3531,7 @@ def render_mindmaps(player: Player) -> str:
           return;
         }
         if (e.target.id === 'mmMenuDelete') { closeMenu(); deleteActiveMindmap(); return; }
+        if (e.target.id === 'mmMenuEditToggle') { closeMenu(); setEditMode(!MM.editMode); return; }
       });
 
       async function deleteActiveMindmap() {
@@ -3470,6 +3699,31 @@ def render_mindmaps(player: Player) -> str:
         const data = await apiCall(
           '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
           { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }
+        );
+        if (!data) return;
+        MM.data = data;
+        if (isStillActiveMindmap(mmId)) recordUndoableEdit(preNodes);
+        render();
+      }
+
+      // Replaces the selected node's goal criteria (see
+      // set_node_goal/clean_goal in app/mindmaps.py) -- the trackable
+      // types' "Save goal" button AND the gray manual-complete toggle
+      // both funnel through here, same PATCH .../goal endpoint either
+      // way, they just build a different `goal` object first. A 400
+      // (an incomplete trackable submission -- clean_goal's
+      // require_complete=True) surfaces the same way any other
+      // rejected edit does, via apiCall's own showError -- nothing
+      // needs undoing since the server never actually changed anything.
+      async function saveSelectedNodeGoal(goal) {
+        var mm = activeMindmap();
+        var node = selectedNode();
+        if (!mm || !node) return;
+        var mmId = mm.id;
+        var preNodes = mm.nodes;
+        const data = await apiCall(
+          '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id) + '/goal',
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal: goal }) }
         );
         if (!data) return;
         MM.data = data;

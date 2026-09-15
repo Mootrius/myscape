@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, field_validator
 
+from app.mindmaps import DIARY_AREAS, DIARY_TIERS, SKILL_NAMES
+
 # The 11 real, in-game equipment slots -- matches EQUIPMENT_SLOTS in the
 # original Maintrius tool's osrs_tracker.py exactly (RuneLite's own
 # ARMS/HAIR/JAW slots are cosmetic-only and never used in vanilla OSRS,
@@ -337,6 +339,131 @@ class RunePouchItemOut(BaseModel):
 class RunePouchOut(BaseModel):
     items: List[RunePouchItemOut]
     updated_at: Optional[datetime] = None
+
+
+# -- Seed vault: identical shape to Rune Pouch above, just a separate
+# container -- see SeedVaultItem's docstring in app/models.py. --------
+
+class SeedVaultItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class SeedVaultSyncRequest(BaseModel):
+    items: List[SeedVaultItemIn]
+
+
+class SeedVaultSyncResponse(BaseModel):
+    item_count: int
+
+
+class SeedVaultItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class SeedVaultOut(BaseModel):
+    items: List[SeedVaultItemOut]
+    updated_at: Optional[datetime] = None
+
+
+# -- Skills/quests/diaries: unlike every item source above, each of
+# these is always exactly one whole snapshot (one level+xp per skill,
+# one completed-quest list, one highest tier per diary area) rather
+# than many independent rows -- see Player.skills/completed_quests/
+# diary_tiers' own comments in app/models.py. Each sync is still a full
+# replace, same spirit as every item source. ---------------------------
+
+class SkillIn(BaseModel):
+    skill: str
+    level: int
+    xp: int
+
+    @field_validator("skill")
+    @classmethod
+    def check_skill(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in SKILL_NAMES:
+            raise ValueError(f"skill must be one of {sorted(SKILL_NAMES)}")
+        return normalized
+
+    @field_validator("level")
+    @classmethod
+    def check_level(cls, value: int) -> int:
+        if not (1 <= value <= 99):
+            raise ValueError("level must be between 1 and 99.")
+        return value
+
+    @field_validator("xp")
+    @classmethod
+    def check_xp(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("xp can't be negative.")
+        return value
+
+
+class SkillsSyncRequest(BaseModel):
+    skills: List[SkillIn]
+
+
+class SkillsSyncResponse(BaseModel):
+    skill_count: int
+
+
+class QuestsSyncRequest(BaseModel):
+    completed_quests: List[str]
+
+
+class QuestsSyncResponse(BaseModel):
+    quest_count: int
+
+
+class DiaryTierIn(BaseModel):
+    area: str
+    tier: str
+
+    @field_validator("area")
+    @classmethod
+    def check_area(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in DIARY_AREAS:
+            raise ValueError(f"area must be one of {sorted(DIARY_AREAS)}")
+        return normalized
+
+    @field_validator("tier")
+    @classmethod
+    def check_tier(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in DIARY_TIERS:
+            raise ValueError(f"tier must be one of {DIARY_TIERS}")
+        return normalized
+
+
+class DiariesSyncRequest(BaseModel):
+    diary_tiers: List[DiaryTierIn]
+
+
+class DiariesSyncResponse(BaseModel):
+    area_count: int
 
 
 # -- Item search (backs the gear-setup slot picker's search box). ---------
@@ -677,6 +804,17 @@ class UpdateMindMapNodeRequest(BaseModel):
     color: Optional[str] = None
 
 
+class SetMindMapNodeGoalRequest(BaseModel):
+    """Replaces a node's goal criteria -- see set_node_goal/clean_goal
+    in app/mindmaps.py for the shape each color's goal type requires
+    (validated there, not here, since which fields are even legal
+    depends on the node's CURRENT color, something only the node itself
+    -- not this request in isolation -- knows). Also how a gray node's
+    manual "Complete" button works: {"manualComplete": true}."""
+
+    goal: Dict[str, Any] = {}
+
+
 class AddMindMapSharedChildRequest(BaseModel):
     """A new node placed as a shared CHILD of two or more existing
     ones -- the node canvas's shift-click multi-select -- see
@@ -711,6 +849,7 @@ class MindMapNodeIn(BaseModel):
     color: str = ""
     order: float = 0.0
     extraParentIds: Optional[List[str]] = None
+    goal: Optional[Dict[str, Any]] = None
 
 
 class ReplaceMindMapNodesRequest(BaseModel):

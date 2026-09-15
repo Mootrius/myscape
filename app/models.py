@@ -71,6 +71,35 @@ class Player(Base):
     account_hash = Column(String, nullable=True, unique=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
+    # Three more player-state snapshots synced by the RuneLite plugin,
+    # alongside bank/inventory/equipment/etc. above -- what Mindmaps'
+    # goal-node auto-completion (see evaluate_completion in
+    # app/mindmaps.py) checks green/blue/purple nodes against. Unlike
+    # those item tables, each of these is always exactly one current
+    # snapshot rather than many independent rows, so a JSONB column
+    # here fits the same way GearSetup.equipment/inventory already
+    # does (see that model's docstring), rather than three more
+    # single-purpose tables.
+    #
+    # skills: {<skill name, lowercase>: {"level": int, "xp": int}} for
+    # every one of the 23 real OSRS skills the plugin has reported at
+    # least once (see SKILL_NAMES in app/mindmaps.py). Synced by POST
+    # /api/players/me/skills, full replace.
+    skills = Column(JSONB, nullable=False, default=dict)
+    # completed_quests: a flat list of quest/miniquest names exactly as
+    # RuneLite's own Quest enum names them (see MyscapePlugin#syncQuests
+    # in the Mootrius/myscape-plugin repo), matched case-insensitively
+    # against a blue goal node's chosen quest. Synced by POST
+    # /api/players/me/quests, full replace.
+    completed_quests = Column(JSONB, nullable=False, default=list)
+    # diary_tiers: {<diary area name, lowercase>: <highest tier
+    # completed, one of DIARY_TIERS in app/mindmaps.py>} -- only the
+    # highest tier is kept per area (finishing Elite implies Hard/
+    # Medium/Easy are done too), matching how the in-game diary journal
+    # itself only ever shows one current tier per area. Synced by POST
+    # /api/players/me/diaries, full replace.
+    diary_tiers = Column(JSONB, nullable=False, default=dict)
+
     link_codes = relationship("LinkCode", back_populates="player", cascade="all, delete-orphan")
     api_keys = relationship("PlayerApiKey", back_populates="player", cascade="all, delete-orphan")
     bank_items = relationship("BankItem", back_populates="player", cascade="all, delete-orphan")
@@ -78,6 +107,7 @@ class Player(Base):
     equipment_items = relationship("EquipmentItem", back_populates="player", cascade="all, delete-orphan")
     potion_storage_items = relationship("PotionStorageItem", back_populates="player", cascade="all, delete-orphan")
     rune_pouch_items = relationship("RunePouchItem", back_populates="player", cascade="all, delete-orphan")
+    seed_vault_items = relationship("SeedVaultItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
     loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
     mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
@@ -326,6 +356,38 @@ class RunePouchItem(Base):
     player = relationship("Player", back_populates="rune_pouch_items")
 
     __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_rune_pouch_items_player_item"),)
+
+
+class SeedVaultItem(Base):
+    """The player's current Player-Owned-House Seed Vault contents --
+    same full-snapshot, delete-and-replace model as Bank/Inventory/
+    Equipment/PotionStorage/RunePouchItem above. Synced by POST
+    /api/players/me/seed-vault (see MyscapeClient#syncSeedVault in the
+    Mootrius/myscape-plugin repo).
+
+    Closes the same kind of gap PotionStorageItem/RunePouchItem already
+    closed: the Seed Vault is its own container, not part of the normal
+    bank/inventory/equipment ItemContainers RuneLite exposes, so seeds
+    kept there were previously invisible to both Purchase Goals and an
+    item-goal Mindmap node counting how many of a seed the player owns.
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above, even though nearly every seed is itself
+    GE-tradeable in practice -- kept for consistency with every other
+    item-source table."""
+
+    __tablename__ = "seed_vault_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="seed_vault_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_seed_vault_items_player_item"),)
 
 
 class GearSetup(Base):

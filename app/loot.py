@@ -66,7 +66,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.models import LootEvent, Player
@@ -454,3 +454,30 @@ def sync_loot_events(db: Session, player: Player, events: list) -> int:
         added += 1
     db.commit()
     return added
+
+
+def kc_counts_by_player(db: Session, player: Player) -> Dict[Tuple[str, str], int]:
+    """{(source_type, <lowercased source_name>): count} across this
+    player's ENTIRE LootEvent history (not windowed by a range, unlike
+    build_loot_state above) -- one count per NPC killed, per NPC
+    pickpocketed, per clue-casket-or-minigame-reward source. What a
+    Mindmaps "kc" goal node's activityType+sourceName+targetCount is
+    checked against (see evaluate_completion in app/mindmaps.py).
+
+    A count here is simply "how many LootEvent rows share this
+    (source_type, source_name)", i.e. how many times that event fired
+    -- an NPC kill or a pickpocket is one row per occurrence, so this is
+    a real kill/pickpocket count; a clue casket or minigame reward is
+    also one row per occurrence, so this is a real open/reward count
+    too, just without a way to split a clue casket count by tier (see
+    LootEvent's docstring in app/models.py for why)."""
+    rows = (
+        db.query(LootEvent.source_type, LootEvent.source_name, func.count(LootEvent.id))
+        .filter(LootEvent.player_id == player.id)
+        .group_by(LootEvent.source_type, LootEvent.source_name)
+        .all()
+    )
+    return {
+        (source_type, (source_name or "").strip().lower()): count
+        for source_type, source_name, count in rows
+    }

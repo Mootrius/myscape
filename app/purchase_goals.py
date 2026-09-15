@@ -38,7 +38,16 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.item_ids import find_item_by_exact_name, find_item_icon, find_item_ids, search_item_names
-from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem, RunePouchItem
+from app.models import (
+    BankItem,
+    EquipmentItem,
+    GearSetup,
+    InventoryItem,
+    Player,
+    PotionStorageItem,
+    RunePouchItem,
+    SeedVaultItem,
+)
 from app.recipes import find_recipe, search_recipe_names
 from app.schemas import GEAR_SETUP_EQUIPMENT_SLOTS, INVENTORY_SIZE
 
@@ -298,7 +307,7 @@ def _take_owned(
 ) -> int:
     """Claim up to qty units of an item from the shared "already own"
     pool (built from bank+inventory+equipment+potion storage -- see
-    _build_owned_pools below), returning how many were actually
+    build_owned_pools below), returning how many were actually
     available. Pools are mutated in place so a physical item can only
     satisfy one requirement, not several.
 
@@ -317,7 +326,7 @@ def _take_owned(
     available for a name, matching sticks to ids alone rather than also
     dipping into the name pool for whatever's left unmatched, since
     pool_by_id and pool_by_name are built from the very same physical
-    items (see _build_owned_pools) and mixing the two for one call
+    items (see build_owned_pools) and mixing the two for one call
     risks claiming the same physical item twice over. An item can have
     more than one real id (a quest-reward variant, a minigame-only
     version, etc.) -- owning it under any of them counts, and this
@@ -926,25 +935,29 @@ def _still_to_purchase_summary(
     return still_to_purchase, next_purchase
 
 
-def _build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict[str, int]]:
-    """Combines bank+inventory+equipment+potion storage+rune pouch into
-    the same shape Maintrius's own load_character_snapshot() produced
-    (totalsById/totalsByName) -- the "everything currently owned" pool
-    every gear setup checks itself against independently (see
-    build_gear_setups, which takes a fresh copy of this per setup).
+def build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict[str, int]]:
+    """Combines bank+inventory+equipment+potion storage+rune pouch+seed
+    vault into the same shape Maintrius's own load_character_snapshot()
+    produced (totalsById/totalsByName) -- the "everything currently
+    owned" pool every gear setup checks itself against independently
+    (see build_gear_setups, which takes a fresh copy of this per setup),
+    and also what an item-goal Mindmap node checks its target item's
+    count against (see evaluate_completion in app/mindmaps.py).
 
-    Potion storage and the rune pouch (added alongside PotionStorageItem
-    and RunePouchItem in app/models.py) slot in here with zero special-
-    casing: the plugin already reports each in the exact same item-id/
-    quantity shape as bank/inventory/equipment (see
-    MyscapePlugin#readPotionStorageItems and #readRunePouchItems in the
-    Mootrius/myscape-plugin repo), so each just needs its own query
-    added, same as the other two. Runes owned only inside a pouch would
-    otherwise never show up here at all -- RuneLite's normal inventory
-    scan reports the pouch itself as a single item, not what's stored
-    inside it -- so without this, a setup needing (for example) fire
-    runes would keep listing them as still to buy even while a full
-    pouch of them sat in the player's own inventory."""
+    Potion storage, the rune pouch, and the seed vault (added alongside
+    PotionStorageItem/RunePouchItem/SeedVaultItem in app/models.py) slot
+    in here with zero special-casing: the plugin already reports each in
+    the exact same item-id/quantity shape as bank/inventory/equipment
+    (see MyscapePlugin#readPotionStorageItems/#readRunePouchItems/
+    #readSeedVaultItems in the Mootrius/myscape-plugin repo), so each
+    just needs its own query added, same as the other two. Runes owned
+    only inside a pouch (or seeds only inside the vault) would otherwise
+    never show up here at all -- RuneLite's normal inventory scan
+    reports the pouch itself as a single item, not what's stored inside
+    it, and the seed vault isn't part of any normal ItemContainer at
+    all -- so without this, a setup (or goal node) needing, say, fire
+    runes or ranarr seeds would keep listing them as missing even while
+    a full pouch or vault of them sat right there."""
     pool_by_id: Dict[int, int] = {}
     pool_by_name: Dict[str, int] = {}
 
@@ -963,6 +976,8 @@ def _build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dic
     for item in db.query(PotionStorageItem).filter(PotionStorageItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
     for item in db.query(RunePouchItem).filter(RunePouchItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(SeedVaultItem).filter(SeedVaultItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
 
     return pool_by_id, pool_by_name
@@ -984,7 +999,7 @@ def _player_coins(db: Session, player: Player) -> int:
 
 def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, coins: int) -> List[dict]:
     setups = db.query(GearSetup).filter(GearSetup.player_id == player.id).order_by(GearSetup.created_at).all()
-    base_pool_by_id, base_pool_by_name = _build_owned_pools(db, player)
+    base_pool_by_id, base_pool_by_name = build_owned_pools(db, player)
 
     results = []
     for s in setups:
@@ -1054,7 +1069,7 @@ def build_purchase_goals_state(db: Session, player: Player) -> dict:
     mapping, mapping_err = get_mapping()
     prices, prices_err = get_latest_prices()
     coins = _player_coins(db, player)
-    _, pool_by_name = _build_owned_pools(db, player)
+    _, pool_by_name = build_owned_pools(db, player)
 
     return {
         "coins": coins,

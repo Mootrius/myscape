@@ -25,7 +25,8 @@ from app.auth import (
 )
 from app.database import get_db
 from app.limiter import limiter
-from app.loot import build_loot_state, resolve_range, sync_loot_events
+from app.loot import build_loot_state, kc_counts_by_player, resolve_range, sync_loot_events
+from app.item_ids import find_item_ids
 from app.mindmaps import (
     add_node,
     add_shared_child,
@@ -33,11 +34,24 @@ from app.mindmaps import (
     delete_node,
     new_root_node,
     replace_nodes,
+    set_node_goal,
     update_node,
 )
-from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, MindMap, Player, PotionStorageItem, RunePouchItem
+from app.models import (
+    BankItem,
+    EquipmentItem,
+    GearSetup,
+    InventoryItem,
+    MindMap,
+    Player,
+    PotionStorageItem,
+    RunePouchItem,
+    SeedVaultItem,
+)
 from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_purchase_goals, render_signup
 from app.purchase_goals import (
+    COINS_ITEM_ID,
+    build_owned_pools,
     build_purchase_goals_state,
     get_mapping,
     is_crystal_armour_piece,
@@ -56,6 +70,8 @@ from app.schemas import (
     BankSyncResponse,
     CreateGearSetupRequest,
     CreateMindMapRequest,
+    DiariesSyncRequest,
+    DiariesSyncResponse,
     EquipmentOut,
     EquipmentItemOut,
     EquipmentSyncRequest,
@@ -76,6 +92,8 @@ from app.schemas import (
     PotionStorageItemOut,
     PotionStorageSyncRequest,
     PotionStorageSyncResponse,
+    QuestsSyncRequest,
+    QuestsSyncResponse,
     RenameGearSetupRequest,
     RenameMindMapRequest,
     ReplaceMindMapNodesRequest,
@@ -83,10 +101,17 @@ from app.schemas import (
     RunePouchItemOut,
     RunePouchSyncRequest,
     RunePouchSyncResponse,
+    SeedVaultOut,
+    SeedVaultItemOut,
+    SeedVaultSyncRequest,
+    SeedVaultSyncResponse,
     SetGearSetupIconRequest,
     SetGearSlotRequest,
     SetStillToPurchaseOrderRequest,
     SetStillToPurchaseSortRequest,
+    SetMindMapNodeGoalRequest,
+    SkillsSyncRequest,
+    SkillsSyncResponse,
     UpdateMindMapNodeRequest,
 )
 
@@ -114,6 +139,20 @@ MAX_POTION_STORAGE_ITEMS = 200
 # not a round-number guess. Left with a little headroom in case Jagex
 # ever ships a bigger pouch before this constant is revisited.
 MAX_RUNE_POUCH_ITEMS = 10
+# The Seed Vault holds every tradeable seed in the game (a few dozen
+# distinct types), a generous multiple of the real ceiling, not a
+# round-number guess, same spirit as MAX_POTION_STORAGE_ITEMS.
+MAX_SEED_VAULT_ITEMS = 200
+# There are exactly 23 real OSRS skills (see SKILL_NAMES in
+# app/mindmaps.py) -- a real ceiling, not a guess.
+MAX_SKILLS_PER_SYNC = 23
+# A defensive upper bound on completed quests/miniquests -- OSRS has
+# nowhere near this many, so the only way a sync would hit it is a
+# malformed/buggy client.
+MAX_QUESTS_PER_SYNC = 1000
+# There are exactly 12 real OSRS achievement diary areas (see
+# DIARY_AREAS in app/mindmaps.py) -- a real ceiling, not a guess.
+MAX_DIARY_AREAS_PER_SYNC = 12
 # The plugin syncs one loot event immediately as it happens (see
 # MyscapePlugin#onLootReceived), so a real sync is always exactly 1 --
 # this is a defensive upper bound against a malformed/buggy client
@@ -450,6 +489,133 @@ def read_rune_pouch(db: Session = Depends(get_db), player: Player = Depends(get_
     )
     updated_at = items[0].updated_at if items else None
     return RunePouchOut(items=[RunePouchItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/seed-vault", response_model=SeedVaultSyncResponse)
+def sync_seed_vault(
+    payload: SeedVaultSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for a
+    Player-Owned-House Seed Vault's contents instead -- see
+    MyscapeClient#syncSeedVault in the Mootrius/myscape-plugin repo and
+    SeedVaultItem's docstring in app/models.py. Full replace, never a
+    merge."""
+    if len(payload.items) > MAX_SEED_VAULT_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_SEED_VAULT_ITEMS}).",
+        )
+
+    db.query(SeedVaultItem).filter(SeedVaultItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(SeedVaultItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    db.commit()
+
+    return SeedVaultSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/seed-vault", response_model=SeedVaultOut)
+def read_seed_vault(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the seed
+    vault instead."""
+    items = (
+        db.query(SeedVaultItem)
+        .filter(SeedVaultItem.player_id == player.id)
+        .order_by(SeedVaultItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return SeedVaultOut(items=[SeedVaultItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/skills", response_model=SkillsSyncResponse)
+def sync_skills(
+    payload: SkillsSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Full replace of the player's current level+xp in every skill --
+    see Player.skills' own comment in app/models.py and
+    MyscapeClient#syncSkills in the Mootrius/myscape-plugin repo. Unlike
+    bank/inventory/etc., this isn't many independent rows to delete-and-
+    replace, just one JSONB column to overwrite outright, since a
+    player has exactly one current level+xp per skill."""
+    if len(payload.skills) > MAX_SKILLS_PER_SYNC:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many skills in one sync (max {MAX_SKILLS_PER_SYNC}).",
+        )
+    player.skills = {s.skill: {"level": s.level, "xp": s.xp} for s in payload.skills}
+    db.commit()
+    return SkillsSyncResponse(skill_count=len(payload.skills))
+
+
+@app.get("/api/players/me/skills")
+def read_skills(player: Player = Depends(get_current_player_from_session)):
+    """The website's own read of the last-synced skills snapshot --
+    session-authenticated like every other GET here."""
+    return {"skills": player.skills or {}}
+
+
+@app.post("/api/players/me/quests", response_model=QuestsSyncResponse)
+def sync_quests(
+    payload: QuestsSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Full replace of the player's completed quest/miniquest list --
+    see Player.completed_quests' own comment in app/models.py and
+    MyscapeClient#syncQuests in the Mootrius/myscape-plugin repo."""
+    if len(payload.completed_quests) > MAX_QUESTS_PER_SYNC:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many quests in one sync (max {MAX_QUESTS_PER_SYNC}).",
+        )
+    player.completed_quests = [q.strip() for q in payload.completed_quests if q and q.strip()]
+    db.commit()
+    return QuestsSyncResponse(quest_count=len(player.completed_quests))
+
+
+@app.get("/api/players/me/quests")
+def read_quests(player: Player = Depends(get_current_player_from_session)):
+    """The website's own read of the last-synced completed-quests
+    snapshot -- session-authenticated like every other GET here."""
+    return {"completedQuests": player.completed_quests or []}
+
+
+@app.post("/api/players/me/diaries", response_model=DiariesSyncResponse)
+def sync_diaries(
+    payload: DiariesSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Full replace of the player's highest completed tier per
+    achievement diary area -- see Player.diary_tiers' own comment in
+    app/models.py and MyscapeClient#syncDiaries in the
+    Mootrius/myscape-plugin repo. The plugin sends only each area's
+    HIGHEST completed tier (matching how the in-game diary journal
+    itself only ever shows one), not one row per tier."""
+    if len(payload.diary_tiers) > MAX_DIARY_AREAS_PER_SYNC:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many diary areas in one sync (max {MAX_DIARY_AREAS_PER_SYNC}).",
+        )
+    player.diary_tiers = {d.area: d.tier for d in payload.diary_tiers}
+    db.commit()
+    return DiariesSyncResponse(area_count=len(payload.diary_tiers))
+
+
+@app.get("/api/players/me/diaries")
+def read_diaries(player: Player = Depends(get_current_player_from_session)):
+    """The website's own read of the last-synced diary-tiers snapshot
+    -- session-authenticated like every other GET here."""
+    return {"diaryTiers": player.diary_tiers or {}}
 
 
 @app.post("/api/players/me/loot", response_model=LootSyncResponse)
@@ -847,13 +1013,46 @@ def set_still_to_purchase_order(
     return build_purchase_goals_state(db, player)
 
 
+def _build_goal_context(db: Session, player: Player) -> dict:
+    """Everything Mindmaps' goal-node auto-completion (see
+    evaluate_completion in app/mindmaps.py) needs to check every node
+    in every one of this player's mindmaps against, gathered once per
+    request rather than once per node. Lives here rather than in
+    app/mindmaps.py because building it means reaching into
+    app/purchase_goals.py (for the same owned-item pool a gear setup
+    already checks itself against) and app/loot.py (for kill counts) --
+    app/mindmaps.py deliberately doesn't import either, to avoid a
+    circular import (app/purchase_goals.py itself imports from
+    app/schemas.py, which imports SKILL_NAMES/DIARY_AREAS/DIARY_TIERS
+    back out of app/mindmaps.py for its own sync-payload validation) --
+    main.py is the one place already importing all three, so it's the
+    natural place to wire them together.
+
+    An item-goal node and a gear-setup slot are checking the literal
+    same "what does this player currently have" question, so this
+    reuses build_owned_pools outright rather than re-deriving it."""
+    owned_pool_by_id, owned_pool_by_name = build_owned_pools(db, player)
+    platinum_qty = sum(owned_pool_by_id.get(i, 0) for i in (find_item_ids("Platinum token") or []))
+    gp_total = owned_pool_by_id.get(COINS_ITEM_ID, 0) + platinum_qty * 1000
+
+    return {
+        "owned_pool_by_id": owned_pool_by_id,
+        "owned_pool_by_name": owned_pool_by_name,
+        "gp_total": gp_total,
+        "skills": player.skills or {},
+        "completed_quests": {(q or "").strip().lower() for q in (player.completed_quests or [])},
+        "diary_tiers": player.diary_tiers or {},
+        "kc_counts": kc_counts_by_player(db, player),
+    }
+
+
 @app.get("/api/mindmaps")
 def list_mindmaps(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
     """Every one of the player's mindmaps, each with its full node list
     -- see build_mindmaps_state in app/mindmaps.py. Not pinned to a
     Pydantic response_model, same reasoning as GET /api/gear-setups
     above (see MindMapsState's docstring in app/schemas.py)."""
-    return build_mindmaps_state(db, player)
+    return build_mindmaps_state(db, player, _build_goal_context(db, player))
 
 
 @app.post("/api/mindmaps", status_code=status.HTTP_201_CREATED)
@@ -866,7 +1065,7 @@ def create_mindmap(
     mindmap = MindMap(player_id=player.id, name=name, nodes=[new_root_node(name)])
     db.add(mindmap)
     db.commit()
-    return build_mindmaps_state(db, player)
+    return build_mindmaps_state(db, player, _build_goal_context(db, player))
 
 
 def _get_owned_mindmap(db: Session, player: Player, mindmap_id: str) -> MindMap:
@@ -894,7 +1093,7 @@ def rename_mindmap(
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     mindmap.name = payload.name
     db.commit()
-    return build_mindmaps_state(db, player)
+    return build_mindmaps_state(db, player, _build_goal_context(db, player))
 
 
 @app.delete("/api/mindmaps/{mindmap_id}")
@@ -906,7 +1105,7 @@ def delete_mindmap(
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     db.delete(mindmap)
     db.commit()
-    return build_mindmaps_state(db, player)
+    return build_mindmaps_state(db, player, _build_goal_context(db, player))
 
 
 @app.post("/api/mindmaps/{mindmap_id}/nodes", status_code=status.HTTP_201_CREATED)
@@ -925,7 +1124,7 @@ def add_mindmap_node(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     mindmap.nodes = new_nodes
     db.commit()
-    state = build_mindmaps_state(db, player)
+    state = build_mindmaps_state(db, player, _build_goal_context(db, player))
     # See add_node's docstring in app/mindmaps.py -- handed back
     # alongside the full state so the client can select the new node
     # without diffing old vs. new node lists itself.
@@ -950,7 +1149,7 @@ def add_mindmap_shared_child(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     mindmap.nodes = new_nodes
     db.commit()
-    state = build_mindmaps_state(db, player)
+    state = build_mindmaps_state(db, player, _build_goal_context(db, player))
     state["newNodeId"] = new_node_id
     return state
 
@@ -972,7 +1171,7 @@ def replace_mindmap_nodes(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
-    return build_mindmaps_state(db, player)
+    return build_mindmaps_state(db, player, _build_goal_context(db, player))
 
 
 @app.patch("/api/mindmaps/{mindmap_id}/nodes/{node_id}")
@@ -989,7 +1188,33 @@ def update_mindmap_node(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
-    return build_mindmaps_state(db, player)
+    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+
+
+@app.patch("/api/mindmaps/{mindmap_id}/nodes/{node_id}/goal")
+def set_mindmap_node_goal(
+    mindmap_id: str,
+    node_id: str,
+    payload: SetMindMapNodeGoalRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Saves a node's goal fields -- the per-color forms described in
+    app/mindmaps.py's clean_goal docstring (kc target + activity for
+    red, item + quantity for orange, and so on) -- and is also what
+    the gray-node "Complete" button calls (gray's only field beyond
+    its text is the manual completed flag clean_goal validates).
+    require_complete defaults to True inside set_node_goal itself, so
+    an incomplete submission (a red node with no activity chosen, say)
+    is rejected here with a 400 naming what's missing, rather than
+    silently saved half-filled-in."""
+    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    try:
+        mindmap.nodes = set_node_goal(mindmap.nodes, node_id, payload.goal)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    db.commit()
+    return build_mindmaps_state(db, player, _build_goal_context(db, player))
 
 
 @app.delete("/api/mindmaps/{mindmap_id}/nodes/{node_id}")
@@ -1005,4 +1230,4 @@ def delete_mindmap_node(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
-    return build_mindmaps_state(db, player)
+    return build_mindmaps_state(db, player, _build_goal_context(db, player))

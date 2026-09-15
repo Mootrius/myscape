@@ -56,6 +56,16 @@
    all-caps to read as actions rather than more list entries. */
 #mmMenuNew, #mmMenuRename, #mmMenuDelete { text-align: center; text-transform: uppercase; }
 
+/* The Edit Mode toggle -- its own row below a second divider (see
+   renderMenu), same centered/all-caps treatment as the New/Rename/
+   Delete actions above it, but reads gold (like .mm-menu-item.active,
+   which normally marks the CURRENTLY OPEN mindmap in this same list)
+   whenever Edit Mode is actually on, so the menu itself is a quick
+   glance-able indicator of which mode the canvas is in without having
+   to open it and check. */
+.mm-menu-edit-toggle { text-align: center; text-transform: uppercase; }
+.mm-menu-edit-toggle.active { color: var(--gold); }
+
 /* Inline new/rename form -- same shape as .pg-setup-form
    (purchase-goals.css), duplicated for the same self-contained-
    stylesheet reason as .mm-menu above. */
@@ -183,43 +193,69 @@ button.primary#mmNameSave, .mm-name-form-save {
 /* The selected node's own outline + stacking rule is defined further
    below, alongside the edge buttons/color popover it's shown with. */
 
-/* Each color is a background + matching border + a hover-brightened
-   variant of that SAME background -- background-color only, the same
+/* Each color is OUTLINED (panel background, colored border, plain
+   text) by default -- a goal that hasn't been met yet -- and only
+   becomes a solid FILL once the server says it's actually complete
+   (see evaluate_completion in app/mindmaps.py, and the `completed`
+   flag build_mindmaps_state attaches to every node; renderCanvas adds
+   the ".completed" class from that flag, nothing here decides it).
+   The filled state keeps the exact same background + hover-brightened
+   variant this page always used (background-color only, the same
    "brighten just the box, not its content" hover treatment used for
-   .loot-npc-box/.gear-slot elsewhere on the site (see loot-tracker.css
-   and purchase-goals.css), not filter: brightness(), so a node's own
-   text doesn't brighten along with it. Text color is picked per
-   background for contrast (dark text on the brighter red/orange/
-   yellow/green/white fills, light text on the darker gray/blue/purple
-   ones) -- matching how a player's own reference mindmap tool did it.
-   Order matches NODE_COLORS in app/mindmaps.py -- gray, red, orange,
-   yellow, green, blue, purple, white (no gold or amber here: those
-   stay reserved for the site accent color and Purchase Goals'
-   affordability states respectively, see --orange/--yellow's own
-   comment in myscape.css). */
+   .loot-npc-box/.gear-slot elsewhere on the site, not
+   filter: brightness(), so a node's own text doesn't brighten along
+   with it) with matching dark-vs-light text picked per fill color for
+   contrast; the outlined state keeps that same text color scheme
+   simple -- always var(--text), since there's no fill color behind it
+   to contrast against yet. Order matches NODE_COLORS in
+   app/mindmaps.py -- gray, red, orange, yellow, green, blue, purple,
+   white (no gold or amber here: those stay reserved for the site
+   accent color and Purchase Goals' affordability states respectively,
+   see --orange/--yellow's own comment in myscape.css). */
 .mm-node-gray { background: var(--panel-2); border-color: var(--border); color: var(--text); }
 .mm-node-gray:hover { background-color: rgb(51, 51, 54); }
+/* Gray has no real "goal color" to fill in with, so its completed
+   state is instead a subtle gold-tinted border -- the same accent
+   color everything else on the site uses to mark something as done/
+   selected -- rather than a background fill that would just look
+   identical to the default. */
+.mm-node-gray.completed { background: var(--panel-2); border-color: var(--gold-dim); color: var(--text); }
+.mm-node-gray.completed:hover { background-color: rgb(51, 51, 54); }
 
-.mm-node-red { background: var(--red); border-color: var(--red); color: #1a0f0c; }
-.mm-node-red:hover { background-color: #dd6857; }
+.mm-node-red { background: var(--panel-2); border-color: var(--red); color: var(--text); }
+.mm-node-red:hover { border-color: #dd6857; }
+.mm-node-red.completed { background: var(--red); border-color: var(--red); color: #1a0f0c; }
+.mm-node-red.completed:hover { background-color: #dd6857; }
 
-.mm-node-orange { background: var(--orange); border-color: var(--orange); color: #1a1108; }
-.mm-node-orange:hover { background-color: #e0924f; }
+.mm-node-orange { background: var(--panel-2); border-color: var(--orange); color: var(--text); }
+.mm-node-orange:hover { border-color: #e0924f; }
+.mm-node-orange.completed { background: var(--orange); border-color: var(--orange); color: #1a1108; }
+.mm-node-orange.completed:hover { background-color: #e0924f; }
 
-.mm-node-yellow { background: var(--yellow); border-color: var(--yellow); color: #1a1608; }
-.mm-node-yellow:hover { background-color: #ddc86a; }
+.mm-node-yellow { background: var(--panel-2); border-color: var(--yellow); color: var(--text); }
+.mm-node-yellow:hover { border-color: #ddc86a; }
+.mm-node-yellow.completed { background: var(--yellow); border-color: var(--yellow); color: #1a1608; }
+.mm-node-yellow.completed:hover { background-color: #ddc86a; }
 
-.mm-node-green { background: var(--green); border-color: var(--green); color: #0e150c; }
-.mm-node-green:hover { background-color: #80c868; }
+.mm-node-green { background: var(--panel-2); border-color: var(--green); color: var(--text); }
+.mm-node-green:hover { border-color: #80c868; }
+.mm-node-green.completed { background: var(--green); border-color: var(--green); color: #0e150c; }
+.mm-node-green.completed:hover { background-color: #80c868; }
 
-.mm-node-blue { background: var(--blue); border-color: var(--blue); color: var(--text); }
-.mm-node-blue:hover { background-color: #68a1e1; }
+.mm-node-blue { background: var(--panel-2); border-color: var(--blue); color: var(--text); }
+.mm-node-blue:hover { border-color: #68a1e1; }
+.mm-node-blue.completed { background: var(--blue); border-color: var(--blue); color: var(--text); }
+.mm-node-blue.completed:hover { background-color: #68a1e1; }
 
-.mm-node-purple { background: var(--purple); border-color: var(--purple); color: var(--text); }
-.mm-node-purple:hover { background-color: #a084d9; }
+.mm-node-purple { background: var(--panel-2); border-color: var(--purple); color: var(--text); }
+.mm-node-purple:hover { border-color: #a084d9; }
+.mm-node-purple.completed { background: var(--purple); border-color: var(--purple); color: var(--text); }
+.mm-node-purple.completed:hover { background-color: #a084d9; }
 
-.mm-node-white { background: var(--text); border-color: var(--text); color: var(--bg); }
-.mm-node-white:hover { background-color: #ffffff; }
+.mm-node-white { background: var(--panel-2); border-color: var(--text); color: var(--text); }
+.mm-node-white:hover { border-color: #ffffff; }
+.mm-node-white.completed { background: var(--text); border-color: var(--text); color: var(--bg); }
+.mm-node-white.completed:hover { background-color: #ffffff; }
 
 /* The selected node needs to paint above its unselected siblings --
    both for its own outline and for the edge buttons/color popover
@@ -291,6 +327,13 @@ button.primary#mmNameSave, .mm-name-form-save {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
   cursor: default; /* .mm-node itself is cursor: pointer -- this panel isn't the node */
 }
+/* Edit Mode's popover additionally carries a goal-criteria form (see
+   .mm-goal-fields below), which needs more breathing room than the
+   plain swatches-only popover a gray node's view-mode toggle uses --
+   widened rather than sized to content so every goal type's form
+   (a 3-field kc form vs. a 1-field gp form) settles at the same
+   width instead of the popover visibly resizing type to type. */
+.mm-node-popover-wide { width: 208px; }
 .mm-color-popover-swatches { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 172px; }
 .mm-swatch {
   width: 24px; height: 24px; border: 1px solid var(--border); cursor: pointer; padding: 0;
@@ -315,6 +358,40 @@ button.primary#mmNameSave, .mm-name-form-save {
    sizing as .mm-color-popover-delete above, just wide enough for its
    own (longer) label rather than sharing that exact rule. */
 .mm-add-shared-child-btn { width: auto; height: 22px; align-self: center; white-space: nowrap; }
+
+/* ---- Goal-criteria form (renderGoalFieldsHtml) -----------------------
+   A trackable node's (red/orange/yellow/green/blue/purple) type-
+   specific fields, always ending in a "Save goal" button -- shown
+   inside the node popover, Edit-Mode-only. The gray manual-complete
+   toggle reuses .mm-manual-toggle-btn on its own (no wrapping
+   .mm-goal-fields, since there's nothing to "save" -- clicking it is
+   itself the action), both inside Edit Mode's popover and outside it. */
+.mm-goal-fields {
+  display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: stretch;
+}
+/* Overrides myscape.css's own input[type=text/number] sizing (16px
+   font, 12px/14px padding -- sized for full-width page forms) down to
+   something that actually fits this compact popover, and adds
+   matching theming for <select>, which myscape.css doesn't style at
+   all anywhere else on the site. */
+.mm-goal-fields input.mm-goal-input,
+.mm-goal-fields select.mm-goal-input {
+  width: 100%; box-sizing: border-box;
+  background: #100e0b; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: inherit; font-size: 11.5px;
+  padding: 7px 8px; height: 30px;
+}
+.mm-goal-fields select.mm-goal-input { cursor: pointer; }
+.mm-goal-fields input.mm-goal-input:focus,
+.mm-goal-fields select.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
+.mm-goal-fields input.mm-goal-input::placeholder { color: var(--text-faint); }
+.mm-goal-save-btn { width: 100%; height: 26px; }
+
+/* The gray node's manual-complete toggle -- shown on its own (no
+   .mm-goal-fields wrapper, see the comment above) whether or not Edit
+   Mode is on, so it needs to look right sitting directly inside the
+   bare .mm-node-popover shell in the view-mode case too. */
+.mm-manual-toggle-btn { width: auto; height: 24px; align-self: center; white-space: nowrap; padding: 0 14px; }
 
 /* ---- Zero-mindmaps state -------------------------------------------
    Same shape as .pg-empty (purchase-goals.css): centered placeholder
