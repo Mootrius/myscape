@@ -175,45 +175,52 @@ def add_node(
     raise ValueError("relation must be 'parent', 'child', or 'sibling'.")
 
 
-def add_node_between(
-    nodes: List[Dict], relative_ids: List[str], text: Optional[str] = None, color: Optional[str] = None
+def add_shared_child(
+    nodes: List[Dict], parent_ids: List[str], text: Optional[str] = None, color: Optional[str] = None
 ) -> "tuple[List[Dict], str]":
-    """Returns a NEW node list with one extra node inserted as a shared
-    sibling of two or more existing nodes -- the node canvas's
-    shift-click multi-select ("hold shift and select multiple nodes on
-    the same level"). Its order is the midpoint between the LOWEST and
-    HIGHEST order among `relative_ids`, so it lands between them
-    regardless of how many other siblings (selected or not) happen to
-    sit in that gap -- the same midpoint idea _order_after/_order_before
-    already use for a single sibling, just spanning the whole selected
-    range instead of one neighbor.
+    """Returns a NEW node list with one extra node added as a shared
+    child of two or more existing nodes -- the node canvas's shift-click
+    multi-select ("hold shift and select multiple nodes, then add a
+    child that connects to all of them"), e.g. four separate "blocklist"
+    nodes all feeding into one shared "setup" node below them.
 
-    "On the same level" only really means one thing in this data model:
-    sharing a parent (a node has exactly one, so a sibling can only
-    ever belong to one of them) -- raises ValueError if fewer than two
-    ids are given, any id doesn't exist, or the given nodes don't all
-    share the same parent (including any of them being the root, which
-    has no parent to share)."""
-    if len(relative_ids) < 2:
-        raise ValueError("Select at least two nodes on the same level to add a node between them.")
-    relatives = []
-    for relative_id in relative_ids:
-        relative = _find(nodes, relative_id)
-        if relative is None:
+    The single-parent-per-node shape every other function in this file
+    assumes (see the module docstring) still holds for STRUCTURAL
+    purposes: the new node's real `parentId` is `parent_ids[0]` (the
+    first node selected), exactly like any other child, so column
+    layout and delete_node's subtree cascade both treat it as an
+    ordinary child of that one node. The rest of `parent_ids` are
+    recorded as `extraParentIds` -- a purely additional, display-only
+    list the client uses to draw the extra connector lines up to those
+    other nodes and to nudge the shared child's on-screen position to
+    sit centered under the whole group, but which delete_node otherwise
+    leaves alone (deleting one of THOSE nodes just prunes it from this
+    list -- see delete_node -- while deleting the primary parent still
+    cascades away the shared child like any other child of that node).
+
+    Raises ValueError if fewer than two ids are given or any id doesn't
+    exist. Unlike the old sibling-insertion version this replaced, the
+    given nodes do NOT need to share a parent or sit at the same depth
+    -- that was only ever a "same level" requirement because siblings
+    by definition share a parent; a shared CHILD underneath a set of
+    existing nodes has no such structural constraint."""
+    if len(parent_ids) < 2:
+        raise ValueError("Select at least two nodes to add a shared child below them.")
+    parents = []
+    for parent_id in parent_ids:
+        parent = _find(nodes, parent_id)
+        if parent is None:
             raise ValueError("That node no longer exists.")
-        relatives.append(relative)
+        parents.append(parent)
 
-    parent_id = relatives[0]["parentId"]
-    if parent_id is None or any(r["parentId"] != parent_id for r in relatives):
-        raise ValueError("Selected nodes must all be siblings (on the same level, under the same parent) to add a node between them.")
-
-    orders = [r["order"] for r in relatives]
+    primary_parent_id = parent_ids[0]
     new_node = {
         "id": str(uuid.uuid4()),
         "text": _clean_text(text),
         "color": _clean_color(color),
-        "parentId": parent_id,
-        "order": (min(orders) + max(orders)) / 2.0,
+        "parentId": primary_parent_id,
+        "order": _next_child_order(nodes, primary_parent_id),
+        "extraParentIds": parent_ids[1:],
     }
     return nodes + [new_node], new_node["id"]
 
@@ -241,7 +248,16 @@ def delete_node(nodes: List[Dict], node_id: str) -> List[Dict]:
     subtree removed. Raises ValueError if the node doesn't exist, or if
     it's the tree's root -- a mindmap always needs exactly one root, so
     removing it is done by deleting the whole mindmap instead (see
-    delete_mindmap in app/main.py), not by deleting just this node."""
+    delete_mindmap in app/main.py), not by deleting just this node.
+
+    A node can also be referenced as an EXTRA (non-structural) parent
+    of some shared child via that child's `extraParentIds` -- see
+    add_shared_child. Removing a node here strips it out of every
+    remaining node's extraParentIds too, so a shared child never keeps
+    a dangling reference to a parent that no longer exists; it just
+    loses that one extra connector line and stays alive through its
+    real (structural) parentId, unless that's ALSO in this subtree, in
+    which case it's swept away like any other descendant."""
     target = _find(nodes, node_id)
     if target is None:
         raise ValueError("That node no longer exists.")
@@ -261,7 +277,19 @@ def delete_node(nodes: List[Dict], node_id: str) -> List[Dict]:
             if n["id"] not in to_remove and n["parentId"] in to_remove:
                 to_remove.add(n["id"])
                 changed = True
-    return [n for n in nodes if n["id"] not in to_remove]
+
+    kept = []
+    for n in nodes:
+        if n["id"] in to_remove:
+            continue
+        extra_parent_ids = n.get("extraParentIds")
+        if extra_parent_ids:
+            pruned = [pid for pid in extra_parent_ids if pid not in to_remove]
+            if len(pruned) != len(extra_parent_ids):
+                n = dict(n)
+                n["extraParentIds"] = pruned
+        kept.append(n)
+    return kept
 
 
 def serialize_mindmap(mindmap: MindMap) -> Dict:

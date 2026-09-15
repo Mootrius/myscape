@@ -26,7 +26,7 @@ from app.auth import (
 from app.database import get_db
 from app.limiter import limiter
 from app.loot import build_loot_state, resolve_range, sync_loot_events
-from app.mindmaps import add_node, add_node_between, build_mindmaps_state, delete_node, new_root_node, update_node
+from app.mindmaps import add_node, add_shared_child, build_mindmaps_state, delete_node, new_root_node, update_node
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, MindMap, Player, PotionStorageItem, RunePouchItem
 from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_purchase_goals, render_signup
 from app.purchase_goals import (
@@ -40,8 +40,8 @@ from app.purchase_goals import (
 from app.recipes import expand_recipe_components
 from app.routers import auth, linking
 from app.schemas import (
-    AddMindMapNodeBetweenRequest,
     AddMindMapNodeRequest,
+    AddMindMapSharedChildRequest,
     BankOut,
     BankItemOut,
     BankSyncRequest,
@@ -924,19 +924,19 @@ def add_mindmap_node(
     return state
 
 
-@app.post("/api/mindmaps/{mindmap_id}/nodes/between", status_code=status.HTTP_201_CREATED)
-def add_mindmap_node_between(
+@app.post("/api/mindmaps/{mindmap_id}/nodes/shared-child", status_code=status.HTTP_201_CREATED)
+def add_mindmap_shared_child(
     mindmap_id: str,
-    payload: AddMindMapNodeBetweenRequest,
+    payload: AddMindMapSharedChildRequest,
     db: Session = Depends(get_db),
     player: Player = Depends(get_current_player_from_session),
 ):
-    """The node canvas's shift-click multi-select: adds one new shared
-    sibling positioned between two or more existing ones -- see
-    add_node_between in app/mindmaps.py."""
+    """The node canvas's shift-click multi-select: adds one new node as
+    a shared child connected below two or more existing ones -- see
+    add_shared_child in app/mindmaps.py."""
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     try:
-        new_nodes, new_node_id = add_node_between(mindmap.nodes, payload.relative_ids, payload.text, payload.color)
+        new_nodes, new_node_id = add_shared_child(mindmap.nodes, payload.parent_ids, payload.text, payload.color)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     mindmap.nodes = new_nodes

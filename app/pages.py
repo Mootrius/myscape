@@ -2433,7 +2433,7 @@ def render_mindmaps(player: Player) -> str:
       </div>
       <div class="mm-multiselect-bar" id="mmMultiBar" style="display:none;">
         <span id="mmMultiBarText"></span>
-        <button class="btn-secondary" id="mmMultiBarAdd" type="button">Add node between</button>
+        <button class="btn-secondary" id="mmMultiBarAdd" type="button">Add shared child</button>
         <button class="btn-secondary" id="mmMultiBarClear" type="button">Clear</button>
       </div>
       <div class="mm-canvas" id="mmCanvas">
@@ -2472,7 +2472,7 @@ def render_mindmaps(player: Player) -> str:
         activeMindmapId: null,
         selectedNodeId: null,
         focusNodeId: null, // one-shot: focus + select this node's text on the next render
-        multiSelectIds: new Set(), // shift-clicked nodes, for "add a shared sibling between them"
+        multiSelectIds: new Set(), // shift-clicked nodes, for "add a shared child below them"
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
         zoom: 1,
@@ -2573,6 +2573,30 @@ def render_mindmaps(player: Player) -> str:
           return unitX;
         }
         if (root) walk(root, 0);
+
+        // A shared-child node (see extraParentIds -- the shift-click
+        // multi-select's "add a shared child below several nodes")
+        // structurally hangs off just ONE of its parents (its own
+        // parentId, used above like any other child for column
+        // assignment), but it should visually read as sitting centered
+        // under the WHOLE group of nodes it's linked to. Nudge its x to
+        // the average center of every linked parent (parentId plus
+        // extraParentIds) that's still actually in the tree -- this only
+        // moves that one node's own rendered position; it can't disturb
+        // any other node's column/slot, since leafCounter bookkeeping
+        // above is already done by the time this runs.
+        nodes.forEach(function (n) {
+          if (!n.extraParentIds || !n.extraParentIds.length) return;
+          var linkedIds = [n.parentId].concat(n.extraParentIds);
+          var centers = [];
+          linkedIds.forEach(function (pid) {
+            var p = positions[pid];
+            if (p) centers.push(p.x + NODE_WIDTH / 2);
+          });
+          if (!centers.length) return;
+          var avgCenter = centers.reduce(function (a, b) { return a + b; }, 0) / centers.length;
+          positions[n.id].x = avgCenter - NODE_WIDTH / 2;
+        });
 
         return {
           positions: positions,
@@ -2744,7 +2768,7 @@ def render_mindmaps(player: Player) -> str:
       // position it was just about to set. A plain (non-shift) select
       // always clears any active shift-click multi-selection too --
       // the two are separate modes, and mixing them would be
-      // confusing (edit-one-node vs. mark-several-for-a-shared-sibling).
+      // confusing (edit-one-node vs. mark-several-for-a-shared-child).
       function selectNode(id) {
         var hadMultiSelect = MM.multiSelectIds.size > 0;
         if (hadMultiSelect) MM.multiSelectIds.clear();
@@ -2755,10 +2779,10 @@ def render_mindmaps(player: Player) -> str:
       }
 
       // Shift-clicking a node toggles it in/out of the multi-select set
-      // used by "add a shared sibling between them" (see the
-      // #mmMultiBar wiring and addNodeBetweenSelected below) -- kept
-      // entirely separate from the single-node selectNode above, so it
-      // never touches MM.selectedNodeId/the edit popover.
+      // used by "add a shared child below them" (see the #mmMultiBar
+      // wiring and addSharedChildSelected below) -- kept entirely
+      // separate from the single-node selectNode above, so it never
+      // touches MM.selectedNodeId/the edit popover.
       function toggleMultiSelect(id) {
         if (MM.multiSelectIds.has(id)) MM.multiSelectIds.delete(id);
         else MM.multiSelectIds.add(id);
@@ -2844,7 +2868,7 @@ def render_mindmaps(player: Player) -> str:
           // Shift-click multi-select (see toggleMultiSelect) -- a
           // distinct ring from the single-node "selected" one above,
           // so the two modes (edit-one-node vs. mark-several-for-a-
-          // shared-sibling) stay visually distinguishable even if a
+          // shared-child) stay visually distinguishable even if a
           // node somehow ends up in both.
           var multiSelectedCls = MM.multiSelectIds.has(n.id) ? ' multi-selected' : '';
           // Only the selected node is ever contenteditable -- typing
@@ -2905,19 +2929,59 @@ def render_mindmaps(player: Player) -> str:
         var pathsHtml = '';
         layout.childrenMap.forEach(function (kids, parentId) {
           if (parentId === null || !kids.length) return; // the null bucket just holds the root itself, not a real edge
+          // Shared-child nodes (extraParentIds) get their own dedicated
+          // fan-in connector below, which already draws the line up to
+          // THIS parent too -- drawing it again here would just be a
+          // redundant, perfectly-overlapping duplicate segment.
+          var fanOutKids = kids.filter(function (k) { return !k.extraParentIds || !k.extraParentIds.length; });
+          if (!fanOutKids.length) return;
           var parentPos = layout.positions[parentId];
           if (!parentPos) return;
           var parentCenterX = parentPos.x + NODE_WIDTH / 2;
           var parentBottomY = parentPos.y + NODE_HEIGHT;
           var childTopY = parentPos.y + ROW_HEIGHT;
           var busY = parentBottomY + (childTopY - parentBottomY) / 2;
-          var childXs = kids.map(function (k) { return layout.positions[k.id].x + NODE_WIDTH / 2; });
+          var childXs = fanOutKids.map(function (k) { return layout.positions[k.id].x + NODE_WIDTH / 2; });
           var minX = Math.min.apply(null, childXs), maxX = Math.max.apply(null, childXs);
           var d = 'M ' + parentCenterX + ' ' + parentBottomY + ' L ' + parentCenterX + ' ' + busY + ' ';
-          if (kids.length > 1) d += 'M ' + minX + ' ' + busY + ' L ' + maxX + ' ' + busY + ' ';
+          if (fanOutKids.length > 1) d += 'M ' + minX + ' ' + busY + ' L ' + maxX + ' ' + busY + ' ';
           childXs.forEach(function (cx) { d += 'M ' + cx + ' ' + busY + ' L ' + cx + ' ' + childTopY + ' '; });
           pathsHtml += '<path d="' + d + '"></path>';
         });
+
+        // Fan-in connectors for shared-child nodes -- the mirror image
+        // of the fan-out bus above: instead of one parent branching
+        // down into several children, several parents converge down
+        // into one shared child (e.g. four "blocklist" nodes all
+        // feeding into one "setup" node below them). Drawn as its own
+        // pass since these nodes aren't grouped by a single parentId
+        // the way layout.childrenMap is keyed.
+        mm.nodes.forEach(function (n) {
+          if (!n.extraParentIds || !n.extraParentIds.length) return;
+          var childPos = layout.positions[n.id];
+          if (!childPos) return;
+          var linkedIds = [n.parentId].concat(n.extraParentIds).filter(function (pid) {
+            return !!layout.positions[pid];
+          });
+          if (linkedIds.length < 2) return; // a linked parent got deleted and pruned down to <2 -- nothing shared to draw
+          var childTopY = childPos.y;
+          var childCenterX = childPos.x + NODE_WIDTH / 2;
+          var parentBottomYs = linkedIds.map(function (pid) { return layout.positions[pid].y + NODE_HEIGHT; });
+          var parentCenterXs = linkedIds.map(function (pid) { return layout.positions[pid].x + NODE_WIDTH / 2; });
+          // Bus sits below the LOWEST linked parent (not just the
+          // primary one) so it never runs through a parent that's
+          // deeper than the others in the rare case they're not all on
+          // the same row.
+          var maxParentBottomY = Math.max.apply(null, parentBottomYs);
+          var busY = maxParentBottomY + (childTopY - maxParentBottomY) / 2;
+          var minX = Math.min.apply(null, parentCenterXs), maxX = Math.max.apply(null, parentCenterXs);
+          var d = '';
+          parentCenterXs.forEach(function (px, i) { d += 'M ' + px + ' ' + parentBottomYs[i] + ' L ' + px + ' ' + busY + ' '; });
+          d += 'M ' + minX + ' ' + busY + ' L ' + maxX + ' ' + busY + ' ';
+          d += 'M ' + childCenterX + ' ' + busY + ' L ' + childCenterX + ' ' + childTopY + ' ';
+          pathsHtml += '<path d="' + d + '"></path>';
+        });
+
         svg.innerHTML = pathsHtml;
       }
 
@@ -3165,20 +3229,24 @@ def render_mindmaps(player: Player) -> str:
         if (data) { MM.data = data; MM.selectedNodeId = null; render(); }
       }
 
-      // ---- Multi-select: add a shared sibling between several nodes ------
+      // ---- Multi-select: add a shared child below several nodes ------
 
-      // Adds one new node as a shared sibling of every node currently
-      // in MM.multiSelectIds (shift-click, see toggleMultiSelect) --
-      // "on the same level" only means one thing in this data model:
-      // sharing a parent, so if the selected nodes don't, the backend
-      // rejects it and the usual showError() surfaces why, the same
-      // way an invalid relation on a single add already does.
-      async function addNodeBetweenSelected() {
+      // Adds one new node as a shared CHILD of every node currently in
+      // MM.multiSelectIds (shift-click, see toggleMultiSelect) -- e.g.
+      // several "blocklist" nodes all feeding into one shared "setup"
+      // node below them. Unlike a normal single add, the selected
+      // nodes don't need to share a parent or sit at the same depth --
+      // see add_shared_child in app/mindmaps.py for why that's fine
+      // structurally; computeLayout/renderCanvas below draw the extra
+      // connector lines and nudge the new node's position to sit
+      // centered under the whole selected group (see their own
+      // extraParentIds handling).
+      async function addSharedChildSelected() {
         var mm = activeMindmap();
         if (!mm || MM.multiSelectIds.size < 2) return;
-        const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/between', {
+        const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/shared-child', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ relative_ids: Array.from(MM.multiSelectIds), text: 'New', color: 'gray' }),
+          body: JSON.stringify({ parent_ids: Array.from(MM.multiSelectIds), text: 'New', color: 'gray' }),
         });
         if (data) {
           MM.data = data;
@@ -3186,7 +3254,7 @@ def render_mindmaps(player: Player) -> str:
           selectNode(data.newNodeId || null);
         }
       }
-      document.getElementById('mmMultiBarAdd').addEventListener('click', addNodeBetweenSelected);
+      document.getElementById('mmMultiBarAdd').addEventListener('click', addSharedChildSelected);
       document.getElementById('mmMultiBarClear').addEventListener('click', function () {
         MM.multiSelectIds.clear();
         render();

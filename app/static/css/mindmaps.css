@@ -80,7 +80,7 @@ button.primary#mmNameSave, .mm-name-form-save {
 
 /* Shown only while one or more nodes are shift-click multi-selected
    (see toggleMultiSelect in the page script) -- lets the player add
-   one new node as a shared sibling of everything currently selected,
+   one new node as a shared CHILD of everything currently selected,
    or back out of the multi-select entirely. Sits between the
    mindmap-switcher header and the canvas, same shape as .mm-name-form
    above. */
@@ -213,7 +213,7 @@ button.primary#mmNameSave, .mm-name-form-save {
 
 /* Shift-click multi-select (see toggleMultiSelect) -- a dashed blue
    ring, deliberately different from the single-node gold outline
-   above, so "marked for a shared sibling" never reads as "this is the
+   above, so "marked for a shared child" never reads as "this is the
    node I'm editing" or vice versa. */
 .mm-node.multi-selected { outline: 2px dashed var(--blue); outline-offset: 2px; z-index: 2; }
 
