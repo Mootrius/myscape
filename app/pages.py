@@ -2460,7 +2460,7 @@ def render_mindmaps(player: Player) -> str:
       // Mirrors NODE_COLORS in app/mindmaps.py -- the fixed palette a
       // node's color can be, in the order the per-node color popover
       // shows them.
-      var NODE_COLORS = ['gray', 'gold', 'red', 'amber', 'green', 'blue', 'purple', 'white'];
+      var NODE_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'white'];
 
       var MM = {
         data: null,
@@ -2617,8 +2617,19 @@ def render_mindmaps(player: Player) -> str:
 
       // ---- Pan/zoom ---------------------------------------------------
 
+      // .mm-world carries a CSS transition on `transform` (see
+      // mindmaps.css) so every zoom change -- the +/-/fit/reset
+      // buttons, the wheel, all of which end up calling applyTransform
+      // through setZoom/zoomToFit/recenterOnNode -- animates smoothly
+      // instead of snapping. Pan-dragging below calls applyTransform
+      // too (every pointermove while dragging), and MUST stay instant
+      // -- a smoothed drag would visibly lag behind the cursor -- so
+      // the pan handlers toggle transitionDuration to '0s' for the
+      // duration of a drag and clear it again afterward, leaving the
+      // CSS transition's own duration in charge the rest of the time.
+      var mmWorldEl = document.getElementById('mmWorld');
       function applyTransform() {
-        document.getElementById('mmWorld').style.transform =
+        mmWorldEl.style.transform =
           'translate(' + MM.pan.x + 'px, ' + MM.pan.y + 'px) scale(' + MM.zoom + ')';
       }
 
@@ -2739,6 +2750,7 @@ def render_mindmaps(player: Player) -> str:
         panState.startPanY = MM.pan.y;
         canvasEl.setPointerCapture(e.pointerId);
         canvasEl.classList.add('panning');
+        mmWorldEl.style.transitionDuration = '0s'; // dragging must track the cursor 1:1, never smoothed
       });
       canvasEl.addEventListener('pointermove', function (e) {
         if (!panState.active) return;
@@ -2752,6 +2764,7 @@ def render_mindmaps(player: Player) -> str:
         if (!panState.active) return;
         panState.active = false;
         canvasEl.classList.remove('panning');
+        mmWorldEl.style.transitionDuration = ''; // hand back to .mm-world's own smooth-zoom transition
         if (!panState.moved) selectNode(null); // a plain click on empty canvas deselects
       }
       canvasEl.addEventListener('pointerup', endPan);
@@ -2801,6 +2814,14 @@ def render_mindmaps(player: Player) -> str:
       // removing the current anchor falls back to whatever's left.
       // Never auto-focuses text editing -- typing while several nodes
       // are marked would be ambiguous about which one it's for.
+      //
+      // A shared child can only connect nodes at the same vertical
+      // level (see _depth/add_shared_child in app/mindmaps.py, which
+      // enforces this same rule server-side) -- adding a node at a
+      // different depth than what's already selected is refused here
+      // rather than only failing later when "Add shared child" is
+      // clicked, using MM.lastLayout's own per-node depth (set by the
+      // most recent renderCanvas) rather than re-walking the tree.
       function extendMultiSelect(id) {
         if (MM.multiSelectIds.has(id)) {
           MM.multiSelectIds.delete(id);
@@ -2808,10 +2829,21 @@ def render_mindmaps(player: Player) -> str:
             var remaining = Array.from(MM.multiSelectIds);
             MM.selectedNodeId = remaining.length ? remaining[remaining.length - 1] : null;
           }
-        } else {
-          MM.multiSelectIds.add(id);
-          MM.selectedNodeId = id;
+          MM.focusNodeId = null;
+          render();
+          return;
         }
+        var layout = MM.lastLayout;
+        if (layout && MM.selectedNodeId) {
+          var anchorPos = layout.positions[MM.selectedNodeId];
+          var newPos = layout.positions[id];
+          if (anchorPos && newPos && anchorPos.depth !== newPos.depth) {
+            showError('Shared child nodes can only connect nodes at the same level.');
+            return;
+          }
+        }
+        MM.multiSelectIds.add(id);
+        MM.selectedNodeId = id;
         MM.focusNodeId = null;
         render();
       }

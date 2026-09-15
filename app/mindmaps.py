@@ -33,7 +33,7 @@ from app.models import MindMap, Player
 # colors already follow. "gray" (panel-2, the site's own default box
 # shade) is what every new node starts as; see mindmaps.css for what
 # each name actually renders as.
-NODE_COLORS = ["gray", "gold", "red", "amber", "green", "blue", "purple", "white"]
+NODE_COLORS = ["gray", "red", "orange", "yellow", "green", "blue", "purple", "white"]
 DEFAULT_COLOR = "gray"
 DEFAULT_TEXT = "New"
 MAX_NODE_TEXT_LENGTH = 120
@@ -66,6 +66,21 @@ def _find(nodes: List[Dict], node_id: str) -> Optional[Dict]:
 
 def _children(nodes: List[Dict], parent_id: Optional[str]) -> List[Dict]:
     return sorted((n for n in nodes if n["parentId"] == parent_id), key=lambda n: n["order"])
+
+
+def _depth(nodes: List[Dict], node_id: str) -> int:
+    """How many parentId hops separate `node_id` from the tree's root
+    (root itself is depth 0) -- used by add_shared_child to enforce
+    "same vertical level." Walks the real structural parentId chain
+    only, never a shared child's extraParentIds (those are display-only
+    and don't participate in the tree's actual shape -- see
+    add_shared_child's own docstring)."""
+    depth = 0
+    node = _find(nodes, node_id)
+    while node is not None and node["parentId"] is not None:
+        node = _find(nodes, node["parentId"])
+        depth += 1
+    return depth
 
 
 def _next_child_order(nodes: List[Dict], parent_id: str) -> float:
@@ -198,12 +213,14 @@ def add_shared_child(
     list -- see delete_node -- while deleting the primary parent still
     cascades away the shared child like any other child of that node).
 
-    Raises ValueError if fewer than two ids are given or any id doesn't
-    exist. Unlike the old sibling-insertion version this replaced, the
-    given nodes do NOT need to share a parent or sit at the same depth
-    -- that was only ever a "same level" requirement because siblings
-    by definition share a parent; a shared CHILD underneath a set of
-    existing nodes has no such structural constraint."""
+    Raises ValueError if fewer than two ids are given, any id doesn't
+    exist, or the given nodes aren't all at the same vertical level
+    (the same number of parentId hops from the root -- see _depth).
+    Unlike the old sibling-insertion version this replaced, they don't
+    need to share a parent, just a depth -- a shared child can connect
+    several different branches together as long as they're all the
+    same number of rows down, matching how the canvas actually draws
+    them (one shared child, one row below the whole selected group)."""
     if len(parent_ids) < 2:
         raise ValueError("Select at least two nodes to add a shared child below them.")
     parents = []
@@ -212,6 +229,10 @@ def add_shared_child(
         if parent is None:
             raise ValueError("That node no longer exists.")
         parents.append(parent)
+
+    depths = {_depth(nodes, parent_id) for parent_id in parent_ids}
+    if len(depths) > 1:
+        raise ValueError("Selected nodes must all be at the same level to add a shared child below them.")
 
     primary_parent_id = parent_ids[0]
     new_node = {

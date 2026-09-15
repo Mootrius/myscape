@@ -98,8 +98,18 @@ button.primary#mmNameSave, .mm-name-form-save {
 
 /* transform-origin: 0 0 so panX/panY (translate) and zoom (scale) in
    the script compose the way they're computed there -- top-left as
-   the fixed point, not the element's own center. */
-.mm-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+   the fixed point, not the element's own center. The transition makes
+   every zoom change (the +/-/fit/reset controls, the wheel) glide
+   smoothly to its new scale/pan instead of snapping there in one
+   frame -- but a smoothed transform would also make click-drag
+   panning visibly lag behind the cursor, so the pan handlers in the
+   page script zero out transitionDuration for the span of an actual
+   drag and hand it back afterward; this rule is only ever "live"
+   during a zoom. */
+.mm-world {
+  position: absolute; top: 0; left: 0; transform-origin: 0 0;
+  transition: transform 0.18s ease-out;
+}
 
 .mm-lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .mm-lines path { stroke: var(--border); stroke-width: 1.5; fill: none; }
@@ -162,20 +172,25 @@ button.primary#mmNameSave, .mm-name-form-save {
    .loot-npc-box/.gear-slot elsewhere on the site (see loot-tracker.css
    and purchase-goals.css), not filter: brightness(), so a node's own
    text doesn't brighten along with it. Text color is picked per
-   background for contrast (dark text on the brighter gold/red/amber/
-   green/white fills, light text on the darker gray/blue ones) --
-   matching how a player's own reference mindmap tool did it. */
+   background for contrast (dark text on the brighter red/orange/
+   yellow/green/white fills, light text on the darker gray/blue/purple
+   ones) -- matching how a player's own reference mindmap tool did it.
+   Order matches NODE_COLORS in app/mindmaps.py -- gray, red, orange,
+   yellow, green, blue, purple, white (no gold or amber here: those
+   stay reserved for the site accent color and Purchase Goals'
+   affordability states respectively, see --orange/--yellow's own
+   comment in myscape.css). */
 .mm-node-gray { background: var(--panel-2); border-color: var(--border); color: var(--text); }
 .mm-node-gray:hover { background-color: rgb(51, 51, 54); }
-
-.mm-node-gold { background: var(--gold); border-color: var(--gold); color: #1a1408; }
-.mm-node-gold:hover { background-color: #ffab42; }
 
 .mm-node-red { background: var(--red); border-color: var(--red); color: #1a0f0c; }
 .mm-node-red:hover { background-color: #dd6857; }
 
-.mm-node-amber { background: var(--amber); border-color: var(--amber); color: #1a1408; }
-.mm-node-amber:hover { background-color: #fabe45; }
+.mm-node-orange { background: var(--orange); border-color: var(--orange); color: #1a1108; }
+.mm-node-orange:hover { background-color: #e0924f; }
+
+.mm-node-yellow { background: var(--yellow); border-color: var(--yellow); color: #1a1608; }
+.mm-node-yellow:hover { background-color: #ddc86a; }
 
 .mm-node-green { background: var(--green); border-color: var(--green); color: #0e150c; }
 .mm-node-green:hover { background-color: #80c868; }
@@ -265,9 +280,9 @@ button.primary#mmNameSave, .mm-name-form-save {
 }
 .mm-swatch.active { outline: 2px solid var(--gold); outline-offset: 2px; }
 .mm-swatch-gray { background: var(--panel-2); }
-.mm-swatch-gold { background: var(--gold); }
 .mm-swatch-red { background: var(--red); }
-.mm-swatch-amber { background: var(--amber); }
+.mm-swatch-orange { background: var(--orange); }
+.mm-swatch-yellow { background: var(--yellow); }
 .mm-swatch-green { background: var(--green); }
 .mm-swatch-blue { background: var(--blue); }
 .mm-swatch-purple { background: var(--purple); }

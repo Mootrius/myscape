@@ -64,6 +64,15 @@
      lightness as the rest of that categorical family, just a distinct
      hue from all of them. */
   --purple: #8b6cc9;
+  /* Two more Mindmaps-only node colors, same reasoning as --blue/
+     --purple above -- NOT the same as --gold or --amber (those stay
+     as they were for their own existing uses elsewhere: --gold is the
+     site's accent color, --amber is Purchase Goals' affordability
+     state), just similarly warm/bright hues picked fresh for the node
+     palette so gold/amber could be dropped from it without touching
+     what those two variables mean anywhere else. */
+  --orange: #c97a3d;
+  --yellow: #c9b355;
   --radius: 0px;
 }
 
