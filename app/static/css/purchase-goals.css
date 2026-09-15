@@ -441,14 +441,6 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-icon-picker-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; flex: 0 0 auto; }
 .gear-icon-picker-actions .btn-secondary { flex: 0 0 auto; }
 
-/* Only shows up above the search box when the picker was opened on a
-   shift-click group of 2+ sockets (see renderSlotPicker in
-   app/pages.py) -- otherwise picking a suggestion would silently fill
-   every selected socket with no indication that's what's about to
-   happen. flex: 1 1 100% so it takes its own full-width row above the
-   search box rather than squeezing onto the same line as it. */
-.gear-slot-picker-hint { flex: 1 1 100%; color: var(--text-muted); font-size: 12px; }
-
 .search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
 /* The slot picker's own search box (as opposed to the setup-icon
    picker's) takes its whole row -- see the "Search for an item" input

@@ -1001,6 +1001,42 @@ def render_purchase_goals(player: Player) -> str:
         else PG.multiSelect.push({ slotType: slotType, slot: slot });
       }
 
+      // Keeps the shared picker in sync with PG.multiSelect -- called
+      // right after every shift-click toggle (see wireSlotClicks), with
+      // the state from just BEFORE that toggle: whether the group was
+      // empty, and whatever picker (if any) was already open. Closes
+      // the picker once the group empties back out (nothing left to
+      // apply a pick to), otherwise opens it (if it isn't already) or
+      // just refreshes which slots it targets (if it is), so a player
+      // can freely add or remove slots mid-search without losing
+      // whatever they've already typed.
+      //
+      // If an ordinary single-slot picker was already open (from a
+      // plain, non-shift click) at the moment the FIRST shift-click of
+      // a fresh group comes in, that slot is folded into the group too
+      // -- shift-clicking a second slot while already searching for one
+      // reads as "add this one too," not "throw away what I had open
+      // and start over." Only ever folds in on that one transition
+      // (wasEmpty), never again afterward, so shift-clicking that same
+      // slot back off later actually removes it instead of it silently
+      // reappearing.
+      function syncMultiSelectPicker(wasEmpty, priorPicker) {
+        if (!PG.multiSelect.length) {
+          PG.picker = null;
+          return;
+        }
+        if (wasEmpty && priorPicker && !isSlotSelected(priorPicker.slotType, priorPicker.slot)) {
+          PG.multiSelect.unshift({ slotType: priorPicker.slotType, slot: priorPicker.slot });
+        }
+        if (PG.picker) {
+          PG.picker.targets = PG.multiSelect.slice();
+        } else {
+          var first = PG.multiSelect[0];
+          openSlotPicker(first.slotType, first.slot, PG.multiSelect.slice());
+        }
+        PG.iconPicker = false;
+      }
+
       function slotHtml(resolved, slotType, slot, extraClass) {
         var picking = PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot);
         var selected = isSlotSelected(slotType, slot);
@@ -1112,47 +1148,48 @@ def render_purchase_goals(player: Player) -> str:
             var slotType = el.getAttribute('data-slot-type');
             var slot = slotType === 'inventory' ? parseInt(el.getAttribute('data-slot'), 10) : el.getAttribute('data-slot');
 
-            // Shift-click only ever toggles this slot in/out of the
-            // pending multi-select group -- filled or empty, it never
-            // opens a picker or the wiki the way a plain click would.
-            // Lets a player build up the whole group first (in any
-            // order, mixing filled and empty sockets) before a
-            // following plain click on one of them opens the shared
-            // picker below.
+            // Shift-click toggles this slot in/out of the multi-select
+            // group -- filled or empty, it never opens the wiki the way
+            // a plain click on a filled slot would. syncMultiSelectPicker
+            // opens the shared picker the moment the FIRST slot is
+            // added (folding in whatever slot's picker was already open,
+            // if any -- see its own comment) rather than needing a
+            // separate follow-up click, and keeps it open/updated as
+            // more slots are added or removed, closing it again once
+            // the group empties back out.
             if (e.shiftKey) {
+              var pickerWasOpen = !!PG.picker;
+              var wasEmpty = PG.multiSelect.length === 0;
+              var priorPicker = PG.picker;
               toggleSlotSelected(slotType, slot);
+              syncMultiSelectPicker(wasEmpty, priorPicker);
               renderContent();
+              // Only steal focus into the search box on the transition
+              // from no picker to one open -- once the player's already
+              // typing a query, further shift-clicks to grow or shrink
+              // the group shouldn't yank focus or re-select their text.
+              if (PG.picker && !pickerWasOpen) {
+                var newInput = document.getElementById('slotSearchInput');
+                if (newInput) {
+                  newInput.focus({ preventScroll: true });
+                  newInput.select();
+                }
+                scrollPickerIntoView();
+              }
               return;
             }
 
             var itemName = el.getAttribute('data-item-name');
 
-            // A plain click on a slot that's already part of a pending
-            // multi-select group opens ONE shared picker for the whole
-            // group instead of this slot's own single behavior --
-            // otherwise a filled slot in the group would just open its
-            // wiki page, with no way to actually search for what should
-            // replace every selected socket at once.
-            if (isSlotSelected(slotType, slot)) {
-              openSlotPicker(slotType, slot, PG.multiSelect.slice());
-              PG.iconPicker = false;
-              renderContent();
-              var groupInput = document.getElementById('slotSearchInput');
-              if (groupInput) {
-                groupInput.focus({ preventScroll: true });
-                groupInput.select();
-              }
-              scrollPickerIntoView();
-              return;
-            }
-
-            // A plain click anywhere else abandons any lingering
-            // multi-select group (e.g. one the player shift-clicked
-            // together but then clicked away from without picking
-            // anything) and falls back to this slot's own normal,
-            // single-slot behavior below.
+            // A plain click (no shift) always abandons any pending
+            // multi-select group -- and the shared picker that came
+            // with it, if one's open -- and acts on just this slot,
+            // same as it always has.
             var hadSelection = PG.multiSelect.length > 0;
-            PG.multiSelect = [];
+            if (hadSelection) {
+              PG.multiSelect = [];
+              PG.picker = null;
+            }
 
             // A filled slot's item is now a link out to the wiki instead
             // of an editor -- removing is handled by the hover "x"
@@ -1484,14 +1521,7 @@ def render_purchase_goals(player: Player) -> str:
         // expand_recipe_components in app/recipes.py), so nobody has to
         // know or type out what an item is made of, or fall back to
         // typing in an untradeable item blind.
-        // The "applies to N sockets" hint only shows up once a group of
-        // 2+ is actually being targeted -- a lone slot's picker (the
-        // normal case) looks exactly like it always has.
-        var groupHint = (p.targets && p.targets.length > 1)
-          ? '<div class="gear-slot-picker-hint">Applies to ' + p.targets.length + ' selected sockets</div>'
-          : '';
         var body = '' +
-          groupHint +
           '<div class="search-box search-box-full">' +
           '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" value="' + esc(p.query) + '" />' +
           '  <div class="suggestions" id="slotSuggestions"></div>' +
