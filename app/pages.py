@@ -2822,6 +2822,8 @@ def render_mindmaps(player: Player) -> str:
       // rather than only failing later when "Add shared child" is
       // clicked, using MM.lastLayout's own per-node depth (set by the
       // most recent renderCanvas) rather than re-walking the tree.
+      // This is a silent no-op (no error message) -- the mismatched
+      // node just doesn't get added to the selection.
       function extendMultiSelect(id) {
         if (MM.multiSelectIds.has(id)) {
           MM.multiSelectIds.delete(id);
@@ -2838,7 +2840,6 @@ def render_mindmaps(player: Player) -> str:
           var anchorPos = layout.positions[MM.selectedNodeId];
           var newPos = layout.positions[id];
           if (anchorPos && newPos && anchorPos.depth !== newPos.depth) {
-            showError('Shared child nodes can only connect nodes at the same level.');
             return;
           }
         }
