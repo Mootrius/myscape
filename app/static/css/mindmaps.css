@@ -161,6 +161,22 @@ button.primary#mmNameSave, .mm-name-form-save {
 }
 #mmEditModeBtn.active:hover { border-color: var(--gold); color: var(--gold); }
 
+/* Hint pulse: fires when the player clicks a node's body while Edit
+   Mode is off (see glowEditModeButton in the script) -- a node isn't
+   clickable at all outside Edit Mode, so this points at the control
+   that actually turns it on instead of the click just doing nothing.
+   A fixed iteration count (2 -- "a couple of times") rather than
+   `infinite`, so it reads as a one-off nudge, not a persistent state
+   the way solid gold (.active, above) already means. Animates
+   border-color/color to the same gold .active ends up at, plus a soft
+   glow via box-shadow that .active itself doesn't use, so a glowing
+   button still reads as distinct from an already-active one. */
+@keyframes mm-edit-glow {
+  0%, 100% { box-shadow: none; border-color: var(--border); color: var(--text-dim); }
+  50% { box-shadow: 0 0 8px 2px var(--gold); border-color: var(--gold); color: var(--gold); }
+}
+#mmEditModeBtn.mm-glow { animation: mm-edit-glow 0.6s ease-in-out 2; }
+
 .mm-canvas-empty {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   color: var(--text-faint); font-size: 12px; text-align: center;
@@ -261,6 +277,85 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
    text-transform: uppercase -- everything else in the label still
    renders upper as normal. */
 .mm-node-x-lower { text-transform: lowercase; }
+
+/* ---- Note flip (renderCanvas/renderNoteFieldHtml) ---------------------
+   A node with a note (see the popover's own note textarea) gets a
+   small paper-icon button pinned to its own top-right corner --
+   clicking it flips the node over via a real 3D rotateY on an inner
+   wrapper (never .mm-node itself, which is what the layout math's
+   left/top/width/height actually positions/sizes -- see .mm-node's own
+   comment above), landing on a back face that shows the note text. The
+   same button then shows a back-arrow instead, in the exact same spot,
+   to flip back. Works whether or not Edit Mode is on -- same "a view
+   action, not an edit one" reasoning as the gray manual-complete
+   checkbox above -- and is excluded from the pointerdown delegation's
+   Edit-Mode gate the same way that checkbox is (see the page script).
+   A node with no note gets none of this at all -- no button, no
+   flip-inner wrapper, nothing to flip TO -- so it costs nothing in the
+   common case. */
+.mm-node-note-toggle {
+  position: absolute; top: 2px; right: 2px; z-index: 1;
+  width: 14px; height: 14px; padding: 0;
+  background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  /* A shade lighter than the panel-2 fill every non-completed color
+     shares while just outlined (see the per-color rules below) -- one
+     shared rule covers every color here, gray included, since there's
+     no color of its own to be specific about until it's actually
+     filled in (see the .completed overrides right after). */
+  color: #676768;
+}
+.mm-node-note-toggle svg { width: 12px; height: 12px; display: block; }
+/* Completed: filled solid with that color's own fill-color (see each
+   .mm-node-<color>.completed rule below), so the icon becomes a shade
+   DARKER than that exact fill instead -- one rule per color, same
+   "match what it's sitting on, just a shade off" logic the default
+   rule above already follows against panel-2. Gray's completed fill is
+   var(--border), not a hue of its own (see .mm-node-gray.completed's
+   own comment below), so it gets the equivalent dark-gray treatment. */
+.mm-node-gray.completed .mm-node-note-toggle { color: #2d2d30; }
+.mm-node-red.completed .mm-node-note-toggle { color: #96463b; }
+.mm-node-orange.completed .mm-node-note-toggle { color: #9d5f30; }
+.mm-node-yellow.completed .mm-node-note-toggle { color: #9d8c42; }
+.mm-node-green.completed .mm-node-note-toggle { color: #578846; }
+.mm-node-blue.completed .mm-node-note-toggle { color: #466d99; }
+.mm-node-purple.completed .mm-node-note-toggle { color: #6c549d; }
+.mm-node-white.completed .mm-node-note-toggle { color: #b8b3a8; }
+
+/* The actual flip: an inner wrapper (never .mm-node itself) rotates
+   180deg around the Y axis; each face is absolutely stacked on top of
+   the other and hides itself once rotated past 90deg
+   (backface-visibility), so only ever one face is visible/interactive
+   at a time, and the flip reads as the card turning over in place
+   rather than its content just swapping. inset:0 fills .mm-node's full
+   bordered box (ignoring its own padding, the same way any absolutely
+   positioned child of a padded box does), so each face reproduces that
+   4px/10px padding itself instead. */
+.mm-node-flip-inner {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.5s ease;
+}
+.mm-node-flip-inner.mm-node-flipped { transform: rotateY(180deg); }
+.mm-node-face {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 4px 10px; box-sizing: border-box;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+.mm-node-face-back {
+  transform: rotateY(180deg);
+  /* The note is the player's own free-form prose, not a short
+     goal/label -- plain case and left-aligned (against .mm-node's own
+     inherited uppercase/centered text), and scrollable rather than
+     clamped/truncated the way the front face's label is, so a longer
+     note stays fully readable inside the same fixed-size card instead
+     of losing most of it. */
+  text-transform: none; letter-spacing: normal; text-align: left;
+  font-size: 9.5px; line-height: 1.35;
+}
+.mm-node-note-text { width: 100%; height: 100%; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+
 /* The selected node's own brighten treatment + stacking rule is
    defined further below, alongside the edge buttons/color popover
    it's shown with. */
@@ -656,6 +751,27 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
 .mm-goal-target-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; }
 .mm-field-error { display: none; font-size: 10.5px; color: var(--red); line-height: 1.3; }
 .mm-field-error.show { display: block; }
+
+/* ---- Note field (renderNoteFieldHtml) --------------------------------
+   The one optional field every node type gets (manual included), a
+   sibling of .mm-goal-fields rather than one of its own inputs -- it
+   sits between that per-type form and the Save/Delete row, so it's the
+   last thing filled in before saving (see renderNodePopoverHtml). Its
+   textarea gets the exact same compact input theming
+   .mm-goal-fields input/select.mm-goal-input use just above, written
+   as its own rule since .mm-note-wrap isn't nested inside
+   .mm-goal-fields, plus a resize handle so a longer note isn't stuck
+   at its 2-row starting height. */
+.mm-note-wrap { width: 100%; }
+.mm-note-wrap textarea.mm-goal-input {
+  width: 100%; box-sizing: border-box;
+  background: #100e0b; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: inherit; font-size: 11.5px;
+  padding: 7px 8px; resize: vertical; min-height: 30px;
+  text-transform: none; letter-spacing: normal;
+}
+.mm-note-wrap textarea.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
+.mm-note-wrap textarea.mm-goal-input::placeholder { color: var(--text-faint); }
 
 /* ---- Zero-mindmaps state -------------------------------------------
    Same shape as .pg-empty (purchase-goals.css): centered placeholder

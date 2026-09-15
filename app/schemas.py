@@ -817,6 +817,10 @@ class AddMindMapNodeRequest(BaseModel):
 class UpdateMindMapNodeRequest(BaseModel):
     text: Optional[str] = None
     color: Optional[str] = None
+    # The node's own optional free-form note (see update_node/
+    # _clean_note in app/mindmaps.py) -- None leaves it untouched
+    # (same as text/color above), "" clears it back to no note.
+    note: Optional[str] = None
 
 
 class SetMindMapNodeGoalRequest(BaseModel):
@@ -825,9 +829,17 @@ class SetMindMapNodeGoalRequest(BaseModel):
     (validated there, not here, since which fields are even legal
     depends on the node's CURRENT color, something only the node itself
     -- not this request in isolation -- knows). Also how a gray node's
-    manual "Complete" button works: {"manualComplete": true}."""
+    manual "Complete" button works: {"manualComplete": true}.
+
+    `note` rides along here too, alongside `goal`, purely so the
+    node-popover's one Save button can save a trackable goal's criteria
+    AND its note in one request/one undo step -- see
+    set_mindmap_node_goal in app/main.py, which applies it via the same
+    update_node a plain node-PATCH would. Optional and independent of
+    `goal`: omitted or None leaves the note untouched."""
 
     goal: Dict[str, Any] = {}
+    note: Optional[str] = None
 
 
 class AddMindMapSharedChildRequest(BaseModel):
@@ -865,6 +877,12 @@ class MindMapNodeIn(BaseModel):
     order: float = 0.0
     extraParentIds: Optional[List[str]] = None
     goal: Optional[Dict[str, Any]] = None
+    # A node's own optional note (see MM.undoStack/replace_nodes) --
+    # missing this meant every undo/redo snapshot silently dropped it
+    # before replace_nodes ever saw it (Pydantic drops any field not
+    # declared on the model), even though the client's own PUT body
+    # included it correctly.
+    note: Optional[str] = None
 
 
 class ReplaceMindMapNodesRequest(BaseModel):

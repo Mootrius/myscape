@@ -2690,6 +2690,16 @@ def render_mindmaps(player: Player) -> str:
       // rather than duplicated, so the two never drift out of sync.
       var GOAL_TYPE_ICON_BY_COLOR = {};
       GOAL_TYPE_PICKER.forEach(function (opt) { if (opt.icon) GOAL_TYPE_ICON_BY_COLOR[opt.color] = opt.icon; });
+      // The note-flip button's two icons (see renderCanvas) -- a plain
+      // page/paper outline for "there's a note here, click to read it",
+      // and a back-arrow for "click to flip back" once it's showing.
+      // Same feather-icon-style stroke SVG as the zoom/edit-mode/undo/
+      // redo toolbar buttons (see .mm-node-note-toggle svg in
+      // mindmaps.css for the sizing).
+      var NOTE_ICON_PAPER_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+      var NOTE_ICON_ARROW_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+        '<line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>';
       var SKILL_NAMES = [
         'attack', 'defence', 'strength', 'hitpoints', 'ranged', 'prayer', 'magic',
         'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
@@ -2798,6 +2808,15 @@ def render_mindmaps(player: Player) -> str:
         // of them get the same gold "selected" ring (see renderCanvas)
         // -- there's no visually separate "multi-select mode" anymore.
         multiSelectIds: new Set(),
+        // Which nodes are currently showing their note-flipped backside
+        // (see the note-toggle button in renderCanvas) -- purely a
+        // client-side view toggle, never sent to or read from the
+        // server, so it's fine for this to reset on a page reload. Not
+        // pruned when a mindmap switches or a node's deleted -- a
+        // stale id left in here just never matches anything real again
+        // (ids are UUIDs, never reused), same "harmless to leave"
+        // reasoning as pointer/click state elsewhere on this page.
+        flippedNodeIds: new Set(),
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
         zoom: 1,
@@ -3380,19 +3399,23 @@ def render_mindmaps(player: Player) -> str:
         commitActiveLabelIfEditing();
         e.stopPropagation();
         // Edge buttons, the node popover (color swatches, or the "add
-        // shared child" button), and the gray manual-complete checkbox
-        // (see renderNodeLabelHtml) all handle themselves (via the
-        // click delegation below), whether or not Edit Mode is on --
-        // only a plain click on the node's own body/label is gated on
-        // Edit Mode below.
-        if (e.target.closest('.mm-edge-btn') || e.target.closest('[data-role="popover"]') || e.target.closest('[data-role="manual-toggle"]')) return;
+        // shared child" button), the gray manual-complete checkbox
+        // (see renderNodeLabelHtml), and the note-flip toggle (see
+        // renderCanvas) all handle themselves (via the click delegation
+        // below), whether or not Edit Mode is on -- only a plain click
+        // on the node's own body/label is gated on Edit Mode below.
+        if (e.target.closest('.mm-edge-btn') || e.target.closest('[data-role="popover"]') || e.target.closest('[data-role="manual-toggle"]') || e.target.closest('[data-role="note-toggle"]')) return;
         // A node isn't clickable at all outside Edit Mode -- see
         // MM.editMode's own comment. The one thing that still worked
         // by clicking a node while just viewing (ticking a gray goal
         // complete) now lives on the node itself as that checkbox
-        // instead, so there's nothing left for a plain click to do
-        // here until Edit Mode is on.
-        if (!MM.editMode) return;
+        // instead (excluded above, before this check, so it never
+        // triggers the glow below), so there's nothing left for a
+        // plain click to do here until Edit Mode is on -- glow the
+        // Edit Mode button a couple of times instead, as a nudge
+        // toward the control that would actually let this click do
+        // something.
+        if (!MM.editMode) { glowEditModeButton(); return; }
         // Shift-click multi-select only means anything in Edit Mode
         // (its one use is "Add shared child" -- see
         // addSharedChildSelected).
@@ -3472,7 +3495,13 @@ def render_mindmaps(player: Player) -> str:
               var newMetric = segBtn.getAttribute('data-segment-value');
               var rawTargetForMetric = targetForMetric.value.trim();
               if (rawTargetForMetric !== '') {
-                var nTargetForMetric = Number(rawTargetForMetric);
+                // The box is still showing the OLD metric's value here
+                // (newMetric is what it's switching TO) -- if that was
+                // XP, it may have a "150k"-style shorthand in it (see
+                // parseMoneySuffix) that needs resolving before it can
+                // be converted to a level.
+                var oldMetric = newMetric === 'xp' ? 'level' : 'xp';
+                var nTargetForMetric = Number(oldMetric === 'xp' ? parseMoneySuffix(rawTargetForMetric) : rawTargetForMetric);
                 if (Number.isInteger(nTargetForMetric)) {
                   targetForMetric.value = newMetric === 'xp'
                     ? xpForLevel(nTargetForMetric)
@@ -3507,6 +3536,24 @@ def render_mindmaps(player: Player) -> str:
           if (toggleNode) saveNodeGoal(toggleNodeId, { manualComplete: !(toggleNode.goal && toggleNode.goal.manualComplete) });
           return;
         }
+        // The note-flip button (see renderCanvas) -- purely a local
+        // view toggle (MM.flippedNodeIds), no request, same "works on
+        // ANY node this way, whether or not Edit Mode is on" reasoning
+        // as the manual-complete checkbox just above. Reads the
+        // CLICKED node's id straight off its ancestor .mm-node rather
+        // than assuming it's the selected one, for the same double-
+        // click-doesn't-desync reason that checkbox does.
+        var noteToggleEl = e.target.closest('[data-role="note-toggle"]');
+        if (noteToggleEl) {
+          var noteToggleNodeEl = noteToggleEl.closest('.mm-node');
+          var noteToggleNodeId = noteToggleNodeEl && noteToggleNodeEl.getAttribute('data-node-id');
+          if (noteToggleNodeId) {
+            if (MM.flippedNodeIds.has(noteToggleNodeId)) MM.flippedNodeIds.delete(noteToggleNodeId);
+            else MM.flippedNodeIds.add(noteToggleNodeId);
+            render();
+          }
+          return;
+        }
         // A trackable goal's criteria form (kc/item/gp/skill/quest/
         // diary -- see renderGoalFieldsHtml) -- Edit Mode only, since
         // this is only ever rendered there in the first place, but the
@@ -3520,6 +3567,13 @@ def render_mindmaps(player: Player) -> str:
           var popoverForSave = e.target.closest('[data-role="popover"]');
           var fieldsWrap = popoverForSave && popoverForSave.querySelector('[data-role="goal-fields"]');
           if (!fieldsWrap) return;
+          // The note field (see renderNoteFieldHtml) sits in the
+          // popover but OUTSIDE .mm-goal-fields (it's the same box for
+          // every node type, not one of a particular type's own
+          // criteria), so it's read off popoverForSave directly rather
+          // than fieldsWrap.
+          var noteInputForSave = popoverForSave && popoverForSave.querySelector('[data-role="node-note-input"]');
+          var noteValForSave = noteInputForSave ? noteInputForSave.value.trim() : '';
           // A gray (manual) node's Save button commits its NAME, not a
           // goal -- see renderGoalFieldsHtml's "manual" branch and
           // saveSelectedNodeText below. A manual node MUST have text to
@@ -3548,8 +3602,9 @@ def render_mindmaps(player: Player) -> str:
               }
               return;
             }
-            if (textVal !== nodeForSave.text) {
-              saveSelectedNodeText(textVal, true);
+            var noteChangedForManual = noteValForSave !== (nodeForSave.note || '');
+            if (textVal !== nodeForSave.text || noteChangedForManual) {
+              saveSelectedNodeText(textVal, noteValForSave, true);
             } else {
               MM.selectedNodeId = null;
               MM.multiSelectIds = new Set();
@@ -3558,18 +3613,37 @@ def render_mindmaps(player: Player) -> str:
             return;
           }
           var goal = {};
+          // The skill goal's own target only accepts the K/M/B
+          // shorthand while XP is the selected metric (see
+          // renderGoalFieldsHtml/validateSkillTarget) -- read here,
+          // once, rather than inside the loop below, since the metric
+          // field isn't necessarily visited before the target field is
+          // (querySelectorAll returns them in DOM order, and the
+          // segmented toggle's hidden field comes after the visible
+          // buttons but the order of [data-goal-field] elements overall
+          // isn't something this loop should have to depend on).
+          var metricHidden = fieldsWrap.querySelector('[data-goal-field="metric"]');
+          var savingXpTarget = metricHidden && metricHidden.value === 'xp';
           fieldsWrap.querySelectorAll('[data-goal-field]').forEach(function (input) {
             var val = (input.value || '').trim();
-            // The gp target accepts a K/M/B shorthand (see
-            // parseMoneySuffix) -- everything else is sent as typed.
-            if (input.getAttribute('data-goal-field') === 'targetGp') val = parseMoneySuffix(val);
-            if (val !== '') goal[input.getAttribute('data-goal-field')] = val;
+            var field = input.getAttribute('data-goal-field');
+            // The gp target and (only in XP mode) the skill target both
+            // accept the K/M/B shorthand (see parseMoneySuffix) --
+            // everything else is sent as typed.
+            if (field === 'targetGp' || (field === 'target' && savingXpTarget)) val = parseMoneySuffix(val);
+            if (val !== '') goal[field] = val;
           });
           // The Save button (unlike the manual-complete toggle, which
           // also funnels through saveSelectedNodeGoal) closes the
           // popover on a successful save -- see that function's own
-          // comment.
-          saveSelectedNodeGoal(goal, true);
+          // comment. The note rides along on this same request (see
+          // SetMindMapNodeGoalRequest's own docstring in
+          // app/schemas.py) rather than a separate one, always -- goal
+          // fields themselves aren't diffed against what's already
+          // saved either (see the loop just above), so there's no
+          // existing "only send what changed" behavior here for the
+          // note to break by joining it.
+          saveSelectedNodeGoal(goal, noteValForSave, true);
         }
       });
 
@@ -3724,7 +3798,14 @@ def render_mindmaps(player: Player) -> str:
         var metric = (metricHidden && metricHidden.value === 'xp') ? 'xp' : 'level';
         var raw = input.value.trim();
         if (raw === '') { errEl.textContent = ''; errEl.classList.remove('show'); return; }
-        var n = Number(raw);
+        // XP accepts the same "140k"/"2.5m"/"1b" shorthand the gp
+        // goal's target does (see parseMoneySuffix) -- resolve it
+        // before range-checking so typing "150k" doesn't flash an
+        // out-of-range error while the player's still typing it out in
+        // full. LVL never accepts the shorthand, so it's left as typed
+        // -- Number() on a stray "5k" there is NaN either way, which
+        // already fails the integer check below exactly as it should.
+        var n = Number(metric === 'xp' ? parseMoneySuffix(raw) : raw);
         var min = metric === 'xp' ? MIN_SKILL_XP : MIN_SKILL_LEVEL;
         var max = metric === 'xp' ? MAX_SKILL_XP : MAX_SKILL_LEVEL;
         if (!Number.isInteger(n) || n < min || n > max) {
@@ -3962,9 +4043,44 @@ def render_mindmaps(player: Player) -> str:
           // is false for it too, so it renders with no data-role at
           // all, nothing on the canvas to click into.
           var labelAttrs = hasLeftSlot ? '' : (isInlineEditable ? (' data-role="label"' + editableAttr) : '');
+          // The optional note flip (see renderNoteFieldHtml for where
+          // it's written) -- a node with no note gets neither the
+          // toggle button nor a back face at all, so it costs nothing
+          // in the common case. hasNote also self-heals MM.flippedNodeIds
+          // the moment a note's cleared out from under an already-
+          // flipped node, rather than leaving a stale id that would
+          // silently show the wrong face again if a note's ever typed
+          // back in later.
+          var hasNote = !!(n.note && n.note.trim());
+          if (!hasNote) MM.flippedNodeIds.delete(n.id);
+          var isFlipped = hasNote && MM.flippedNodeIds.has(n.id);
+          var noteToggleHtml = !hasNote ? '' :
+            '<button type="button" class="mm-node-note-toggle" data-role="note-toggle" title="' +
+            (isFlipped ? 'Back to node' : 'View note') + '">' +
+            (isFlipped ? NOTE_ICON_ARROW_SVG : NOTE_ICON_PAPER_SVG) + '</button>';
+          // The front face is exactly what a non-flippable node has
+          // always rendered (labelCls/labelAttrs/labelInner, untouched)
+          // -- just wrapped in its own face div now instead of sitting
+          // directly in .mm-node, so it can sit opposite a back face
+          // inside the same rotating flip-inner (see
+          // .mm-node-flip-inner in mindmaps.css). A node with no note
+          // never gets a flip-inner at all -- there's nothing to flip
+          // TO -- so it renders its label exactly as before, no extra
+          // wrapper markup for the common case.
+          var faceHtml = hasNote
+            ? '<div class="mm-node-flip-inner' + (isFlipped ? ' mm-node-flipped' : '') + '">' +
+              '<div class="mm-node-face mm-node-face-front">' +
+              '<div class="' + labelCls + '"' + labelAttrs + '>' + labelInner + '</div>' +
+              '</div>' +
+              '<div class="mm-node-face mm-node-face-back">' +
+              '<div class="mm-node-note-text">' + esc(n.note) + '</div>' +
+              '</div>' +
+              '</div>'
+            : '<div class="' + labelCls + '"' + labelAttrs + '>' + labelInner + '</div>';
           return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + completedCls + '" data-node-id="' + esc(n.id) + '" ' +
             'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
-            '<div class="' + labelCls + '"' + labelAttrs + '>' + labelInner + '</div>' +
+            faceHtml +
+            noteToggleHtml +
             edgeButtonsHtml +
             popoverHtml +
             '</div>';
@@ -4151,7 +4267,34 @@ def render_mindmaps(player: Player) -> str:
         return '<div class="mm-node-popover mm-node-popover-wide" data-role="popover">' +
           renderGoalTypePickerHtml(node) +
           renderGoalFieldsHtml(node) +
+          renderNoteFieldHtml(node) +
           actionsHtml +
+          '</div>';
+      }
+
+      // The one optional field every non-root node type gets, gray
+      // (manual) included, right above the Save/Delete row -- "how I'd
+      // like to achieve this," entirely separate from a trackable
+      // node's own goal CRITERIA (renderGoalFieldsHtml, just above this
+      // in the popover) or a manual node's own name. Saved by the same
+      // Save button as everything else in the popover, riding along on
+      // whichever request that node type's own fields already send
+      // (see the goal-save click delegation, and
+      // saveSelectedNodeText/saveSelectedNodeGoal below) rather than a
+      // separate request of its own -- one Save click, one request,
+      // one undo step, whether or not the note itself actually
+      // changed. Shows the current note's text as its own value (not
+      // placeholder) via a plain <textarea>, not one of the
+      // data-goal-field inputs the generic goal-save loop reads
+      // automatically -- it needs its own explicit handling either way
+      // (manual saves through the node-PATCH endpoint, every other type
+      // through the goal endpoint -- see SetMindMapNodeGoalRequest's own
+      // docstring in app/schemas.py for why note rides along there
+      // too), so there's nothing to gain from making it LOOK generic.
+      function renderNoteFieldHtml(node) {
+        return '<div class="mm-note-wrap">' +
+          '<textarea class="mm-goal-input mm-note-input" data-role="node-note-input" placeholder="Notes (optional)" maxlength="1000" rows="2">' +
+          esc(node.note || '') + '</textarea>' +
           '</div>';
       }
 
@@ -4287,6 +4430,18 @@ def render_mindmaps(player: Player) -> str:
         } else if (type === 'skill') {
           var metric = goal.metric === 'xp' ? 'xp' : 'level';
           var targetPlaceholder = metric === 'xp' ? 'Target experience' : 'Target level';
+          // type="text" (not "number"), same reasoning as the gp
+          // goal's own target field just above -- XP accepts the same
+          // "140k"/"2.5m"/"1b" shorthand (see parseMoneySuffix,
+          // resolved at save time by the goal-save click delegation,
+          // live-validated by validateSkillTarget, and carried across
+          // the LVL/XP toggle by the segmented-toggle click delegation
+          // above), which a real number input would refuse to let the
+          // player type at all. LVL never accepts the shorthand (a
+          // level suffix makes no sense at OSRS's 1-126 scale) but
+          // still uses the same text input -- restricting to digits
+          // only ever happens in LVL mode is handled by validation, not
+          // by swapping input types on every toggle click.
           fields =
             '<div class="mm-goal-skill-row">' +
               '<select class="mm-goal-input" data-goal-field="skill">' +
@@ -4297,7 +4452,7 @@ def render_mindmaps(player: Player) -> str:
               renderSegmentedToggleHtml('metric', [['level', 'LVL'], ['xp', 'XP']], goal.metric) +
             '</div>' +
             '<div class="mm-goal-target-wrap">' +
-              '<input class="mm-goal-input" type="number" data-goal-field="target" placeholder="' + esc(targetPlaceholder) + '" value="' + esc(goal.target != null ? goal.target : '') + '">' +
+              '<input class="mm-goal-input" type="text" inputmode="decimal" data-goal-field="target" placeholder="' + esc(targetPlaceholder) + '" value="' + esc(goal.target != null ? goal.target : '') + '">' +
               '<div class="mm-field-error" data-role="target-error"></div>' +
             '</div>';
         } else if (type === 'quest') {
@@ -4504,6 +4659,25 @@ def render_mindmaps(player: Player) -> str:
         if (btn) btn.classList.toggle('active', MM.editMode);
       }
 
+      // Pulses the Edit Mode button gold a couple of times -- called
+      // when the player clicks a node's body while Edit Mode is off
+      // (see the nodes-layer pointerdown delegation below), since a
+      // node isn't clickable at all outside Edit Mode and this is the
+      // one nudge toward the control that actually turns it on, rather
+      // than the click just silently doing nothing. mm-glow is a plain
+      // CSS animation (see mindmaps.css) with a fixed iteration count,
+      // so all this does is (re)start it -- removing the class first
+      // and forcing a reflow before re-adding it is what lets a second
+      // click mid-glow restart the pulse from the beginning instead of
+      // being ignored because the class was already present.
+      function glowEditModeButton() {
+        var btn = document.getElementById('mmEditModeBtn');
+        if (!btn) return;
+        btn.classList.remove('mm-glow');
+        void btn.offsetWidth;
+        btn.classList.add('mm-glow');
+      }
+
       // Called by every mutating action below with `preNodes` --
       // activeMindmap().nodes as it stood right before that action's
       // API call -- but only AFTER that call has already come back
@@ -4619,7 +4793,17 @@ def render_mindmaps(player: Player) -> str:
       // now lives right on the node itself and works on ANY gray node,
       // selected or not, in or out of Edit Mode -- see its own click
       // handler above.
-      async function saveNodeGoal(nodeId, goal, closePopover) {
+      //
+      // `note` (see renderNoteFieldHtml/SetMindMapNodeGoalRequest's own
+      // docstring in app/schemas.py) rides along on this same request,
+      // applied server-side via the same update_node a plain node-PATCH
+      // uses -- one request/one undo step for a trackable node's goal
+      // AND its note together, rather than two. Left undefined by the
+      // manual-complete checkbox call above (JSON.stringify drops an
+      // undefined value's key entirely, same as the server's own
+      // Optional[str] = None default), which is exactly right -- ticking
+      // a goal complete should never touch its note.
+      async function saveNodeGoal(nodeId, goal, note, closePopover) {
         var mm = activeMindmap();
         var node = mm && mm.nodes.find(function (n) { return n.id === nodeId; });
         if (!mm || !node) return;
@@ -4627,7 +4811,7 @@ def render_mindmaps(player: Player) -> str:
         var preNodes = mm.nodes;
         const data = await apiCall(
           '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id) + '/goal',
-          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal: goal }) }
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal: goal, note: note }) }
         );
         if (!data) return;
         MM.data = data;
@@ -4641,20 +4825,22 @@ def render_mindmaps(player: Player) -> str:
       // Thin wrapper over saveNodeGoal for the Edit-Mode popover's own
       // Save button, which only ever acts on whatever's currently
       // selected.
-      function saveSelectedNodeGoal(goal, closePopover) {
+      function saveSelectedNodeGoal(goal, note, closePopover) {
         if (!MM.selectedNodeId) return;
-        return saveNodeGoal(MM.selectedNodeId, goal, closePopover);
+        return saveNodeGoal(MM.selectedNodeId, goal, note, closePopover);
       }
 
       // A gray (manual) node's own Save button commits its NAME rather
       // than a goal -- see renderGoalFieldsHtml's "manual" branch and
       // the goal-save click delegation's own manual handling above.
       // Same shape as saveNodeGoal (PATCH, record undo, optionally
-      // close the popover), just against the plain node PATCH endpoint
-      // (see updateSelectedNode) instead of .../goal, since a node's
-      // text and its goal criteria are two separate fields server-side
-      // (see update_node vs. set_node_goal in app/mindmaps.py).
-      async function saveSelectedNodeText(text, closePopover) {
+      // close the popover, `note` riding along the same way), just
+      // against the plain node PATCH endpoint (see updateSelectedNode)
+      // instead of .../goal, since a node's text and its goal criteria
+      // are two separate fields server-side (see update_node vs.
+      // set_node_goal in app/mindmaps.py) -- note lives with text here
+      // (both go through update_node either way).
+      async function saveSelectedNodeText(text, note, closePopover) {
         var mm = activeMindmap();
         var node = selectedNode();
         if (!mm || !node) return;
@@ -4662,7 +4848,7 @@ def render_mindmaps(player: Player) -> str:
         var preNodes = mm.nodes;
         const data = await apiCall(
           '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
-          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text }) }
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, note: note }) }
         );
         if (!data) return;
         MM.data = data;

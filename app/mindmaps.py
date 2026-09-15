@@ -50,6 +50,10 @@ DEFAULT_COLOR = "gray"
 DEFAULT_TEXT = "New"
 MAX_NODE_TEXT_LENGTH = 120
 MAX_MINDMAP_NAME_LENGTH = 60
+# A node's own optional note (see update_node/_clean_note below) --
+# free-form "how I'd like to achieve this" text, not a display label,
+# so it gets much more room than MAX_NODE_TEXT_LENGTH.
+MAX_NODE_NOTE_LENGTH = 1000
 
 # Which goal TYPE each color picks -- see clean_goal/evaluate_completion
 # below for what each type actually checks. "manual" (gray) is the one
@@ -175,6 +179,16 @@ def _clean_text(text: Optional[str], allow_empty: bool = False) -> str:
     if allow_empty:
         return text
     return text or DEFAULT_TEXT
+
+
+def _clean_note(note: Optional[str]) -> str:
+    """Trims/truncates a node's own optional note (see update_node) --
+    unlike _clean_text, always allowed to come out blank and never
+    falls back to a placeholder: a note is optional by design (see
+    app/pages.py's node-popover note field), so "no note" is a normal,
+    common state to end up in, not something to guard against the way
+    a blank node NAME is."""
+    return (note or "").strip()[:MAX_NODE_NOTE_LENGTH]
 
 
 def _clean_color(color: Optional[str], is_root: bool = False) -> str:
@@ -555,14 +569,25 @@ def add_shared_child(
     return nodes + [new_node], new_node["id"]
 
 
-def update_node(nodes: List[Dict], node_id: str, text: Optional[str] = None, color: Optional[str] = None) -> List[Dict]:
-    """Returns a NEW node list with the given node's text and/or color
-    replaced -- whichever of the two is not None. Changing color always
-    resets that node's `goal` back to a blank default for the new color
-    (see default_goal) -- criteria shaped for one goal type rarely mean
-    anything for another, so there's nothing worth trying to carry
-    across; use set_node_goal afterward to fill the new goal in. Raises
-    ValueError if the node doesn't exist."""
+def update_node(
+    nodes: List[Dict],
+    node_id: str,
+    text: Optional[str] = None,
+    color: Optional[str] = None,
+    note: Optional[str] = None,
+) -> List[Dict]:
+    """Returns a NEW node list with the given node's text, color, and/or
+    note replaced -- whichever of the three is not None. Changing color
+    always resets that node's `goal` back to a blank default for the new
+    color (see default_goal) -- criteria shaped for one goal type rarely
+    mean anything for another, so there's nothing worth trying to carry
+    across; use set_node_goal afterward to fill the new goal in. `note`
+    is deliberately left alone by a color change, unlike `goal` -- it's
+    the player's own free-form "how I'd like to achieve this" text (see
+    app/pages.py's node-popover note field), which doesn't stop applying
+    just because the node's tracked-goal TYPE changed underneath it, the
+    way goal criteria shaped for the old type would. Raises ValueError
+    if the node doesn't exist."""
     node = _find(nodes, node_id)
     if node is None:
         raise ValueError("That node no longer exists.")
@@ -578,6 +603,8 @@ def update_node(nodes: List[Dict], node_id: str, text: Optional[str] = None, col
                 if new_color != n.get("color"):
                     n["goal"] = default_goal(new_color)
                 n["color"] = new_color
+            if note is not None:
+                n["note"] = _clean_note(note)
         updated.append(n)
     return updated
 
@@ -715,6 +742,13 @@ def replace_nodes(nodes: List[Dict]) -> List[Dict]:
             "goal": clean_goal(new_color, n.get("goal"), require_complete=False),
             "order": float(n.get("order") or 0.0),
         }
+        # Only carried across if actually present -- an older snapshot
+        # (from before notes existed) or a node that never had one
+        # shouldn't gain an empty "note" key it didn't have before, same
+        # spirit as extraParentIds right below only being set when
+        # there's something to set.
+        if n.get("note"):
+            new_node["note"] = _clean_note(n.get("note"))
         extra_parent_ids = n.get("extraParentIds")
         if extra_parent_ids:
             pruned = [pid for pid in extra_parent_ids if pid in id_set and pid != n["id"]]

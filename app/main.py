@@ -1204,7 +1204,7 @@ def update_mindmap_node(
 ):
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     try:
-        mindmap.nodes = update_node(mindmap.nodes, node_id, payload.text, payload.color)
+        mindmap.nodes = update_node(mindmap.nodes, node_id, payload.text, payload.color, payload.note)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
@@ -1227,10 +1227,19 @@ def set_mindmap_node_goal(
     require_complete defaults to True inside set_node_goal itself, so
     an incomplete submission (a red node with no activity chosen, say)
     is rejected here with a 400 naming what's missing, rather than
-    silently saved half-filled-in."""
+    silently saved half-filled-in.
+
+    payload.note (see SetMindMapNodeGoalRequest's own docstring) rides
+    along on the same request when given -- applied via the same
+    update_node a plain node-PATCH uses, against the already-updated
+    node list, so a trackable node's popover Save button persists its
+    goal AND its note in one request/one undo step instead of two."""
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     try:
-        mindmap.nodes = set_node_goal(mindmap.nodes, node_id, payload.goal)
+        nodes = set_node_goal(mindmap.nodes, node_id, payload.goal)
+        if payload.note is not None:
+            nodes = update_node(nodes, node_id, note=payload.note)
+        mindmap.nodes = nodes
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
