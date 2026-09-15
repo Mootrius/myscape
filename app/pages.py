@@ -3481,12 +3481,18 @@ def render_mindmaps(player: Player) -> str:
         document.getElementById('mmNodesLayer').innerHTML = mm.nodes.map(function (n) {
           var pos = layout.positions[n.id];
           // Every selected node (whether it's the only one, or one of
-          // several shift-added to it) gets the exact same gold ring --
-          // there's no separate "multi-select" visual mode anymore.
+          // several shift-added to it) gets the exact same brighten
+          // treatment -- there's no separate "multi-select" visual mode
+          // otherwise. Selection itself still works the same outside
+          // Edit Mode (a click still opens the popover -- e.g. the gray
+          // "Mark complete" toggle -- so isSelected/isAnchor stay as
+          // they are), but the visual highlight is Edit-Mode-only: a
+          // node that just isn't editable right now shouldn't look
+          // "pressed" the way an actual clickable control would.
           var isSelected = MM.multiSelectIds.has(n.id);
           var isAnchor = n.id === MM.selectedNodeId;
           var isRoot = n.parentId === null;
-          var selectedCls = isSelected ? ' selected' : '';
+          var selectedCls = (isSelected && MM.editMode) ? ' selected' : '';
           // Filled solid once the goal's actually met (see
           // evaluate_completion in app/mindmaps.py -- computed fresh
           // server-side on every read, never something this script
