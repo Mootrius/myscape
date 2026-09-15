@@ -50,10 +50,14 @@
 .mm-menu-item.danger:hover { color: var(--red); }
 .mm-menu-divider { border-top: 1px solid var(--border); margin: 4px 0; }
 
-/* The New/Rename/Delete actions (not the mindmap-switch rows above
-   them, which show the player's own mindmap names and stay
-   left-aligned/normal-case as list items should) -- centered and
-   all-caps to read as actions rather than more list entries. */
+/* The mindmap-switch rows (the player's own mindmap names) are
+   centered same as the New/Rename/Delete actions below them, but stay
+   normal-case -- a typed name uppercased everywhere it shows up would
+   be a much bigger visual change than just centering it, and nothing
+   asked for that. */
+.mm-menu-switch { text-align: center; }
+/* The New/Rename/Delete actions -- centered and all-caps to read as
+   actions rather than more list entries. */
 #mmMenuNew, #mmMenuRename, #mmMenuDelete { text-align: center; text-transform: uppercase; }
 
 /* Inline new/rename form -- same shape as .pg-setup-form
@@ -141,7 +145,7 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-zoom-controls button:disabled {
   opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-dim);
 }
-#mmZoomFit svg, #mmEditModeBtn svg { display: block; }
+#mmZoomFit svg, #mmEditModeBtn svg, #mmUndoBtn svg, #mmRedoBtn svg { display: block; }
 
 /* The Edit Mode pencil toggle -- its own row below the zoom cluster,
    separated by the same .mm-zoom-divider seam the undo/redo pair

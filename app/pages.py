@@ -2433,8 +2433,12 @@ def render_mindmaps(player: Player) -> str:
       </div>
       <div class="mm-canvas" id="mmCanvas">
         <div class="mm-zoom-controls">
-          <button type="button" id="mmUndoBtn" title="Undo" disabled>&#8630;</button>
-          <button type="button" id="mmRedoBtn" title="Redo" disabled>&#8631;</button>
+          <button type="button" id="mmUndoBtn" title="Undo" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+          </button>
+          <button type="button" id="mmRedoBtn" title="Redo" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          </button>
           <div class="mm-zoom-divider"></div>
           <button type="button" id="mmZoomIn" title="Zoom in">+</button>
           <button type="button" id="mmZoomOut" title="Zoom out">&minus;</button>
