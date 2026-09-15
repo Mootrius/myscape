@@ -113,35 +113,25 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-world {
   position: absolute; top: 0; left: 0; transform-origin: 0 0;
   transition: transform 0.18s ease-out;
-  /* Every blur bug chased in this file so far -- the preserve-3d note
-     flip, the edge-button hover opacity transition, wheel-zoom's own
-     restarted transitions -- has had the same shape underneath: SOME
-     element living inside this shared, flattened canvas layer gets
-     promoted to (or demoted from) its own GPU layer for a moment, and
-     that promotion/demotion forces the browser to re-rasterize this
-     whole layer's content around it, which briefly softens every
-     node's text along with whatever actually triggered it. The
-     search-suggestions dropdown scrolling natively (see
-     .mm-suggestions' own comment) is just the latest thing to trigger
-     it, not a new mechanism -- an actively-scrolled overflow:auto
-     region gets its own compositing layer same as any of the above,
-     entirely independent of any CSS transition/animation, so
-     excluding it from the wheel-zoom handler (fixing the scroll
-     itself) doesn't touch this.
-     will-change here gives .mm-world its OWN stable, persistently-
-     promoted layer up front, instead of the browser deciding whether
-     to promote it moment to moment -- so a child being promoted or
-     demoted for its own reasons no longer requires re-rasterizing
-     this shared layer along with it; the two are isolated. This is
-     the standard fix for "a nested layer's churn is degrading its
-     ancestor," and specifically wasn't the fix for the very first
-     blur bug in this file (that one was the preserve-3d/backface-
-     visibility rendering mode itself, not promotion churn, and
-     will-change alone didn't touch it then) -- but every one of those
-     3D properties is gone from this page now (see the note flip's own
-     history), so nothing here should still hit that different
-     failure mode. */
-  will-change: transform;
+  /* NOT will-change: transform (tried it, reverted it -- see git log).
+     The theory ("give this shared layer its own stable, persistent
+     GPU layer so a child's own promotion/demotion doesn't drag it
+     into a re-rasterize too") was reasonable, and matched the pattern
+     every OTHER blur bug in this file has had -- but the result was
+     permanent blur across the whole canvas instead of a transient one
+     around whatever triggered it, which is a well-documented failure
+     mode of forcing a persistent compositing layer of its own: the
+     browser rasterizes that layer at a fixed resolution up front
+     rather than the display's actual device pixel ratio, and unlike a
+     layer that's only promoted for the duration of a real transition
+     (which gets to re-rasterize crisp once it settles), a layer that
+     NEVER stops being "promoted" never gets that chance to correct
+     itself. Same underlying mistake as the .mm-edge-btn
+     will-change: opacity regression above, just applied to the large
+     shared layer instead of hundreds of small ones -- both ended up
+     permanent rather than transient. Whatever fix the search-dropdown-
+     scroll blur (see .mm-suggestions' own comment on the mechanism)
+     still needs, it isn't a persistent will-change here. */
 }
 
 .mm-lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
