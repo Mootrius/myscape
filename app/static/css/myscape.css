@@ -375,6 +375,16 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   border-radius: var(--radius);
   padding: 22px 24px 24px;
 }
+/* Each card is a single clickable link out to its own page (see
+   purchase_goals_card/loot_tracker_card in app/pages.py), so unlike
+   the translucent "frame" cards elsewhere on the site (.loot-chart-card,
+   .gear-summary, etc., which just hold a grid of separately-hoverable
+   boxes), this whole card IS the hoverable box here -- same
+   background-only brightening, and the same rgb(51,51,54) target, as
+   .loot-npc-box/.loot-item-box (loot-tracker.css) and .gear-slot/
+   .gear-summary-row (purchase-goals.css) use for their own hover
+   feedback, so hovering a dashboard card matches those. */
+.dash-card:hover { background-color: rgb(51, 51, 54); }
 
 /* Medium-sized icon chip anchoring the left side of each card -- a flat
    square (matching the site's sharp-corner identity) rather than a circle,
@@ -406,6 +416,13 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   font-weight: normal;
   font-size: 17px;
   margin: 0 0 8px;
+  /* "PURCHASE GOALS" / "LOOT TRACKER" -- both titles are fixed static
+     copy (see _dash_card in app/pages.py), not a value that ever needs
+     a mixed-case exception the way the loot tracker's own chart title
+     does (see .loot-chart-title in loot-tracker.css), so a plain CSS
+     transform is enough here. */
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .dash-card .subtitle { margin-top: 0; margin-bottom: 14px; }
