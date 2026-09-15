@@ -374,11 +374,12 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   text-transform: none; letter-spacing: normal; text-align: left;
   font-size: 9.5px; line-height: 1.35;
 }
-/* overscroll-behavior + contain: paint here too -- same scroll-chaining
-   AND blur-while-scrollable reasons as .mm-suggestions/.mm-note-wrap
-   textarea below, for a long note read on the node's own flipped-over
-   back face rather than its popover's edit box. */
-.mm-node-note-text { width: 100%; height: 100%; overflow-y: auto; overscroll-behavior: contain; contain: paint; white-space: pre-wrap; word-break: break-word; }
+/* overscroll-behavior here too -- same scroll-chaining fix as
+   .mm-suggestions/.mm-note-wrap textarea below, for a long note read
+   on the node's own flipped-over back face rather than its popover's
+   edit box. NOT contain: paint (tried it, reverted it -- see git log
+   and .mm-suggestions' own comment for why). */
+.mm-node-note-text { width: 100%; height: 100%; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; word-break: break-word; }
 
 /* The selected node's own brighten treatment + stacking rule is
    defined further below, alongside the edge buttons/color popover
@@ -743,31 +744,37 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
      scrolls itself and only itself, exactly like a player hitting the
      end of a normal dropdown expects. */
   overscroll-behavior: contain;
-  /* This is the actual fix for the blur that only shows up once there
-     are enough results to need this list's own scrollbar (confirmed:
-     no blur with too few results to overflow, blur returns the
-     instant there are enough to). A scrollable overflow:auto region
-     with actual overflowing content gets promoted to its own
-     compositing layer by the browser pre-emptively -- not just while
-     something's actively being dragged/scrolled in it, just for
-     BEING a real scroller ready to be scrolled smoothly -- and same
-     as every other promotion/demotion in this file's history, that
-     forces .mm-world (its ancestor, sharing one flattened layer with
-     every node's own text) to re-rasterize around it. Unlike the
-     will-change: transform attempt on .mm-world itself (reverted --
-     see git log), which tried to solve this by giving the big ANCESTOR
-     its own permanent layer and ended up blurring the entire canvas
-     at the wrong raster scale all the time, `contain: paint` doesn't
-     force this small element into its own GPU texture at all -- it's
-     a containment guarantee, not a compositing hint: it tells the
-     browser this box's own paint never needs to affect anything
-     outside its border box, so whatever compositing decision gets
-     made for ITS scrolling doesn't have to ripple out to .mm-world's
-     raster the way it currently does. Confirmed harmless here: this
-     element already clips to its own box via overflow-y: auto and
-     already establishes its own stacking context via z-index, both
-     of which `paint` containment implies anyway. */
-  contain: paint;
+  /* NOT contain: paint. Tried it here (and on the note textarea/back-
+     face text below) as a fix for the blur that shows up once there
+     are enough results to need this list's own scrollbar -- the
+     theory being that a scrollable overflow:auto region with real
+     overflowing content gets promoted to its own compositing layer
+     pre-emptively, and that forces .mm-world (its ancestor, sharing
+     one flattened layer with every node's own text) to re-rasterize
+     around it, and that `contain: paint`'s containment GUARANTEE
+     (rather than a will-change-style compositing HINT) would let the
+     browser isolate that promotion without needing a persistent GPU
+     texture of its own.
+
+     Confirmed by the user's own screen recording that this was
+     wrong: with contain: paint applied, the blur stopped clearing on
+     zoom the way it used to (screen recording showed sharpness
+     dropping the instant the scrollable dropdown opened and STAYING
+     low through an entire zoom + pan, only recovering once the
+     dropdown was removed from the DOM entirely by picking a result
+     and the canvas was interacted with again). That's a regression,
+     not a fix -- before this was tried, the blur was transient and
+     self-corrected on zoom (see the overscroll-behavior comment's
+     git history for that confirmed-good state). Best guess at why:
+     the paint-containment guarantee seems to have given the browser
+     license to composite this element PERSISTENTLY rather than only
+     while actively scrolling, since with paint fully contained there
+     is no correctness cost to keeping it composited forever -- which
+     hits the exact same raster-scale-mismatch failure mode as
+     will-change, just cleared by DOM removal instead of never
+     clearing. Reverted. Do not retry contain: paint on a scrollable
+     descendant of .mm-world without a real explanation for why this
+     mechanism wouldn't apply. */
 }
 .mm-suggestions.show { display: block; }
 /* Normal case, NOT the all-caps every other bit of popover text
@@ -850,11 +857,9 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
      scrolled to its own top/bottom would otherwise hand the rest of
      the gesture off to the page underneath it. */
   overscroll-behavior: contain;
-  /* Same blur-while-scrollable fix as .mm-suggestions' own too (see
-     its comment for the full mechanism) -- a note long enough to need
-     this textarea's own scrollbar is the same kind of
-     actively-promotable scroller nested inside .mm-world. */
-  contain: paint;
+  /* NOT contain: paint (tried it, reverted it -- see .mm-suggestions'
+     own comment below for why: it made the blur-while-scrollable
+     issue worse, not better). */
 }
 .mm-note-wrap textarea.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-note-wrap textarea.mm-goal-input::placeholder { color: var(--text-faint); }
