@@ -3181,15 +3181,19 @@ def render_mindmaps(player: Player) -> str:
           segGroup.querySelectorAll('.mm-segment-btn').forEach(function (b) { b.classList.toggle('active', b === segBtn); });
           var segHidden = segGroup.nextElementSibling;
           if (segHidden && segHidden.matches('input[type="hidden"]')) segHidden.value = segBtn.getAttribute('data-segment-value');
-          // The skill target's valid range depends on which metric is
-          // picked (level vs. xp) -- re-check it immediately against
-          // whatever's already typed so switching metrics updates the
-          // inline error right away rather than waiting for the next
+          // The skill target's valid range (AND its placeholder --
+          // "Target level" vs. "Target experience") depends on which
+          // metric is picked -- re-check/re-label it immediately
+          // against whatever's already typed so switching metrics
+          // updates both right away rather than waiting for the next
           // keystroke in the target field.
           if (segGroup.getAttribute('data-segment-field') === 'metric') {
             var fieldsWrapForMetric = segGroup.closest('[data-role="goal-fields"]');
             var targetForMetric = fieldsWrapForMetric && fieldsWrapForMetric.querySelector('[data-goal-field="target"]');
-            if (targetForMetric) validateSkillTarget(targetForMetric);
+            if (targetForMetric) {
+              targetForMetric.placeholder = (segBtn.getAttribute('data-segment-value') === 'xp') ? 'Target experience' : 'Target level';
+              validateSkillTarget(targetForMetric);
+            }
           }
           return;
         }
@@ -3223,9 +3227,16 @@ def render_mindmaps(player: Player) -> str:
           var goal = {};
           fieldsWrap.querySelectorAll('[data-goal-field]').forEach(function (input) {
             var val = (input.value || '').trim();
+            // The gp target accepts a K/M/B shorthand (see
+            // parseMoneySuffix) -- everything else is sent as typed.
+            if (input.getAttribute('data-goal-field') === 'targetGp') val = parseMoneySuffix(val);
             if (val !== '') goal[input.getAttribute('data-goal-field')] = val;
           });
-          saveSelectedNodeGoal(goal);
+          // The Save button (unlike the manual-complete toggle, which
+          // also funnels through saveSelectedNodeGoal) closes the
+          // popover on a successful save -- see that function's own
+          // comment.
+          saveSelectedNodeGoal(goal, true);
         }
       });
 
@@ -3294,6 +3305,23 @@ def render_mindmaps(player: Player) -> str:
       // ---- Rendering ----------------------------------------------------
 
       function fmtNum(n) { return Number(n).toLocaleString('en-US'); }
+
+      // Lets the gp goal's target be typed as a shorthand -- "140k",
+      // "2.5m", "1b" -- and resolves it to the plain integer the
+      // server actually stores (140000, 2500000, 1000000000); the
+      // node itself always displays the resolved number with commas
+      // (see goalDisplayText's "gp" branch, unchanged), never the
+      // shorthand the player typed. Anything that isn't a number
+      // immediately followed by k/m/b (case-insensitive) -- including
+      // a plain "140000" -- passes through untouched, so typing the
+      // full number still works exactly as before.
+      function parseMoneySuffix(raw) {
+        var s = (raw || '').trim();
+        var m = /^([0-9]*\.?[0-9]+)\s*([kKmMbB])$/.exec(s);
+        if (!m) return s;
+        var mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2].toLowerCase()];
+        return String(Math.round(parseFloat(m[1]) * mult));
+      }
 
       // Runs a goal search field's query against whichever endpoint
       // its data-search-kind picks (see GOAL_SEARCH_ENDPOINTS) and
@@ -3377,7 +3405,7 @@ def render_mindmaps(player: Player) -> str:
       // types -- it's derived straight from its goal criteria (see
       // clean_goal in app/mindmaps.py for the fields each type
       // stores), formatted per the exact shape asked for:
-      //   kc:    "<count> kc at <activity>"
+      //   kc:    "<count> <activity> kc"
       //   item:  "x<qty> <item>"
       //   gp:    "<amount> gp"
       //   skill: "<xp> <skill> xp"  or  "lvl <level> <skill>"
@@ -3395,7 +3423,7 @@ def render_mindmaps(player: Player) -> str:
         var goal = node.goal || {};
         if (type === 'kc') {
           if (!goal.targetCount || !goal.sourceName) return 'Set KC goal';
-          return fmtNum(goal.targetCount) + ' kc at ' + goal.sourceName;
+          return fmtNum(goal.targetCount) + ' ' + goal.sourceName + ' kc';
         }
         if (type === 'item') {
           if (!goal.targetQty || !goal.itemName) return 'Set item goal';
@@ -3756,18 +3784,27 @@ def render_mindmaps(player: Player) -> str:
             renderSearchFieldHtml('itemName', 'item', 'Search for an item', goal.itemName) +
             '<input class="mm-goal-input" type="number" data-goal-field="targetQty" placeholder="Target quantity" min="1" value="' + esc(goal.targetQty != null ? goal.targetQty : '') + '">';
         } else if (type === 'gp') {
+          // type="text" (not "number") because the shorthand this
+          // accepts -- "140k", "2.5m", "1b" -- has letters in it, which
+          // a real number input would just refuse to let the player
+          // type at all; parseMoneySuffix resolves it to a plain
+          // integer at save time (see the goal-save click delegation).
           fields =
-            '<input class="mm-goal-input" type="number" data-goal-field="targetGp" placeholder="Target gp (coins + platinum)" min="1" value="' + esc(goal.targetGp != null ? goal.targetGp : '') + '">';
+            '<input class="mm-goal-input" type="text" inputmode="decimal" data-goal-field="targetGp" placeholder="Target gp (coins + tokens)" value="' + esc(goal.targetGp != null ? goal.targetGp : '') + '">';
         } else if (type === 'skill') {
+          var metric = goal.metric === 'xp' ? 'xp' : 'level';
+          var targetPlaceholder = metric === 'xp' ? 'Target experience' : 'Target level';
           fields =
-            '<select class="mm-goal-input" data-goal-field="skill">' +
-              SKILL_NAMES.map(function (sk) {
-                return '<option value="' + sk + '"' + (goal.skill === sk ? ' selected' : '') + '>' + esc(titleCase(sk)) + '</option>';
-              }).join('') +
-            '</select>' +
-            renderSegmentedToggleHtml('metric', [['level', 'Level'], ['xp', 'Experience']], goal.metric) +
+            '<div class="mm-goal-skill-row">' +
+              '<select class="mm-goal-input" data-goal-field="skill">' +
+                SKILL_NAMES.slice().sort().map(function (sk) {
+                  return '<option value="' + sk + '"' + (goal.skill === sk ? ' selected' : '') + '>' + esc(titleCase(sk)) + '</option>';
+                }).join('') +
+              '</select>' +
+              renderSegmentedToggleHtml('metric', [['level', 'LVL'], ['xp', 'XP']], goal.metric) +
+            '</div>' +
             '<div class="mm-goal-target-wrap">' +
-              '<input class="mm-goal-input" type="number" data-goal-field="target" placeholder="Target" value="' + esc(goal.target != null ? goal.target : '') + '">' +
+              '<input class="mm-goal-input" type="number" data-goal-field="target" placeholder="' + esc(targetPlaceholder) + '" value="' + esc(goal.target != null ? goal.target : '') + '">' +
               '<div class="mm-field-error" data-role="target-error"></div>' +
             '</div>';
         } else if (type === 'quest') {
@@ -4075,7 +4112,16 @@ def render_mindmaps(player: Player) -> str:
       // require_complete=True) surfaces the same way any other
       // rejected edit does, via apiCall's own showError -- nothing
       // needs undoing since the server never actually changed anything.
-      async function saveSelectedNodeGoal(goal) {
+      // `closePopover` -- true only for the popover's own Save button
+      // (see the goal-save click delegation above), never for the
+      // gray manual-complete toggle, which also funnels through here
+      // but has no "popup" of its own to close -- deselects the node
+      // once the save actually succeeds, which is what closes the
+      // popover (it only ever shows for the selected node -- see
+      // renderNodePopoverHtml). Left alone (not deselected) on a
+      // failed save, so the player can fix whatever the error was
+      // without having to reselect the node and start over.
+      async function saveSelectedNodeGoal(goal, closePopover) {
         var mm = activeMindmap();
         var node = selectedNode();
         if (!mm || !node) return;
@@ -4088,6 +4134,10 @@ def render_mindmaps(player: Player) -> str:
         if (!data) return;
         MM.data = data;
         if (isStillActiveMindmap(mmId)) recordUndoableEdit(preNodes);
+        if (closePopover) {
+          MM.selectedNodeId = null;
+          MM.multiSelectIds = new Set();
+        }
         render();
       }
 
