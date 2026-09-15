@@ -35,7 +35,7 @@ from app.models import MindMap, Player
 # each name actually renders as.
 NODE_COLORS = ["gray", "gold", "red", "amber", "green", "blue", "purple", "white"]
 DEFAULT_COLOR = "gray"
-DEFAULT_TEXT = "New idea"
+DEFAULT_TEXT = "New"
 MAX_NODE_TEXT_LENGTH = 120
 MAX_MINDMAP_NAME_LENGTH = 60
 
@@ -119,9 +119,14 @@ def add_node(
         see the single-root shape MindMap.nodes assumes throughout).
       - "parent": a new node takes over the relative node's exact spot
         (same parentId and order) among its current siblings, and the
-        relative node becomes that new node's only child. If the
-        relative node was the root, the new node simply becomes the
-        new root.
+        relative node becomes that new node's only child. The relative
+        node can't be the tree's root -- unlike a sibling, this would
+        otherwise actually succeed (the new node just becomes the new
+        root), but it's disallowed anyway: every mindmap needs exactly
+        one node nobody can delete (see delete_node), and letting a
+        parent be added to the root would just create a fresh one of
+        those every time, each burying the last "original" node one
+        level deeper for no real benefit.
 
     Returns (new_nodes, new_node_id) -- the caller (see
     add_mindmap_node in app/main.py) hands the id straight back to the
@@ -129,8 +134,8 @@ def add_node(
     diff the old and new node lists itself.
 
     Raises ValueError (its message is safe to show the player as-is)
-    on an unknown relation, a missing relative node, or a sibling
-    requested for the root."""
+    on an unknown relation, a missing relative node, a sibling
+    requested for the root, or a parent requested for the root."""
     relative = _find(nodes, relative_id)
     if relative is None:
         raise ValueError("That node no longer exists.")
@@ -154,6 +159,8 @@ def add_node(
         return nodes + [new_node], new_node["id"]
 
     if relation == "parent":
+        if relative["parentId"] is None:
+            raise ValueError("The root node can't have a parent added -- it's the one node every mindmap keeps.")
         new_node["parentId"] = relative["parentId"]
         new_node["order"] = relative["order"]
         updated = []

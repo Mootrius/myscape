@@ -2637,18 +2637,36 @@ def render_mindmaps(player: Player) -> str:
       // root at a fixed zoom of 1) -- picks whichever of width/height
       // is the tighter constraint, clamped to the same 0.4-2 zoom
       // range as everything else, then centers the fitted box in the
-      // viewport.
+      // viewport. Uses the actual tight bounding box of the node
+      // positions themselves (not layout.worldWidth/worldHeight) --
+      // those two are sized for computeLayout's own arithmetic
+      // convenience and end up with more empty margin past the last
+      // column/row than before the first one, so centering THAT box
+      // visibly drags the real content off-center (left/up) instead
+      // of centering what's actually on screen.
       function zoomToFit() {
         var layout = MM.lastLayout;
         if (!layout) return;
+        var ids = Object.keys(layout.positions);
+        if (!ids.length) return;
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        ids.forEach(function (id) {
+          var pos = layout.positions[id];
+          minX = Math.min(minX, pos.x);
+          minY = Math.min(minY, pos.y);
+          maxX = Math.max(maxX, pos.x + NODE_WIDTH);
+          maxY = Math.max(maxY, pos.y + NODE_HEIGHT);
+        });
+        var boxW = maxX - minX, boxH = maxY - minY;
         var canvas = document.getElementById('mmCanvas');
         var viewW = canvas.clientWidth, viewH = canvas.clientHeight;
         var pad = 40; // breathing room inside the viewport edges
         var availW = Math.max(1, viewW - pad * 2), availH = Math.max(1, viewH - pad * 2);
-        var z = Math.max(0.4, Math.min(2, Math.min(availW / layout.worldWidth, availH / layout.worldHeight)));
+        var z = Math.max(0.4, Math.min(2, Math.min(availW / boxW, availH / boxH)));
         MM.zoom = z;
-        MM.pan.x = (viewW - layout.worldWidth * z) / 2;
-        MM.pan.y = (viewH - layout.worldHeight * z) / 2;
+        var boxCenterX = minX + boxW / 2, boxCenterY = minY + boxH / 2;
+        MM.pan.x = viewW / 2 - boxCenterX * z;
+        MM.pan.y = viewH / 2 - boxCenterY * z;
         applyTransform();
       }
 
@@ -2798,19 +2816,26 @@ def render_mindmaps(player: Player) -> str:
         document.getElementById('mmNodesLayer').innerHTML = mm.nodes.map(function (n) {
           var pos = layout.positions[n.id];
           var isSelected = n.id === MM.selectedNodeId;
+          var isRoot = n.parentId === null;
           var selectedCls = isSelected ? ' selected' : '';
           // Only the selected node is ever contenteditable -- typing
           // directly into a node is how its text changes now (see the
           // focusout/keydown delegation above), so this only needs to
           // be live for the one node currently being edited.
           var editableAttr = isSelected ? ' contenteditable="true" spellcheck="false"' : '';
+          // The root is the one node every mindmap always keeps, so it
+          // can't get a parent (which would just bury it under a new,
+          // equally permanent root) or a sibling (it has no parent to
+          // share one under) -- only its "add child" edge button shows.
+          // The backend enforces the same rule; this just keeps the
+          // dead-end options from ever being offered in the first place.
           return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + '" data-node-id="' + esc(n.id) + '" ' +
             'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
             '<div class="mm-node-label" data-role="label"' + editableAttr + '>' + esc(n.text) + '</div>' +
-            '<button type="button" class="mm-edge-btn mm-edge-top" data-relation="parent" title="Add parent">+</button>' +
+            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-top" data-relation="parent" title="Add parent">+</button>') +
             '<button type="button" class="mm-edge-btn mm-edge-bottom" data-relation="child" title="Add child">+</button>' +
-            '<button type="button" class="mm-edge-btn mm-edge-left" data-relation="sibling" data-before="1" title="Add sibling">+</button>' +
-            '<button type="button" class="mm-edge-btn mm-edge-right" data-relation="sibling" data-before="0" title="Add sibling">+</button>' +
+            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-left" data-relation="sibling" data-before="1" title="Add sibling">+</button>') +
+            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-right" data-relation="sibling" data-before="0" title="Add sibling">+</button>') +
             (isSelected ? renderColorPopoverHtml(n) : '') +
             '</div>';
         }).join('');
@@ -2895,7 +2920,7 @@ def render_mindmaps(player: Player) -> str:
         var isRoot = node.parentId === null;
         return '<div class="mm-color-popover" data-role="popover">' +
           '<div class="mm-color-popover-swatches">' + swatches + '</div>' +
-          (isRoot ? '' : '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete node</button>') +
+          (isRoot ? '' : '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>') +
           '</div>';
       }
 
@@ -3060,7 +3085,7 @@ def render_mindmaps(player: Player) -> str:
       async function addNodeRelativeTo(nodeId, relation, before) {
         var mm = activeMindmap();
         if (!mm) return;
-        var body = { relative_to: nodeId, relation: relation, text: 'New idea', color: 'gray' };
+        var body = { relative_to: nodeId, relation: relation, text: 'New', color: 'gray' };
         if (relation === 'sibling') body.before = !!before;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

@@ -188,7 +188,7 @@ button.primary#mmNameSave, .mm-name-form-save {
    below, which are its DOM children and would otherwise be at the
    mercy of plain document order against other .mm-node boxes that
    happen to sit nearby. */
-.mm-node.selected { outline: 2px solid var(--gold); outline-offset: 2px; z-index: 2; }
+.mm-node.selected { outline: 1px solid var(--gold); outline-offset: 1px; z-index: 2; }
 
 /* ---- Per-node hover controls -----------------------------------------
    Small "+" buttons on each of a node's four edges, shown only while
@@ -201,27 +201,34 @@ button.primary#mmNameSave, .mm-name-form-save {
    look rather than a rounded "chip" treatment. */
 .mm-edge-btn {
   position: absolute; z-index: 3;
-  width: 18px; height: 18px; box-sizing: border-box;
+  width: 14px; height: 14px; box-sizing: border-box;
   background: var(--panel-2); border: 1px solid var(--gold-dim); color: var(--gold);
-  font-family: inherit; font-size: 13px; line-height: 1;
+  font-family: inherit; font-size: 11px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; padding: 0;
   opacity: 0; pointer-events: none; transition: opacity 0.12s ease;
 }
 .mm-node:hover .mm-edge-btn { opacity: 1; pointer-events: auto; }
 .mm-edge-btn:hover { background: var(--gold); color: #1a1408; border-color: var(--gold); }
-.mm-edge-top { top: -9px; left: 50%; transform: translateX(-50%); }
-.mm-edge-bottom { bottom: -9px; left: 50%; transform: translateX(-50%); }
-.mm-edge-left { left: -9px; top: 50%; transform: translateY(-50%); }
-.mm-edge-right { right: -9px; top: 50%; transform: translateY(-50%); }
+/* Sits just outside the node's own border (a 3px gap), centered along
+   the edge it's on -- not straddling the border itself. */
+.mm-edge-top { top: -17px; left: 50%; transform: translateX(-50%); }
+.mm-edge-bottom { bottom: -17px; left: 50%; transform: translateX(-50%); }
+.mm-edge-left { left: -17px; top: 50%; transform: translateY(-50%); }
+.mm-edge-right { right: -17px; top: 50%; transform: translateY(-50%); }
 
 /* ---- Per-node color popover --------------------------------------
    Replaces the old toolbar's swatch row -- appears directly below the
    clicked (selected) node instead of in a panel docked under the
    canvas. Also carries the delete action, since removing the toolbar
-   left it with nowhere else to live. */
+   left it with nowhere else to live. Cleared to sit below the bottom
+   edge button's own outer reach (that button sits from -3px to -17px
+   past the node's bottom edge -- see .mm-edge-bottom above) rather
+   than right under the node, so a selected node's own "add child"
+   button never ends up underneath this popover's higher z-index and
+   unclickable. */
 .mm-color-popover {
-  position: absolute; z-index: 4; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  position: absolute; z-index: 4; top: calc(100% + 22px); left: 50%; transform: translateX(-50%);
   background: var(--panel); border: 1px solid var(--border); padding: 10px;
   display: flex; flex-direction: column; gap: 10px; align-items: center;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
@@ -241,7 +248,7 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-swatch-purple { background: var(--purple); }
 .mm-swatch-white { background: var(--text); }
 
-.mm-color-popover-delete { width: 100%; }
+.mm-color-popover-delete { width: auto; align-self: center; }
 .mm-delete-btn:hover { border-color: var(--red); color: var(--red); }
 .mm-delete-btn:disabled:hover { border-color: var(--border); color: var(--text-dim); }
 
