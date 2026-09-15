@@ -33,7 +33,7 @@ from app.models import MindMap, Player
 # colors already follow. "gray" (panel-2, the site's own default box
 # shade) is what every new node starts as; see mindmaps.css for what
 # each name actually renders as.
-NODE_COLORS = ["gray", "gold", "red", "amber", "green", "blue", "white"]
+NODE_COLORS = ["gray", "gold", "red", "amber", "green", "blue", "purple", "white"]
 DEFAULT_COLOR = "gray"
 DEFAULT_TEXT = "New idea"
 MAX_NODE_TEXT_LENGTH = 120
@@ -85,8 +85,26 @@ def _order_after(nodes: List[Dict], node: Dict) -> float:
     return node["order"] + 1.0
 
 
+def _order_before(nodes: List[Dict], node: Dict) -> float:
+    """The mirror image of _order_after -- an order value that sorts
+    immediately BEFORE `node` among its own siblings, used for the
+    node canvas's left-edge "add sibling" control (right-edge uses
+    _order_after instead). Same midpoint-or-plus/minus-one shape, just
+    walking to the previous sibling instead of the next."""
+    siblings = _children(nodes, node["parentId"])
+    idx = next(i for i, n in enumerate(siblings) if n["id"] == node["id"])
+    if idx > 0:
+        return (siblings[idx - 1]["order"] + node["order"]) / 2.0
+    return node["order"] - 1.0
+
+
 def add_node(
-    nodes: List[Dict], relative_id: str, relation: str, text: Optional[str] = None, color: Optional[str] = None
+    nodes: List[Dict],
+    relative_id: str,
+    relation: str,
+    text: Optional[str] = None,
+    color: Optional[str] = None,
+    before: bool = False,
 ) -> "tuple[List[Dict], str]":
     """Returns a NEW node list with one extra node inserted relative to
     an existing one (`relative_id`), per `relation`:
@@ -94,7 +112,9 @@ def add_node(
       - "child": a new child of the relative node, after its existing
         children (if any).
       - "sibling": a new node sharing the relative node's own parent,
-        placed immediately after it. The relative node can't be the
+        placed immediately after it (or before it, when `before` is
+        true -- the node canvas's right-edge vs. left-edge "add
+        sibling" hover controls). The relative node can't be the
         tree's root (a root has no parent to share a sibling under --
         see the single-root shape MindMap.nodes assumes throughout).
       - "parent": a new node takes over the relative node's exact spot
@@ -130,7 +150,7 @@ def add_node(
         if relative["parentId"] is None:
             raise ValueError("The root node can't have a sibling -- try adding a parent or child instead.")
         new_node["parentId"] = relative["parentId"]
-        new_node["order"] = _order_after(nodes, relative)
+        new_node["order"] = _order_before(nodes, relative) if before else _order_after(nodes, relative)
         return nodes + [new_node], new_node["id"]
 
     if relation == "parent":

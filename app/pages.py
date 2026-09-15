@@ -2435,28 +2435,12 @@ def render_mindmaps(player: Player) -> str:
         <div class="mm-zoom-controls">
           <button type="button" id="mmZoomIn" title="Zoom in">+</button>
           <button type="button" id="mmZoomOut" title="Zoom out">&minus;</button>
+          <button type="button" id="mmZoomFit" title="Zoom to fit">Fit</button>
           <button type="button" id="mmZoomReset" title="Reset view">&#8635;</button>
         </div>
         <div class="mm-world" id="mmWorld">
           <svg class="mm-lines" id="mmLines"></svg>
           <div id="mmNodesLayer"></div>
-        </div>
-      </div>
-      <div class="mm-toolbar" id="mmToolbar">
-        <p class="mm-toolbar-empty" id="mmToolbarEmpty">Select a node to edit it.</p>
-        <div id="mmToolbarBody" style="display:none;">
-          <div class="mm-toolbar-row">
-            <input type="text" id="mmNodeText" class="mm-node-text-input" maxlength="120" placeholder="Node text" />
-          </div>
-          <div class="mm-toolbar-row">
-            <div class="mm-swatches" id="mmSwatches"></div>
-          </div>
-          <div class="mm-toolbar-row mm-toolbar-actions">
-            <button class="btn-secondary" id="mmAddParent" type="button">+ Parent</button>
-            <button class="btn-secondary" id="mmAddChild" type="button">+ Child</button>
-            <button class="btn-secondary" id="mmAddSibling" type="button">+ Sibling</button>
-            <button class="btn-secondary mm-delete-btn" id="mmDeleteNode" type="button">Delete node</button>
-          </div>
         </div>
       </div>
     </div>
@@ -2474,18 +2458,19 @@ def render_mindmaps(player: Player) -> str:
       var MARGIN = 60;       // breathing room around the whole tree inside the world
 
       // Mirrors NODE_COLORS in app/mindmaps.py -- the fixed palette a
-      // node's color can be, in the order the toolbar's swatches show
-      // them.
-      var NODE_COLORS = ['gray', 'gold', 'red', 'amber', 'green', 'blue', 'white'];
+      // node's color can be, in the order the per-node color popover
+      // shows them.
+      var NODE_COLORS = ['gray', 'gold', 'red', 'amber', 'green', 'blue', 'purple', 'white'];
 
       var MM = {
         data: null,
         activeMindmapId: null,
         selectedNodeId: null,
+        focusNodeId: null, // one-shot: focus + select this node's text on the next render
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
         zoom: 1,
-        lastLayout: null, // set by renderCanvas, read by recenterOnNode
+        lastLayout: null, // set by renderCanvas, read by recenterOnNode/zoomToFit
       };
 
       // Same "remember what was open across a reload" convenience as
@@ -2599,8 +2584,28 @@ def render_mindmaps(player: Player) -> str:
           'translate(' + MM.pan.x + 'px, ' + MM.pan.y + 'px) scale(' + MM.zoom + ')';
       }
 
-      function setZoom(z) {
-        MM.zoom = Math.max(0.4, Math.min(2, z));
+      // Zooms toward/away from a fixed screen point -- (originX, originY)
+      // in canvas-viewport pixels, defaulting to the viewport's own
+      // center when omitted (both the +/-/reset buttons and the wheel
+      // listener below call it with no origin, so every zoom trigger
+      // zooms around the center of the current view, not a fixed
+      // top-left-anchored scale). Standard "zoom around a point" math:
+      // find the world-space point currently sitting under (originX,
+      // originY), change the zoom, then re-solve pan so that same
+      // world point still lands under (originX, originY) afterward --
+      // that's what makes the zoom feel anchored there instead of
+      // drifting the view.
+      function setZoom(z, originX, originY) {
+        var canvas = document.getElementById('mmCanvas');
+        if (originX == null) originX = canvas.clientWidth / 2;
+        if (originY == null) originY = canvas.clientHeight / 2;
+        var newZoom = Math.max(0.4, Math.min(2, z));
+        if (newZoom === MM.zoom) return;
+        var worldX = (originX - MM.pan.x) / MM.zoom;
+        var worldY = (originY - MM.pan.y) / MM.zoom;
+        MM.zoom = newZoom;
+        MM.pan.x = originX - worldX * MM.zoom;
+        MM.pan.y = originY - worldY * MM.zoom;
         applyTransform();
       }
 
@@ -2627,9 +2632,42 @@ def render_mindmaps(player: Player) -> str:
         else applyTransform();
       }
 
+      // Fits the WHOLE tree's bounding box inside the current viewport
+      // (as opposed to resetView, which always centers on just the
+      // root at a fixed zoom of 1) -- picks whichever of width/height
+      // is the tighter constraint, clamped to the same 0.4-2 zoom
+      // range as everything else, then centers the fitted box in the
+      // viewport.
+      function zoomToFit() {
+        var layout = MM.lastLayout;
+        if (!layout) return;
+        var canvas = document.getElementById('mmCanvas');
+        var viewW = canvas.clientWidth, viewH = canvas.clientHeight;
+        var pad = 40; // breathing room inside the viewport edges
+        var availW = Math.max(1, viewW - pad * 2), availH = Math.max(1, viewH - pad * 2);
+        var z = Math.max(0.4, Math.min(2, Math.min(availW / layout.worldWidth, availH / layout.worldHeight)));
+        MM.zoom = z;
+        MM.pan.x = (viewW - layout.worldWidth * z) / 2;
+        MM.pan.y = (viewH - layout.worldHeight * z) / 2;
+        applyTransform();
+      }
+
+      // If a node's text is mid-edit (its label is focused and
+      // contenteditable), blur it so the pending edit commits before
+      // whatever's about to happen -- deselecting by clicking the
+      // canvas, switching mindmaps, etc. -- rebuilds or hides it.
+      // Without this, a click that both ends an edit AND changes
+      // selection/mindmap in the same gesture could silently drop the
+      // unsaved text.
+      function commitActiveLabelIfEditing() {
+        var el = document.activeElement;
+        if (el && el.isContentEditable && el.getAttribute && el.getAttribute('data-role') === 'label') el.blur();
+      }
+
       var canvasEl = document.getElementById('mmCanvas');
       var panState = { active: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0, moved: false };
       canvasEl.addEventListener('pointerdown', function (e) {
+        commitActiveLabelIfEditing();
         // A node's own handler owns clicks on it (selection), and the
         // zoom control buttons need their native click to fire
         // normally -- setPointerCapture below would otherwise redirect
@@ -2669,20 +2707,82 @@ def render_mindmaps(player: Player) -> str:
 
       document.getElementById('mmZoomIn').addEventListener('click', function () { setZoom(MM.zoom + 0.15); });
       document.getElementById('mmZoomOut').addEventListener('click', function () { setZoom(MM.zoom - 0.15); });
+      document.getElementById('mmZoomFit').addEventListener('click', zoomToFit);
       document.getElementById('mmZoomReset').addEventListener('click', resetView);
 
       // ---- Node selection + click delegation ---------------------------
 
+      // Selecting the node that's ALREADY selected is a deliberate
+      // no-op (no re-render) -- otherwise a click meant to place the
+      // text cursor somewhere inside an already-editable node's label
+      // would blow away and rebuild that very DOM node out from under
+      // the browser's own click-to-focus handling, losing the caret
+      // position it was just about to set.
       function selectNode(id) {
+        if (id === MM.selectedNodeId) return;
         MM.selectedNodeId = id;
+        MM.focusNodeId = id; // focus + select this node's text on the next render, if any
         render();
       }
 
       document.getElementById('mmNodesLayer').addEventListener('pointerdown', function (e) {
         var el = e.target.closest('.mm-node');
         if (!el) return;
+        commitActiveLabelIfEditing();
         e.stopPropagation();
+        // Edge buttons and the color popover handle themselves (via
+        // the click delegation below) -- only a plain click on the
+        // node itself (its body/label) selects it.
+        if (e.target.closest('.mm-edge-btn') || e.target.closest('[data-role="popover"]')) return;
         selectNode(el.getAttribute('data-node-id'));
+      });
+
+      // A second delegation, on 'click' rather than 'pointerdown' --
+      // stopPropagation() above only stops the pointerdown from
+      // reaching the canvas's own pan-start handler, it doesn't
+      // suppress the click event the browser fires afterward, so a
+      // button's own click still arrives here normally.
+      document.getElementById('mmNodesLayer').addEventListener('click', function (e) {
+        var edgeBtn = e.target.closest('.mm-edge-btn');
+        if (edgeBtn) {
+          var nodeEl = edgeBtn.closest('.mm-node');
+          addNodeRelativeTo(
+            nodeEl.getAttribute('data-node-id'),
+            edgeBtn.getAttribute('data-relation'),
+            edgeBtn.getAttribute('data-before') === '1'
+          );
+          return;
+        }
+        var swatch = e.target.closest('.mm-swatch');
+        if (swatch) { updateSelectedNode({ color: swatch.getAttribute('data-color') }); return; }
+        if (e.target.closest('[data-role="delete"]')) deleteSelectedNode();
+      });
+
+      // Committing an in-node text edit fires on focusout (bubbles,
+      // unlike blur) rather than the pointerdown/click delegation
+      // above, since it needs to run whenever the label loses focus
+      // for ANY reason (Enter/Escape below, clicking elsewhere,
+      // Tab...), not just on a click.
+      document.getElementById('mmNodesLayer').addEventListener('focusout', function (e) {
+        var label = e.target.closest('[data-role="label"]');
+        if (label) commitNodeTextFromLabel(label);
+      });
+      document.getElementById('mmNodesLayer').addEventListener('keydown', function (e) {
+        var label = e.target.closest('[data-role="label"]');
+        if (!label) return;
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); label.blur(); }
+        else if (e.key === 'Escape') { e.preventDefault(); label.blur(); }
+      });
+      // Pasting into a node's label should paste plain text, not
+      // whatever rich markup the clipboard also carries -- a
+      // contenteditable div otherwise happily inherits the source's
+      // own formatting.
+      document.getElementById('mmNodesLayer').addEventListener('paste', function (e) {
+        var label = e.target.closest('[data-role="label"]');
+        if (!label) return;
+        e.preventDefault();
+        var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+        document.execCommand('insertText', false, text);
       });
 
       // ---- Rendering ----------------------------------------------------
@@ -2697,12 +2797,53 @@ def render_mindmaps(player: Player) -> str:
 
         document.getElementById('mmNodesLayer').innerHTML = mm.nodes.map(function (n) {
           var pos = layout.positions[n.id];
-          var selectedCls = (n.id === MM.selectedNodeId) ? ' selected' : '';
+          var isSelected = n.id === MM.selectedNodeId;
+          var selectedCls = isSelected ? ' selected' : '';
+          // Only the selected node is ever contenteditable -- typing
+          // directly into a node is how its text changes now (see the
+          // focusout/keydown delegation above), so this only needs to
+          // be live for the one node currently being edited.
+          var editableAttr = isSelected ? ' contenteditable="true" spellcheck="false"' : '';
           return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + '" data-node-id="' + esc(n.id) + '" ' +
             'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
-            '<div class="mm-node-label">' + esc(n.text) + '</div>' +
+            '<div class="mm-node-label" data-role="label"' + editableAttr + '>' + esc(n.text) + '</div>' +
+            '<button type="button" class="mm-edge-btn mm-edge-top" data-relation="parent" title="Add parent">+</button>' +
+            '<button type="button" class="mm-edge-btn mm-edge-bottom" data-relation="child" title="Add child">+</button>' +
+            '<button type="button" class="mm-edge-btn mm-edge-left" data-relation="sibling" data-before="1" title="Add sibling">+</button>' +
+            '<button type="button" class="mm-edge-btn mm-edge-right" data-relation="sibling" data-before="0" title="Add sibling">+</button>' +
+            (isSelected ? renderColorPopoverHtml(n) : '') +
             '</div>';
         }).join('');
+
+        // A newly-selected node (see selectNode) asks to be focused,
+        // with its text pre-selected, right after the DOM above lands
+        // -- lets the player start typing immediately to rename it,
+        // the same way selecting text in any other field works.
+        // Deferred with setTimeout(..., 0) rather than called inline:
+        // this render() runs synchronously inside the very pointerdown
+        // handler that's selecting the node, and a browser's own
+        // default action for that same mousedown/pointerdown (run
+        // right after all its event listeners finish) resolves focus
+        // on its own -- since the node wasn't editable/focusable yet
+        // at mousedown time, that default resolution finds nothing
+        // focusable and blurs to <body>, silently undoing a focus()
+        // called inline here. Pushing this to the next task runs it
+        // after that default focus resolution has already happened,
+        // so it's the one that sticks.
+        if (MM.focusNodeId) {
+          var focusId = MM.focusNodeId;
+          MM.focusNodeId = null;
+          setTimeout(function () {
+            var label = document.querySelector('.mm-node[data-node-id="' + focusId + '"] [data-role="label"]');
+            if (!label) return;
+            label.focus();
+            var range = document.createRange();
+            range.selectNodeContents(label);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }, 0);
+        }
 
         var svg = document.getElementById('mmLines');
         svg.setAttribute('width', layout.worldWidth);
@@ -2739,29 +2880,23 @@ def render_mindmaps(player: Player) -> str:
           '<button type="button" class="mm-menu-item danger" id="mmMenuDelete">Delete mindmap</button>';
       }
 
-      function renderToolbar() {
-        var node = selectedNode();
-        var emptyEl = document.getElementById('mmToolbarEmpty');
-        var bodyEl = document.getElementById('mmToolbarBody');
-        if (!node) {
-          emptyEl.style.display = '';
-          bodyEl.style.display = 'none';
-          return;
-        }
-        emptyEl.style.display = 'none';
-        bodyEl.style.display = '';
-
-        var textInput = document.getElementById('mmNodeText');
-        if (document.activeElement !== textInput) textInput.value = node.text;
-
-        document.getElementById('mmSwatches').innerHTML = NODE_COLORS.map(function (c) {
+      // The selected node's color swatches + delete action, shown as a
+      // popover anchored right below the node itself -- replaces the
+      // old toolbar's swatch row and +Parent/+Child/+Sibling/Delete
+      // buttons (the add-relative ones are now the edge buttons above;
+      // delete didn't have anywhere else to go once the toolbar was
+      // removed, so it lives here too). The root node has no delete
+      // action, same rule the backend already enforces.
+      function renderColorPopoverHtml(node) {
+        var swatches = NODE_COLORS.map(function (c) {
           var activeCls = (c === node.color) ? ' active' : '';
           return '<button type="button" class="mm-swatch mm-swatch-' + c + activeCls + '" data-color="' + c + '" title="' + c + '"></button>';
         }).join('');
-
         var isRoot = node.parentId === null;
-        document.getElementById('mmAddSibling').disabled = isRoot;
-        document.getElementById('mmDeleteNode').disabled = isRoot;
+        return '<div class="mm-color-popover" data-role="popover">' +
+          '<div class="mm-color-popover-swatches">' + swatches + '</div>' +
+          (isRoot ? '' : '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete node</button>') +
+          '</div>';
       }
 
       function render() {
@@ -2791,13 +2926,13 @@ def render_mindmaps(player: Player) -> str:
         document.getElementById('mmSwitchName').textContent = mm ? mm.name : '';
         renderMenu();
         if (mm) renderCanvas(mm);
-        renderToolbar();
       }
 
       // ---- Mindmap switcher menu -----------------------------------------
 
       function closeMenu() { document.getElementById('mmMenu').style.display = 'none'; }
       document.getElementById('mmSwitchBtn').addEventListener('click', function () {
+        commitActiveLabelIfEditing();
         var menu = document.getElementById('mmMenu');
         menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
       });
@@ -2807,6 +2942,7 @@ def render_mindmaps(player: Player) -> str:
       });
 
       document.getElementById('mmMenu').addEventListener('click', function (e) {
+        commitActiveLabelIfEditing();
         var switchBtn = e.target.closest('.mm-menu-switch');
         if (switchBtn) {
           closeMenu();
@@ -2889,7 +3025,7 @@ def render_mindmaps(player: Player) -> str:
         }
       });
 
-      // ---- Selected-node toolbar actions ---------------------------------
+      // ---- Selected-node actions ------------------------------------------
 
       async function updateSelectedNode(patch) {
         var mm = activeMindmap();
@@ -2902,45 +3038,44 @@ def render_mindmaps(player: Player) -> str:
         if (data) { MM.data = data; render(); }
       }
 
-      function commitNodeText() {
+      // Only the selected node is ever contenteditable, so the label
+      // losing focus always means the CURRENTLY selected node's text
+      // is what changed -- no need to look up which node the label
+      // belonged to.
+      function commitNodeTextFromLabel(label) {
         var node = selectedNode();
         if (!node) return;
-        var input = document.getElementById('mmNodeText');
-        var val = (input.value || '').trim();
-        if (!val || val === node.text) { input.value = node.text; return; }
+        var val = (label.textContent || '').trim();
+        if (!val || val === node.text) { label.textContent = node.text; return; }
         updateSelectedNode({ text: val });
       }
-      document.getElementById('mmNodeText').addEventListener('blur', commitNodeText);
-      document.getElementById('mmNodeText').addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mmNodeText').blur(); }
-      });
 
-      document.getElementById('mmToolbarBody').addEventListener('click', function (e) {
-        var swatch = e.target.closest('.mm-swatch');
-        if (swatch) updateSelectedNode({ color: swatch.getAttribute('data-color') });
-      });
-
-      async function addNodeRelative(relation) {
+      // Adds a node relative to `nodeId` -- NOT necessarily the
+      // currently selected node, since the edge-hover "+" buttons work
+      // on whichever node they're hovering, selected or not. `before`
+      // only matters for relation "sibling" (the left- vs. right-edge
+      // button): placed immediately before or after `nodeId` among its
+      // own siblings, see _order_before/_order_after in
+      // app/mindmaps.py.
+      async function addNodeRelativeTo(nodeId, relation, before) {
         var mm = activeMindmap();
-        var node = selectedNode();
-        if (!mm || !node) return;
+        if (!mm) return;
+        var body = { relative_to: nodeId, relation: relation, text: 'New idea', color: 'gray' };
+        if (relation === 'sibling') body.before = !!before;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ relative_to: node.id, relation: relation, text: 'New idea', color: 'gray' }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
         if (data) {
           MM.data = data;
-          MM.selectedNodeId = data.newNodeId || MM.selectedNodeId;
-          render();
-          var input = document.getElementById('mmNodeText');
-          if (input) { input.focus(); input.select(); }
+          // selectNode both selects and (since it's a different id
+          // than whatever was selected before) queues the new node's
+          // label to be focused + text-selected on the next render, so
+          // the player can start typing its name immediately.
+          selectNode(data.newNodeId || null);
         }
       }
-      document.getElementById('mmAddParent').addEventListener('click', function () { addNodeRelative('parent'); });
-      document.getElementById('mmAddChild').addEventListener('click', function () { addNodeRelative('child'); });
-      document.getElementById('mmAddSibling').addEventListener('click', function () { addNodeRelative('sibling'); });
 
-      document.getElementById('mmDeleteNode').addEventListener('click', async function () {
+      async function deleteSelectedNode() {
         var mm = activeMindmap();
         var node = selectedNode();
         if (!mm || !node || node.parentId === null) return;
@@ -2950,7 +3085,7 @@ def render_mindmaps(player: Player) -> str:
           { method: 'DELETE' }
         );
         if (data) { MM.data = data; MM.selectedNodeId = null; render(); }
-      });
+      }
 
       // ---- Boot -----------------------------------------------------------
 

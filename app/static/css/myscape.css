@@ -59,6 +59,11 @@
      as one consistent "categorical node color" family rather than one
      visibly standing apart. */
   --blue: #5a8cc4;
+  /* A second Mindmaps-only addition (see --blue above for why these
+     aren't ported from Maintrius) -- same moderate saturation/
+     lightness as the rest of that categorical family, just a distinct
+     hue from all of them. */
+  --purple: #8b6cc9;
   --radius: 0px;
 }
 

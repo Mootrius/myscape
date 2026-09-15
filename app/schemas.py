@@ -662,6 +662,7 @@ class AddMindMapNodeRequest(BaseModel):
     relation: str
     text: Optional[str] = None
     color: Optional[str] = None
+    before: bool = False
 
     @field_validator("relation")
     @classmethod

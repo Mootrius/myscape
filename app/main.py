@@ -908,7 +908,9 @@ def add_mindmap_node(
 ):
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     try:
-        new_nodes, new_node_id = add_node(mindmap.nodes, payload.relative_to, payload.relation, payload.text, payload.color)
+        new_nodes, new_node_id = add_node(
+            mindmap.nodes, payload.relative_to, payload.relation, payload.text, payload.color, payload.before
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     mindmap.nodes = new_nodes
