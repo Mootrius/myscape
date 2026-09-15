@@ -26,7 +26,15 @@ from app.auth import (
 from app.database import get_db
 from app.limiter import limiter
 from app.loot import build_loot_state, resolve_range, sync_loot_events
-from app.mindmaps import add_node, add_shared_child, build_mindmaps_state, delete_node, new_root_node, update_node
+from app.mindmaps import (
+    add_node,
+    add_shared_child,
+    build_mindmaps_state,
+    delete_node,
+    new_root_node,
+    replace_nodes,
+    update_node,
+)
 from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, MindMap, Player, PotionStorageItem, RunePouchItem
 from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_purchase_goals, render_signup
 from app.purchase_goals import (
@@ -70,6 +78,7 @@ from app.schemas import (
     PotionStorageSyncResponse,
     RenameGearSetupRequest,
     RenameMindMapRequest,
+    ReplaceMindMapNodesRequest,
     RunePouchOut,
     RunePouchItemOut,
     RunePouchSyncRequest,
@@ -944,6 +953,26 @@ def add_mindmap_shared_child(
     state = build_mindmaps_state(db, player)
     state["newNodeId"] = new_node_id
     return state
+
+
+@app.put("/api/mindmaps/{mindmap_id}/nodes")
+def replace_mindmap_nodes(
+    mindmap_id: str,
+    payload: ReplaceMindMapNodesRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Restores a mindmap's whole node tree to a previously-seen
+    snapshot -- what the node canvas's undo/redo buttons use (see
+    replace_nodes in app/mindmaps.py) in place of a confirm-before-
+    delete dialog on individual node deletes."""
+    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    try:
+        mindmap.nodes = replace_nodes([n.model_dump(exclude_none=True) for n in payload.nodes])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    db.commit()
+    return build_mindmaps_state(db, player)
 
 
 @app.patch("/api/mindmaps/{mindmap_id}/nodes/{node_id}")

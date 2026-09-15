@@ -2433,10 +2433,14 @@ def render_mindmaps(player: Player) -> str:
       </div>
       <div class="mm-canvas" id="mmCanvas">
         <div class="mm-zoom-controls">
+          <button type="button" id="mmUndoBtn" title="Undo" disabled>&#8630;</button>
+          <button type="button" id="mmRedoBtn" title="Redo" disabled>&#8631;</button>
+          <div class="mm-zoom-divider"></div>
           <button type="button" id="mmZoomIn" title="Zoom in">+</button>
           <button type="button" id="mmZoomOut" title="Zoom out">&minus;</button>
-          <button type="button" id="mmZoomFit" title="Zoom to fit">Fit</button>
-          <button type="button" id="mmZoomReset" title="Reset view">&#8635;</button>
+          <button type="button" id="mmZoomFit" title="Zoom to fit">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><line x1="20" y1="20" x2="15.5" y2="15.5"></line></svg>
+          </button>
         </div>
         <div class="mm-world" id="mmWorld">
           <svg class="mm-lines" id="mmLines"></svg>
@@ -2485,6 +2489,14 @@ def render_mindmaps(player: Player) -> str:
         pan: { x: 0, y: 0 },
         zoom: 1,
         lastLayout: null, // set by renderCanvas, read by recenterOnNode/zoomToFit
+        // Per-mindmap edit history -- each entry is a full past
+        // activeMindmap().nodes snapshot (this same mindmap's own
+        // prior server-returned state), not a diff. See
+        // recordUndoableEdit/undo/redo below; cleared whenever the active mindmap
+        // changes (see setActiveMindmapId) since one mindmap's history
+        // has no meaning against a different one's node tree.
+        undoStack: [],
+        redoStack: [],
       };
 
       // Same "remember what was open across a reload" convenience as
@@ -2497,6 +2509,11 @@ def render_mindmaps(player: Player) -> str:
       }
       function setActiveMindmapId(id) {
         MM.activeMindmapId = id;
+        // A different mindmap's node-tree snapshots don't mean
+        // anything against this one -- every switch (including the
+        // very first load) starts its edit history fresh.
+        MM.undoStack = [];
+        MM.redoStack = [];
         try {
           if (id) localStorage.setItem(ACTIVE_MINDMAP_STORAGE_KEY, id);
           else localStorage.removeItem(ACTIVE_MINDMAP_STORAGE_KEY);
@@ -2810,11 +2827,11 @@ def render_mindmaps(player: Player) -> str:
       canvasEl.addEventListener('pointerdown', function (e) {
         commitActiveLabelIfEditing();
         // A node's own handler owns clicks on it (selection), and the
-        // zoom control buttons need their native click to fire
-        // normally -- setPointerCapture below would otherwise redirect
-        // that click's events to the canvas instead, since they're
-        // also DOM descendants of it, silently swallowing the button
-        // press.
+        // zoom/undo/redo control buttons need their native click to
+        // fire normally -- setPointerCapture below would otherwise
+        // redirect that click's events to the canvas instead, since
+        // they're also DOM descendants of it, silently swallowing the
+        // button press.
         if (e.target.closest('.mm-node') || e.target.closest('.mm-zoom-controls')) return;
         panState.active = true;
         panState.moved = false;
@@ -2851,7 +2868,8 @@ def render_mindmaps(player: Player) -> str:
       document.getElementById('mmZoomIn').addEventListener('click', function () { setZoom(MM.zoom + 0.15); });
       document.getElementById('mmZoomOut').addEventListener('click', function () { setZoom(MM.zoom - 0.15); });
       document.getElementById('mmZoomFit').addEventListener('click', zoomToFit);
-      document.getElementById('mmZoomReset').addEventListener('click', resetView);
+      document.getElementById('mmUndoBtn').addEventListener('click', undo);
+      document.getElementById('mmRedoBtn').addEventListener('click', redo);
 
       // ---- Node selection + click delegation ---------------------------
 
@@ -3177,6 +3195,7 @@ def render_mindmaps(player: Player) -> str:
       }
 
       function render() {
+        updateHistoryButtons();
         var wrapEl = document.getElementById('mmEmptyWrap');
         var msgEl = document.getElementById('mmEmptyMsg');
         var createBtn = document.getElementById('mmCreateFirstBtn');
@@ -3323,17 +3342,93 @@ def render_mindmaps(player: Player) -> str:
         }
       });
 
+      // ---- Undo/redo --------------------------------------------------
+      //
+      // Every node-tree edit (add, delete, recolor, rename, add shared
+      // child) records the tree's state from just BEFORE that edit
+      // into MM.undoStack once the edit itself has actually succeeded,
+      // so undo/redo is just "replace the whole node list with a past
+      // (or future) snapshot" -- no per-action inverse logic to keep
+      // in sync with add_node/delete_node/etc. This is also why
+      // there's no more confirm-before-delete dialog: undo covers it
+      // (any accidental delete, or any other edit) without
+      // interrupting the player up front.
+      var MAX_HISTORY = 50;
+
+      function updateHistoryButtons() {
+        var undoBtn = document.getElementById('mmUndoBtn');
+        var redoBtn = document.getElementById('mmRedoBtn');
+        if (undoBtn) undoBtn.disabled = !MM.undoStack.length;
+        if (redoBtn) redoBtn.disabled = !MM.redoStack.length;
+      }
+
+      // Called by every mutating action below with `preNodes` --
+      // activeMindmap().nodes as it stood right before that action's
+      // API call -- but only AFTER that call has already come back
+      // successful, so a failed request (network hiccup, validation error) never
+      // records a snapshot for an edit that didn't actually happen.
+      function recordUndoableEdit(preNodes) {
+        MM.undoStack.push(preNodes);
+        if (MM.undoStack.length > MAX_HISTORY) MM.undoStack.shift();
+        // A fresh edit forks off a new future -- whatever was
+        // previously redo-able no longer follows from where the tree
+        // is now, same as any other undo/redo history (browsers,
+        // editors, ...).
+        MM.redoStack = [];
+      }
+
+      // The actual PUT that restores a snapshot -- shared by both
+      // undo and redo below, which only differ in which stack they
+      // read from/push onto, and (like every other mutating action)
+      // only touch those stacks once this has actually succeeded.
+      async function restoreNodesSnapshot(nodes) {
+        var mm = activeMindmap();
+        if (!mm) return null;
+        return apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nodes: nodes }),
+        });
+      }
+
+      async function undo() {
+        var mm = activeMindmap();
+        if (!MM.undoStack.length || !mm) return;
+        var prev = MM.undoStack[MM.undoStack.length - 1];
+        var preUndoNodes = mm.nodes;
+        const data = await restoreNodesSnapshot(prev);
+        if (!data) return;
+        MM.undoStack.pop();
+        MM.redoStack.push(preUndoNodes);
+        MM.data = data;
+        MM.selectedNodeId = null;
+        render();
+      }
+
+      async function redo() {
+        var mm = activeMindmap();
+        if (!MM.redoStack.length || !mm) return;
+        var next = MM.redoStack[MM.redoStack.length - 1];
+        var preRedoNodes = mm.nodes;
+        const data = await restoreNodesSnapshot(next);
+        if (!data) return;
+        MM.redoStack.pop();
+        MM.undoStack.push(preRedoNodes);
+        MM.data = data;
+        MM.selectedNodeId = null;
+        render();
+      }
+
       // ---- Selected-node actions ------------------------------------------
 
       async function updateSelectedNode(patch) {
         var mm = activeMindmap();
         var node = selectedNode();
         if (!mm || !node) return;
+        var preNodes = mm.nodes;
         const data = await apiCall(
           '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
           { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }
         );
-        if (data) { MM.data = data; render(); }
+        if (data) { recordUndoableEdit(preNodes); MM.data = data; render(); }
       }
 
       // Only the selected node is ever contenteditable, so the label
@@ -3358,12 +3453,14 @@ def render_mindmaps(player: Player) -> str:
       async function addNodeRelativeTo(nodeId, relation, before) {
         var mm = activeMindmap();
         if (!mm) return;
+        var preNodes = mm.nodes;
         var body = { relative_to: nodeId, relation: relation, text: 'New', color: 'gray' };
         if (relation === 'sibling') body.before = !!before;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
         if (data) {
+          recordUndoableEdit(preNodes);
           MM.data = data;
           // selectNode both selects and (since it's a different id
           // than whatever was selected before) queues the new node's
@@ -3373,16 +3470,20 @@ def render_mindmaps(player: Player) -> str:
         }
       }
 
+      // No confirm-before-delete dialog -- the undo button (see
+      // "Undo/redo" above) covers an accidental delete the same way
+      // it covers any other edit, without interrupting the player with
+      // a prompt on every single delete.
       async function deleteSelectedNode() {
         var mm = activeMindmap();
         var node = selectedNode();
         if (!mm || !node || node.parentId === null) return;
-        if (!window.confirm('Delete "' + node.text + '" and everything below it? This cannot be undone.')) return;
+        var preNodes = mm.nodes;
         const data = await apiCall(
           '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
           { method: 'DELETE' }
         );
-        if (data) { MM.data = data; MM.selectedNodeId = null; render(); }
+        if (data) { recordUndoableEdit(preNodes); MM.data = data; MM.selectedNodeId = null; render(); }
       }
 
       // ---- Multi-select: add a shared child below several nodes ------
@@ -3404,13 +3505,14 @@ def render_mindmaps(player: Player) -> str:
       async function addSharedChildSelected() {
         var mm = activeMindmap();
         if (!mm || MM.multiSelectIds.size < 2) return;
+        var preNodes = mm.nodes;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/shared-child', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ parent_ids: Array.from(MM.multiSelectIds), text: 'New', color: 'gray' }),
         });
         // selectNode below replaces MM.multiSelectIds with just the new
         // node on its own -- no separate .clear() needed first.
-        if (data) { MM.data = data; selectNode(data.newNodeId || null); }
+        if (data) { recordUndoableEdit(preNodes); MM.data = data; selectNode(data.newNodeId || null); }
       }
 
       // ---- Boot -----------------------------------------------------------

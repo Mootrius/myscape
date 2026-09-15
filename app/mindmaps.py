@@ -313,6 +313,85 @@ def delete_node(nodes: List[Dict], node_id: str) -> List[Dict]:
     return kept
 
 
+def replace_nodes(nodes: List[Dict]) -> List[Dict]:
+    """Returns a NEW node list built from `nodes` -- a full snapshot
+    the client is restoring. This is what the node canvas's undo/redo
+    buttons use in place of a confirm-before-delete dialog: rather than
+    asking "are you sure?" before every destructive edit, the client
+    keeps its own stack of this same mindmap's past server-returned
+    node lists (see MM.undoStack/MM.redoStack in the Mindmaps script,
+    app/pages.py) and PUTs one straight back to step backward/forward
+    through it -- so a delete (or any other edit) can always just be
+    undone afterward instead of confirmed beforehand.
+
+    Every node's text/color is re-cleaned exactly like any other write
+    path (see _clean_text/_clean_color) even though the snapshot was
+    already valid once, since it's still untrusted input off the wire,
+    not something this function can assume came from a real previous
+    server response just because the client claims it did.
+
+    Raises ValueError if the snapshot isn't a well-formed tree: empty,
+    no root (exactly one node with parentId None), a duplicate id, a
+    parentId/extraParentIds entry that doesn't point at another node
+    in the same snapshot, or a parentId chain that cycles back on
+    itself. None of this should ever actually trip for a legitimate
+    undo/redo step -- it only ever replays a snapshot this same server
+    handed out -- it's a defensive floor against a corrupted or
+    tampered payload, same spirit as add_node/add_shared_child raising
+    on a shape they don't recognize."""
+    if not nodes:
+        raise ValueError("A mindmap needs at least one node.")
+
+    ids = [n.get("id") for n in nodes]
+    if len(set(ids)) != len(ids) or any(i is None for i in ids):
+        raise ValueError("Every node needs its own unique id.")
+    id_set = set(ids)
+    by_id = {n["id"]: n for n in nodes}
+
+    roots = [n for n in nodes if n.get("parentId") is None]
+    if len(roots) != 1:
+        raise ValueError("A mindmap needs exactly one root node.")
+
+    for n in nodes:
+        parent_id = n.get("parentId")
+        if parent_id is not None and parent_id not in id_set:
+            raise ValueError("A node's parent must exist in the same tree.")
+
+    # Cycle guard for the parentId chain -- _depth and other callers
+    # walk this chain assuming it always terminates at the root; a
+    # tampered payload with e.g. A's parent set to its own descendant
+    # would otherwise hang the server the next time something walks
+    # it. Bounded by the tree's own size, so this can't itself loop
+    # forever even against a maximally adversarial payload.
+    for n in nodes:
+        cur = n
+        hops = 0
+        while cur.get("parentId") is not None:
+            hops += 1
+            if hops > len(nodes):
+                raise ValueError("The submitted tree contains a cycle.")
+            cur = by_id.get(cur["parentId"])
+            if cur is None:
+                break
+
+    cleaned = []
+    for n in nodes:
+        new_node = {
+            "id": n["id"],
+            "parentId": n.get("parentId"),
+            "text": _clean_text(n.get("text")),
+            "color": _clean_color(n.get("color")),
+            "order": float(n.get("order") or 0.0),
+        }
+        extra_parent_ids = n.get("extraParentIds")
+        if extra_parent_ids:
+            pruned = [pid for pid in extra_parent_ids if pid in id_set and pid != n["id"]]
+            if pruned:
+                new_node["extraParentIds"] = pruned
+        cleaned.append(new_node)
+    return cleaned
+
+
 def serialize_mindmap(mindmap: MindMap) -> Dict:
     return {
         "id": str(mindmap.id),

@@ -694,6 +694,34 @@ class AddMindMapSharedChildRequest(BaseModel):
         return value
 
 
+class MindMapNodeIn(BaseModel):
+    """One node as submitted by the client for a full-tree replace --
+    see ReplaceMindMapNodesRequest/replace_nodes in app/mindmaps.py.
+    The undo/redo buttons' snapshots are always a previous response
+    from this same API (MM.undoStack/MM.redoStack just hold past
+    copies of MM.data.nodes), not fresh player-authored data, so this
+    mirrors the node shape the server itself hands back -- id/
+    parentId/text/color/order, plus the optional extraParentIds a
+    shared child carries -- rather than the narrower per-field shape
+    AddMindMapNodeRequest et al. accept."""
+
+    id: str
+    parentId: Optional[str] = None
+    text: str = ""
+    color: str = ""
+    order: float = 0.0
+    extraParentIds: Optional[List[str]] = None
+
+
+class ReplaceMindMapNodesRequest(BaseModel):
+    """Restores a mindmap's whole node list to a previously-seen
+    snapshot -- what the undo/redo buttons use in place of a
+    confirm-before-delete dialog (see replace_nodes in
+    app/mindmaps.py)."""
+
+    nodes: List[MindMapNodeIn]
+
+
 class MindMapsState(BaseModel):
     """Documents (not enforced) the payload every Mindmaps endpoint
     returns: {"mindmaps": [...]}, each with id/name/createdAt/nodes --

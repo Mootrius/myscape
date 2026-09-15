@@ -114,6 +114,13 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .mm-lines path { stroke: var(--border); stroke-width: 1.5; fill: none; }
 
+/* Undo/redo share this same floating group with the zoom buttons
+   (rather than getting their own corner) deliberately -- the canvas's
+   top-left is where a plain click-on-empty-space-to-deselect gesture
+   naturally lands near a freshly-created mindmap's root node, so a
+   second button cluster planted there risks eating that click. Keeping
+   every floating control in one corner leaves the rest of the canvas,
+   including that one, unambiguously "empty space." */
 .mm-zoom-controls {
   position: absolute; top: 10px; right: 10px; z-index: 3;
   display: flex; flex-direction: column; gap: 4px;
@@ -124,7 +131,17 @@ button.primary#mmNameSave, .mm-name-form-save {
   display: flex; align-items: center; justify-content: center;
 }
 .mm-zoom-controls button:hover { border-color: var(--gold-dim); color: var(--text); }
-#mmZoomFit, #mmZoomReset { font-size: 9px; letter-spacing: 0.02em; text-transform: uppercase; }
+/* A thin rule between the undo/redo pair and the zoom buttons below --
+   same group, but a visual seam marking them as two different kinds
+   of action (edit history vs. view). */
+.mm-zoom-divider { height: 1px; background: var(--border); margin: 2px 2px; }
+/* Undo/redo disable themselves (see updateHistoryButtons in the
+   script) rather than disappearing, so the layout never shifts --
+   same reasoning as any other disabled control site-wide. */
+.mm-zoom-controls button:disabled {
+  opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-dim);
+}
+#mmZoomFit svg { display: block; }
 
 .mm-canvas-empty {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
