@@ -3311,63 +3311,55 @@ def render_mindmaps(player: Player) -> str:
       // degrades text/icon rendering across the whole shared canvas
       // layer while it's in flight (this is the same family of bug as
       // the preserve-3d blur fixed above, just triggered by continuous
-      // wheel events instead of a persistent 3D layer). So the CSS
-      // transition stays off for the whole gesture -- see below for
-      // exactly when it comes back.
+      // wheel events instead of a persistent 3D layer). So: transitions
+      // stay off for as long as wheel events keep arriving, and only get
+      // handed back once the gesture actually settles (no wheel event
+      // for wheelSettleMs), via the same debounce shape as endPan -- a
+      // real gesture never leaves a 200ms gap between ticks, so this
+      // doesn't clip a slow, deliberate scroll either.
       //
-      // Each tick's OWN jump size is scaled by that tick's deltaY
+      // Each tick's own jump size is scaled by that tick's deltaY
       // (exponentially, so it composes the way repeated multiplication
       // should) rather than a fixed +/-0.12 regardless of how small the
       // tick was -- a trackpad's ticks vary a lot in size, and a fixed
       // step made a gentle scroll jump exactly as far as an aggressive
       // one.
       //
-      // Scaling the step still isn't enough on its own, though: a real
-      // wheel/trackpad event stream doesn't arrive at a steady rate --
-      // it clusters and gaps unevenly, and a trackpad can coalesce
-      // several physical ticks into one larger DOM event under load.
-      // Applying each event's jump synchronously, the instant it
-      // arrives, means the *visible* step rate is only as smooth as
-      // that raw event stream happens to be -- which is what was still
-      // reading as choppy. So wheel events don't touch MM.zoom directly
-      // at all any more: they only update a target value
-      // (wheelTargetZoom), and a requestAnimationFrame loop separately
-      // eases MM.zoom a fraction of the remaining distance toward that
-      // target every frame -- a steady 60fps, independent of how
-      // bursty or sparse the wheel events feeding it are. New ticks
-      // during an ongoing ease just move the target again; the loop
-      // keeps chasing it smoothly rather than snapping.
-      //
-      // The transition is handed back the instant this loop actually
-      // converges (not on a guessed timeout keyed to the last wheel
-      // event) -- restoring it any earlier would hand a value that's
-      // still mid-ease over to a 0.18s CSS transition and reintroduce
-      // the very blur this was all fixing, since the loop would then be
-      // fighting an active transition on every subsequent frame.
+      // A later attempt tried to smooth this further with a
+      // requestAnimationFrame loop that eased the applied zoom toward a
+      // target across several frames -- turned out to reintroduce
+      // blur, DURING the zoom specifically, and was reverted. That's a
+      // different mechanism than the other fixes on this page: it's
+      // not promote/demote layer churn from an unrelated property, it's
+      // the ordinary GPU-texture-resampling softness every browser
+      // shows while a raster layer's transform:scale is actively,
+      // continuously changing (crisp again the instant it's still) --
+      // and a monotonic per-frame ramp toward a target for 150-250ms
+      // running via requestAnimationFrame is *exactly* the shape of
+      // change Chrome's compositor treats as a live animation worth
+      // trading raster fidelity for, will-change or no. Applying each
+      // tick instantly and irregularly, tied to real (never perfectly
+      // steady) input events, doesn't read as a continuous animation
+      // the same way -- each jump fully settles before the next one
+      // arrives, so there's no sustained "actively transforming" window
+      // for the compositor to soften. Getting BOTH a silky continuous
+      // ramp AND zero softness-while-moving isn't achievable this way
+      // on raster/DOM content -- it'd need the canvas to stop scaling a
+      // rasterized layer altogether (e.g. recompute each node's actual
+      // px layout every frame instead of one CSS transform:scale on the
+      // shared ancestor), which is a much bigger rendering change than
+      // this bug-fix thread should make without dedicated testing.
       var wheelZoomSensitivity = 0.0013;
-      var wheelZoomEase = 0.4; // fraction of the remaining distance to target closed per frame
-      var wheelZoomSettleThreshold = 0.0008;
-      var wheelTargetZoom = null;
-      var wheelRafId = null;
-      function wheelZoomStep() {
-        if (wheelTargetZoom == null) { wheelRafId = null; return; }
-        var diff = wheelTargetZoom - MM.zoom;
-        if (Math.abs(diff) < wheelZoomSettleThreshold) {
-          setZoom(wheelTargetZoom);
-          wheelTargetZoom = null;
-          wheelRafId = null;
-          mmWorldEl.style.transitionDuration = ''; // hand back to .mm-world's own smooth-zoom transition
-          return;
-        }
-        setZoom(MM.zoom + diff * wheelZoomEase);
-        wheelRafId = requestAnimationFrame(wheelZoomStep);
-      }
+      var wheelSettleTimer = null;
+      var wheelSettleMs = 200;
       canvasEl.addEventListener('wheel', function (e) {
         e.preventDefault();
         mmWorldEl.style.transitionDuration = '0s';
-        var base = wheelTargetZoom == null ? MM.zoom : wheelTargetZoom;
-        wheelTargetZoom = Math.max(0.4, Math.min(2, base * Math.exp(-e.deltaY * wheelZoomSensitivity)));
-        if (wheelRafId == null) wheelRafId = requestAnimationFrame(wheelZoomStep);
+        setZoom(MM.zoom * Math.exp(-e.deltaY * wheelZoomSensitivity));
+        clearTimeout(wheelSettleTimer);
+        wheelSettleTimer = setTimeout(function () {
+          mmWorldEl.style.transitionDuration = ''; // hand back to .mm-world's own smooth-zoom transition
+        }, wheelSettleMs);
       }, { passive: false });
 
       document.getElementById('mmZoomIn').addEventListener('click', function () { setZoom(MM.zoom + 0.15); });
