@@ -726,9 +726,45 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
    under mm- prefixed names and sized to fit this compact popover
    rather than duplicated verbatim, since mindmaps.css is loaded on a
    different page and shares no rules with that stylesheet. */
-.mm-search-wrap { position: relative; width: 100%; }
+.mm-search-wrap { width: 100%; }
+/* This dropdown is NOT rendered as a child of .mm-search-wrap any more
+   (see renderSearchFieldHtml/getFloatingSuggestionsEl in the page
+   script) -- it's a single shared element appended straight to <body>
+   and positioned with `position: fixed` to track whichever search
+   input is currently focused, wherever that input currently sits on
+   screen after .mm-world's own pan/zoom transform.
+
+   Every earlier attempt at this fix tried to contain the side effects
+   of this list living INSIDE .mm-world instead: overscroll-behavior
+   below (still needed, see its own comment) was never the problem;
+   `contain: paint` was tried next and, confirmed by the user's own
+   screen recording, made the underlying blur WORSE -- it stopped
+   clearing on zoom the way it used to, staying blurry through an
+   entire pan/zoom and only clearing once the dropdown was removed
+   from the DOM by picking a result. Best guess at why: paint
+   containment's guarantee ("this box's paint can never affect
+   anything outside it") gave the browser license to keep this region
+   composited PERSISTENTLY instead of only while actively being
+   scrolled, since with paint fully contained there's no correctness
+   cost to doing so -- the same raster-scale-mismatch failure
+   will-change hit twice before (see .mm-world's own comment), just
+   triggered a different way. (Full history in git log: 6e1e22c added
+   overscroll-behavior, b3dbe5b reverted a will-change: transform
+   attempt on .mm-world itself, 06127ca added contain: paint here and
+   fc6da5c reverted it again once the recording showed it regressed.)
+
+   All of those shared one root cause: a scrollable overflow:auto
+   region with real overflowing content, sitting inside .mm-world's
+   own shared compositing layer, gets promoted to its own GPU layer by
+   the browser just for being a scroller ready to scroll smoothly --
+   not only while something's actively dragging/scrolling in it -- and
+   that promotion forces .mm-world to re-rasterize around it. Moving
+   this list OUTSIDE .mm-world's subtree entirely, rather than trying
+   yet another way to contain the promotion from the inside, sidesteps
+   that mechanism instead of fighting it: its own layer promotion
+   simply can't force a repaint of an ancestor it no longer has. */
 .mm-suggestions {
-  display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
+  display: none; position: fixed; z-index: 1000;
   background: var(--panel); border: 1px solid var(--border); max-height: 180px; overflow-y: auto;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
   /* Scrolling this list no longer reaches the canvas wheel handler at
@@ -737,44 +773,12 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
      handles it now instead. Without this, though, that default
      handling still CHAINS past this list's own scroll bounds once the
      player hits the top or bottom -- the leftover wheel delta doesn't
-     just vanish, it scrolls the next scrollable ancestor up the tree,
-     which for this page is the whole document (.mm-canvas is a fixed
-     620px box, and the surrounding page is taller than that on most
-     screens). contain stops that hand-off right here: this list
-     scrolls itself and only itself, exactly like a player hitting the
-     end of a normal dropdown expects. */
+     just vanish, it scrolls the next scrollable ancestor up the tree.
+     Still needed even now that this list lives outside .mm-canvas
+     entirely: without it, that same chaining would just hand off
+     straight into the surrounding document instead, which is taller
+     than the viewport on most screens. */
   overscroll-behavior: contain;
-  /* NOT contain: paint. Tried it here (and on the note textarea/back-
-     face text below) as a fix for the blur that shows up once there
-     are enough results to need this list's own scrollbar -- the
-     theory being that a scrollable overflow:auto region with real
-     overflowing content gets promoted to its own compositing layer
-     pre-emptively, and that forces .mm-world (its ancestor, sharing
-     one flattened layer with every node's own text) to re-rasterize
-     around it, and that `contain: paint`'s containment GUARANTEE
-     (rather than a will-change-style compositing HINT) would let the
-     browser isolate that promotion without needing a persistent GPU
-     texture of its own.
-
-     Confirmed by the user's own screen recording that this was
-     wrong: with contain: paint applied, the blur stopped clearing on
-     zoom the way it used to (screen recording showed sharpness
-     dropping the instant the scrollable dropdown opened and STAYING
-     low through an entire zoom + pan, only recovering once the
-     dropdown was removed from the DOM entirely by picking a result
-     and the canvas was interacted with again). That's a regression,
-     not a fix -- before this was tried, the blur was transient and
-     self-corrected on zoom (see the overscroll-behavior comment's
-     git history for that confirmed-good state). Best guess at why:
-     the paint-containment guarantee seems to have given the browser
-     license to composite this element PERSISTENTLY rather than only
-     while actively scrolling, since with paint fully contained there
-     is no correctness cost to keeping it composited forever -- which
-     hits the exact same raster-scale-mismatch failure mode as
-     will-change, just cleared by DOM removal instead of never
-     clearing. Reverted. Do not retry contain: paint on a scrollable
-     descendant of .mm-world without a real explanation for why this
-     mechanism wouldn't apply. */
 }
 .mm-suggestions.show { display: block; }
 /* Normal case, NOT the all-caps every other bit of popover text

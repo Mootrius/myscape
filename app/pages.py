@@ -3105,6 +3105,14 @@ def render_mindmaps(player: Player) -> str:
       function applyTransform() {
         mmWorldEl.style.transform =
           'translate(' + MM.pan.x + 'px, ' + MM.pan.y + 'px) scale(' + MM.zoom + ')';
+        // The floating goal-search dropdown (see getFloatingSuggestionsEl)
+        // lives outside .mm-world now, so it doesn't move on its own
+        // when this transform changes the way an ordinary in-canvas
+        // popover child would -- every call site that pans/zooms the
+        // canvas funnels through here, so this is the one place that
+        // needs to re-sync its screen position. A no-op whenever the
+        // dropdown isn't actually open (see positionFloatingSuggestions).
+        positionFloatingSuggestions();
       }
 
       // Zooms toward/away from a fixed screen point -- (originX, originY)
@@ -3529,22 +3537,11 @@ def render_mindmaps(player: Player) -> str:
         }
         var typeBtn = e.target.closest('.mm-type-btn');
         if (typeBtn) { updateSelectedNode({ color: typeBtn.getAttribute('data-color') }); return; }
-        // A goal search field's suggestion (see renderSearchFieldHtml/
-        // runGoalSearch) -- fills the search box's own input with the
-        // picked name and closes the dropdown, but does NOT save on
-        // its own; the player still hits the popover's Save button
-        // once every field (including a numeric one alongside it) is
-        // filled in, same as typing a name in directly.
-        var suggestionEl = e.target.closest('.mm-suggestion');
-        if (suggestionEl) {
-          var searchWrap = suggestionEl.closest('.mm-search-wrap');
-          var searchInputEl = searchWrap && searchWrap.querySelector('.mm-search-input');
-          if (searchInputEl) searchInputEl.value = suggestionEl.getAttribute('data-value');
-          var suggBox = searchWrap && searchWrap.querySelector('[data-role="mm-suggestions"]');
-          if (suggBox) { suggBox.classList.remove('show'); suggBox.innerHTML = ''; }
-          showGoalSaveError(null);
-          return;
-        }
+        // A goal search field's suggestion click used to be handled
+        // right here, but that dropdown now lives outside #mmNodesLayer
+        // entirely (see getFloatingSuggestionsEl's own comment) and has
+        // its own click listener alongside it instead -- nothing left
+        // for this delegation to do for it.
         // A segmented toggle option (see renderSegmentedToggleHtml) --
         // the skill goal's level/experience choice, the diary goal's
         // tier choice. Marks the clicked option active and copies its
@@ -3735,16 +3732,21 @@ def render_mindmaps(player: Player) -> str:
         if (label) commitNodeTextFromLabel(label);
         // A goal search field losing focus closes its suggestions --
         // delayed slightly rather than done immediately, since a click
-        // on a suggestion itself (see the .mm-suggestion click
-        // delegation above) blurs this same input first; the delay
-        // gives that click time to read the suggestions box before
-        // this empties it out from under it.
+        // on a suggestion itself (see getFloatingSuggestionsEl's own
+        // click listener) blurs this same input first; the delay gives
+        // that click time to read the floating box before this empties
+        // it out from under it. Guarded by activeSearchInput still
+        // being THIS input specifically -- the floating box is shared
+        // across every search field now (see getFloatingSuggestionsEl's
+        // own comment), so if the player blurred this one and focused a
+        // different search field within the same 150ms, that other
+        // field has already taken over the box by the time this timeout
+        // runs, and hiding it here would wrongly yank its dropdown away
+        // mid-search.
         var searchInput = e.target.closest('.mm-search-input');
         if (searchInput) {
-          var searchWrapOut = searchInput.closest('.mm-search-wrap');
           setTimeout(function () {
-            var box = searchWrapOut && searchWrapOut.querySelector('[data-role="mm-suggestions"]');
-            if (box) { box.classList.remove('show'); box.innerHTML = ''; }
+            if (activeSearchInput === searchInput) hideFloatingSuggestions();
           }, 150);
         }
       });
@@ -3825,17 +3827,100 @@ def render_mindmaps(player: Player) -> str:
         return String(Math.round(parseFloat(m[1]) * mult));
       }
 
+      // ---- Floating goal-search suggestions dropdown --------------------
+      // The KC/ITEM/QUEST goal search fields' results dropdown used to be
+      // rendered inline as a normal child of each field's own
+      // .mm-search-wrap (see renderSearchFieldHtml's git history), which
+      // put it inside .mm-world along with everything else on the canvas.
+      // That's what caused the "blur while searching" bug several rounds
+      // of this file's history tried to fix from the inside: a scrollable
+      // overflow:auto region with real overflowing content -- exactly
+      // what this dropdown is whenever a search returns enough results to
+      // need its own scrollbar -- gets promoted to its own GPU
+      // compositing layer by the browser just for being a scroller ready
+      // to scroll smoothly, not only while actively being dragged in, and
+      // that promotion forces .mm-world's shared layer to re-rasterize
+      // around it. overscroll-behavior: contain (still applied below) was
+      // never the problem; `contain: paint` was tried next and made
+      // things WORSE, not better (see mindmaps.css's own comment on
+      // .mm-suggestions and the git log for the full account) -- it
+      // appears to have given the browser license to keep the region
+      // composited permanently instead of only while scrolling, the same
+      // raster-scale-mismatch failure will-change hit twice before,
+      // elsewhere in this file's history.
+      //
+      // This drops that whole approach and moves the dropdown OUTSIDE
+      // .mm-world's subtree entirely instead of trying to contain the
+      // side effects of it living inside there: a single shared element
+      // appended straight to <body>, `position: fixed`, repositioned via
+      // getBoundingClientRect() on whichever search input is currently
+      // focused. Its own layer promotion can no longer force a repaint of
+      // an ancestor it no longer has. One shared element rather than one
+      // per field, since only one popover -- and so only one search field
+      // -- can ever be focused at a time; positionFloatingSuggestions is
+      // called from applyTransform (every pan/zoom, the one choke point
+      // all of those funnel through) so it tracks the canvas live instead
+      // of drifting off the input the instant the view moves.
+      var floatingSuggestionsEl = null;
+      var activeSearchInput = null;
+      function getFloatingSuggestionsEl() {
+        if (!floatingSuggestionsEl) {
+          floatingSuggestionsEl = document.createElement('div');
+          floatingSuggestionsEl.className = 'mm-suggestions';
+          floatingSuggestionsEl.setAttribute('data-role', 'mm-suggestions');
+          document.body.appendChild(floatingSuggestionsEl);
+          // A goal search field's suggestion -- fills the search box's
+          // own input with the picked name and closes the dropdown, but
+          // does NOT save on its own; the player still hits the
+          // popover's Save button once every field (including a numeric
+          // one alongside it) is filled in, same as typing a name in
+          // directly. This box lives outside #mmNodesLayer now, so it
+          // can't be picked up by that element's own click delegation
+          // any more -- it gets this one listener of its own instead,
+          // scoped to just this one shared box, kept alive for as long
+          // as the page is (never torn down/recreated the way the rest
+          // of the popover is on every render).
+          floatingSuggestionsEl.addEventListener('click', function (e) {
+            var suggestionEl = e.target.closest('.mm-suggestion');
+            if (!suggestionEl || !activeSearchInput) return;
+            activeSearchInput.value = suggestionEl.getAttribute('data-value');
+            hideFloatingSuggestions();
+            showGoalSaveError(null);
+          });
+        }
+        return floatingSuggestionsEl;
+      }
+      // Syncs the floating box's on-screen position/width to whatever
+      // activeSearchInput's own getBoundingClientRect() reports right
+      // now -- which already reflects .mm-world's current pan/zoom
+      // transform (getBoundingClientRect always resolves to real,
+      // post-transform viewport pixels), so this never needs to read
+      // MM.pan/MM.zoom itself. A safe no-op whenever there's no open
+      // dropdown to move, so every call site can call this
+      // unconditionally rather than checking first.
+      function positionFloatingSuggestions() {
+        if (!activeSearchInput || !floatingSuggestionsEl || !floatingSuggestionsEl.classList.contains('show')) return;
+        if (!document.body.contains(activeSearchInput)) { hideFloatingSuggestions(); return; }
+        var rect = activeSearchInput.getBoundingClientRect();
+        floatingSuggestionsEl.style.left = rect.left + 'px';
+        floatingSuggestionsEl.style.top = (rect.bottom + 2) + 'px';
+        floatingSuggestionsEl.style.width = rect.width + 'px';
+      }
+      function hideFloatingSuggestions() {
+        if (!floatingSuggestionsEl) return;
+        floatingSuggestionsEl.classList.remove('show');
+        floatingSuggestionsEl.innerHTML = '';
+        activeSearchInput = null;
+      }
+
       // Runs a goal search field's query against whichever endpoint
       // its data-search-kind picks (see GOAL_SEARCH_ENDPOINTS) and
-      // renders the result into that same field's own suggestions box
-      // -- shared by the KC/ITEM/QUEST fields (see
-      // renderSearchFieldHtml), called debounced off the 'input'
-      // delegation above.
+      // renders the result into the shared floating suggestions box --
+      // shared by the KC/ITEM/QUEST fields (see renderSearchFieldHtml),
+      // called debounced off the 'input' delegation above.
       async function runGoalSearch(input) {
-        var box = input.parentElement && input.parentElement.querySelector('[data-role="mm-suggestions"]');
-        if (!box) return;
         var query = input.value.trim();
-        if (!query) { box.classList.remove('show'); box.innerHTML = ''; return; }
+        if (!query) { if (activeSearchInput === input) hideFloatingSuggestions(); return; }
         var kind = input.getAttribute('data-search-kind');
         var endpoint = GOAL_SEARCH_ENDPOINTS[kind];
         if (!endpoint) return;
@@ -3843,10 +3928,17 @@ def render_mindmaps(player: Player) -> str:
         // The popover (and this exact input) can be gone by the time
         // this resolves -- the node got deselected, recolored, or the
         // whole canvas re-rendered for some other reason while the
-        // request was in flight. Bail rather than writing into a
-        // detached box nobody can see any more.
-        if (!document.body.contains(input)) return;
-        renderGoalSuggestions(box, kind, data ? data.results : []);
+        // request was in flight. Bail rather than writing into a box
+        // nobody can see any more. And now that every search field
+        // shares ONE floating box instead of each carrying its own (see
+        // getFloatingSuggestionsEl's own comment), a slower-to-resolve
+        // request from a field the player has since tabbed/clicked away
+        // from could otherwise clobber whatever's currently showing for
+        // the field they're actually in -- the activeElement check
+        // guards against that too.
+        if (!document.body.contains(input) || document.activeElement !== input) return;
+        activeSearchInput = input;
+        renderGoalSuggestions(getFloatingSuggestionsEl(), kind, data ? data.results : []);
       }
 
       // Renders one search field's suggestion dropdown. Item results
@@ -3858,17 +3950,20 @@ def render_mindmaps(player: Player) -> str:
         if (!results.length) {
           var emptyLabel = kind === 'npc' ? 'No NPCs found' : kind === 'quest' ? 'No quests found' : 'No items found';
           box.innerHTML = '<div class="mm-suggestion-empty">' + esc(emptyLabel) + '</div>';
-          box.classList.add('show');
-          return;
+        } else {
+          box.innerHTML = results.map(function (r) {
+            var name = kind === 'item' ? r.name : r;
+            var icon = kind === 'item' ? r.icon : null;
+            return '<div class="mm-suggestion" data-value="' + esc(name) + '">' +
+              (icon ? '<img src="' + esc(icon) + '" alt="">' : '') +
+              '<span>' + esc(name) + '</span></div>';
+          }).join('');
         }
-        box.innerHTML = results.map(function (r) {
-          var name = kind === 'item' ? r.name : r;
-          var icon = kind === 'item' ? r.icon : null;
-          return '<div class="mm-suggestion" data-value="' + esc(name) + '">' +
-            (icon ? '<img src="' + esc(icon) + '" alt="">' : '') +
-            '<span>' + esc(name) + '</span></div>';
-        }).join('');
         box.classList.add('show');
+        // Only actually visible (display: block) once 'show' is added
+        // just above, but positioning it before or after that makes no
+        // difference -- inline left/top/width apply the same either way.
+        positionFloatingSuggestions();
       }
 
       // Live, as-you-type range check for the skill goal's target
@@ -4463,14 +4558,16 @@ def render_mindmaps(player: Player) -> str:
       // `data-goal-field="<fieldName>"` like any other field -- typing
       // a name straight in (without picking a suggestion) is still a
       // perfectly valid save, same as before this search box existed;
-      // clicking a suggestion (see the .mm-suggestion click delegation
-      // above) just fills the same input's value in for you.
+      // clicking a suggestion (see getFloatingSuggestionsEl's own click
+      // listener) just fills the same input's value in for you. No
+      // .mm-suggestions div rendered inline here any more -- see
+      // getFloatingSuggestionsEl for why (it's a single shared element
+      // living outside the popover/canvas entirely, not one per field).
       function renderSearchFieldHtml(fieldName, searchKind, placeholder, currentValue) {
         return '<div class="mm-search-wrap">' +
           '<input class="mm-goal-input mm-search-input" type="text" autocomplete="off" ' +
           'data-goal-field="' + fieldName + '" data-search-kind="' + searchKind + '" ' +
           'placeholder="' + esc(placeholder) + '" maxlength="80" value="' + esc(currentValue || '') + '">' +
-          '<div class="mm-suggestions" data-role="mm-suggestions"></div>' +
           '</div>';
       }
 
@@ -4609,6 +4706,18 @@ def render_mindmaps(player: Player) -> str:
       }
 
       function render() {
+        // Every path below can tear down and rebuild #mmNodesLayer's
+        // whole subtree (a different node selected, a goal saved, a
+        // mindmap switched...), which would orphan the floating
+        // suggestions box's activeSearchInput reference -- it lives
+        // outside that subtree now (see getFloatingSuggestionsEl's own
+        // comment) and wouldn't otherwise notice its anchor input is
+        // gone until the next pan/zoom happened to call
+        // positionFloatingSuggestions and catch the stale reference.
+        // Closing it unconditionally here instead means it never
+        // lingers on screen, visibly detached from whatever field it
+        // used to belong to, in the gap between those two things.
+        hideFloatingSuggestions();
         updateHistoryButtons();
         updateEditModeButton();
         var wrapEl = document.getElementById('mmEmptyWrap');
