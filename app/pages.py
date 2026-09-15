@@ -624,9 +624,16 @@ def render_purchase_goals(player: Player) -> str:
       var PG = {
         data: null,
         activeSetupId: null,
-        picker: null,       // { slotType, slot } while a gear/inventory slot is open for editing
+        picker: null,       // { slotType, slot, targets } while a gear/inventory slot is open for editing
         iconPicker: false,  // true while the setup-icon picker is open
         nameFormMode: null, // 'new' | 'rename' | null
+        // Sockets (gear or inventory slots, filled or empty) shift-
+        // clicked into a pending group -- see toggleSlotSelected/
+        // wireSlotClicks below. Cleared whenever the player switches
+        // setups, opens the icon picker, or plain-clicks a slot that
+        // isn't part of the current group, so it never lingers into
+        // a context it no longer applies to.
+        multiSelect: [],    // [{ slotType, slot }, ...]
         pollTimer: null,
         dragSuppressClick: false, // true for one click right after a completed drag-and-drop (see wireSlotClicks)
         // Bumped every time a direct, explicit action (a click, a drag-drop,
@@ -829,6 +836,11 @@ def render_purchase_goals(player: Player) -> str:
             setActiveSetupId(btn.getAttribute('data-setup-id'));
             PG.picker = null;
             PG.iconPicker = false;
+            // A pending shift-click group is specific to the setup it
+            // was built on -- carrying it over to a different setup's
+            // (unrelated) slots of the same type/index would silently
+            // apply a future search to the wrong sockets.
+            PG.multiSelect = [];
             render();
           });
         });
@@ -971,9 +983,28 @@ def render_purchase_goals(player: Player) -> str:
         return 'https://oldschool.runescape.wiki/w/' + encodeURIComponent(String(itemName).replace(/ /g, '_'));
       }
 
+      // Shift-click multi-select: lets a player build up a group of
+      // sockets (gear or inventory, filled or empty, any mix) before
+      // searching once and applying that one item to every socket in
+      // the group -- see wireSlotClicks (where these are called) and
+      // saveSlot (which actually applies the picked item to every
+      // target). Slot identity is (slotType, slot) same as everywhere
+      // else on this page; String(...) on the slot half since an
+      // inventory slot is a number but the DOM attribute it's compared
+      // against is always a string.
+      function isSlotSelected(slotType, slot) {
+        return PG.multiSelect.some(function (s) { return s.slotType === slotType && String(s.slot) === String(slot); });
+      }
+      function toggleSlotSelected(slotType, slot) {
+        var idx = PG.multiSelect.findIndex(function (s) { return s.slotType === slotType && String(s.slot) === String(slot); });
+        if (idx >= 0) PG.multiSelect.splice(idx, 1);
+        else PG.multiSelect.push({ slotType: slotType, slot: slot });
+      }
+
       function slotHtml(resolved, slotType, slot, extraClass) {
         var picking = PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot);
-        var cls = slotClasses(resolved) + (extraClass ? ' ' + extraClass : '') + (picking ? ' picking' : '');
+        var selected = isSlotSelected(slotType, slot);
+        var cls = slotClasses(resolved) + (extraClass ? ' ' + extraClass : '') + (picking ? ' picking' : '') + (selected ? ' multi-selected' : '');
         // draggable="false" here -- browsers make <img> draggable by
         // default, which competes with the .gear-slot div's own
         // draggable="true" (see below): starting a drag with the
@@ -1073,20 +1104,63 @@ def render_purchase_goals(player: Player) -> str:
             moveSlotItem(fromSlotType, fromSlot, toSlotType, toSlot);
           });
 
-          el.addEventListener('click', function () {
+          el.addEventListener('click', function (e) {
             if (PG.dragSuppressClick) {
               PG.dragSuppressClick = false;
               return;
             }
             var slotType = el.getAttribute('data-slot-type');
             var slot = slotType === 'inventory' ? parseInt(el.getAttribute('data-slot'), 10) : el.getAttribute('data-slot');
+
+            // Shift-click only ever toggles this slot in/out of the
+            // pending multi-select group -- filled or empty, it never
+            // opens a picker or the wiki the way a plain click would.
+            // Lets a player build up the whole group first (in any
+            // order, mixing filled and empty sockets) before a
+            // following plain click on one of them opens the shared
+            // picker below.
+            if (e.shiftKey) {
+              toggleSlotSelected(slotType, slot);
+              renderContent();
+              return;
+            }
+
             var itemName = el.getAttribute('data-item-name');
+
+            // A plain click on a slot that's already part of a pending
+            // multi-select group opens ONE shared picker for the whole
+            // group instead of this slot's own single behavior --
+            // otherwise a filled slot in the group would just open its
+            // wiki page, with no way to actually search for what should
+            // replace every selected socket at once.
+            if (isSlotSelected(slotType, slot)) {
+              openSlotPicker(slotType, slot, PG.multiSelect.slice());
+              PG.iconPicker = false;
+              renderContent();
+              var groupInput = document.getElementById('slotSearchInput');
+              if (groupInput) {
+                groupInput.focus({ preventScroll: true });
+                groupInput.select();
+              }
+              scrollPickerIntoView();
+              return;
+            }
+
+            // A plain click anywhere else abandons any lingering
+            // multi-select group (e.g. one the player shift-clicked
+            // together but then clicked away from without picking
+            // anything) and falls back to this slot's own normal,
+            // single-slot behavior below.
+            var hadSelection = PG.multiSelect.length > 0;
+            PG.multiSelect = [];
+
             // A filled slot's item is now a link out to the wiki instead
             // of an editor -- removing is handled by the hover "x"
             // (above) and adding only ever happens on an empty slot, so
             // there's nothing left for a filled slot's own click to open.
             if (itemName) {
               window.open(itemWikiUrl(itemName), '_blank', 'noopener');
+              if (hadSelection) renderContent();
               return;
             }
             var opening = !(PG.picker && PG.picker.slotType === slotType && String(PG.picker.slot) === String(slot));
@@ -1379,8 +1453,17 @@ def render_purchase_goals(player: Player) -> str:
 
       // ---- Gear/inventory slot picker --------------------------------------
 
-      function openSlotPicker(slotType, slot) {
-        PG.picker = { slotType: slotType, slot: slot, query: '' };
+      // targets defaults to just this one slot -- passed explicitly as
+      // the current multi-select group (see wireSlotClicks) when the
+      // picker should apply whatever gets picked to more than one
+      // socket at once.
+      function openSlotPicker(slotType, slot, targets) {
+        PG.picker = {
+          slotType: slotType,
+          slot: slot,
+          query: '',
+          targets: (targets && targets.length) ? targets : [{ slotType: slotType, slot: slot }],
+        };
       }
 
       function renderSlotPicker() {
@@ -1401,7 +1484,14 @@ def render_purchase_goals(player: Player) -> str:
         // expand_recipe_components in app/recipes.py), so nobody has to
         // know or type out what an item is made of, or fall back to
         // typing in an untradeable item blind.
+        // The "applies to N sockets" hint only shows up once a group of
+        // 2+ is actually being targeted -- a lone slot's picker (the
+        // normal case) looks exactly like it always has.
+        var groupHint = (p.targets && p.targets.length > 1)
+          ? '<div class="gear-slot-picker-hint">Applies to ' + p.targets.length + ' selected sockets</div>'
+          : '';
         var body = '' +
+          groupHint +
           '<div class="search-box search-box-full">' +
           '  <input type="text" id="slotSearchInput" placeholder="Search for an item" autocomplete="off" value="' + esc(p.query) + '" />' +
           '  <div class="suggestions" id="slotSuggestions"></div>' +
@@ -1467,13 +1557,45 @@ def render_purchase_goals(player: Player) -> str:
         });
       }
 
+      // Applies `item` to every target in the picker's group (just the
+      // one slot it was opened on, unless it was opened on a multi-
+      // select group -- see openSlotPicker/wireSlotClicks) -- one PUT
+      // per socket, same request shape as the single-slot save this
+      // replaced. Sequential, not parallel: each PUT's response is the
+      // setup's full, freshly recomputed state, so the next target's
+      // save (and everything the player sees if it stops partway) is
+      // always built on top of what actually landed, not a stale
+      // snapshot from before the loop started. Stops at the first
+      // failure -- apiCall has already shown the error -- rather than
+      // firing off the rest against whatever's wrong (an expired
+      // session, say), but keeps whatever targets DID save rather than
+      // discarding that progress.
       async function saveSlot(item) {
         var p = PG.picker;
-        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/slot', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slot_type: p.slotType, slot: p.slot, item: item }),
-        });
-        if (data) { PG.stateVersion++; PG.data = data; PG.picker = null; render(); }
+        var targets = (p.targets && p.targets.length) ? p.targets : [{ slotType: p.slotType, slot: p.slot }];
+        var data = null;
+        for (var i = 0; i < targets.length; i++) {
+          var t = targets[i];
+          var result = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/slot', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slot_type: t.slotType, slot: t.slot, item: item }),
+          });
+          if (!result) break;
+          data = result;
+          PG.stateVersion++;
+          PG.data = data;
+        }
+        // Only close the picker (and drop the multi-select group with
+        // it) once at least one target actually saved -- a total
+        // failure on the very first (or only) target leaves everything
+        // exactly as it was, same as a single-slot save always has, so
+        // the player can just retry rather than losing their group and
+        // having to reselect it.
+        if (data) {
+          PG.picker = null;
+          PG.multiSelect = [];
+          render();
+        }
       }
 
       // Removes whatever's in a slot directly from its hover "x" -- unlike
@@ -1531,6 +1653,7 @@ def render_purchase_goals(player: Player) -> str:
         var opening = !PG.iconPicker;
         PG.iconPicker = opening;
         PG.picker = null;
+        PG.multiSelect = [];
         renderIconPicker();
         document.getElementById('pgSlotPicker').innerHTML = '';
         if (opening) {
