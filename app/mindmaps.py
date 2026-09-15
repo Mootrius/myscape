@@ -19,6 +19,7 @@ list-in-list-out function with no ORM/session concerns of its own --
 those stay in main.py's route handlers, same split as
 app/purchase_goals.py.
 """
+import math
 import uuid
 from typing import Dict, List, Optional
 
@@ -113,10 +114,43 @@ MAX_KC_TARGET = 1_000_000
 MAX_ITEM_QTY_TARGET = 2_000_000_000
 MAX_GP_TARGET = 100_000_000_000
 # The player's own bounds, given verbatim: a skill LEVEL goal is
-# 2-99 (starting level 1 in everything isn't a goal), an XP goal is
-# 1-200,000,000 (OSRS's own max skill xp).
-MIN_SKILL_LEVEL, MAX_SKILL_LEVEL = 2, 99
-MIN_SKILL_XP, MAX_SKILL_XP = 1, 200_000_000
+# 1-126 (level 1 through OSRS's "virtual level" cap above the real
+# level-99 one -- both ends allowed even though "reach level 1" is
+# always already true, by request), an XP goal is 0-200,000,000
+# (0 is level 1's own xp requirement -- see app/pages.py's
+# SKILL_XP_TABLE, which mirrors this same level-1-through-126 range
+# -- and 200,000,000 is OSRS's own max skill xp).
+MIN_SKILL_LEVEL, MAX_SKILL_LEVEL = 1, 126
+MIN_SKILL_XP, MAX_SKILL_XP = 0, 200_000_000
+
+
+def _build_skill_xp_table() -> List[int]:
+    """The OSRS xp-per-level curve (levels 1-126, including the
+    "virtual" levels above the real level-99 cap) -- mirrors
+    app/pages.py's own SKILL_XP_TABLE exactly (same formula, see its
+    comment for the source), built once at import off MAX_SKILL_LEVEL
+    rather than hardcoded so the two can never drift apart. Index 0 is
+    unused (levels are 1-indexed); index 1 is always 0.
+    """
+    table = [0, 0]
+    cumulative = 0
+    for level in range(1, MAX_SKILL_LEVEL):
+        cumulative += math.floor(level + 300 * (2 ** (level / 7)))
+        table.append(math.floor(cumulative / 4))
+    return table
+
+
+SKILL_XP_TABLE = _build_skill_xp_table()
+
+
+def _xp_for_level(level: int) -> int:
+    """The xp SKILL_XP_TABLE says `level` needs, clamped into range --
+    used by evaluate_completion below to check a LVL-metric skill goal
+    (including a virtual one above 99) against the player's own xp
+    rather than their reported level, which the client only ever sends
+    real/99-capped (see evaluate_completion's own comment)."""
+    level = max(MIN_SKILL_LEVEL, min(MAX_SKILL_LEVEL, level))
+    return SKILL_XP_TABLE[level]
 
 
 def _clean_text(text: Optional[str], allow_empty: bool = False) -> str:
@@ -780,8 +814,18 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
         elif goal_type == "skill":
             skill, metric, target = goal.get("skill"), goal.get("metric"), goal.get("target")
             if skill and metric and target:
-                have = (skills.get(skill) or {}).get(metric, 0)
-                done = have >= target
+                # Both LVL and XP goals are actually checked against
+                # xp, never the plugin-reported `level` stat -- that's
+                # the player's real, 99-capped in-game level, which a
+                # "virtual" level target (above MAX_SKILL_LEVEL's old
+                # 99 cap -- see its own comment) could never reach no
+                # matter how much xp they have. A level target is
+                # converted to its own xp requirement via
+                # _xp_for_level first, so it's really always an xp
+                # comparison underneath either way.
+                have_xp = (skills.get(skill) or {}).get("xp", 0)
+                need_xp = target if metric == "xp" else _xp_for_level(target)
+                done = have_xp >= need_xp
         elif goal_type == "quest":
             quest_name = goal.get("questName")
             done = bool(quest_name) and _normalize_lookup_name(quest_name) in completed_quests

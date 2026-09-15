@@ -2526,8 +2526,56 @@ def render_mindmaps(player: Player) -> str:
       // in app/mindmaps.py -- used only for the skill goal's inline,
       // as-you-type target validation (see validateSkillTarget); the
       // server re-validates against its own copy of these regardless.
-      var MIN_SKILL_LEVEL = 2, MAX_SKILL_LEVEL = 99;
-      var MIN_SKILL_XP = 1, MAX_SKILL_XP = 200000000;
+      // Goes all the way up to 126 -- OSRS's "virtual level" cap, past
+      // the real level-99 cap -- and down to 1 (not the trivially-
+      // already-true 2 this used to start at): both ends are allowed
+      // as goals now, on request, even though "reach level 1" is
+      // always already met. MIN_SKILL_XP follows level 1 down to 0
+      // (was 1) for the same reason -- level 1 IS 0 xp (see
+      // SKILL_XP_TABLE below), and the LVL/XP conversion this enables
+      // (see the metric segmented-toggle's click handler) needs 0 to
+      // be a valid xp value or switching a level-1 target over to XP
+      // would immediately show as out of range.
+      var MIN_SKILL_LEVEL = 1, MAX_SKILL_LEVEL = 126;
+      var MIN_SKILL_XP = 0, MAX_SKILL_XP = 200000000;
+      // The OSRS xp-per-level curve (levels 1-126, including the
+      // "virtual" levels above the real level-99 cap -- see
+      // https://oldschool.runescape.wiki/w/Experience for the formula
+      // this implements exactly: xp(L) = floor(1/4 * sum[l=1..L-1] of
+      // floor(l + 300*2^(l/7))). Built once here off MAX_SKILL_LEVEL
+      // rather than hardcoded, so it can never drift from whatever the
+      // level cap above says, and used only to convert the skill
+      // goal's target field between LVL and XP when that toggle
+      // switches (see the metric segmented-toggle's click handler
+      // below) -- SKILL_XP_TABLE[L] is the total xp needed for level
+      // L; index 0 is unused (levels are 1-indexed) and
+      // SKILL_XP_TABLE[1] is always 0.
+      var SKILL_XP_TABLE = (function () {
+        var table = [0, 0];
+        var cumulative = 0;
+        for (var l = 1; l < MAX_SKILL_LEVEL; l++) {
+          cumulative += Math.floor(l + 300 * Math.pow(2, l / 7));
+          table[l + 1] = Math.floor(cumulative / 4);
+        }
+        return table;
+      })();
+      // The xp SKILL_XP_TABLE says level "level" needs, clamped into
+      // range -- used when the metric toggle switches from LVL to XP.
+      function xpForLevel(level) {
+        level = Math.max(MIN_SKILL_LEVEL, Math.min(MAX_SKILL_LEVEL, Math.round(level)));
+        return SKILL_XP_TABLE[level];
+      }
+      // The level a given amount of xp has actually reached -- the
+      // LARGEST level whose own requirement is at or below it (5,750
+      // xp sits between level 22's 5,624 and level 23's 6,291, so this
+      // reads as 22, same as the in-game skills tab would show), used
+      // when the metric toggle switches from XP to LVL.
+      function levelForXp(xp) {
+        for (var l = MAX_SKILL_LEVEL; l >= MIN_SKILL_LEVEL; l--) {
+          if (xp >= SKILL_XP_TABLE[l]) return l;
+        }
+        return MIN_SKILL_LEVEL;
+      }
       // Endpoint each goal-field search box (see renderSearchFieldHtml/
       // runGoalSearch) queries, keyed by its data-search-kind. "item"
       // reuses Purchase Goals' own item search outright (see
@@ -2907,6 +2955,46 @@ def render_mindmaps(player: Player) -> str:
         applyTransform();
       }
 
+      // Nudges the pan (never the zoom) just enough that a freshly-
+      // opened popover's bottom edge clears .mm-canvas's own bottom
+      // edge, when the node it belongs to sits near the bottom of the
+      // current view -- called after every render (see renderCanvas's
+      // own post-render effect), since which node's selected and how
+      // tall its popover is (a bare swatch row vs. a full goal-
+      // criteria form) both change render to render. Deliberately
+      // goes through MM.pan/applyTransform rather than leaving it to
+      // the browser's own native "scroll the focused element into
+      // view" -- that scrolls .mm-canvas's own scrollTop, which every
+      // OTHER absolutely-positioned child of .mm-canvas (the zoom
+      // controls above all) visually rides along with, popping them
+      // out past the canvas's own fixed on-screen box (still clipped
+      // by its overflow: hidden) until the view's panned back
+      // manually -- exactly the "toolbar buttons get left behind" bug
+      // this replaces. MM.pan is the one thing this component ever
+      // moves content through, so this is the only path that leaves
+      // the zoom controls' own screen position alone. Purely a
+      // vertical nudge, same margin idea as scrollPickerIntoView
+      // elsewhere on the site (see its own comment) -- just through
+      // this canvas's own pan instead of the page's scroll, and never
+      // shrinking/zooming the popover to force it to fit.
+      function ensurePopoverVisible() {
+        var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
+        if (!popover) return;
+        var canvas = document.getElementById('mmCanvas');
+        var canvasRect = canvas.getBoundingClientRect();
+        var popRect = popover.getBoundingClientRect();
+        var MARGIN = 16;
+        var overflowBelow = popRect.bottom - (canvasRect.bottom - MARGIN);
+        var overflowAbove = (canvasRect.top + MARGIN) - popRect.top;
+        if (overflowBelow > 0) {
+          MM.pan.y -= overflowBelow;
+          applyTransform();
+        } else if (overflowAbove > 0) {
+          MM.pan.y += overflowAbove;
+          applyTransform();
+        }
+      }
+
       function resetView() {
         var mm = activeMindmap();
         MM.zoom = 1;
@@ -3198,12 +3286,26 @@ def render_mindmaps(player: Player) -> str:
           // metric is picked -- re-check/re-label it immediately
           // against whatever's already typed so switching metrics
           // updates both right away rather than waiting for the next
-          // keystroke in the target field.
+          // keystroke in the target field. Also carries whatever
+          // number's already in there across the switch (5,750 xp
+          // becomes level 22, and back again) via
+          // xpForLevel/levelForXp, rather than leaving a now-wrong-unit
+          // number sitting in the box for the player to redo by hand.
           if (segGroup.getAttribute('data-segment-field') === 'metric') {
             var fieldsWrapForMetric = segGroup.closest('[data-role="goal-fields"]');
             var targetForMetric = fieldsWrapForMetric && fieldsWrapForMetric.querySelector('[data-goal-field="target"]');
             if (targetForMetric) {
-              targetForMetric.placeholder = (segBtn.getAttribute('data-segment-value') === 'xp') ? 'Target experience' : 'Target level';
+              var newMetric = segBtn.getAttribute('data-segment-value');
+              var rawTargetForMetric = targetForMetric.value.trim();
+              if (rawTargetForMetric !== '') {
+                var nTargetForMetric = Number(rawTargetForMetric);
+                if (Number.isInteger(nTargetForMetric)) {
+                  targetForMetric.value = newMetric === 'xp'
+                    ? xpForLevel(nTargetForMetric)
+                    : levelForXp(nTargetForMetric);
+                }
+              }
+              targetForMetric.placeholder = (newMetric === 'xp') ? 'Target experience' : 'Target level';
               validateSkillTarget(targetForMetric);
             }
           }
@@ -3672,36 +3774,49 @@ def render_mindmaps(player: Player) -> str:
         // focusable and blurs to <body>, silently undoing a focus()
         // called inline here. Pushing this to the next task runs it
         // after that default focus resolution has already happened,
-        // so it's the one that sticks.
-        if (MM.focusNodeId) {
-          var focusId = MM.focusNodeId;
-          MM.focusNodeId = null;
-          setTimeout(function () {
-            var nodeEl = document.querySelector('.mm-node[data-node-id="' + focusId + '"]');
-            if (!nodeEl) return;
-            var label = nodeEl.querySelector('[data-role="label"]');
-            if (label) {
-              label.focus();
-              var range = document.createRange();
-              range.selectNodeContents(label);
-              var sel = window.getSelection();
-              sel.removeAllRanges();
-              sel.addRange(range);
-              return;
+        // so it's the one that sticks. Always scheduled now, not just
+        // when a focus was queued -- ensurePopoverVisible below needs
+        // to check every fresh popover for overflow (a trackable
+        // node's swatch/goal-form popover included, not just a free-
+        // text one that also wants a focus), and needs the same
+        // "after the DOM above has actually landed" timing this does.
+        var focusIdForThisRender = MM.focusNodeId;
+        MM.focusNodeId = null;
+        setTimeout(function () {
+          if (focusIdForThisRender) {
+            var nodeEl = document.querySelector('.mm-node[data-node-id="' + focusIdForThisRender + '"]');
+            if (nodeEl) {
+              var label = nodeEl.querySelector('[data-role="label"]');
+              if (label) {
+                // preventScroll -- see ensurePopoverVisible's own
+                // comment: the browser's native scroll-into-view would
+                // otherwise fight the deliberate pan below (and, on
+                // its own, is exactly what caused the toolbar-left-
+                // behind bug that pan replaces).
+                label.focus({ preventScroll: true });
+                var range = document.createRange();
+                range.selectNodeContents(label);
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+              } else {
+                // No inline-editable label -- this is a gray (manual)
+                // node, whose equivalent "start typing immediately"
+                // target is the text box in its own popover instead
+                // (see renderGoalFieldsHtml's "manual" branch);
+                // selectNode still queues focus the same way for both
+                // cases (see its own comment), only the actual target
+                // differs.
+                var textInput = nodeEl.querySelector('[data-role="node-text-input"]');
+                if (textInput) {
+                  textInput.focus({ preventScroll: true });
+                  textInput.select();
+                }
+              }
             }
-            // No inline-editable label -- this is a gray (manual) node,
-            // whose equivalent "start typing immediately" target is the
-            // text box in its own popover instead (see
-            // renderGoalFieldsHtml's "manual" branch); selectNode still
-            // queues focus the same way for both cases (see its own
-            // comment), only the actual target differs.
-            var textInput = nodeEl.querySelector('[data-role="node-text-input"]');
-            if (textInput) {
-              textInput.focus();
-              textInput.select();
-            }
-          }, 0);
-        }
+          }
+          ensurePopoverVisible();
+        }, 0);
 
         var svg = document.getElementById('mmLines');
         svg.setAttribute('width', layout.worldWidth);

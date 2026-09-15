@@ -386,6 +386,24 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); }
    the edge "+" buttons visibly lit up while the player's actually
    down in that panel. :has() lets the rule opt back out exactly then. */
 .mm-node:hover:not(:has(.mm-node-popover:hover)) .mm-edge-btn { opacity: 1; pointer-events: auto; }
+/* While ANY popover is open, a DIFFERENT node's edge "+" buttons must
+   never show on hover, even though the rule right above would
+   otherwise light them up same as always. The popover-owning node
+   gets z-index: 2 (see .mm-node.selected below) precisely so its own
+   popover clears the rest of the canvas, but .mm-edge-btn's own
+   z-index: 3 is scoped to ITS OWN node -- an ordinary node has no
+   z-index of its own to contain that inside, so it leaks straight out
+   to the shared stacking context .mm-node.selected's z-index: 2 lives
+   in, and 3 beats 2. A neighboring node that happens to sit partly
+   under the popover (mindmaps have no fixed layout bound to keep them
+   apart) would then hover its edge buttons right on top of it. Higher
+   specificity (the #id) rather than raising some z-index further --
+   this is a "shouldn't respond to hover at all right now" rule, not a
+   stacking fix, exactly what was asked for; the popover's own node
+   keeps working normally via :not(:has(> .mm-node-popover)) below. */
+#mmNodesLayer:has(.mm-node-popover) .mm-node:not(:has(> .mm-node-popover)) .mm-edge-btn {
+  opacity: 0; pointer-events: none;
+}
 .mm-edge-btn:hover { background: var(--gold); color: #1a1408; border-color: var(--gold); }
 /* Centered exactly on the node's own border -- half the button
    inside, half outside -- rather than sitting fully outside it. */
