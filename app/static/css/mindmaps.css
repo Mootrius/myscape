@@ -113,6 +113,35 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-world {
   position: absolute; top: 0; left: 0; transform-origin: 0 0;
   transition: transform 0.18s ease-out;
+  /* Every blur bug chased in this file so far -- the preserve-3d note
+     flip, the edge-button hover opacity transition, wheel-zoom's own
+     restarted transitions -- has had the same shape underneath: SOME
+     element living inside this shared, flattened canvas layer gets
+     promoted to (or demoted from) its own GPU layer for a moment, and
+     that promotion/demotion forces the browser to re-rasterize this
+     whole layer's content around it, which briefly softens every
+     node's text along with whatever actually triggered it. The
+     search-suggestions dropdown scrolling natively (see
+     .mm-suggestions' own comment) is just the latest thing to trigger
+     it, not a new mechanism -- an actively-scrolled overflow:auto
+     region gets its own compositing layer same as any of the above,
+     entirely independent of any CSS transition/animation, so
+     excluding it from the wheel-zoom handler (fixing the scroll
+     itself) doesn't touch this.
+     will-change here gives .mm-world its OWN stable, persistently-
+     promoted layer up front, instead of the browser deciding whether
+     to promote it moment to moment -- so a child being promoted or
+     demoted for its own reasons no longer requires re-rasterizing
+     this shared layer along with it; the two are isolated. This is
+     the standard fix for "a nested layer's churn is degrading its
+     ancestor," and specifically wasn't the fix for the very first
+     blur bug in this file (that one was the preserve-3d/backface-
+     visibility rendering mode itself, not promotion churn, and
+     will-change alone didn't touch it then) -- but every one of those
+     3D properties is gone from this page now (see the note flip's own
+     history), so nothing here should still hit that different
+     failure mode. */
+  will-change: transform;
 }
 
 .mm-lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
@@ -355,7 +384,11 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   text-transform: none; letter-spacing: normal; text-align: left;
   font-size: 9.5px; line-height: 1.35;
 }
-.mm-node-note-text { width: 100%; height: 100%; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+/* overscroll-behavior: contain here too -- same scroll-chaining reason
+   as .mm-suggestions/.mm-note-wrap textarea above, for a long note
+   read on the node's own flipped-over back face rather than its
+   popover's edit box. */
+.mm-node-note-text { width: 100%; height: 100%; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; word-break: break-word; }
 
 /* The selected node's own brighten treatment + stacking rule is
    defined further below, alongside the edge buttons/color popover
@@ -707,6 +740,19 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
   background: var(--panel); border: 1px solid var(--border); max-height: 180px; overflow-y: auto;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  /* Scrolling this list no longer reaches the canvas wheel handler at
+     all (see canvasEl's own wheel listener -- it bails out for any
+     target inside the popover), so the browser's own default scroll
+     handles it now instead. Without this, though, that default
+     handling still CHAINS past this list's own scroll bounds once the
+     player hits the top or bottom -- the leftover wheel delta doesn't
+     just vanish, it scrolls the next scrollable ancestor up the tree,
+     which for this page is the whole document (.mm-canvas is a fixed
+     620px box, and the surrounding page is taller than that on most
+     screens). contain stops that hand-off right here: this list
+     scrolls itself and only itself, exactly like a player hitting the
+     end of a normal dropdown expects. */
+  overscroll-behavior: contain;
 }
 .mm-suggestions.show { display: block; }
 /* Normal case, NOT the all-caps every other bit of popover text
@@ -785,6 +831,10 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   color: var(--text); font-family: inherit; font-size: 11.5px;
   padding: 7px 8px; resize: vertical; min-height: 30px;
   text-transform: none; letter-spacing: normal;
+  /* Same scroll-chaining fix as .mm-suggestions' own -- a long note
+     scrolled to its own top/bottom would otherwise hand the rest of
+     the gesture off to the page underneath it. */
+  overscroll-behavior: contain;
 }
 .mm-note-wrap textarea.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-note-wrap textarea.mm-goal-input::placeholder { color: var(--text-faint); }
