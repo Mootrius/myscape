@@ -3297,9 +3297,35 @@ def render_mindmaps(player: Player) -> str:
       }
       canvasEl.addEventListener('pointerup', endPan);
       canvasEl.addEventListener('pointercancel', endPan);
+      // Same reasoning as the pan-dragging handlers just above: a real
+      // scroll/pinch-to-zoom gesture fires MANY wheel events per second
+      // (a trackpad especially), and .mm-world's CSS transition (see
+      // mindmaps.css) means every single one of those ticks -- not just
+      // the gesture as a whole -- restarts a fresh 0.18s transform
+      // transition on top of whichever previous one is still running.
+      // For the length of the whole gesture .mm-world sits in an
+      // unbroken, continuously-restarted transform ANIMATION rather
+      // than a series of discrete jumps, which is exactly the kind of
+      // sustained "layer actively transitioning transform" state that
+      // degrades text/icon rendering across the whole shared canvas
+      // layer while it's in flight (this is the same family of bug as
+      // the preserve-3d blur fixed above, just triggered by continuous
+      // wheel events instead of a persistent 3D layer). So: transitions
+      // stay off for as long as wheel events keep arriving, and only
+      // get handed back once the gesture actually settles (no wheel
+      // event for wheelSettleMs), via the same debounce shape as
+      // endPan -- a real gesture never leaves a 200ms gap between
+      // ticks, so this doesn't clip a slow, deliberate scroll either.
+      var wheelSettleTimer = null;
+      var wheelSettleMs = 200;
       canvasEl.addEventListener('wheel', function (e) {
         e.preventDefault();
+        mmWorldEl.style.transitionDuration = '0s';
         setZoom(MM.zoom + (e.deltaY < 0 ? 0.12 : -0.12));
+        clearTimeout(wheelSettleTimer);
+        wheelSettleTimer = setTimeout(function () {
+          mmWorldEl.style.transitionDuration = ''; // hand back to .mm-world's own smooth-zoom transition
+        }, wheelSettleMs);
       }, { passive: false });
 
       document.getElementById('mmZoomIn').addEventListener('click', function () { setZoom(MM.zoom + 0.15); });
