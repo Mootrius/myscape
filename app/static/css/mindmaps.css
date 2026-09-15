@@ -374,12 +374,30 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   text-transform: none; letter-spacing: normal; text-align: left;
   font-size: 9.5px; line-height: 1.35;
 }
-/* overscroll-behavior here too -- same scroll-chaining fix as
-   .mm-suggestions/.mm-note-wrap textarea below, for a long note read
-   on the node's own flipped-over back face rather than its popover's
-   edit box. NOT contain: paint (tried it, reverted it -- see git log
-   and .mm-suggestions' own comment for why). */
-.mm-node-note-text { width: 100%; height: 100%; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; word-break: break-word; }
+/* overflow: hidden, not overflow-y: auto -- a note is hard-capped to 2
+   lines end to end now (see clampNoteInput in the page script), with
+   this as the backstop: nothing should ever actually need clipping
+   here in normal use, but should the cap ever be circumvented (an
+   already-saved note from before this change, say), the failure mode
+   is silently losing a would-be 3rd line rather than growing a
+   scrollbar -- a scrollable overflow:auto region with real overflowing
+   content is exactly what promotes to its own compositing layer and
+   forces .mm-world (this box's ancestor, sharing one flattened layer
+   with every node/popover on the canvas) to re-rasterize around it,
+   which is the same mechanism behind the search-dropdown blur bug this
+   file's history spent several rounds chasing (see
+   getFloatingSuggestionsEl's own comment in the page script for the
+   full account) -- just with no "move it outside .mm-world" escape
+   hatch available here the way that dropdown got, since this box IS
+   the node. overscroll-behavior: contain kept, NOT dropped -- this IS
+   the box clampNoteInput measures against, so it should fit clean, but
+   .mm-note-wrap's own textarea (a DIFFERENT box, clamped against THIS
+   one's metrics rather than its own) turned out to still have a few px
+   of real scrollTop range even with overflow: hidden set, confirmed via
+   Playwright -- cheap insurance here too against the same class of
+   subpixel/box-model mismatch, rather than assuming this element is
+   somehow immune to it. */
+.mm-node-note-text { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: contain; white-space: pre-wrap; word-break: break-word; }
 
 /* The selected node's own brighten treatment + stacking rule is
    defined further below, alongside the edge buttons/color popover
@@ -848,22 +866,48 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
    textarea gets the exact same compact input theming
    .mm-goal-fields input/select.mm-goal-input use just above, written
    as its own rule since .mm-note-wrap isn't nested inside
-   .mm-goal-fields, plus a resize handle so a longer note isn't stuck
-   at its 2-row starting height. */
+   .mm-goal-fields. */
 .mm-note-wrap { width: 100%; }
 .mm-note-wrap textarea.mm-goal-input {
   width: 100%; box-sizing: border-box;
   background: #100e0b; border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--text); font-family: inherit; font-size: 11.5px;
-  padding: 7px 8px; resize: vertical; min-height: 30px;
+  padding: 7px 8px;
   text-transform: none; letter-spacing: normal;
-  /* Same scroll-chaining fix as .mm-suggestions' own -- a long note
-     scrolled to its own top/bottom would otherwise hand the rest of
-     the gesture off to the page underneath it. */
-  overscroll-behavior: contain;
-  /* NOT contain: paint (tried it, reverted it -- see .mm-suggestions'
-     own comment below for why: it made the blur-while-scrollable
-     issue worse, not better). */
+  /* NOT resizable and NOT scrollable any more -- a note is hard-capped
+     to 2 lines end to end now (see clampNoteInput in the page script),
+     so there's nothing a resize handle or a scrollbar would ever need
+     to reveal. overflow: hidden here is a deliberate backstop, not a
+     workaround: a scrollable overflow:auto region with real
+     overflowing content is exactly what triggered the "blur while a
+     popover's search dropdown is open" bug this file's history spent
+     several rounds chasing (see .mm-suggestions' own comment, and
+     getFloatingSuggestionsEl's in the page script, for the full
+     account) -- this textarea is one of the two places on this canvas
+     that regression could still reach even after that fix (the
+     node's own flipped-over back face, .mm-node-note-text, is the
+     other), since neither one can be moved outside .mm-world the way
+     the search dropdown was -- this one has to live in the popover,
+     right where the player's editing it. rows="2" (the HTML attribute,
+     not set here) sizes the box itself; capping the CONTENT to 2 lines
+     removes the scrollbar instead of trying to contain its side
+     effects, same underlying idea as the search dropdown fix, just
+     applied by shrinking the content instead of moving the container.
+     overscroll-behavior: contain kept, NOT dropped -- clampNoteInput
+     measures the 2-line cap against the node's own flipped-over back
+     face (a plain div, different font-size/box model than a real
+     <textarea>'s own native rows="2" sizing), and confirmed via
+     Playwright: that mismatch can still leave a few px of real
+     scrollTop range even with overflow: hidden set, which Chromium
+     will happily hand wheel-scroll delta into and then chain the rest
+     of the gesture straight to the page once it's exhausted, exactly
+     the bug this rule originally fixed. overflow: hidden's job is
+     making sure that residual scrollability is never visible as a
+     scrollbar (so it can't trigger the compositing/blur issue above);
+     overscroll-behavior: contain's job is making sure it can't leak
+     into the page either. Keep both regardless of how tight the content
+     cap gets -- neither is made redundant by the other. */
+  overflow: hidden; overscroll-behavior: contain;
 }
 .mm-note-wrap textarea.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-note-wrap textarea.mm-goal-input::placeholder { color: var(--text-faint); }

@@ -3379,6 +3379,29 @@ def render_mindmaps(player: Player) -> str:
         // whatever's actually scrollable under the cursor" -- the
         // suggestions list or the note textarea, same as any other
         // scrollable element on the page.
+        // The note textarea and the node's flipped-over back face are
+        // BOTH deliberately non-scrollable now (overflow: hidden -- see
+        // mindmaps.css, added to guarantee no scrollbar can ever appear
+        // there and re-trigger the .mm-world compositing-layer blur bug).
+        // Because neither one is a genuine overflow:auto/scroll element
+        // any more, the browser doesn't treat a wheel event over them as
+        // "targeting something locally scrollable" the way it did before
+        // this change -- so the old "bail out and hand this off to
+        // whatever's natively scrollable under the cursor" reasoning
+        // below no longer applies to these two elements specifically:
+        // there's nothing under the cursor for the browser to hand it
+        // off TO any more, and the whole wheel delta was observed
+        // leaking straight through to the page's own scroll instead
+        // (worse than the old overflow:auto behavior, which at least
+        // consumed the gesture locally up to its own content first).
+        // Since nothing in either element should ever need to scroll
+        // again, just swallow the event here: no canvas zoom (a wheel
+        // over a note shouldn't zoom the whole mindmap either) and no
+        // page scroll.
+        if (e.target.closest('[data-role="node-note-input"], .mm-node-note-text')) {
+          e.preventDefault();
+          return;
+        }
         if (e.target.closest('[data-role="popover"]')) return;
         e.preventDefault();
         mmWorldEl.style.transitionDuration = '0s';
@@ -3779,6 +3802,8 @@ def render_mindmaps(player: Player) -> str:
         if (targetInput && targetInput.closest('.mm-goal-fields')) validateSkillTarget(targetInput);
         var nodeTextInput = e.target.closest('[data-role="node-text-input"]');
         if (nodeTextInput) validateNodeText(nodeTextInput);
+        var noteInput = e.target.closest('[data-role="node-note-input"]');
+        if (noteInput) clampNoteInput(noteInput);
       });
       // Backstop for the skill/diary <select> fields -- 'input' fires
       // for a <select> in every current browser, but 'change' is the
@@ -4495,6 +4520,103 @@ def render_mindmaps(player: Player) -> str:
           '</div>';
       }
 
+      // ---- Note two-line cap ---------------------------------------------
+      // A node's own note used to allow up to 1000 characters with no line
+      // cap, shown in a resizable, scrollable textarea in its popover and a
+      // scrollable box on the node's own flipped-over back face
+      // (.mm-node-note-text). Either one growing tall enough to need its
+      // own scrollbar reintroduces the exact "scrollable region inside
+      // .mm-world" mechanism behind the search-dropdown blur bug this
+      // file's history spent several rounds chasing (see
+      // getFloatingSuggestionsEl's own comment for the full account) --
+      // and unlike that dropdown, there's no "move it outside .mm-world"
+      // fix available for either of these: the textarea has to live in the
+      // popover, right where the player is editing it, and the back face
+      // literally IS the node. So instead of moving them out, this removes
+      // the possibility of a scrollbar ever appearing on them AT ALL --
+      // capping a note to 2 lines end to end, with overflow: hidden on
+      // both as a backstop (see mindmaps.css), rather than trying to
+      // contain a scrollbar's side effects the way earlier rounds did.
+      //
+      // RuneScapePlain11 (this whole page's font) is proportional, not
+      // monospace, so a fixed character-count cap would either cut short a
+      // note that's mostly narrow characters (i, l, .) or still overflow
+      // one that's mostly wide ones (M, W, @) -- this measures the ACTUAL
+      // rendered height of a candidate value against a hidden mirror
+      // element instead of guessing a character budget. The mirror is
+      // sized to match .mm-node-note-text/.mm-node-face exactly (font-
+      // size 9.5px, line-height 1.35, NODE_WIDTH's own content width --
+      // see mindmaps.css, keep the two in sync if either ever changes),
+      // the NODE'S OWN BACK FACE, not the (larger, roomier) popover
+      // textarea -- the back face is the tighter of the two contexts for
+      // the same text, so a note that fits 2 lines there is guaranteed to
+      // fit in 2 (or fewer) lines in the bigger textarea too. Clamping
+      // against that one canonical fit point, live as the player types (or
+      // pastes -- 'input' fires for both), keeps what they see while
+      // editing and what the note actually looks like on the card in sync
+      // -- there's no second, different truncation point a saved note
+      // could still run into later.
+      var noteMeasureEl = null;
+      function getNoteMeasureEl() {
+        if (!noteMeasureEl) {
+          noteMeasureEl = document.createElement('div');
+          noteMeasureEl.style.position = 'fixed';
+          noteMeasureEl.style.visibility = 'hidden';
+          noteMeasureEl.style.pointerEvents = 'none';
+          noteMeasureEl.style.top = '-9999px';
+          noteMeasureEl.style.left = '-9999px';
+          noteMeasureEl.style.boxSizing = 'border-box';
+          noteMeasureEl.style.width = (NODE_WIDTH - 20) + 'px'; // NODE_WIDTH minus .mm-node-face's 10px+10px padding
+          noteMeasureEl.style.fontFamily = 'RuneScapePlain11';
+          noteMeasureEl.style.fontSize = '9.5px';
+          noteMeasureEl.style.lineHeight = '1.35';
+          noteMeasureEl.style.whiteSpace = 'pre-wrap';
+          noteMeasureEl.style.wordBreak = 'break-word';
+          document.body.appendChild(noteMeasureEl);
+        }
+        return noteMeasureEl;
+      }
+      var NOTE_MAX_LINES = 2;
+      // Longest prefix of `value` that still renders at or under
+      // NOTE_MAX_LINES lines tall in the mirror above. Binary-searches the
+      // cut point rather than measuring one character at a time -- a
+      // pasted note can be hundreds of characters, and this keeps that to
+      // a handful of measurements instead of hundreds.
+      function clampNoteToLines(value) {
+        if (!value) return value;
+        var mirror = getNoteMeasureEl();
+        mirror.textContent = 'M';
+        var oneLine = mirror.getBoundingClientRect().height;
+        var maxHeight = oneLine * NOTE_MAX_LINES + 1; // +1px slack for sub-pixel rounding
+        mirror.textContent = value;
+        if (mirror.getBoundingClientRect().height <= maxHeight) return value;
+        var lo = 0, hi = value.length;
+        while (lo < hi) {
+          var mid = (lo + hi + 1) >> 1;
+          mirror.textContent = value.slice(0, mid);
+          if (mirror.getBoundingClientRect().height <= maxHeight) lo = mid; else hi = mid - 1;
+        }
+        return value.slice(0, lo);
+      }
+      // Called off the note textarea's own 'input' event (see the
+      // delegated listener above) -- clamps in place and, only when a
+      // character actually got cut, parks the caret at the end of what's
+      // left. That's exactly right for the overwhelmingly common case
+      // (typing/pasting at the end, which is the only place a caret can be
+      // when a fresh keystroke is what tipped this over); a paste landing
+      // mid-note that pushes the tail past 2 lines is the one case this
+      // doesn't handle precisely (the caret ends up at the very end rather
+      // than after the pasted text specifically) -- a small, rare
+      // imprecision, not a broken one, and not worth the extra
+      // bookkeeping this quick a fix calls for.
+      function clampNoteInput(textarea) {
+        var clamped = clampNoteToLines(textarea.value);
+        if (clamped !== textarea.value) {
+          textarea.value = clamped;
+          textarea.setSelectionRange(clamped.length, clamped.length);
+        }
+      }
+
       // The one optional field every non-root node type gets, gray
       // (manual) included, right above the Save/Delete row -- "how I'd
       // like to achieve this," entirely separate from a trackable
@@ -4513,10 +4635,19 @@ def render_mindmaps(player: Player) -> str:
       // (manual saves through the node-PATCH endpoint, every other type
       // through the goal endpoint -- see SetMindMapNodeGoalRequest's own
       // docstring in app/schemas.py for why note rides along there
-      // too), so there's nothing to gain from making it LOOK generic.
+      // too), so there's nothing to gain from making it LOOK generic. No
+      // longer resizable (see mindmaps.css) -- a note is hard-capped to 2
+      // lines now (see clampNoteInput above), so there's nothing a resize
+      // handle would let the player reach that typing itself doesn't
+      // already allow. maxlength here is a generous backstop, not the
+      // real cap -- clampNoteInput (wired up via the delegated 'input'
+      // listener) is what actually enforces 2 lines, live, character by
+      // character; this just matches MAX_NODE_NOTE_LENGTH server-side so
+      // an already-long note from before this change can't paste back in
+      // unbounded before that live clamp gets a chance to run.
       function renderNoteFieldHtml(node) {
         return '<div class="mm-note-wrap">' +
-          '<textarea class="mm-goal-input mm-note-input" data-role="node-note-input" placeholder="Notes (optional)" maxlength="1000" rows="2">' +
+          '<textarea class="mm-goal-input mm-note-input" data-role="node-note-input" placeholder="Notes (optional)" maxlength="200" rows="2">' +
           esc(node.note || '') + '</textarea>' +
           '</div>';
       }

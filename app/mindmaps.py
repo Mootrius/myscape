@@ -51,9 +51,20 @@ DEFAULT_TEXT = "New"
 MAX_NODE_TEXT_LENGTH = 120
 MAX_MINDMAP_NAME_LENGTH = 60
 # A node's own optional note (see update_node/_clean_note below) --
-# free-form "how I'd like to achieve this" text, not a display label,
-# so it gets much more room than MAX_NODE_TEXT_LENGTH.
-MAX_NODE_NOTE_LENGTH = 1000
+# free-form "how I'd like to achieve this" text, not a display label.
+# Capped to 2 LINES, not really this many characters -- this value used
+# to be the real cap (1000), but a note long enough to need its own
+# scrollbar (in its popover's textarea, or on the node's own flipped-
+# over back face) turned out to reintroduce the exact GPU-compositing
+# blur bug the search dropdown had (see .mm-suggestions' own comment in
+# mindmaps.css for that whole story). The real, precise 2-line
+# enforcement is client-side now (clampNoteInput in app/pages.py, which
+# measures actual rendered height rather than guessing a character
+# count -- RuneScapePlain11 is a proportional font); this is left
+# generously large as a backstop for a request that bypasses that UI
+# entirely, not tightened down to match it -- see _clean_note's own
+# comment for how the 2-line cap itself gets enforced server-side.
+MAX_NODE_NOTE_LENGTH = 200
 
 # Which goal TYPE each color picks -- see clean_goal/evaluate_completion
 # below for what each type actually checks. "manual" (gray) is the one
@@ -187,8 +198,25 @@ def _clean_note(note: Optional[str]) -> str:
     falls back to a placeholder: a note is optional by design (see
     app/pages.py's node-popover note field), so "no note" is a normal,
     common state to end up in, not something to guard against the way
-    a blank node NAME is."""
-    return (note or "").strip()[:MAX_NODE_NOTE_LENGTH]
+    a blank node NAME is.
+
+    A note is capped to 2 lines (see MAX_NODE_NOTE_LENGTH's own
+    comment) -- the real, precise enforcement of that lives client-side
+    (clampNoteInput in app/pages.py measures a candidate note's actual
+    rendered height against the node's own flipped-over back face,
+    live as the player types, since RuneScapePlain11 is a proportional
+    font and no fixed character count maps cleanly to "2 rendered
+    lines"). This is only a backstop against a request that bypasses
+    that UI entirely -- a raw API call -- so it doesn't need to be
+    pixel-precise, just bounded: collapse anything past 2 EXPLICIT
+    lines (an extra \\n the player could still paste in) down to 2, then
+    fall back to the flat character cap for the (rarer) case of one
+    long unbroken line with no newline in it at all."""
+    cleaned = (note or "").strip()
+    lines = cleaned.split("\n")
+    if len(lines) > 2:
+        cleaned = "\n".join(lines[:2])
+    return cleaned[:MAX_NODE_NOTE_LENGTH]
 
 
 def _clean_color(color: Optional[str], is_root: bool = False) -> str:
