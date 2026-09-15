@@ -187,8 +187,9 @@ button.primary#mmNameSave, .mm-name-form-save {
    both for its own outline and for the edge buttons/color popover
    below, which are its DOM children and would otherwise be at the
    mercy of plain document order against other .mm-node boxes that
-   happen to sit nearby. */
-.mm-node.selected { outline: 1px solid var(--gold); outline-offset: 1px; z-index: 2; }
+   happen to sit nearby. outline-offset: 0 hugs the ring right against
+   the node's own border rather than leaving a gap around it. */
+.mm-node.selected { outline: 1px solid var(--gold); outline-offset: 0; z-index: 2; }
 
 /* ---- Per-node hover controls -----------------------------------------
    Small "+" buttons on each of a node's four edges, shown only while
@@ -208,25 +209,32 @@ button.primary#mmNameSave, .mm-name-form-save {
   cursor: pointer; padding: 0;
   opacity: 0; pointer-events: none; transition: opacity 0.12s ease;
 }
-.mm-node:hover .mm-edge-btn { opacity: 1; pointer-events: auto; }
+/* Edge buttons show while hovering the node itself, but NOT while
+   hovering the color popover below it -- the popover is still a DOM
+   descendant of .mm-node (see its own comment below for why), so a
+   plain ".mm-node:hover" alone stays matched the whole time the mouse
+   is over the popover too, which would otherwise leave the edge "+"
+   buttons visibly lit up while the player's actually down in the
+   color/delete panel. :has() lets the rule opt back out exactly then. */
+.mm-node:hover:not(:has(.mm-color-popover:hover)) .mm-edge-btn { opacity: 1; pointer-events: auto; }
 .mm-edge-btn:hover { background: var(--gold); color: #1a1408; border-color: var(--gold); }
-/* Sits just outside the node's own border (a 3px gap), centered along
-   the edge it's on -- not straddling the border itself. */
-.mm-edge-top { top: -17px; left: 50%; transform: translateX(-50%); }
-.mm-edge-bottom { bottom: -17px; left: 50%; transform: translateX(-50%); }
-.mm-edge-left { left: -17px; top: 50%; transform: translateY(-50%); }
-.mm-edge-right { right: -17px; top: 50%; transform: translateY(-50%); }
+/* Centered exactly on the node's own border -- half the button
+   inside, half outside -- rather than sitting fully outside it. */
+.mm-edge-top { top: -7px; left: 50%; transform: translateX(-50%); }
+.mm-edge-bottom { bottom: -7px; left: 50%; transform: translateX(-50%); }
+.mm-edge-left { left: -7px; top: 50%; transform: translateY(-50%); }
+.mm-edge-right { right: -7px; top: 50%; transform: translateY(-50%); }
 
 /* ---- Per-node color popover --------------------------------------
    Replaces the old toolbar's swatch row -- appears directly below the
    clicked (selected) node instead of in a panel docked under the
    canvas. Also carries the delete action, since removing the toolbar
    left it with nowhere else to live. Cleared to sit below the bottom
-   edge button's own outer reach (that button sits from -3px to -17px
-   past the node's bottom edge -- see .mm-edge-bottom above) rather
-   than right under the node, so a selected node's own "add child"
-   button never ends up underneath this popover's higher z-index and
-   unclickable. */
+   edge button's own outer reach (that button straddles the node's
+   border and pokes out only 7px past it -- see .mm-edge-bottom above)
+   rather than right under the node, so a selected node's own "add
+   child" button never ends up underneath this popover's higher
+   z-index and unclickable. */
 .mm-color-popover {
   position: absolute; z-index: 4; top: calc(100% + 22px); left: 50%; transform: translateX(-50%);
   background: var(--panel); border: 1px solid var(--border); padding: 10px;
@@ -248,7 +256,9 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-swatch-purple { background: var(--purple); }
 .mm-swatch-white { background: var(--text); }
 
-.mm-color-popover-delete { width: auto; align-self: center; }
+/* Shorter than .btn-secondary's own default 32px -- this one sits in
+   a small popover, not a row of full-size buttons. */
+.mm-color-popover-delete { width: auto; height: 22px; align-self: center; }
 .mm-delete-btn:hover { border-color: var(--red); color: var(--red); }
 .mm-delete-btn:disabled:hover { border-color: var(--border); color: var(--text-dim); }
 
