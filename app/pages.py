@@ -3297,48 +3297,77 @@ def render_mindmaps(player: Player) -> str:
       }
       canvasEl.addEventListener('pointerup', endPan);
       canvasEl.addEventListener('pointercancel', endPan);
+      // ---- Wheel-zoom ---------------------------------------------------
       // Same reasoning as the pan-dragging handlers just above: a real
       // scroll/pinch-to-zoom gesture fires MANY wheel events per second
       // (a trackpad especially), and .mm-world's CSS transition (see
       // mindmaps.css) means every single one of those ticks -- not just
-      // the gesture as a whole -- restarts a fresh 0.18s transform
-      // transition on top of whichever previous one is still running.
-      // For the length of the whole gesture .mm-world sits in an
-      // unbroken, continuously-restarted transform ANIMATION rather
+      // the gesture as a whole -- would otherwise restart a fresh 0.18s
+      // transform transition on top of whichever previous one is still
+      // running. For the length of the whole gesture .mm-world would sit
+      // in an unbroken, continuously-restarted transform ANIMATION rather
       // than a series of discrete jumps, which is exactly the kind of
       // sustained "layer actively transitioning transform" state that
       // degrades text/icon rendering across the whole shared canvas
       // layer while it's in flight (this is the same family of bug as
       // the preserve-3d blur fixed above, just triggered by continuous
-      // wheel events instead of a persistent 3D layer). So: transitions
-      // stay off for as long as wheel events keep arriving, and only
-      // get handed back once the gesture actually settles (no wheel
-      // event for wheelSettleMs), via the same debounce shape as
-      // endPan -- a real gesture never leaves a 200ms gap between
-      // ticks, so this doesn't clip a slow, deliberate scroll either.
-      // Now that each tick applies instantly (no transition to blend
-      // consecutive ticks into a smooth-looking ramp), a FIXED step per
-      // tick is what actually made zooming feel chunky/stepped once the
-      // transition above stopped papering over it -- a trackpad fires
-      // many small ticks per gesture, and each one used to jump the
-      // exact same 0.12 regardless of how small that tick's own
-      // deltaY was. Scaling the step by deltaY (exponentially, so it
-      // composes the same way repeated multiplication should) instead
-      // makes a gentle trackpad scroll produce many tiny, smooth steps
-      // and a single sharp mouse-wheel notch (deltaY ~100) land close
-      // to the old fixed step's size, rather than every tick jumping
-      // the same amount no matter how fast or slow the input was.
+      // wheel events instead of a persistent 3D layer). So the CSS
+      // transition stays off for the whole gesture -- see below for
+      // exactly when it comes back.
+      //
+      // Each tick's OWN jump size is scaled by that tick's deltaY
+      // (exponentially, so it composes the way repeated multiplication
+      // should) rather than a fixed +/-0.12 regardless of how small the
+      // tick was -- a trackpad's ticks vary a lot in size, and a fixed
+      // step made a gentle scroll jump exactly as far as an aggressive
+      // one.
+      //
+      // Scaling the step still isn't enough on its own, though: a real
+      // wheel/trackpad event stream doesn't arrive at a steady rate --
+      // it clusters and gaps unevenly, and a trackpad can coalesce
+      // several physical ticks into one larger DOM event under load.
+      // Applying each event's jump synchronously, the instant it
+      // arrives, means the *visible* step rate is only as smooth as
+      // that raw event stream happens to be -- which is what was still
+      // reading as choppy. So wheel events don't touch MM.zoom directly
+      // at all any more: they only update a target value
+      // (wheelTargetZoom), and a requestAnimationFrame loop separately
+      // eases MM.zoom a fraction of the remaining distance toward that
+      // target every frame -- a steady 60fps, independent of how
+      // bursty or sparse the wheel events feeding it are. New ticks
+      // during an ongoing ease just move the target again; the loop
+      // keeps chasing it smoothly rather than snapping.
+      //
+      // The transition is handed back the instant this loop actually
+      // converges (not on a guessed timeout keyed to the last wheel
+      // event) -- restoring it any earlier would hand a value that's
+      // still mid-ease over to a 0.18s CSS transition and reintroduce
+      // the very blur this was all fixing, since the loop would then be
+      // fighting an active transition on every subsequent frame.
       var wheelZoomSensitivity = 0.0013;
-      var wheelSettleTimer = null;
-      var wheelSettleMs = 200;
+      var wheelZoomEase = 0.4; // fraction of the remaining distance to target closed per frame
+      var wheelZoomSettleThreshold = 0.0008;
+      var wheelTargetZoom = null;
+      var wheelRafId = null;
+      function wheelZoomStep() {
+        if (wheelTargetZoom == null) { wheelRafId = null; return; }
+        var diff = wheelTargetZoom - MM.zoom;
+        if (Math.abs(diff) < wheelZoomSettleThreshold) {
+          setZoom(wheelTargetZoom);
+          wheelTargetZoom = null;
+          wheelRafId = null;
+          mmWorldEl.style.transitionDuration = ''; // hand back to .mm-world's own smooth-zoom transition
+          return;
+        }
+        setZoom(MM.zoom + diff * wheelZoomEase);
+        wheelRafId = requestAnimationFrame(wheelZoomStep);
+      }
       canvasEl.addEventListener('wheel', function (e) {
         e.preventDefault();
         mmWorldEl.style.transitionDuration = '0s';
-        setZoom(MM.zoom * Math.exp(-e.deltaY * wheelZoomSensitivity));
-        clearTimeout(wheelSettleTimer);
-        wheelSettleTimer = setTimeout(function () {
-          mmWorldEl.style.transitionDuration = ''; // hand back to .mm-world's own smooth-zoom transition
-        }, wheelSettleMs);
+        var base = wheelTargetZoom == null ? MM.zoom : wheelTargetZoom;
+        wheelTargetZoom = Math.max(0.4, Math.min(2, base * Math.exp(-e.deltaY * wheelZoomSensitivity)));
+        if (wheelRafId == null) wheelRafId = requestAnimationFrame(wheelZoomStep);
       }, { passive: false });
 
       document.getElementById('mmZoomIn').addEventListener('click', function () { setZoom(MM.zoom + 0.15); });
