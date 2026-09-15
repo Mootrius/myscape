@@ -3048,12 +3048,16 @@ def render_mindmaps(player: Player) -> str:
         if (alreadyJustThis) return;
         MM.selectedNodeId = id;
         MM.multiSelectIds = new Set(id ? [id] : []);
-        // Only worth focusing/text-selecting when the label is
-        // actually going to be contenteditable (see renderCanvas) --
-        // Edit Mode has to be on, AND the node has to be one of the
-        // free-text colors (gray/white); a trackable node's label is
-        // derived from its goal, not typed, so there's nothing for a
-        // browser focus/selection to land in there.
+        // Only worth queuing a focus at all when Edit Mode is on AND
+        // the node is one of the free-text colors (gray/white) -- a
+        // trackable node's label is derived from its goal, not typed,
+        // so there's nothing for a focus to land in there. Which
+        // element actually gets focused differs by color (see
+        // renderCanvas's post-render focus effect): white's label is
+        // still contenteditable right on the canvas, but gray renames
+        // through a text box in its own popover instead now, so this
+        // same MM.focusNodeId queue just resolves to a different
+        // target for it.
         var mmForFocus = activeMindmap();
         var nodeForFocus = mmForFocus && id ? mmForFocus.nodes.find(function (n) { return n.id === id; }) : null;
         var focusGoalType = nodeForFocus ? GOAL_TYPE_BY_COLOR[nodeForFocus.color] : null;
@@ -3240,6 +3244,26 @@ def render_mindmaps(player: Player) -> str:
           var popoverForSave = e.target.closest('[data-role="popover"]');
           var fieldsWrap = popoverForSave && popoverForSave.querySelector('[data-role="goal-fields"]');
           if (!fieldsWrap) return;
+          // A gray (manual) node's Save button commits its NAME, not a
+          // goal -- see renderGoalFieldsHtml's "manual" branch and
+          // saveSelectedNodeText below. Blank, or unchanged from what's
+          // already saved, just closes the popover without a request --
+          // same "nothing worth sending" guard commitNodeTextFromLabel
+          // used to apply for the old inline-editable version of this
+          // same rename.
+          var nodeForSave = selectedNode();
+          if (nodeForSave && GOAL_TYPE_BY_COLOR[nodeForSave.color] === 'manual') {
+            var textInput = fieldsWrap.querySelector('[data-role="node-text-input"]');
+            var textVal = textInput ? textInput.value.trim() : '';
+            if (textVal && textVal !== nodeForSave.text) {
+              saveSelectedNodeText(textVal, true);
+            } else {
+              MM.selectedNodeId = null;
+              MM.multiSelectIds = new Set();
+              render();
+            }
+            return;
+          }
           var goal = {};
           fieldsWrap.querySelectorAll('[data-goal-field]').forEach(function (input) {
             var val = (input.value || '').trim();
@@ -3528,11 +3552,23 @@ def render_mindmaps(player: Player) -> str:
           // free-typed label anymore -- every trackable color's text
           // is derived from its own goal criteria instead (see
           // goalDisplayText), so there's nothing left for the player
-          // to type into those. Combined with the same "only the sole
-          // selected node, only in Edit Mode" gating as before.
+          // to type into those.
           var goalType = GOAL_TYPE_BY_COLOR[n.color];
           var isFreeText = (goalType === 'manual' || !goalType);
-          var editableAttr = (MM.editMode && isFreeText && isSelected && MM.multiSelectIds.size === 1) ? ' contenteditable="true" spellcheck="false"' : '';
+          // But only the root (white, goalType null) is still edited
+          // INLINE, directly on the canvas -- a gray node renames
+          // through a text box in its own popover instead now (see
+          // renderGoalFieldsHtml's "manual" branch and the goal-save
+          // click delegation's own manual handling below), so a gray
+          // label never becomes contenteditable, and never carries
+          // data-role="label" either (nothing needs to find it there
+          // any more -- see the post-render focus effect's fallback to
+          // [data-role="node-text-input"] for how a brand new gray
+          // node still gets typed into immediately). Combined with the
+          // same "only the sole selected node, only in Edit Mode"
+          // gating as before.
+          var isInlineEditable = !goalType;
+          var editableAttr = (MM.editMode && isInlineEditable && isSelected && MM.multiSelectIds.size === 1) ? ' contenteditable="true" spellcheck="false"' : '';
           var displayText = isFreeText ? n.text : goalDisplayText(n);
           // A gray node with actual text in it gets a manual-complete
           // checkbox where the icon sits for every other trackable
@@ -3562,7 +3598,20 @@ def render_mindmaps(player: Player) -> str:
             var leftSlotHtml = showManualCheckbox
               ? '<input type="checkbox" class="mm-node-checkbox" data-role="manual-toggle" title="Mark complete"' + (manualChecked ? ' checked' : '') + '>'
               : '<img class="mm-node-icon" src="' + iconSrc + '" alt="">';
-            labelInner = leftSlotHtml + '<span class="mm-node-label-text" data-role="label"' + editableAttr + '>' + renderNodeLabelHtml(goalType, displayText) + '</span>';
+            // isInlineEditable is always false whenever hasLeftSlot is
+            // true from a checkbox (a gray node only ever gets a left
+            // slot once it HAS text -- see showManualCheckbox -- and
+            // gray is never inline-editable any more), so this only
+            // ever actually adds data-role="label"/editableAttr for a
+            // tracked-type icon case... which in turn never happens
+            // either, since isInlineEditable is root-only and root
+            // never has a left slot (see hasLeftSlot's own comment
+            // above). Kept as the general rule anyway -- computed the
+            // same way as labelAttrs below -- rather than assuming
+            // "left slot" and "inline editable" can never coincide by
+            // construction.
+            var innerLabelAttrs = isInlineEditable ? (' data-role="label"' + editableAttr) : '';
+            labelInner = leftSlotHtml + '<span class="mm-node-label-text"' + innerLabelAttrs + '>' + renderNodeLabelHtml(goalType, displayText) + '</span>';
           } else {
             labelInner = esc(displayText);
           }
@@ -3594,8 +3643,13 @@ def render_mindmaps(player: Player) -> str:
           // data-role="label"/editableAttr already moved onto the inner
           // text span above when hasLeftSlot -- this outer div only
           // still carries them itself in the plain (no icon/checkbox)
-          // case, same as before.
-          var labelAttrs = hasLeftSlot ? '' : (' data-role="label"' + editableAttr);
+          // case, same as before, and even then only for the root (see
+          // isInlineEditable above) -- an empty, not-yet-typed-into
+          // gray node has no left slot either (no checkbox until it
+          // has text -- see showManualCheckbox), but isInlineEditable
+          // is false for it too, so it renders with no data-role at
+          // all, nothing on the canvas to click into.
+          var labelAttrs = hasLeftSlot ? '' : (isInlineEditable ? (' data-role="label"' + editableAttr) : '');
           return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + completedCls + '" data-node-id="' + esc(n.id) + '" ' +
             'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
             '<div class="' + labelCls + '"' + labelAttrs + '>' + labelInner + '</div>' +
@@ -3623,14 +3677,29 @@ def render_mindmaps(player: Player) -> str:
           var focusId = MM.focusNodeId;
           MM.focusNodeId = null;
           setTimeout(function () {
-            var label = document.querySelector('.mm-node[data-node-id="' + focusId + '"] [data-role="label"]');
-            if (!label) return;
-            label.focus();
-            var range = document.createRange();
-            range.selectNodeContents(label);
-            var sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
+            var nodeEl = document.querySelector('.mm-node[data-node-id="' + focusId + '"]');
+            if (!nodeEl) return;
+            var label = nodeEl.querySelector('[data-role="label"]');
+            if (label) {
+              label.focus();
+              var range = document.createRange();
+              range.selectNodeContents(label);
+              var sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              return;
+            }
+            // No inline-editable label -- this is a gray (manual) node,
+            // whose equivalent "start typing immediately" target is the
+            // text box in its own popover instead (see
+            // renderGoalFieldsHtml's "manual" branch); selectNode still
+            // queues focus the same way for both cases (see its own
+            // comment), only the actual target differs.
+            var textInput = nodeEl.querySelector('[data-role="node-text-input"]');
+            if (textInput) {
+              textInput.focus();
+              textInput.select();
+            }
           }, 0);
         }
 
@@ -3743,12 +3812,13 @@ def render_mindmaps(player: Player) -> str:
         // selection to work.
         if (node.parentId === null || !MM.editMode) return '';
         var goalType = GOAL_TYPE_BY_COLOR[node.color];
-        // Every trackable type gets a Save button alongside Delete;
-        // manual has no criteria form at all here (see
-        // renderGoalFieldsHtml -- ticking it complete is the checkbox
-        // on the node itself, not anything this popover saves), so
-        // it's just Delete alone.
-        var showSave = !!goalType && goalType !== 'manual';
+        // Every non-root type gets a Save button alongside Delete now,
+        // including manual -- see renderGoalFieldsHtml's "manual"
+        // branch, which gives it a name text box in place of a goal
+        // form (ticking it COMPLETE is still the checkbox on the node
+        // itself, not anything this popover saves -- only its NAME
+        // saves here).
+        var showSave = !!goalType;
         var actionsHtml = '<div class="mm-popover-actions" data-role="popover-actions">' +
           (showSave ? '<button type="button" class="btn-secondary mm-goal-save-btn" data-role="goal-save">SAVE</button>' : '') +
           '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>' +
@@ -3832,22 +3902,36 @@ def render_mindmaps(player: Player) -> str:
       // The current color's goal-criteria fields, prefilled from the
       // node's own `goal` (see clean_goal/default_goal in
       // app/mindmaps.py for the exact shape each type stores) --
-      // "gray"/manual has no criteria to fill in at all (ticking it
-      // complete is the checkbox right on the node itself now, see
-      // renderNodeLabelHtml, not anything in this popover), "white"/null
-      // (the root) never reaches this function at all any more (see
-      // renderNodePopoverHtml's own early return), and the rest get a
-      // small form whose fields are read fresh off the DOM by the
-      // popover's own Save button (see the goal-save click delegation
-      // above) -- nothing here is tracked in JS state, so there's
-      // nothing to keep in sync with what the player's actually typed.
-      // This whole function only ever runs in Edit Mode now (see
-      // renderNodePopoverHtml's own early return), so there's no
-      // separate view-mode branch to gate here either.
+      // "white"/null (the root) never reaches this function at all any
+      // more (see renderNodePopoverHtml's own early return), and every
+      // OTHER color gets a small form whose fields are read fresh off
+      // the DOM by the popover's own Save button (see the goal-save
+      // click delegation above) -- nothing here is tracked in JS state,
+      // so there's nothing to keep in sync with what the player's
+      // actually typed. This whole function only ever runs in Edit Mode
+      // now (see renderNodePopoverHtml's own early return), so there's
+      // no separate view-mode branch to gate here either.
+      //
+      // "gray"/manual is the one type with no actual GOAL criteria (see
+      // clean_goal in app/mindmaps.py -- its only field is
+      // manualComplete, set by the checkbox right on the node itself,
+      // see renderNodeLabelHtml, never by this popover) -- but it still
+      // gets a field here now: a plain text box for the node's own
+      // NAME, since a gray node no longer renames itself inline on the
+      // canvas (see renderCanvas's isInlineEditable). Saving it goes
+      // through the same Save button as every other type, but the
+      // click delegation routes a manual node's save to the node's own
+      // text (PATCH .../nodes/<id>) rather than its goal (PATCH
+      // .../nodes/<id>/goal) -- see saveSelectedNodeText below.
       function renderGoalFieldsHtml(node) {
         var goal = node.goal || {};
         var type = GOAL_TYPE_BY_COLOR[node.color];
-        if (type === 'manual' || !type) return '';
+        if (!type) return '';
+        if (type === 'manual') {
+          return '<div class="mm-goal-fields" data-role="goal-fields">' +
+            '<input class="mm-goal-input" type="text" data-role="node-text-input" placeholder="Type something" maxlength="120" value="' + esc(node.text || '') + '">' +
+            '</div>';
+        }
         var fields = '';
         if (type === 'kc') {
           // No more activity-type dropdown -- the search field below
@@ -4234,10 +4318,39 @@ def render_mindmaps(player: Player) -> str:
         return saveNodeGoal(MM.selectedNodeId, goal, closePopover);
       }
 
-      // Only the selected node is ever contenteditable, so the label
-      // losing focus always means the CURRENTLY selected node's text
-      // is what changed -- no need to look up which node the label
-      // belonged to.
+      // A gray (manual) node's own Save button commits its NAME rather
+      // than a goal -- see renderGoalFieldsHtml's "manual" branch and
+      // the goal-save click delegation's own manual handling above.
+      // Same shape as saveNodeGoal (PATCH, record undo, optionally
+      // close the popover), just against the plain node PATCH endpoint
+      // (see updateSelectedNode) instead of .../goal, since a node's
+      // text and its goal criteria are two separate fields server-side
+      // (see update_node vs. set_node_goal in app/mindmaps.py).
+      async function saveSelectedNodeText(text, closePopover) {
+        var mm = activeMindmap();
+        var node = selectedNode();
+        if (!mm || !node) return;
+        var mmId = mm.id;
+        var preNodes = mm.nodes;
+        const data = await apiCall(
+          '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text }) }
+        );
+        if (!data) return;
+        MM.data = data;
+        if (isStillActiveMindmap(mmId)) recordUndoableEdit(preNodes);
+        if (closePopover) {
+          MM.selectedNodeId = null;
+          MM.multiSelectIds = new Set();
+        }
+        render();
+      }
+
+      // Only the root is ever contenteditable now (see renderCanvas's
+      // isInlineEditable -- a gray node renames through its popover's
+      // text box instead, see saveSelectedNodeText above), so the
+      // label losing focus always means the root's own text is what
+      // changed -- no need to look up which node the label belonged to.
       function commitNodeTextFromLabel(label) {
         pendingLabelCommit = null;
         var node = selectedNode();
@@ -4274,10 +4387,12 @@ def render_mindmaps(player: Player) -> str:
         if (isStillActiveMindmap(mmId)) {
           recordUndoableEdit(preNodes);
           // selectNode both selects and (since it's a different id
-          // than whatever was selected before) queues the new node's
-          // label to be focused + text-selected on the next render, so
-          // the player can start typing its name immediately. Only
-          // done if the player's still looking at this mindmap --
+          // than whatever was selected before) queues a focus for the
+          // next render -- a brand new node is always gray, so that
+          // resolves to the popover's own text box (see renderCanvas's
+          // post-render focus effect), letting the player start typing
+          // its name immediately without an extra click to open it.
+          // Only done if the player's still looking at this mindmap --
           // otherwise the new node's id wouldn't belong to whatever
           // mindmap IS on screen now.
           selectNode(data.newNodeId || null);

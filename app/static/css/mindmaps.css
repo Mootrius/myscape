@@ -202,9 +202,11 @@ button.primary#mmNameSave, .mm-name-form-save {
    relies on the same text-selection machinery user-select: none turns
    off -- without this override the caret can't be placed and the
    focus-then-select-all in the script's renderCanvas silently does
-   nothing. Only gray/white labels are ever contenteditable (see
-   renderCanvas) -- every trackable color's text is derived from its
-   goal instead, never typed. */
+   nothing. Only the root's (white) label is ever contenteditable now
+   (see renderCanvas's isInlineEditable) -- a gray node renames through
+   a text box in its own popover instead (see .mm-goal-fields below),
+   and every trackable color's text is derived from its goal, never
+   typed either way. */
 .mm-node-label[contenteditable="true"] {
   cursor: text; outline: none; user-select: text; -webkit-user-select: text;
 }
@@ -456,13 +458,15 @@ button.primary#mmNameSave, .mm-name-form-save {
 }
 .mm-type-btn-label { text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* The popover's bottom row once Edit Mode's on -- Save (trackable
-   types only -- see renderNodePopoverHtml) and Delete (every non-root
-   node) sit side by side here instead of Save living inside
-   .mm-goal-fields above Delete on its own line. Each button just
-   takes an equal share of the row; a lone Delete (a manual/gray node,
-   which has nothing to "save") still sits centered rather than
-   stretching full-width, matching how it looked on its own before. */
+/* The popover's bottom row once Edit Mode's on -- Save (every non-root
+   node now, including manual -- see renderNodePopoverHtml) and Delete
+   sit side by side here instead of Save living inside .mm-goal-fields
+   above Delete on its own line. Each button just takes an equal share
+   of the row; :has(...:only-child) below is what still centers a lone
+   Delete rather than stretching it full-width, for whatever popover
+   genuinely has no Save at all (there's none today -- every type gets
+   one -- but this is cheap insurance against that ever changing again
+   rather than something to rely on right now). */
 .mm-popover-actions {
   display: flex; flex-direction: row; gap: 8px; width: 100%; justify-content: center;
 }
@@ -487,13 +491,12 @@ button.primary#mmNameSave, .mm-name-form-save {
 
 /* ---- Goal-criteria form (renderGoalFieldsHtml) -----------------------
    A trackable node's (red/orange/yellow/green/blue/purple) type-
-   specific fields -- shown inside the node popover, Edit-Mode-only,
-   with the actual "SAVE" button living just below in
-   .mm-popover-actions (alongside Delete) rather than inside this
-   wrapper. The gray manual-complete toggle reuses
-   .mm-manual-toggle-btn on its own (no wrapping .mm-goal-fields,
-   since there's nothing to "save" -- clicking it is itself the
-   action, and it's view-mode-only now -- see MM.editMode's comment). */
+   specific fields, OR a gray (manual) node's own name text box, shown
+   inside the node popover, Edit-Mode-only, with the actual "SAVE"
+   button living just below in .mm-popover-actions (alongside Delete)
+   rather than inside this wrapper. Marking a gray goal COMPLETE is a
+   separate thing entirely -- the checkbox right on the node itself
+   (see .mm-node-checkbox above), not anything in this popover. */
 .mm-goal-fields {
   display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: stretch;
 }

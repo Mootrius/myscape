@@ -122,16 +122,21 @@ MIN_SKILL_XP, MAX_SKILL_XP = 1, 200_000_000
 def _clean_text(text: Optional[str], allow_empty: bool = False) -> str:
     """Trims/truncates whatever text a node is given. `allow_empty`
     lets a brand new node (see add_node/add_shared_child below) actually
-    start with nothing in it -- the canvas immediately focuses a fresh
-    node's label for typing (see selectNode's own comment in the page
-    script), so there's no "New" placeholder for the player to notice
-    or have to clear first. Everywhere else (an existing node's text
-    being CHANGED, and a mindmap's own root, whose text comes from the
-    mindmap's own required name) keeps falling back to DEFAULT_TEXT --
-    update_node's caller already refuses to ever submit an empty edit
-    in the first place (see commitActiveLabelIfEditing), so this is
-    purely a defensive floor against a stray/direct API call blanking
-    an existing node out, not something the normal UI can trigger."""
+    start with nothing in it -- the canvas immediately queues a focus
+    for a fresh node (see selectNode's own comment in the page script),
+    landing either in the root's own inline-editable label or, for
+    every other new node (always gray), a text box in its popover (see
+    renderGoalFieldsHtml's "manual" branch) -- either way there's no
+    "New" placeholder for the player to notice or have to clear first.
+    Everywhere else (an existing node's text being CHANGED, and a
+    mindmap's own root, whose text comes from the mindmap's own
+    required name) keeps falling back to DEFAULT_TEXT -- update_node's
+    callers already refuse to ever submit an empty edit in the first
+    place (see commitActiveLabelIfEditing for the root's inline rename,
+    and the goal-save click delegation's own manual handling for a gray
+    node's popover rename), so this is purely a defensive floor against
+    a stray/direct API call blanking an existing node out, not
+    something the normal UI can trigger."""
     text = (text or "").strip()[:MAX_NODE_TEXT_LENGTH].strip()
     if allow_empty:
         return text
