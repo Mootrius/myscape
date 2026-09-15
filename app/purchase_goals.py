@@ -98,8 +98,19 @@ def get_mapping(force: bool = False) -> Tuple[Dict[str, dict], Optional[str]]:
 
     try:
         raw = _fetch_json(f"{API_BASE}/mapping")
+        # highalch/members ride along unused by every existing caller
+        # here (gear setups only ever needed name/icon), but cost
+        # nothing extra to keep -- see Possessions Monitoring's
+        # app/possessions.py, which reuses this same mapping for its
+        # High Alch value / Tradeable toggles rather than re-fetching
+        # the ~860KB payload a second time under a different cache.
         by_id = {
-            str(entry["id"]): {"name": entry.get("name"), "icon": entry.get("icon")}
+            str(entry["id"]): {
+                "name": entry.get("name"),
+                "icon": entry.get("icon"),
+                "highalch": entry.get("highalch"),
+                "members": entry.get("members"),
+            }
             for entry in raw
         }
         _mapping_cache = {"fetchedAt": time.time(), "byId": by_id, "error": None}

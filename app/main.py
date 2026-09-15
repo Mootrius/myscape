@@ -44,13 +44,22 @@ from app.models import (
     EquipmentItem,
     GearSetup,
     InventoryItem,
+    LootingBagItem,
     MindMap,
     Player,
+    PossessionTracker,
     PotionStorageItem,
     RunePouchItem,
     SeedVaultItem,
 )
-from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_purchase_goals, render_signup
+from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_possessions, render_purchase_goals, render_signup
+from app.possessions import (
+    build_possessions_summary,
+    build_trackers_state,
+    next_sort_order,
+    resolve_item_display,
+    search_trackable_items,
+)
 from app.purchase_goals import (
     COINS_ITEM_ID,
     build_owned_pools,
@@ -86,11 +95,18 @@ from app.schemas import (
     InventorySyncRequest,
     InventorySyncResponse,
     ItemSearchResponse,
+    LootingBagOut,
+    LootingBagItemOut,
+    LootingBagSyncRequest,
+    LootingBagSyncResponse,
     LootSyncRequest,
     LootSyncResponse,
     MoveGearSlotItemRequest,
     NpcSearchResponse,
     PlayerOut,
+    POSSESSION_STORAGE_KEYS,
+    PossessionTrackerIn,
+    PossessionTrackerUpdate,
     PotionStorageOut,
     PotionStorageItemOut,
     PotionStorageSyncRequest,
@@ -116,6 +132,7 @@ from app.schemas import (
     SetMindMapNodeGoalRequest,
     SkillsSyncRequest,
     SkillsSyncResponse,
+    SyncStatusOut,
     UpdateMindMapNodeRequest,
 )
 
@@ -147,6 +164,10 @@ MAX_RUNE_POUCH_ITEMS = 10
 # distinct types), a generous multiple of the real ceiling, not a
 # round-number guess, same spirit as MAX_POTION_STORAGE_ITEMS.
 MAX_SEED_VAULT_ITEMS = 200
+# The Looting Bag holds up to 28 distinct item stacks (the same size as
+# the main inventory, since it's filled the same way), so this mirrors
+# MAX_INVENTORY_ITEMS's own reasoning rather than being a fresh guess.
+MAX_LOOTING_BAG_ITEMS = INVENTORY_SIZE
 # There are exactly 24 real OSRS skills (see SKILL_NAMES in
 # app/mindmaps.py) -- a real ceiling, not a guess.
 MAX_SKILLS_PER_SYNC = 24
@@ -275,6 +296,24 @@ def unlink_player(db: Session = Depends(get_db), player: Player = Depends(get_cu
     linking.revoke_link(db, player)
 
 
+def _stamp_storage_synced(player: Player, storage_key: str, now: datetime) -> None:
+    """Records that `storage_key` (one of POSSESSION_STORAGE_KEYS) was
+    just synced -- called from the bottom of every one of the seven
+    per-storage POST handlers below, right before their own db.commit()
+    (storage_synced_at is a plain column on the same Player row already
+    being flushed, so this never needs a commit of its own). See
+    Player.storage_synced_at's own docstring in app/models.py for why
+    this exists at all rather than just reading the item tables' own
+    updated_at back.
+
+    Reassigns the whole dict rather than mutating the existing one in
+    place -- a JSONB column's SQLAlchemy tracking only notices a
+    brand-new object assigned to it, not an in-place `dict[key] = ...`
+    on the same object, so mutating in place would silently fail to
+    persist."""
+    player.storage_synced_at = {**(player.storage_synced_at or {}), storage_key: now.isoformat()}
+
+
 @app.post("/api/players/me/bank", response_model=BankSyncResponse)
 def sync_bank(
     payload: BankSyncRequest,
@@ -303,6 +342,7 @@ def sync_bank(
             player_id=player.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
+    _stamp_storage_synced(player, "bank", now)
     db.commit()
 
     return BankSyncResponse(item_count=len(payload.items))
@@ -343,6 +383,7 @@ def sync_inventory(
             player_id=player.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
+    _stamp_storage_synced(player, "inventory", now)
     db.commit()
 
     return InventorySyncResponse(item_count=len(payload.items))
@@ -382,6 +423,7 @@ def sync_equipment(
             player_id=player.id, slot=item.slot, item_id=item.item_id,
             item_name=item.item_name, quantity=item.quantity, updated_at=now,
         ))
+    _stamp_storage_synced(player, "equipment", now)
     db.commit()
 
     return EquipmentSyncResponse(item_count=len(payload.items))
@@ -426,6 +468,7 @@ def sync_potion_storage(
             player_id=player.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
+    _stamp_storage_synced(player, "potion_storage", now)
     db.commit()
 
     return PotionStorageSyncResponse(item_count=len(payload.items))
@@ -476,6 +519,7 @@ def sync_rune_pouch(
             player_id=player.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
+    _stamp_storage_synced(player, "rune_pouch", now)
     db.commit()
 
     return RunePouchSyncResponse(item_count=len(payload.items))
@@ -519,6 +563,7 @@ def sync_seed_vault(
             player_id=player.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
+    _stamp_storage_synced(player, "seed_vault", now)
     db.commit()
 
     return SeedVaultSyncResponse(item_count=len(payload.items))
@@ -536,6 +581,65 @@ def read_seed_vault(db: Session = Depends(get_db), player: Player = Depends(get_
     )
     updated_at = items[0].updated_at if items else None
     return SeedVaultOut(items=[SeedVaultItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/looting-bag", response_model=LootingBagSyncResponse)
+def sync_looting_bag(
+    payload: LootingBagSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for a Looting
+    Bag's contents instead -- see MyscapeClient#syncLootingBag in the
+    Mootrius/myscape-plugin repo and LootingBagItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_LOOTING_BAG_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_LOOTING_BAG_ITEMS}).",
+        )
+
+    db.query(LootingBagItem).filter(LootingBagItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(LootingBagItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "looting_bag", now)
+    db.commit()
+
+    return LootingBagSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/looting-bag", response_model=LootingBagOut)
+def read_looting_bag(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the looting
+    bag instead."""
+    items = (
+        db.query(LootingBagItem)
+        .filter(LootingBagItem.player_id == player.id)
+        .order_by(LootingBagItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return LootingBagOut(items=[LootingBagItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.get("/api/players/me/sync-status", response_model=SyncStatusOut)
+def read_sync_status(player: Player = Depends(get_current_player_from_api_key)):
+    """API-key authenticated (unlike the website's own session-
+    authenticated GETs above) -- this is what the RuneLite plugin's
+    side panel Status section actually polls (see MyscapePanel's
+    Status section in the Mootrius/myscape-plugin repo), since the
+    plugin has no browser session to authenticate with, the same
+    reason every other plugin-facing endpoint here is API-key
+    authenticated too. Returns every one of POSSESSION_STORAGE_KEYS,
+    `None` for anything never synced (see Player.storage_synced_at's
+    own docstring in app/models.py for why that's not the same thing
+    as "synced empty")."""
+    stamped = player.storage_synced_at or {}
+    return SyncStatusOut(storages={key: stamped.get(key) for key in POSSESSION_STORAGE_KEYS})
 
 
 @app.post("/api/players/me/skills", response_model=SkillsSyncResponse)
@@ -729,6 +833,127 @@ def mindmaps_page(player: Optional[Player] = Depends(get_optional_current_player
     if not player:
         return RedirectResponse("/login", status_code=302)
     return render_mindmaps(player)
+
+
+@app.get("/dashboard/possessions", response_class=HTMLResponse)
+def possessions_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    return render_possessions(player)
+
+
+@app.get("/api/possessions/search-items", response_model=ItemSearchResponse)
+def possessions_item_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
+    """Backs the min/max tracker "add an item" search field on the
+    Possessions Monitoring page -- session-authenticated like
+    item_search above, since only the website UI calls this. Unlike
+    that endpoint, every result here always carries a real item id
+    (see search_trackable_items in app/possessions.py for why -- a
+    tracker has nothing to watch without one)."""
+    return ItemSearchResponse(results=search_trackable_items(q))
+
+
+@app.get("/api/possessions/summary")
+def possessions_summary(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Section 3's payload -- every item currently owned in any synced
+    storage, priced and broken down by location (see
+    build_possessions_summary in app/possessions.py). Not pinned to a
+    response_model, same reasoning as /api/gear-setups below: a plain
+    list of dicts is simpler than fixing a schema for data this shape-
+    stable in practice but not worth formally modeling."""
+    return build_possessions_summary(db, player)
+
+
+@app.get("/api/possessions/trackers")
+def possessions_trackers(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Sections 1/2's combined payload -- both the minimum and maximum
+    trackers the player has set up, each already resolved against a
+    live owned-quantity count (see build_trackers_state in
+    app/possessions.py)."""
+    return build_trackers_state(db, player)
+
+
+@app.post("/api/possessions/trackers", status_code=status.HTTP_201_CREATED)
+def create_possession_tracker(
+    payload: PossessionTrackerIn,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Adds one new min or max tracker. item_name is whatever the
+    search result the player picked carried (see
+    possessions_item_search above) -- purely the same untradeable-
+    item-display fallback role documented on BankItem in
+    app/models.py, never consulted for a tradeable item. Re-adding the
+    same (kind, item_id) pair a player already has a tracker for
+    updates its target instead of erroring or duplicating -- the
+    natural behavior when they're just changing their mind about the
+    number, not a state they need to explicitly delete-then-recreate
+    to reach."""
+    existing = (
+        db.query(PossessionTracker)
+        .filter(
+            PossessionTracker.player_id == player.id,
+            PossessionTracker.kind == payload.kind,
+            PossessionTracker.item_id == payload.item_id,
+        )
+        .first()
+    )
+    if existing:
+        existing.target_quantity = payload.target_quantity
+        if payload.item_name:
+            existing.item_name = payload.item_name
+        db.commit()
+    else:
+        db.add(PossessionTracker(
+            player_id=player.id,
+            kind=payload.kind,
+            item_id=payload.item_id,
+            item_name=payload.item_name,
+            target_quantity=payload.target_quantity,
+            sort_order=next_sort_order(db, player, payload.kind),
+        ))
+        db.commit()
+    return build_trackers_state(db, player)
+
+
+@app.patch("/api/possessions/trackers/{tracker_id}")
+def update_possession_tracker(
+    tracker_id: uuid.UUID,
+    payload: PossessionTrackerUpdate,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Edits an existing tracker's target quantity in place -- the only
+    thing the page's own UI ever lets a player change about one after
+    creation (swapping the item itself is delete-and-recreate instead,
+    see PossessionTrackerUpdate's own docstring in app/schemas.py)."""
+    tracker = (
+        db.query(PossessionTracker)
+        .filter(PossessionTracker.id == tracker_id, PossessionTracker.player_id == player.id)
+        .first()
+    )
+    if not tracker:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracker not found.")
+    tracker.target_quantity = payload.target_quantity
+    db.commit()
+    return build_trackers_state(db, player)
+
+
+@app.delete("/api/possessions/trackers/{tracker_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_possession_tracker(
+    tracker_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    tracker = (
+        db.query(PossessionTracker)
+        .filter(PossessionTracker.id == tracker_id, PossessionTracker.player_id == player.id)
+        .first()
+    )
+    if not tracker:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracker not found.")
+    db.delete(tracker)
+    db.commit()
 
 
 @app.get("/api/gear-setups")

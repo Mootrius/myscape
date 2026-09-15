@@ -29,7 +29,7 @@ account inherit history that isn't theirs.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -100,6 +100,25 @@ class Player(Base):
     # /api/players/me/diaries, full replace.
     diary_tiers = Column(JSONB, nullable=False, default=dict)
 
+    # storage_synced_at: {<storage key>: <ISO 8601 timestamp>} for every
+    # one of the seven sources Possessions Monitoring's side-panel
+    # Status section reports on -- "bank", "equipment", "inventory",
+    # "potion_storage", "rune_pouch", "seed_vault", "looting_bag" --
+    # stamped every time that source's own sync endpoint is hit (see
+    # each POST /api/players/me/<source> handler in app/main.py), full
+    # replace of just that one key rather than the whole dict.
+    #
+    # Deliberately its own column rather than inferred from the item
+    # tables' own updated_at columns: a storage that syncs as
+    # genuinely EMPTY (an unstocked rune pouch, a bare bank) leaves
+    # zero rows behind, and BankOut/InventoryOut/etc.'s own
+    # `updated_at = items[0].updated_at if items else None` already
+    # reads that indistinguishably from "never synced at all" -- see
+    # those GET handlers in app/main.py. This column answers "has the
+    # plugin told us about this source at least once" on its own,
+    # independent of whatever that source currently holds.
+    storage_synced_at = Column(JSONB, nullable=False, default=dict)
+
     link_codes = relationship("LinkCode", back_populates="player", cascade="all, delete-orphan")
     api_keys = relationship("PlayerApiKey", back_populates="player", cascade="all, delete-orphan")
     bank_items = relationship("BankItem", back_populates="player", cascade="all, delete-orphan")
@@ -108,9 +127,11 @@ class Player(Base):
     potion_storage_items = relationship("PotionStorageItem", back_populates="player", cascade="all, delete-orphan")
     rune_pouch_items = relationship("RunePouchItem", back_populates="player", cascade="all, delete-orphan")
     seed_vault_items = relationship("SeedVaultItem", back_populates="player", cascade="all, delete-orphan")
+    looting_bag_items = relationship("LootingBagItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
     loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
     mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
+    possession_trackers = relationship("PossessionTracker", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -390,6 +411,37 @@ class SeedVaultItem(Base):
     __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_seed_vault_items_player_item"),)
 
 
+class LootingBagItem(Base):
+    """The player's current Looting Bag contents -- same full-snapshot,
+    delete-and-replace model as Bank/Inventory/Equipment/PotionStorage/
+    RunePouch/SeedVaultItem above. Synced by POST
+    /api/players/me/looting-bag (see MyscapeClient#syncLootingBag in
+    the Mootrius/myscape-plugin repo).
+
+    Unlike Potion Storage/Rune Pouch/Seed Vault, a Looting Bag IS a
+    normal ItemContainer RuneLite exposes directly (InventoryID.
+    LOOTING_BAG) -- the same way Bank is -- but, also like Bank, it
+    only reports real contents once the player has actually opened it
+    at least once in the current session (see
+    MyscapePlugin#readLootingBagItems there).
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above."""
+
+    __tablename__ = "looting_bag_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="looting_bag_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_looting_bag_items_player_item"),)
+
+
 class GearSetup(Base):
     """A named, saveable equipment+inventory loadout the player is
     planning/saving toward -- the Purchase Goals feature, ported from
@@ -549,3 +601,58 @@ class LootEvent(Base):
     player = relationship("Player", back_populates="loot_events")
 
     __table_args__ = (UniqueConstraint("player_id", "event_id", name="uq_loot_events_player_event"),)
+
+
+class PossessionTracker(Base):
+    """One "keep an eye on this item" tracker for the Possessions
+    Monitoring feature (see app/possessions.py) -- either a MINIMUM
+    tracker (section 1: "I want at least `target_quantity` of this at
+    all times", shown as a fill-toward-target progress bar -- e.g. 100
+    of each herb for emergency potion-making) or a MAXIMUM tracker
+    (section 2: "flag me once I have more than `target_quantity` of
+    this, so I know to sell the excess", shown as a red/green box --
+    e.g. 10,000 blood runes). Both are the same shape (an item plus one
+    threshold), just read in opposite directions -- `kind` is what
+    tells app/possessions.py and the page's own script which direction
+    to evaluate and how to color it, rather than two separate tables
+    for what's otherwise identical data.
+
+    item_id is OSRS's own real item id -- see BankItem's docstring in
+    this file for why that's what every owned-quantity source here is
+    already keyed by, and item_name plays the same untradeable-item-
+    display-fallback role documented there, used only when a live
+    icon/name lookup (tradeable wiki mapping or the item_ids.json
+    snapshot -- see app/possessions.py's search_trackable_items) comes
+    up empty, e.g. an item the wiki/snapshot data hasn't caught up to
+    yet.
+
+    Current quantity is never stored here -- it's always computed live
+    from whichever of bank/inventory/equipment/potion_storage/
+    rune_pouch/seed_vault/looting_bag the tracker's own item_id is
+    found in (see get_owned_quantity_map in app/possessions.py), the
+    same "read the last-synced snapshot fresh every time" approach
+    Purchase Goals already uses -- a tracker just remembers WHAT to
+    watch and WHAT threshold matters, not a cached amount that could
+    drift stale.
+
+    sort_order works exactly like MindMap node ordering (see that
+    model's own docstring) -- a float so a tracker can be inserted
+    between two existing ones without renumbering every row after it;
+    lower sorts first within its own `kind`."""
+
+    __tablename__ = "possession_trackers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)  # "min" or "max"
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    target_quantity = Column(Integer, nullable=False)
+    sort_order = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="possession_trackers")
+
+    __table_args__ = (
+        UniqueConstraint("player_id", "kind", "item_id", name="uq_possession_trackers_player_kind_item"),
+    )

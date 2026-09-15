@@ -386,6 +386,130 @@ class SeedVaultOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+# -- Looting bag: identical shape to Bank/Rune Pouch/Seed Vault above,
+# just a separate container -- see LootingBagItem's docstring in
+# app/models.py. -------------------------------------------------------
+
+class LootingBagItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class LootingBagSyncRequest(BaseModel):
+    items: List[LootingBagItemIn]
+
+
+class LootingBagSyncResponse(BaseModel):
+    item_count: int
+
+
+class LootingBagItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class LootingBagOut(BaseModel):
+    items: List[LootingBagItemOut]
+    updated_at: Optional[datetime] = None
+
+
+# -- Possessions Monitoring: the min/max item trackers (sections 1/2)
+# and the storage sync-status map the plugin side panel's Status
+# section reads -- see PossessionTracker/Player.storage_synced_at's
+# own docstrings in app/models.py. ---------------------------------
+
+#: Every storage source Possessions Monitoring (and the plugin panel's
+#: Status section) knows about, in the fixed order they're always shown.
+#: Kept here, not just in app/possessions.py, since main.py's sync
+#: endpoints need the same key spelling to stamp storage_synced_at with.
+POSSESSION_STORAGE_KEYS = [
+    "bank", "equipment", "inventory", "potion_storage",
+    "rune_pouch", "seed_vault", "looting_bag",
+]
+
+
+class SyncStatusOut(BaseModel):
+    """One entry per POSSESSION_STORAGE_KEYS -- {"bank": "<iso ts>"|None,
+    ...}. Read by the plugin's side panel Status section (GET
+    /api/players/me/sync-status) -- session-auth isn't usable from the
+    plugin (it's API-key authenticated like every other plugin-facing
+    endpoint), so this is deliberately a plain dict rather than the
+    website's own session-authenticated GETs above."""
+    storages: Dict[str, Optional[datetime]]
+
+
+class PossessionTrackerIn(BaseModel):
+    kind: str  # "min" or "max"
+    item_id: int
+    item_name: Optional[str] = None
+    target_quantity: int
+
+    @field_validator("kind")
+    @classmethod
+    def check_kind(cls, value: str) -> str:
+        if value not in ("min", "max"):
+            raise ValueError('kind must be "min" or "max".')
+        return value
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("target_quantity")
+    @classmethod
+    def check_target_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("target_quantity must be a positive integer.")
+        return value
+
+
+class PossessionTrackerUpdate(BaseModel):
+    """PATCH body -- only target_quantity is ever editable after
+    creation (see the page's own edit-in-place UI); swapping an
+    existing tracker's item is just delete-and-recreate instead."""
+    target_quantity: int
+
+    @field_validator("target_quantity")
+    @classmethod
+    def check_target_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("target_quantity must be a positive integer.")
+        return value
+
+
+class PossessionTrackerOut(BaseModel):
+    id: str
+    kind: str
+    item_id: int
+    item_name: Optional[str] = None
+    target_quantity: int
+    icon: Optional[str] = None
+    tradeable: bool = False
+    owned_quantity: int = 0
+
+
 # -- Skills/quests/diaries: unlike every item source above, each of
 # these is always exactly one whole snapshot (one level+xp per skill,
 # one completed-quest list, one highest tier per diary area) rather
