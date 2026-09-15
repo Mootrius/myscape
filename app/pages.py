@@ -3353,6 +3353,25 @@ def render_mindmaps(player: Player) -> str:
       var wheelSettleTimer = null;
       var wheelSettleMs = 200;
       canvasEl.addEventListener('wheel', function (e) {
+        // A wheel event over the popover -- most commonly scrolling
+        // through a long NPC/item/quest search-suggestions list (see
+        // .mm-suggestions' own overflow-y: auto) -- was never excluded
+        // here, so it bubbled straight up to this canvas-wide listener
+        // same as a wheel event anywhere else on the canvas: preventing
+        // the dropdown's own native scroll AND zooming the whole
+        // mindmap out from under it instead. That's what the reported
+        // "blurry when searching" actually was -- not a new rendering
+        // bug, just this handler hijacking the scroll and triggering
+        // the exact same "soft while actively zooming, crisp once
+        // still" behavior described above, while the player was trying
+        // to scroll a dropdown and had no reason to expect the canvas
+        // to be zooming at all. Bailing out here (and deliberately NOT
+        // calling preventDefault in that case) hands the event back to
+        // the browser's own default handling, which is exactly "scroll
+        // whatever's actually scrollable under the cursor" -- the
+        // suggestions list or the note textarea, same as any other
+        // scrollable element on the page.
+        if (e.target.closest('[data-role="popover"]')) return;
         e.preventDefault();
         mmWorldEl.style.transitionDuration = '0s';
         setZoom(MM.zoom * Math.exp(-e.deltaY * wheelZoomSensitivity));
@@ -3656,7 +3675,7 @@ def render_mindmaps(player: Player) -> str:
             if (!textVal) {
               var textErrEl = textInput && textInput.parentElement && textInput.parentElement.querySelector('[data-role="node-text-error"]');
               if (textErrEl) {
-                textErrEl.textContent = 'Must have text to save.';
+                textErrEl.textContent = 'Type something.';
                 textErrEl.classList.add('show');
               }
               return;
@@ -4523,7 +4542,7 @@ def render_mindmaps(player: Player) -> str:
           fields =
             renderSearchFieldHtml('sourceName', 'npc', 'Search for an NPC', goal.sourceName) +
             '<input type="hidden" data-goal-field="activityType" value="npc">' +
-            '<input class="mm-goal-input" type="number" data-goal-field="targetCount" placeholder="Target count" min="1" value="' + esc(goal.targetCount != null ? goal.targetCount : '') + '">';
+            '<input class="mm-goal-input" type="number" data-goal-field="targetCount" placeholder="Target kc" min="1" value="' + esc(goal.targetCount != null ? goal.targetCount : '') + '">';
         } else if (type === 'item') {
           fields =
             renderSearchFieldHtml('itemName', 'item', 'Search for an item', goal.itemName) +

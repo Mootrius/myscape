@@ -284,8 +284,8 @@ def clean_goal(color: str, goal, require_complete: bool = True) -> Optional[Dict
                 raise ValueError(f"activityType must be one of {KC_ACTIVITY_TYPES}.")
             return v
         field("activityType", _activity, "Pick what kind of activity this goal tracks.")
-        field("sourceName", lambda v: _clean_goal_text(v, "sourceName"), "Name the NPC, boss, or activity.")
-        field("targetCount", lambda v: _clean_int_in_range(v, "targetCount", 1, MAX_KC_TARGET), "Set a target count.")
+        field("sourceName", lambda v: _clean_goal_text(v, "sourceName"), "Pick an NPC.")
+        field("targetCount", lambda v: _clean_int_in_range(v, "targetCount", 1, MAX_KC_TARGET), "Set a target kc.")
         return cleaned
 
     if goal_type == "item":
@@ -311,9 +311,9 @@ def clean_goal(color: str, goal, require_complete: bool = True) -> Optional[Dict
         field("metric", _metric, "Pick level or experience.")
         metric = cleaned.get("metric")
         if metric == "xp":
-            field("target", lambda v: _clean_int_in_range(v, "target", MIN_SKILL_XP, MAX_SKILL_XP), "Set a target.")
+            field("target", lambda v: _clean_int_in_range(v, "target", MIN_SKILL_XP, MAX_SKILL_XP), "Set an experience target.")
         else:
-            field("target", lambda v: _clean_int_in_range(v, "target", MIN_SKILL_LEVEL, MAX_SKILL_LEVEL), "Set a target.")
+            field("target", lambda v: _clean_int_in_range(v, "target", MIN_SKILL_LEVEL, MAX_SKILL_LEVEL), "Set a level target.")
         return cleaned
 
     if goal_type == "quest":
