@@ -197,7 +197,17 @@
 @supports (container-type: inline-size) {
   .loot-npc-box { height: calc((100cqw - 40px) / 3 + 8px); }
 }
-.loot-npc-box:hover { border-color: var(--gold-dim); }
+/* Matches .gear-slot's hover feedback on Purchase Goals (lighting the
+   box up, rather than recoloring the border, on hover -- see that
+   file's own comment on .gear-slot:hover for why) -- but as a plain
+   background-color instead of filter: brightness(1.18), and a bit
+   brighter than that (rgb(51,51,54) vs. panel-2's rgb(38,38,40) is
+   roughly a 1.35x lift). filter brightens the whole rendered box,
+   icon and kc/gp text included, which isn't wanted here -- only the
+   box's own background should light up on hover. .active (the
+   selected-NPC state, below) is untouched -- that's a different,
+   sticky affordance from this transient hover one. */
+.loot-npc-box:hover { background-color: rgb(51, 51, 54); }
 .loot-npc-box.active { border-color: var(--gold); }
 .loot-npc-box-icon { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
 .loot-npc-box-kc {
@@ -309,7 +319,9 @@
   color: inherit; text-decoration: none; cursor: pointer;
 }
 .loot-item-box:hover {
-  border-color: var(--gold-dim);
+  /* Same background-only brightening as .loot-npc-box:hover above
+     (see its comment) instead of recoloring the border. */
+  background-color: rgb(51, 51, 54);
   /* The base rule above already resets text-decoration to none, but
      that alone doesn't survive hovering -- myscape.css's global
      a:hover { text-decoration: underline; } has the same specificity
