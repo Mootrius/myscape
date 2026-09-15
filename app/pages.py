@@ -355,7 +355,7 @@ def render_landing(player: Optional[Player]) -> str:
 # so a returning player recognizes them at a glance.
 _ICON_COINS = "/static/img/icon-coins.png"
 _ICON_BONES = "/static/img/icon-dragon-bones.png"
-_ICON_CLUE_SCROLL = "/static/img/icon-clue-scroll.png"
+_ICON_CLUELESS_SCROLL = "/static/img/icon-clueless-scroll.png"
 
 
 def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
@@ -405,12 +405,12 @@ def render_dashboard(player: Player) -> str:
     mindmaps_card = (
         '<a href="/dashboard/mindmaps" style="display:block;color:inherit;text-decoration:none;">'
         + _dash_card(
-            _ICON_CLUE_SCROLL,
-            "Clue scroll",
+            _ICON_CLUELESS_SCROLL,
+            "Clueless scroll",
             "Mindmaps",
-            "Organize your goals into a mindmap -- start from one idea and branch "
-            "out with parent, child, and sibling nodes, each recolorable to "
-            "however you like to group things.",
+            "Organize your goals into a mindmap! Start from one goal and branch "
+            "out with parent, child, and sibling nodes — all with autodetecting "
+            "completion functionality.",
         )
         + "</a>"
     )
