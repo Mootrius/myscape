@@ -113,6 +113,18 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-world {
   position: absolute; top: 0; left: 0; transform-origin: 0 0;
   transition: transform 0.18s ease-out;
+  /* Keeps this whole panned/zoomed layer on its own stable
+     compositing layer at a fixed raster scale, rather than letting
+     the browser re-decide that scale on the fly -- which is exactly
+     what a nested 3D-transform-context descendant (.mm-node-flip-inner,
+     added for the note flip) can otherwise perturb, since introducing
+     a 3D rendering context anywhere in a subtree can make the browser
+     re-evaluate how the WHOLE subtree gets rasterized. Without this,
+     that shows up as every node's text/icons going slightly soft the
+     moment any node on the canvas has a note, not just the flipped
+     one -- will-change here pins the layer down instead of leaving it
+     to that heuristic. */
+  will-change: transform;
 }
 
 .mm-lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
@@ -335,8 +347,16 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   position: absolute; inset: 0;
   transform-style: preserve-3d;
   transition: transform 0.5s ease;
+  /* translateZ(0) alongside the rotateY below -- gives this its own
+     explicit, stable layer up front (same reasoning as .mm-world's
+     own will-change just above) instead of one the browser only
+     promotes implicitly the moment backface-visibility/preserve-3d
+     are in play, which is the pairing that otherwise risks a blurry
+     raster scale for this node and, via .mm-world, every other one on
+     the canvas too. */
+  transform: translateZ(0);
 }
-.mm-node-flip-inner.mm-node-flipped { transform: rotateY(180deg); }
+.mm-node-flip-inner.mm-node-flipped { transform: translateZ(0) rotateY(180deg); }
 .mm-node-face {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
