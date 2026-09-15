@@ -359,30 +359,40 @@ button.primary#mmNameSave, .mm-name-form-save {
    .mm-goal-fields below), which needs more breathing room than the
    plain swatches-only popover a gray node's view-mode toggle uses --
    widened rather than sized to content so every goal type's form
-   (a 3-field kc form vs. a 1-field gp form) settles at the same
-   width instead of the popover visibly resizing type to type. */
-.mm-node-popover-wide { width: 208px; }
+   (a search-field kc form vs. a 1-field gp form) settles at the same
+   width instead of the popover visibly resizing type to type. Wider
+   than the old 2-column picker's 208px -- the 3-column, icon-left/
+   text-right buttons need more horizontal room per button than the
+   old icon-on-top layout did. */
+.mm-node-popover-wide { width: 250px; }
 
 /* ---- Goal-type picker (renderGoalTypePickerHtml) ---------------------
-   Replaces the old plain color-swatch row -- a 2-column grid of
-   icon+label buttons, one per goal type (MANUAL/KC/ITEM/GP/SKILL/
-   QUEST/DIARY -- see GOAL_TYPE_PICKER in the page script), so the
-   picker reads as "what kind of goal" rather than just "what color".
-   Clicking one still only ever sends a `color` (see the click
-   delegation), same request as the old swatches. */
+   Replaces the old plain color-swatch row -- a 3-column grid of
+   icon+label buttons, one per goal type (KC/ITEM/GP/SKILL/QUEST/
+   DIARY/MANUAL, in that array order -- see GOAL_TYPE_PICKER in the
+   page script), so the picker reads as "what kind of goal" rather
+   than just "what color". Clicking one still only ever sends a
+   `color` (see the click delegation), same request as the old
+   swatches. The array's own order IS the grid position (row 1
+   KC/ITEM/GP, row 2 SKILL/QUEST/DIARY, row 3 MANUAL alone) -- a plain
+   3-up grid with no explicit placement needed. */
 .mm-type-picker {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; width: 100%;
 }
+/* Icon on the left, label text on the right (row, not column) -- the
+   HTML already emits the icon/swatch markup before the label span
+   (see renderGoalTypePickerHtml), so this is purely a flex-direction
+   change from the old icon-on-top layout. */
 .mm-type-btn {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  background: var(--panel-2); border: 1px solid var(--border); padding: 8px 4px;
+  display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 5px;
+  background: var(--panel-2); border: 1px solid var(--border); padding: 6px 6px;
   color: var(--text-dim); font-family: inherit;
   font-size: 9.5px; letter-spacing: 0.02em; cursor: pointer;
 }
 .mm-type-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .mm-type-btn.active { border-color: var(--gold); color: var(--gold); }
 .mm-type-btn-icon {
-  width: 20px; height: 20px; object-fit: contain;
+  width: 18px; height: 18px; object-fit: contain; flex: none;
   /* The source icons are tiny (13x13) OSRS sprites -- crisp
      nearest-neighbor scaling reads far better blown up than the
      browser's default smoothing, which just turns them to mush. */
@@ -392,13 +402,31 @@ button.primary#mmNameSave, .mm-name-form-save {
    picker used, with a diagonal red slash standing in for "no tracked
    goal" where every other option has a real icon image. */
 .mm-type-btn-swatch {
-  position: relative; width: 20px; height: 20px; background: var(--panel-2); border: 1px solid var(--border);
+  position: relative; width: 18px; height: 18px; flex: none; background: var(--panel-2); border: 1px solid var(--border);
 }
 .mm-type-btn-swatch-manual::after {
   content: ''; position: absolute; left: 1px; right: 1px; top: 50%; height: 2px;
   background: var(--red); transform: translateY(-50%) rotate(45deg);
 }
-.mm-type-btn-label { text-transform: uppercase; white-space: nowrap; }
+.mm-type-btn-label { text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The popover's bottom row once Edit Mode's on -- Save (trackable
+   types only -- see renderNodePopoverHtml) and Delete (every non-root
+   node) sit side by side here instead of Save living inside
+   .mm-goal-fields above Delete on its own line. Each button just
+   takes an equal share of the row; a lone Delete (a manual/gray node,
+   which has nothing to "save") still sits centered rather than
+   stretching full-width, matching how it looked on its own before. */
+.mm-popover-actions {
+  display: flex; flex-direction: row; gap: 8px; width: 100%; justify-content: center;
+}
+.mm-popover-actions .mm-goal-save-btn,
+.mm-popover-actions .mm-color-popover-delete {
+  flex: 1 1 0; width: auto; height: 26px;
+}
+.mm-popover-actions:has(.mm-color-popover-delete:only-child) .mm-color-popover-delete {
+  flex: 0 1 auto; padding: 0 20px;
+}
 
 /* Shorter than .btn-secondary's own default 32px -- this one sits in
    a small popover, not a row of full-size buttons. */
@@ -413,11 +441,13 @@ button.primary#mmNameSave, .mm-name-form-save {
 
 /* ---- Goal-criteria form (renderGoalFieldsHtml) -----------------------
    A trackable node's (red/orange/yellow/green/blue/purple) type-
-   specific fields, always ending in a "Save goal" button -- shown
-   inside the node popover, Edit-Mode-only. The gray manual-complete
-   toggle reuses .mm-manual-toggle-btn on its own (no wrapping
-   .mm-goal-fields, since there's nothing to "save" -- clicking it is
-   itself the action), both inside Edit Mode's popover and outside it. */
+   specific fields -- shown inside the node popover, Edit-Mode-only,
+   with the actual "SAVE" button living just below in
+   .mm-popover-actions (alongside Delete) rather than inside this
+   wrapper. The gray manual-complete toggle reuses
+   .mm-manual-toggle-btn on its own (no wrapping .mm-goal-fields,
+   since there's nothing to "save" -- clicking it is itself the
+   action, and it's view-mode-only now -- see MM.editMode's comment). */
 .mm-goal-fields {
   display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: stretch;
 }
@@ -437,13 +467,65 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-goal-fields input.mm-goal-input:focus,
 .mm-goal-fields select.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-goal-fields input.mm-goal-input::placeholder { color: var(--text-faint); }
-.mm-goal-save-btn { width: 100%; height: 26px; }
+/* .mm-goal-save-btn itself is sized/laid out by .mm-popover-actions
+   above (it now sits there, not inside .mm-goal-fields). */
 
 /* The gray node's manual-complete toggle -- shown on its own (no
-   .mm-goal-fields wrapper, see the comment above) whether or not Edit
-   Mode is on, so it needs to look right sitting directly inside the
-   bare .mm-node-popover shell in the view-mode case too. */
+   .mm-goal-fields wrapper, see the comment above), ONLY outside Edit
+   Mode now (ticking a goal off is a "using it" action, not an
+   "editing its criteria" one), so it needs to look right sitting
+   directly inside the bare .mm-node-popover shell in that view-mode
+   case. */
 .mm-manual-toggle-btn { width: auto; height: 24px; align-self: center; white-space: nowrap; padding: 0 14px; }
+
+/* ---- Goal search fields (renderSearchFieldHtml) -----------------------
+   The KC/ITEM/QUEST goals' NPC/item/quest search boxes -- same
+   debounced-dropdown pattern as Purchase Goals' own item search (see
+   .search-box/.suggestions/.suggestion in purchase-goals.css), just
+   under mm- prefixed names and sized to fit this compact popover
+   rather than duplicated verbatim, since mindmaps.css is loaded on a
+   different page and shares no rules with that stylesheet. */
+.mm-search-wrap { position: relative; width: 100%; }
+.mm-suggestions {
+  display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
+  background: var(--panel); border: 1px solid var(--border); max-height: 180px; overflow-y: auto;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.mm-suggestions.show { display: block; }
+.mm-suggestion {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 11.5px;
+  color: var(--text); cursor: pointer;
+}
+.mm-suggestion:hover { background: var(--panel-2); }
+.mm-suggestion img { width: 18px; height: 18px; object-fit: contain; image-rendering: pixelated; flex: none; }
+.mm-suggestion-empty {
+  padding: 6px 8px; font-size: 11.5px; color: var(--text-faint); font-style: italic; cursor: default;
+}
+
+/* ---- Segmented toggle (renderSegmentedToggleHtml) ---------------------
+   The skill goal's level/experience choice and the diary goal's tier
+   choice -- a row of equal-width buttons standing in for a <select>,
+   backed by a hidden input carrying whichever one's active (see the
+   segmented-toggle click delegation in the page script). */
+.mm-segment-group {
+  display: flex; flex-direction: row; width: 100%; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+}
+.mm-segment-btn {
+  flex: 1 1 0; background: #100e0b; border: none; border-right: 1px solid var(--border);
+  color: var(--text-dim); font-family: inherit; font-size: 10.5px; letter-spacing: 0.02em;
+  padding: 7px 4px; cursor: pointer; text-align: center;
+}
+.mm-segment-btn:last-child { border-right: none; }
+.mm-segment-btn:hover { color: var(--text); }
+.mm-segment-btn.active { background: var(--panel-2); color: var(--gold); }
+
+/* ---- Inline field validation (validateSkillTarget) --------------------
+   The skill goal's target field -- shown directly under that one
+   input, not the page's global error banner, and empty/hidden
+   whenever the value's in range. */
+.mm-goal-target-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.mm-field-error { display: none; font-size: 10.5px; color: var(--red); line-height: 1.3; }
+.mm-field-error.show { display: block; }
 
 /* ---- Zero-mindmaps state -------------------------------------------
    Same shape as .pg-empty (purchase-goals.css): centered placeholder

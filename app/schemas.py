@@ -484,6 +484,21 @@ class ItemSearchResponse(BaseModel):
     results: List[ItemSearchResult]
 
 
+class NpcSearchResponse(BaseModel):
+    """Backs the Mindmaps KC goal's NPC search field (see
+    app/npc_names.py) -- just names, unlike item search, since there's
+    no per-NPC icon snapshot to show alongside a suggestion."""
+
+    results: List[str]
+
+
+class QuestSearchResponse(BaseModel):
+    """Backs the Mindmaps QUEST goal's quest/miniquest search field
+    (see app/quest_names.py)."""
+
+    results: List[str]
+
+
 # -- Gear setups (Purchase Goals). -----------------------------------------
 
 class GearSetupIconIn(BaseModel):

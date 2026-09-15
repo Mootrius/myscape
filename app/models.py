@@ -82,7 +82,7 @@ class Player(Base):
     # single-purpose tables.
     #
     # skills: {<skill name, lowercase>: {"level": int, "xp": int}} for
-    # every one of the 23 real OSRS skills the plugin has reported at
+    # every one of the 24 real OSRS skills the plugin has reported at
     # least once (see SKILL_NAMES in app/mindmaps.py). Synced by POST
     # /api/players/me/skills, full replace.
     skills = Column(JSONB, nullable=False, default=dict)

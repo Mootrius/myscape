@@ -2474,8 +2474,8 @@ def render_mindmaps(player: Player) -> str:
       var NODE_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'white'];
 
       // Everything below mirrors app/mindmaps.py's own goal-type
-      // constants exactly (GOAL_TYPE_BY_COLOR, KC_ACTIVITY_TYPES,
-      // SKILL_NAMES, DIARY_AREAS, DIARY_TIERS) -- there's no endpoint
+      // constants exactly (GOAL_TYPE_BY_COLOR, SKILL_NAMES,
+      // DIARY_AREAS, DIARY_TIERS) -- there's no endpoint
       // that hands these lists to the client, since they're small,
       // fixed, and only ever used to build the goal-criteria form
       // below (renderGoalFieldsHtml), not validated here at all (the
@@ -2496,14 +2496,19 @@ def render_mindmaps(player: Player) -> str:
       // locally under app/static/img/ rather than hot-linked from the
       // wiki. "gray" has no icon file -- see its own comment in
       // renderGoalTypePickerHtml for what it shows instead.
+      // Ordered (not just listed) to match the 3-column grid the
+      // player asked for exactly: row 1 KC/ITEM/GP, row 2
+      // SKILL/QUEST/DIARY, row 3 MANUAL alone -- see .mm-type-picker
+      // in mindmaps.css, a plain 3-up grid that just lays these out
+      // in array order, so the order here IS the grid position.
       var GOAL_TYPE_PICKER = [
-        { color: 'gray', label: 'MANUAL' },
         { color: 'red', label: 'KC', icon: '/static/img/icon-goal-kc.png' },
         { color: 'orange', label: 'ITEM', icon: '/static/img/icon-goal-item.png' },
         { color: 'yellow', label: 'GP', icon: '/static/img/icon-goal-gp.png' },
         { color: 'green', label: 'SKILL', icon: '/static/img/icon-goal-skill.png' },
         { color: 'blue', label: 'QUEST', icon: '/static/img/icon-goal-quest.png' },
         { color: 'purple', label: 'DIARY', icon: '/static/img/icon-goal-diary.png' },
+        { color: 'gray', label: 'MANUAL' },
       ];
       // Icon path by color, for the same icon shown inside a node
       // itself next to its (goal-derived) label text -- see
@@ -2511,20 +2516,28 @@ def render_mindmaps(player: Player) -> str:
       // rather than duplicated, so the two never drift out of sync.
       var GOAL_TYPE_ICON_BY_COLOR = {};
       GOAL_TYPE_PICKER.forEach(function (opt) { if (opt.icon) GOAL_TYPE_ICON_BY_COLOR[opt.color] = opt.icon; });
-      // [value, label] pairs -- source_type strings LootEvent already
-      // stores (see app/loot.py), not free-form text, so a kc goal's
-      // "activity" field is a picklist rather than a typed field.
-      var KC_ACTIVITY_TYPES = [
-        ['npc', 'NPC / boss kill'],
-        ['pickpocket', 'Pickpocket'],
-        ['event', 'Clue casket / minigame reward'],
-      ];
       var SKILL_NAMES = [
         'attack', 'defence', 'strength', 'hitpoints', 'ranged', 'prayer', 'magic',
         'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting',
         'smithing', 'mining', 'herblore', 'agility', 'thieving', 'slayer', 'farming',
-        'runecraft', 'hunter', 'construction',
+        'runecraft', 'hunter', 'construction', 'sailing',
       ];
+      // Mirrors MIN_SKILL_LEVEL/MAX_SKILL_LEVEL/MIN_SKILL_XP/MAX_SKILL_XP
+      // in app/mindmaps.py -- used only for the skill goal's inline,
+      // as-you-type target validation (see validateSkillTarget); the
+      // server re-validates against its own copy of these regardless.
+      var MIN_SKILL_LEVEL = 2, MAX_SKILL_LEVEL = 99;
+      var MIN_SKILL_XP = 1, MAX_SKILL_XP = 200000000;
+      // Endpoint each goal-field search box (see renderSearchFieldHtml/
+      // runGoalSearch) queries, keyed by its data-search-kind. "item"
+      // reuses Purchase Goals' own item search outright (see
+      // app/main.py's item_search) -- no Mindmaps-specific backend
+      // needed there at all.
+      var GOAL_SEARCH_ENDPOINTS = {
+        npc: '/api/npcs/search',
+        item: '/api/items/search',
+        quest: '/api/quests/search',
+      };
       var DIARY_AREAS = [
         'ardougne', 'desert', 'falador', 'fremennik', 'kandarin', 'karamja',
         'kourend_kebos', 'lumbridge_draynor', 'morytania', 'varrock',
@@ -3140,6 +3153,46 @@ def render_mindmaps(player: Player) -> str:
         }
         var typeBtn = e.target.closest('.mm-type-btn');
         if (typeBtn) { updateSelectedNode({ color: typeBtn.getAttribute('data-color') }); return; }
+        // A goal search field's suggestion (see renderSearchFieldHtml/
+        // runGoalSearch) -- fills the search box's own input with the
+        // picked name and closes the dropdown, but does NOT save on
+        // its own; the player still hits the popover's Save button
+        // once every field (including a numeric one alongside it) is
+        // filled in, same as typing a name in directly.
+        var suggestionEl = e.target.closest('.mm-suggestion');
+        if (suggestionEl) {
+          var searchWrap = suggestionEl.closest('.mm-search-wrap');
+          var searchInputEl = searchWrap && searchWrap.querySelector('.mm-search-input');
+          if (searchInputEl) searchInputEl.value = suggestionEl.getAttribute('data-value');
+          var suggBox = searchWrap && searchWrap.querySelector('[data-role="mm-suggestions"]');
+          if (suggBox) { suggBox.classList.remove('show'); suggBox.innerHTML = ''; }
+          return;
+        }
+        // A segmented toggle option (see renderSegmentedToggleHtml) --
+        // the skill goal's level/experience choice, the diary goal's
+        // tier choice. Marks the clicked option active and copies its
+        // value into the hidden field right after the group (read
+        // generically by goal-save below, same as any other
+        // [data-goal-field] element).
+        var segBtn = e.target.closest('.mm-segment-btn');
+        if (segBtn) {
+          var segGroup = segBtn.closest('[data-role="segment-group"]');
+          if (!segGroup) return;
+          segGroup.querySelectorAll('.mm-segment-btn').forEach(function (b) { b.classList.toggle('active', b === segBtn); });
+          var segHidden = segGroup.nextElementSibling;
+          if (segHidden && segHidden.matches('input[type="hidden"]')) segHidden.value = segBtn.getAttribute('data-segment-value');
+          // The skill target's valid range depends on which metric is
+          // picked (level vs. xp) -- re-check it immediately against
+          // whatever's already typed so switching metrics updates the
+          // inline error right away rather than waiting for the next
+          // keystroke in the target field.
+          if (segGroup.getAttribute('data-segment-field') === 'metric') {
+            var fieldsWrapForMetric = segGroup.closest('[data-role="goal-fields"]');
+            var targetForMetric = fieldsWrapForMetric && fieldsWrapForMetric.querySelector('[data-goal-field="target"]');
+            if (targetForMetric) validateSkillTarget(targetForMetric);
+          }
+          return;
+        }
         if (e.target.closest('[data-role="delete"]')) { deleteSelectedNode(); return; }
         if (e.target.closest('[data-role="add-shared-child"]')) { addSharedChildSelected(); return; }
         // The gray-node manual "Complete" toggle -- available whether
@@ -3157,9 +3210,16 @@ def render_mindmaps(player: Player) -> str:
         // A trackable goal's criteria form (kc/item/gp/skill/quest/
         // diary -- see renderGoalFieldsHtml) -- Edit Mode only, since
         // this is only ever rendered there in the first place, but the
-        // save button existing at all already implies that.
+        // save button existing at all already implies that. The Save
+        // button itself now sits in the popover's own actions row,
+        // alongside Delete, rather than inside .mm-goal-fields (see
+        // renderNodePopoverHtml) -- so this looks the fields wrapper up
+        // via the shared popover ancestor instead of e.target's own
+        // closest ancestor.
         if (e.target.closest('[data-role="goal-save"]')) {
-          var fieldsWrap = e.target.closest('[data-role="goal-fields"]');
+          var popoverForSave = e.target.closest('[data-role="popover"]');
+          var fieldsWrap = popoverForSave && popoverForSave.querySelector('[data-role="goal-fields"]');
+          if (!fieldsWrap) return;
           var goal = {};
           fieldsWrap.querySelectorAll('[data-goal-field]').forEach(function (input) {
             var val = (input.value || '').trim();
@@ -3177,6 +3237,41 @@ def render_mindmaps(player: Player) -> str:
       document.getElementById('mmNodesLayer').addEventListener('focusout', function (e) {
         var label = e.target.closest('[data-role="label"]');
         if (label) commitNodeTextFromLabel(label);
+        // A goal search field losing focus closes its suggestions --
+        // delayed slightly rather than done immediately, since a click
+        // on a suggestion itself (see the .mm-suggestion click
+        // delegation above) blurs this same input first; the delay
+        // gives that click time to read the suggestions box before
+        // this empties it out from under it.
+        var searchInput = e.target.closest('.mm-search-input');
+        if (searchInput) {
+          var searchWrapOut = searchInput.closest('.mm-search-wrap');
+          setTimeout(function () {
+            var box = searchWrapOut && searchWrapOut.querySelector('[data-role="mm-suggestions"]');
+            if (box) { box.classList.remove('show'); box.innerHTML = ''; }
+          }, 150);
+        }
+      });
+      // Debounced live search (goal search fields -- see
+      // renderSearchFieldHtml) and live inline range validation (the
+      // skill goal's target field -- see validateSkillTarget), both
+      // driven off the same delegated 'input' listener since both are
+      // "react to every keystroke, without a full render()" behaviors
+      // that would otherwise wipe out whatever's mid-typing in every
+      // other field of the same form. Keyed by a WeakMap rather than a
+      // single shared timer, since a player could plausibly have more
+      // than one search field in view (e.g. switching goal types
+      // quickly) -- each input gets its own independent debounce.
+      var searchDebounceTimers = new WeakMap();
+      document.getElementById('mmNodesLayer').addEventListener('input', function (e) {
+        var searchInput = e.target.closest('.mm-search-input');
+        if (searchInput) {
+          clearTimeout(searchDebounceTimers.get(searchInput));
+          searchDebounceTimers.set(searchInput, setTimeout(function () { runGoalSearch(searchInput); }, 200));
+          return;
+        }
+        var targetInput = e.target.closest('[data-goal-field="target"]');
+        if (targetInput && targetInput.closest('.mm-goal-fields')) validateSkillTarget(targetInput);
       });
       document.getElementById('mmNodesLayer').addEventListener('keydown', function (e) {
         var label = e.target.closest('[data-role="label"]');
@@ -3199,6 +3294,84 @@ def render_mindmaps(player: Player) -> str:
       // ---- Rendering ----------------------------------------------------
 
       function fmtNum(n) { return Number(n).toLocaleString('en-US'); }
+
+      // Runs a goal search field's query against whichever endpoint
+      // its data-search-kind picks (see GOAL_SEARCH_ENDPOINTS) and
+      // renders the result into that same field's own suggestions box
+      // -- shared by the KC/ITEM/QUEST fields (see
+      // renderSearchFieldHtml), called debounced off the 'input'
+      // delegation above.
+      async function runGoalSearch(input) {
+        var box = input.parentElement && input.parentElement.querySelector('[data-role="mm-suggestions"]');
+        if (!box) return;
+        var query = input.value.trim();
+        if (!query) { box.classList.remove('show'); box.innerHTML = ''; return; }
+        var kind = input.getAttribute('data-search-kind');
+        var endpoint = GOAL_SEARCH_ENDPOINTS[kind];
+        if (!endpoint) return;
+        var data = await apiCall(endpoint + '?q=' + encodeURIComponent(query));
+        // The popover (and this exact input) can be gone by the time
+        // this resolves -- the node got deselected, recolored, or the
+        // whole canvas re-rendered for some other reason while the
+        // request was in flight. Bail rather than writing into a
+        // detached box nobody can see any more.
+        if (!document.body.contains(input)) return;
+        renderGoalSuggestions(box, kind, data ? data.results : []);
+      }
+
+      // Renders one search field's suggestion dropdown. Item results
+      // are {name, icon, ...} objects (see /api/items/search); NPC and
+      // quest results are plain name strings (see /api/npcs/search,
+      // /api/quests/search) -- both end up as the same shape of row,
+      // just with or without an icon.
+      function renderGoalSuggestions(box, kind, results) {
+        if (!results.length) {
+          var emptyLabel = kind === 'npc' ? 'No NPCs found' : kind === 'quest' ? 'No quests found' : 'No items found';
+          box.innerHTML = '<div class="mm-suggestion-empty">' + esc(emptyLabel) + '</div>';
+          box.classList.add('show');
+          return;
+        }
+        box.innerHTML = results.map(function (r) {
+          var name = kind === 'item' ? r.name : r;
+          var icon = kind === 'item' ? r.icon : null;
+          return '<div class="mm-suggestion" data-value="' + esc(name) + '">' +
+            (icon ? '<img src="' + esc(icon) + '" alt="">' : '') +
+            '<span>' + esc(name) + '</span></div>';
+        }).join('');
+        box.classList.add('show');
+      }
+
+      // Live, as-you-type range check for the skill goal's target
+      // field -- mirrors MIN_SKILL_LEVEL/MAX_SKILL_LEVEL/MIN_SKILL_XP/
+      // MAX_SKILL_XP exactly (the server re-validates against its own
+      // copy of these regardless -- see clean_goal in
+      // app/mindmaps.py). Writes straight into the little error line
+      // right under the field (see the .mm-goal-target-wrap markup in
+      // renderGoalFieldsHtml) rather than the page's global error
+      // banner, and clears itself the instant the value's back in
+      // range -- called on every keystroke in the field itself, and
+      // again whenever the level/experience toggle changes (see the
+      // segmented-toggle click delegation above), since the valid
+      // range depends on which one's picked.
+      function validateSkillTarget(input) {
+        var errEl = input.parentElement && input.parentElement.querySelector('[data-role="target-error"]');
+        if (!errEl) return;
+        var fieldsWrap = input.closest('[data-role="goal-fields"]');
+        var metricHidden = fieldsWrap && fieldsWrap.querySelector('[data-goal-field="metric"]');
+        var metric = (metricHidden && metricHidden.value === 'xp') ? 'xp' : 'level';
+        var raw = input.value.trim();
+        if (raw === '') { errEl.textContent = ''; errEl.classList.remove('show'); return; }
+        var n = Number(raw);
+        var min = metric === 'xp' ? MIN_SKILL_XP : MIN_SKILL_LEVEL;
+        var max = metric === 'xp' ? MAX_SKILL_XP : MAX_SKILL_LEVEL;
+        if (!Number.isInteger(n) || n < min || n > max) {
+          errEl.textContent = 'Must be between ' + fmtNum(min) + ' and ' + fmtNum(max) + '.';
+          errEl.classList.add('show');
+        } else {
+          errEl.textContent = '';
+          errEl.classList.remove('show');
+        }
+      }
 
       // A trackable node's own text is no longer something the player
       // types -- it's derived straight from its goal criteria (see
@@ -3426,7 +3599,7 @@ def render_mindmaps(player: Player) -> str:
       }
 
       // The selected node's color swatches + per-color goal-criteria
-      // form + delete action, shown as a popover anchored right below
+      // form + Save/Delete row, shown as a popover anchored right below
       // the node itself -- replaces the old toolbar's swatch row and
       // +Parent/+Child/+Sibling/Delete buttons (the add-relative ones
       // are now the edge buttons above; delete didn't have anywhere
@@ -3434,29 +3607,43 @@ def render_mindmaps(player: Player) -> str:
       // too). All Edit-Mode-only, EXCEPT the gray node's manual
       // "Mark complete" toggle (see renderGoalFieldsHtml), which is
       // also the only thing this popover ever shows OUTSIDE Edit Mode
-      // -- see MM.editMode's own comment for why. The root node has no
-      // delete action, same rule the backend already enforces. Shares
-      // its outer .mm-node-popover shell/position with
-      // renderSharedChildPopoverHtml below -- only one of the two is
-      // ever shown for a given node (see renderCanvas), depending on
-      // whether it's the sole selected node or the anchor of several.
+      // -- see MM.editMode's own comment for why. Shares its outer
+      // .mm-node-popover shell/position with renderSharedChildPopoverHtml
+      // below -- only one of the two is ever shown for a given node
+      // (see renderCanvas), depending on whether it's the sole selected
+      // node or the anchor of several.
+      //
+      // The root node has NOTHING to show here at all, in either mode
+      // -- it can't have a goal type (always white, structurally -- see
+      // NODE_COLORS' own comment in app/mindmaps.py) and can't be
+      // deleted (same rule the backend already enforces), so this
+      // bails out before rendering any popover shell for it. Doing
+      // that check first (rather than just leaving out the picker/
+      // delete button and still wrapping an empty shell) is what keeps
+      // selecting the root from showing a visible-but-empty popover box.
       function renderNodePopoverHtml(node) {
+        if (node.parentId === null) return '';
         if (!MM.editMode) {
           // Nothing to show for a non-gray node while just viewing --
           // there's no action available on it at all outside Edit Mode.
           if (GOAL_TYPE_BY_COLOR[node.color] !== 'manual') return '';
           return '<div class="mm-node-popover" data-role="popover">' + renderGoalFieldsHtml(node) + '</div>';
         }
-        var isRoot = node.parentId === null;
-        // The root can't have a goal type at all (it's always white,
-        // structurally -- see NODE_COLORS' own comment in
-        // app/mindmaps.py), so it gets no picker, just the delete-less
-        // shell with nothing else to show.
-        var pickerHtml = isRoot ? '' : renderGoalTypePickerHtml(node);
+        var goalType = GOAL_TYPE_BY_COLOR[node.color];
+        // Every trackable type gets a Save button alongside Delete;
+        // manual has nothing to "save" (its own criteria form is
+        // gated out entirely in Edit Mode -- see renderGoalFieldsHtml
+        // -- ticking it complete is a view-mode-only action), so it's
+        // just Delete alone.
+        var showSave = !!goalType && goalType !== 'manual';
+        var actionsHtml = '<div class="mm-popover-actions" data-role="popover-actions">' +
+          (showSave ? '<button type="button" class="btn-secondary mm-goal-save-btn" data-role="goal-save">SAVE</button>' : '') +
+          '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>' +
+          '</div>';
         return '<div class="mm-node-popover mm-node-popover-wide" data-role="popover">' +
-          pickerHtml +
+          renderGoalTypePickerHtml(node) +
           renderGoalFieldsHtml(node) +
-          (isRoot ? '' : '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>') +
+          actionsHtml +
           '</div>';
       }
 
@@ -3489,38 +3676,84 @@ def render_mindmaps(player: Player) -> str:
         return '<div class="mm-type-picker">' + buttons + '</div>';
       }
 
+      // Renders a text input backed by a live search dropdown -- the
+      // KC goal's NPC field, the ITEM goal's item field, and the QUEST
+      // goal's quest/miniquest field all use this, differing only in
+      // which snapshot they search (see GOAL_SEARCH_ENDPOINTS/
+      // runGoalSearch). The input itself still just carries
+      // `data-goal-field="<fieldName>"` like any other field -- typing
+      // a name straight in (without picking a suggestion) is still a
+      // perfectly valid save, same as before this search box existed;
+      // clicking a suggestion (see the .mm-suggestion click delegation
+      // above) just fills the same input's value in for you.
+      function renderSearchFieldHtml(fieldName, searchKind, placeholder, currentValue) {
+        return '<div class="mm-search-wrap">' +
+          '<input class="mm-goal-input mm-search-input" type="text" autocomplete="off" ' +
+          'data-goal-field="' + fieldName + '" data-search-kind="' + searchKind + '" ' +
+          'placeholder="' + esc(placeholder) + '" maxlength="80" value="' + esc(currentValue || '') + '">' +
+          '<div class="mm-suggestions" data-role="mm-suggestions"></div>' +
+          '</div>';
+      }
+
+      // Renders a segmented multi-choice button group backed by a
+      // hidden `data-goal-field="<fieldName>"` input carrying whichever
+      // option is currently active -- the skill goal's level/experience
+      // choice and the diary goal's tier choice both use this in place
+      // of a <select>. The goal-save click delegation reads every
+      // `[data-goal-field]` element generically (including this hidden
+      // one) exactly like a real <select>/<input>, so nothing else
+      // needs to know this isn't one. Falls back to the FIRST option
+      // when `currentValue` doesn't match any (a brand new goal with
+      // nothing chosen yet) -- the same effective default a <select>
+      // with no explicit `selected` option already had.
+      function renderSegmentedToggleHtml(fieldName, options, currentValue) {
+        var value = options.some(function (o) { return o[0] === currentValue; }) ? currentValue : options[0][0];
+        var buttons = options.map(function (o) {
+          var activeCls = (o[0] === value) ? ' active' : '';
+          return '<button type="button" class="mm-segment-btn' + activeCls + '" data-segment-value="' + o[0] + '">' + esc(o[1]) + '</button>';
+        }).join('');
+        return '<div class="mm-segment-group" data-role="segment-group" data-segment-field="' + fieldName + '">' + buttons + '</div>' +
+          '<input type="hidden" data-goal-field="' + fieldName + '" value="' + esc(value) + '">';
+      }
+
       // The current color's goal-criteria fields, prefilled from the
       // node's own `goal` (see clean_goal/default_goal in
       // app/mindmaps.py for the exact shape each type stores) --
-      // "gray"/manual is just the one-button toggle (available whether
-      // or not Edit Mode is on), "white"/null (the root) has nothing
-      // trackable to fill in at all, and the rest get a small form
-      // ending in a "Save goal" button that PATCHes .../goal with
-      // whatever's currently in these inputs (see the goal-save click
-      // delegation above) -- read fresh off the DOM at save time, not
-      // tracked here, so there's no extra state to keep in sync with
-      // what the player's actually typed.
+      // "gray"/manual is the one-button toggle, but ONLY outside Edit
+      // Mode (ticking a goal off is a "using it" action, not an
+      // "editing its criteria" one -- see MM.editMode's own comment;
+      // Edit Mode's popover shows the type picker + Save/Delete row
+      // around this instead, see renderNodePopoverHtml), "white"/null
+      // (the root) never reaches this function at all any more (see
+      // renderNodePopoverHtml's own early return), and the rest get a
+      // small form whose fields are read fresh off the DOM by the
+      // popover's own Save button (see the goal-save click delegation
+      // above) -- nothing here is tracked in JS state, so there's
+      // nothing to keep in sync with what the player's actually typed.
       function renderGoalFieldsHtml(node) {
         var goal = node.goal || {};
         var type = GOAL_TYPE_BY_COLOR[node.color];
         if (type === 'manual') {
+          if (MM.editMode) return '';
           var label = (goal.manualComplete ? 'Mark incomplete' : 'Mark complete');
           return '<button type="button" class="btn-secondary mm-manual-toggle-btn" data-role="manual-toggle">' + esc(label) + '</button>';
         }
         if (!type) return '';
         var fields = '';
         if (type === 'kc') {
+          // No more activity-type dropdown -- the search field below
+          // is scoped to killable NPCs specifically (see
+          // app/npc_names.py), so activityType is always 'npc' now;
+          // carried as a hidden field purely so the server's existing
+          // clean_goal (which still requires it) sees a complete kc
+          // goal without exposing a picklist the player never needs.
           fields =
-            '<select class="mm-goal-input" data-goal-field="activityType">' +
-              KC_ACTIVITY_TYPES.map(function (o) {
-                return '<option value="' + o[0] + '"' + (goal.activityType === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
-              }).join('') +
-            '</select>' +
-            '<input class="mm-goal-input" type="text" data-goal-field="sourceName" placeholder="NPC / boss / activity name" maxlength="80" value="' + esc(goal.sourceName || '') + '">' +
+            renderSearchFieldHtml('sourceName', 'npc', 'Search for an NPC', goal.sourceName) +
+            '<input type="hidden" data-goal-field="activityType" value="npc">' +
             '<input class="mm-goal-input" type="number" data-goal-field="targetCount" placeholder="Target count" min="1" value="' + esc(goal.targetCount != null ? goal.targetCount : '') + '">';
         } else if (type === 'item') {
           fields =
-            '<input class="mm-goal-input" type="text" data-goal-field="itemName" placeholder="Item name" maxlength="80" value="' + esc(goal.itemName || '') + '">' +
+            renderSearchFieldHtml('itemName', 'item', 'Search for an item', goal.itemName) +
             '<input class="mm-goal-input" type="number" data-goal-field="targetQty" placeholder="Target quantity" min="1" value="' + esc(goal.targetQty != null ? goal.targetQty : '') + '">';
         } else if (type === 'gp') {
           fields =
@@ -3532,14 +3765,13 @@ def render_mindmaps(player: Player) -> str:
                 return '<option value="' + sk + '"' + (goal.skill === sk ? ' selected' : '') + '>' + esc(titleCase(sk)) + '</option>';
               }).join('') +
             '</select>' +
-            '<select class="mm-goal-input" data-goal-field="metric">' +
-              '<option value="level"' + (goal.metric === 'level' ? ' selected' : '') + '>Level (2-99)</option>' +
-              '<option value="xp"' + (goal.metric === 'xp' ? ' selected' : '') + '>Experience</option>' +
-            '</select>' +
-            '<input class="mm-goal-input" type="number" data-goal-field="target" placeholder="Target" value="' + esc(goal.target != null ? goal.target : '') + '">';
+            renderSegmentedToggleHtml('metric', [['level', 'Level'], ['xp', 'Experience']], goal.metric) +
+            '<div class="mm-goal-target-wrap">' +
+              '<input class="mm-goal-input" type="number" data-goal-field="target" placeholder="Target" value="' + esc(goal.target != null ? goal.target : '') + '">' +
+              '<div class="mm-field-error" data-role="target-error"></div>' +
+            '</div>';
         } else if (type === 'quest') {
-          fields =
-            '<input class="mm-goal-input" type="text" data-goal-field="questName" placeholder="Quest or miniquest name" maxlength="80" value="' + esc(goal.questName || '') + '">';
+          fields = renderSearchFieldHtml('questName', 'quest', 'Search for a quest or miniquest', goal.questName);
         } else if (type === 'diary') {
           fields =
             '<select class="mm-goal-input" data-goal-field="area">' +
@@ -3547,15 +3779,9 @@ def render_mindmaps(player: Player) -> str:
                 return '<option value="' + a + '"' + (goal.area === a ? ' selected' : '') + '>' + esc(DIARY_AREA_LABELS[a]) + '</option>';
               }).join('') +
             '</select>' +
-            '<select class="mm-goal-input" data-goal-field="tier">' +
-              DIARY_TIERS.map(function (t) {
-                return '<option value="' + t + '"' + (goal.tier === t ? ' selected' : '') + '>' + esc(titleCase(t)) + '</option>';
-              }).join('') +
-            '</select>';
+            renderSegmentedToggleHtml('tier', DIARY_TIERS.map(function (t) { return [t, titleCase(t)]; }), goal.tier);
         }
-        return '<div class="mm-goal-fields" data-role="goal-fields">' + fields +
-          '<button type="button" class="btn-secondary mm-goal-save-btn" data-role="goal-save">Save goal</button>' +
-          '</div>';
+        return '<div class="mm-goal-fields" data-role="goal-fields">' + fields + '</div>';
       }
 
       // Shown instead of the color popover above once a SECOND node's

@@ -80,13 +80,13 @@ GOAL_TYPE_BY_COLOR = {
 # something worked around here).
 KC_ACTIVITY_TYPES = ["npc", "pickpocket", "event"]
 
-# The 23 real OSRS skills, lowercase -- what a green (skill) goal's
+# The 24 real OSRS skills, lowercase -- what a green (skill) goal's
 # `skill` field must be one of.
 SKILL_NAMES = {
     "attack", "defence", "strength", "hitpoints", "ranged", "prayer", "magic",
     "cooking", "woodcutting", "fletching", "fishing", "firemaking", "crafting",
     "smithing", "mining", "herblore", "agility", "thieving", "slayer", "farming",
-    "runecraft", "hunter", "construction",
+    "runecraft", "hunter", "construction", "sailing",
 }
 
 # The 12 real OSRS achievement diary areas, lowercase/slugified -- what

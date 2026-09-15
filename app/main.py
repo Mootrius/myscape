@@ -27,6 +27,8 @@ from app.database import get_db
 from app.limiter import limiter
 from app.loot import build_loot_state, kc_counts_by_player, resolve_range, sync_loot_events
 from app.item_ids import find_item_ids
+from app.npc_names import search_npc_names
+from app.quest_names import search_quest_names
 from app.mindmaps import (
     add_node,
     add_shared_child,
@@ -87,11 +89,13 @@ from app.schemas import (
     LootSyncRequest,
     LootSyncResponse,
     MoveGearSlotItemRequest,
+    NpcSearchResponse,
     PlayerOut,
     PotionStorageOut,
     PotionStorageItemOut,
     PotionStorageSyncRequest,
     PotionStorageSyncResponse,
+    QuestSearchResponse,
     QuestsSyncRequest,
     QuestsSyncResponse,
     RenameGearSetupRequest,
@@ -143,9 +147,9 @@ MAX_RUNE_POUCH_ITEMS = 10
 # distinct types), a generous multiple of the real ceiling, not a
 # round-number guess, same spirit as MAX_POTION_STORAGE_ITEMS.
 MAX_SEED_VAULT_ITEMS = 200
-# There are exactly 23 real OSRS skills (see SKILL_NAMES in
+# There are exactly 24 real OSRS skills (see SKILL_NAMES in
 # app/mindmaps.py) -- a real ceiling, not a guess.
-MAX_SKILLS_PER_SYNC = 23
+MAX_SKILLS_PER_SYNC = 24
 # A defensive upper bound on completed quests/miniquests -- OSRS has
 # nowhere near this many, so the only way a sync would hit it is a
 # malformed/buggy client.
@@ -688,6 +692,22 @@ def item_search(q: str = "", player: Player = Depends(get_current_player_from_se
     other Purchase Goals endpoint below, since only the website UI calls
     this, never the plugin."""
     return ItemSearchResponse(results=search_items(q))
+
+
+@app.get("/api/npcs/search", response_model=NpcSearchResponse)
+def npc_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
+    """Backs the Mindmaps KC goal's NPC search field (see
+    app/npc_names.py) -- session-authenticated like item_search above,
+    since only the website UI calls this."""
+    return NpcSearchResponse(results=search_npc_names(q))
+
+
+@app.get("/api/quests/search", response_model=QuestSearchResponse)
+def quest_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
+    """Backs the Mindmaps QUEST goal's quest/miniquest search field
+    (see app/quest_names.py) -- session-authenticated like
+    item_search above, since only the website UI calls this."""
+    return QuestSearchResponse(results=search_quest_names(q))
 
 
 @app.get("/dashboard/purchase-goals", response_class=HTMLResponse)
