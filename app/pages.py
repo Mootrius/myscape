@@ -2822,6 +2822,20 @@ def render_mindmaps(player: Player) -> str:
         if (el && el.isContentEditable && el.getAttribute && el.getAttribute('data-role') === 'label') el.blur();
       }
 
+      // Blurring a still-editing label (see commitActiveLabelIfEditing
+      // above) fires the label's own text-commit PATCH in the
+      // background (see commitNodeTextFromLabel below) -- if a click
+      // that's ALSO acting on that same node (recoloring it, adding a
+      // node relative to it, deleting it...) fired its own request
+      // immediately afterward, the two requests raced: whichever
+      // response landed second would blow away and rebuild the node's
+      // whole DOM out from under the first response's, still-settling
+      // one, which is what produced a stray, wrongly-positioned caret
+      // flashing in the node for an instant. The click delegation
+      // below awaits this before doing anything else, so the text
+      // commit's own render always finishes first.
+      var pendingLabelCommit = null;
+
       var canvasEl = document.getElementById('mmCanvas');
       var panState = { active: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0, moved: false };
       canvasEl.addEventListener('pointerdown', function (e) {
@@ -2960,7 +2974,16 @@ def render_mindmaps(player: Player) -> str:
       // reaching the canvas's own pan-start handler, it doesn't
       // suppress the click event the browser fires afterward, so a
       // button's own click still arrives here normally.
-      document.getElementById('mmNodesLayer').addEventListener('click', function (e) {
+      document.getElementById('mmNodesLayer').addEventListener('click', async function (e) {
+        // See pendingLabelCommit's comment above -- if this same click
+        // just blurred a still-editing label on its way in (via the
+        // pointerdown delegation's commitActiveLabelIfEditing call),
+        // let that text-commit's own request+render fully finish
+        // before this click's own action fires its own request.
+        if (pendingLabelCommit) {
+          await pendingLabelCommit;
+          pendingLabelCommit = null;
+        }
         var edgeBtn = e.target.closest('.mm-edge-btn');
         if (edgeBtn) {
           var nodeEl = edgeBtn.closest('.mm-node');
@@ -3436,11 +3459,12 @@ def render_mindmaps(player: Player) -> str:
       // is what changed -- no need to look up which node the label
       // belonged to.
       function commitNodeTextFromLabel(label) {
+        pendingLabelCommit = null;
         var node = selectedNode();
         if (!node) return;
         var val = (label.textContent || '').trim();
         if (!val || val === node.text) { label.textContent = node.text; return; }
-        updateSelectedNode({ text: val });
+        pendingLabelCommit = updateSelectedNode({ text: val });
       }
 
       // Adds a node relative to `nodeId` -- NOT necessarily the
