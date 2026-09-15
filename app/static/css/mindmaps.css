@@ -485,21 +485,6 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; padding: 0;
   opacity: 0; pointer-events: none; transition: opacity 0.12s ease;
-  /* Every node's four edge buttons sit in the DOM at all times (just
-     invisible via opacity: 0 until that node's hovered) -- without
-     this, the FIRST hover on any given node still has to promote all
-     four to their own compositing layer right as the opacity
-     transition above kicks in, and demote them again once it ends.
-     That promote/demote is exactly the kind of event that can force a
-     full repaint of a shared ancestor layer rather than staying
-     scoped to the button itself -- here, that ancestor is .mm-world,
-     the one transformed/panned/zoomed layer every node on the canvas
-     already paints into, so a repaint of it reads as every node's
-     text/icons flickering, not just the hovered one's edge buttons.
-     will-change here establishes each button's own layer up front,
-     so hovering only ever touches an already-existing layer instead
-     of creating/tearing one down. */
-  will-change: opacity;
 }
 /* Edge buttons show while hovering the node itself, but NOT while
    hovering the popover below it (color swatches, or the "add shared
