@@ -2646,7 +2646,38 @@ def render_mindmaps(player: Player) -> str:
             if (clampedCenter < minAllowed) clampedCenter = minAllowed;
             if (clampedCenter > maxAllowed) clampedCenter = maxAllowed;
           }
+
+          // Moving n itself isn't enough -- if n has its own children
+          // (an ordinary node added below a shared child, say), THEIR
+          // x was computed during the walk() above relative to n's
+          // OLD (pre-nudge) position, and they never get touched by
+          // this loop themselves (only nodes with their own
+          // extraParentIds do). Left alone, the fan-out connector from
+          // n down to its own first child ends up trying to join two
+          // verticals that no longer share an x at all -- since that
+          // segment is only ever bridged by a horizontal bus when n
+          // has 2+ children (see the single-child branch below in the
+          // connector-drawing pass), a single child just renders as a
+          // disconnected floating stub. So shift n's WHOLE subtree
+          // (every descendant, recursively, via childrenMap) by the
+          // exact same delta as n itself moved -- that keeps their
+          // positions relative to n frozen, so everything n carries
+          // down with it stays visually attached and its connectors
+          // stay straight, exactly as if the whole subtree had simply
+          // been drawn starting from n's new spot to begin with.
+          var oldCenter = positions[n.id].x + NODE_WIDTH / 2;
+          var delta = clampedCenter - oldCenter;
           positions[n.id].x = clampedCenter - NODE_WIDTH / 2;
+          if (delta !== 0) {
+            (function shiftSubtree(nodeId) {
+              (childrenMap.get(nodeId) || []).forEach(function (kid) {
+                if (positions[kid.id]) {
+                  positions[kid.id].x += delta;
+                  shiftSubtree(kid.id);
+                }
+              });
+            })(n.id);
+          }
         });
 
         return {
