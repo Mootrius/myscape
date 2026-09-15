@@ -218,6 +218,11 @@ button.primary#mmNameSave, .mm-name-form-save {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; min-width: 0;
 }
+/* An item goal's leading "x" (see renderNodeLabelHtml in the page
+   script) stays lowercase against .mm-node's own inherited
+   text-transform: uppercase -- everything else in the label still
+   renders upper as normal. */
+.mm-node-x-lower { text-transform: lowercase; }
 /* The selected node's own outline + stacking rule is defined further
    below, alongside the edge buttons/color popover it's shown with. */
 

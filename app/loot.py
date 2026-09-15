@@ -235,15 +235,35 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict) -> Tuple[L
     for raw in raw_items:
         item_id = raw.get("item_id")
         quantity = raw.get("quantity", 0) or 0
-        meta = mapping.get(str(item_id), {}) if item_id is not None else {}
+        # A noted drop keeps the game's own display name (OSRS shows
+        # "Blue dragonhide" whether it's noted or not) but carries a
+        # DIFFERENT item id from the unnoted item -- which is exactly
+        # what _add_item_totals below groups by, so left alone a noted
+        # and unnoted drop of the same item would land in two separate
+        # buckets with identical names. Folding the noted id down to
+        # its unnoted counterpart here (same lookup _noted_id_fallback
+        # already does for pricing, since the wiki's mapping/price
+        # APIs never carry a separate listing for the noted id anyway)
+        # means both variants resolve to the same itemId and merge into
+        # one entry downstream.
+        canonical_id = item_id
+        if item_id is not None:
+            unnoted_id = _noted_id_fallback(item_id, mapping)
+            if unnoted_id is not None:
+                canonical_id = unnoted_id
+        meta = mapping.get(str(canonical_id), {}) if canonical_id is not None else {}
         item_name = raw.get("item_name") or meta.get("name") or (
-            f"Item #{item_id}" if item_id is not None else "Unknown item"
+            f"Item #{canonical_id}" if canonical_id is not None else "Unknown item"
         )
+        # Value is still priced off the ORIGINAL item_id (sell_price_for
+        # does its own noted-id fallback internally) -- canonical_id is
+        # only for grouping/display, not a claim that the two ids are
+        # interchangeable everywhere.
         value = _item_value(item_id, quantity, prices, mapping)
         total_value += value
         icon = item_icon_url(meta.get("icon")) if meta.get("icon") else item_icon_url(item_name)
         resolved.append({
-            "itemId": item_id,
+            "itemId": canonical_id,
             "itemName": item_name,
             "icon": icon,
             "quantity": quantity,

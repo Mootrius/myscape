@@ -386,7 +386,7 @@ def render_dashboard(player: Player) -> str:
             "Purchase Goals",
             "Track your owned GP against the purchases you'd like to make on the "
             "Grand Exchange, all with live pricing updates for each item. "
-            "One-off purchases and entire setups are both supported.",
+            "Organize multiple setups to keep track of at once.",
         )
         + "</a>"
     )
@@ -417,9 +417,9 @@ def render_dashboard(player: Player) -> str:
 
     body = f"""
     <div class="dash-grid">
-      {purchase_goals_card}
       {loot_tracker_card}
       {mindmaps_card}
+      {purchase_goals_card}
     </div>
     """
     return _shell(title="Dashboard — myscape", player=player, body=body)
@@ -3427,6 +3427,11 @@ def render_mindmaps(player: Player) -> str:
         }
         if (type === 'item') {
           if (!goal.targetQty || !goal.itemName) return 'Set item goal';
+          // The leading "x" here is intentionally lowercase in the
+          // source string -- see renderNodeLabelHtml, which is what
+          // actually keeps it lowercase on screen despite .mm-node's
+          // own text-transform: uppercase (everything else in this
+          // string still renders upper via that inherited rule).
           return 'x' + fmtNum(goal.targetQty) + ' ' + goal.itemName;
         }
         if (type === 'gp') {
@@ -3448,6 +3453,21 @@ def render_mindmaps(player: Player) -> str:
           return DIARY_AREA_LABELS[goal.area] + ' ' + titleCase(goal.tier);
         }
         return node.text;
+      }
+
+      // .mm-node's own text-transform: uppercase (see that rule's own
+      // comment in mindmaps.css) shouts an item goal's leading "x" into
+      // "X" along with everything else in the label -- this wraps just
+      // that character in a span forced back to lowercase (mirroring
+      // the .mm-segment-btn/.mm-suggestion text-transform overrides
+      // elsewhere in this file), leaving the rest of the label, and
+      // every other goal type's label, uppercased exactly as before.
+      function renderNodeLabelHtml(goalType, text) {
+        if (goalType === 'item') {
+          var m = /^x(\d.*)$/.exec(text);
+          if (m) return '<span class="mm-node-x-lower">x</span>' + esc(m[1]);
+        }
+        return esc(text);
       }
 
       function renderCanvas(mm) {
@@ -3486,7 +3506,7 @@ def render_mindmaps(player: Player) -> str:
           var iconSrc = GOAL_TYPE_ICON_BY_COLOR[n.color];
           var labelCls = 'mm-node-label' + (iconSrc ? ' mm-node-label-with-icon' : '');
           var labelInner = iconSrc
-            ? '<img class="mm-node-icon" src="' + iconSrc + '" alt="">' + '<span class="mm-node-label-text">' + esc(displayText) + '</span>'
+            ? '<img class="mm-node-icon" src="' + iconSrc + '" alt="">' + '<span class="mm-node-label-text">' + renderNodeLabelHtml(goalType, displayText) + '</span>'
             : esc(displayText);
           // The root is the one node every mindmap always keeps, so it
           // can't get a parent (which would just bury it under a new,
