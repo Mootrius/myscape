@@ -119,8 +119,22 @@ MIN_SKILL_LEVEL, MAX_SKILL_LEVEL = 2, 99
 MIN_SKILL_XP, MAX_SKILL_XP = 1, 200_000_000
 
 
-def _clean_text(text: Optional[str]) -> str:
+def _clean_text(text: Optional[str], allow_empty: bool = False) -> str:
+    """Trims/truncates whatever text a node is given. `allow_empty`
+    lets a brand new node (see add_node/add_shared_child below) actually
+    start with nothing in it -- the canvas immediately focuses a fresh
+    node's label for typing (see selectNode's own comment in the page
+    script), so there's no "New" placeholder for the player to notice
+    or have to clear first. Everywhere else (an existing node's text
+    being CHANGED, and a mindmap's own root, whose text comes from the
+    mindmap's own required name) keeps falling back to DEFAULT_TEXT --
+    update_node's caller already refuses to ever submit an empty edit
+    in the first place (see commitActiveLabelIfEditing), so this is
+    purely a defensive floor against a stray/direct API call blanking
+    an existing node out, not something the normal UI can trigger."""
     text = (text or "").strip()[:MAX_NODE_TEXT_LENGTH].strip()
+    if allow_empty:
+        return text
     return text or DEFAULT_TEXT
 
 
@@ -410,7 +424,7 @@ def add_node(
     new_color = _clean_color(color)
     new_node = {
         "id": str(uuid.uuid4()),
-        "text": _clean_text(text),
+        "text": _clean_text(text, allow_empty=True),
         "color": new_color,
         "goal": default_goal(new_color),
     }
@@ -492,7 +506,7 @@ def add_shared_child(
     new_color = _clean_color(color)
     new_node = {
         "id": str(uuid.uuid4()),
-        "text": _clean_text(text),
+        "text": _clean_text(text, allow_empty=True),
         "color": new_color,
         "goal": default_goal(new_color),
         "parentId": primary_parent_id,
@@ -651,7 +665,13 @@ def replace_nodes(nodes: List[Dict]) -> List[Dict]:
         new_node = {
             "id": n["id"],
             "parentId": n.get("parentId"),
-            "text": _clean_text(n.get("text")),
+            # allow_empty=True for the same reason clean_goal above is
+            # leniently require_complete=False -- a snapshot being
+            # restored might capture a freshly-created node the player
+            # hadn't typed a name into yet (see add_node/add_shared_child),
+            # and undo/redo needs to restore that exact state rather than
+            # silently "fixing" it back to DEFAULT_TEXT.
+            "text": _clean_text(n.get("text"), allow_empty=True),
             "color": new_color,
             "goal": clean_goal(new_color, n.get("goal"), require_complete=False),
             "order": float(n.get("order") or 0.0),

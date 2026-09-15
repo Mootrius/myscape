@@ -3113,16 +3113,24 @@ def render_mindmaps(player: Player) -> str:
         if (!el) return;
         commitActiveLabelIfEditing();
         e.stopPropagation();
-        // Edge buttons and the node popover (color swatches, or the
-        // "add shared child" button) handle themselves (via the click
-        // delegation below) -- only a plain click on the node itself
-        // (its body/label) selects it.
-        if (e.target.closest('.mm-edge-btn') || e.target.closest('[data-role="popover"]')) return;
+        // Edge buttons, the node popover (color swatches, or the "add
+        // shared child" button), and the gray manual-complete checkbox
+        // (see renderNodeLabelHtml) all handle themselves (via the
+        // click delegation below), whether or not Edit Mode is on --
+        // only a plain click on the node's own body/label is gated on
+        // Edit Mode below.
+        if (e.target.closest('.mm-edge-btn') || e.target.closest('[data-role="popover"]') || e.target.closest('[data-role="manual-toggle"]')) return;
+        // A node isn't clickable at all outside Edit Mode -- see
+        // MM.editMode's own comment. The one thing that still worked
+        // by clicking a node while just viewing (ticking a gray goal
+        // complete) now lives on the node itself as that checkbox
+        // instead, so there's nothing left for a plain click to do
+        // here until Edit Mode is on.
+        if (!MM.editMode) return;
         // Shift-click multi-select only means anything in Edit Mode
         // (its one use is "Add shared child" -- see
-        // addSharedChildSelected), so outside Edit Mode a shift-click
-        // just falls through to a plain select instead.
-        if (e.shiftKey && MM.editMode) { extendMultiSelect(el.getAttribute('data-node-id')); return; }
+        // addSharedChildSelected).
+        if (e.shiftKey) { extendMultiSelect(el.getAttribute('data-node-id')); return; }
         selectNode(el.getAttribute('data-node-id'));
       });
 
@@ -3199,16 +3207,24 @@ def render_mindmaps(player: Player) -> str:
         }
         if (e.target.closest('[data-role="delete"]')) { deleteSelectedNode(); return; }
         if (e.target.closest('[data-role="add-shared-child"]')) { addSharedChildSelected(); return; }
-        // The gray-node manual "Complete" toggle -- available whether
-        // or not Edit Mode is on (see MM.editMode's own comment), so
-        // this isn't gated on it here either. Reads the CURRENT node's
-        // own goal fresh off selectedNode() (not anything cached from
-        // when the popover was drawn) so double-clicking it quickly
-        // toggles back and forth correctly rather than sending the
-        // same value twice.
-        if (e.target.closest('[data-role="manual-toggle"]')) {
-          var toggleNode = selectedNode();
-          if (toggleNode) saveSelectedNodeGoal({ manualComplete: !(toggleNode.goal && toggleNode.goal.manualComplete) });
+        // The gray-node manual-complete checkbox -- lives right on the
+        // node itself now (see renderNodeLabelHtml), not behind a
+        // popover, so it works on ANY gray node with text, whether or
+        // not it's selected and whether or not Edit Mode is on (see
+        // MM.editMode's own comment). Reads the CLICKED node (its own
+        // ancestor .mm-node, not necessarily the selected one) fresh
+        // off the mindmap's current data, so double-clicking it
+        // quickly toggles back and forth correctly rather than sending
+        // the same value twice.
+        var toggleEl = e.target.closest('[data-role="manual-toggle"]');
+        if (toggleEl) {
+          var toggleNodeEl = toggleEl.closest('.mm-node');
+          var toggleNodeId = toggleNodeEl && toggleNodeEl.getAttribute('data-node-id');
+          var mmForToggle = activeMindmap();
+          var toggleNode = mmForToggle && toggleNodeId
+            ? mmForToggle.nodes.find(function (n) { return n.id === toggleNodeId; })
+            : null;
+          if (toggleNode) saveNodeGoal(toggleNodeId, { manualComplete: !(toggleNode.goal && toggleNode.goal.manualComplete) });
           return;
         }
         // A trackable goal's criteria form (kc/item/gp/skill/quest/
@@ -3478,7 +3494,16 @@ def render_mindmaps(player: Player) -> str:
         world.style.width = layout.worldWidth + 'px';
         world.style.height = layout.worldHeight + 'px';
 
-        document.getElementById('mmNodesLayer').innerHTML = mm.nodes.map(function (n) {
+        var nodesLayer = document.getElementById('mmNodesLayer');
+        // Nodes aren't clickable at all outside Edit Mode (see the
+        // pointerdown delegation's own comment) -- this swaps the
+        // whole layer's cursor from "pointer" to plain "default" to
+        // match, so a node doesn't visually invite a click it won't
+        // do anything with. See .mm-view-mode's own rule in
+        // mindmaps.css.
+        nodesLayer.classList.toggle('mm-view-mode', !MM.editMode);
+
+        nodesLayer.innerHTML = mm.nodes.map(function (n) {
           var pos = layout.positions[n.id];
           // Every selected node (whether it's the only one, or one of
           // several shift-added to it) gets the exact same brighten
@@ -3509,11 +3534,38 @@ def render_mindmaps(player: Player) -> str:
           var isFreeText = (goalType === 'manual' || !goalType);
           var editableAttr = (MM.editMode && isFreeText && isSelected && MM.multiSelectIds.size === 1) ? ' contenteditable="true" spellcheck="false"' : '';
           var displayText = isFreeText ? n.text : goalDisplayText(n);
+          // A gray node with actual text in it gets a manual-complete
+          // checkbox where the icon sits for every other trackable
+          // type (see the click delegation's own
+          // [data-role="manual-toggle"] handler, which works on ANY
+          // gray node this way -- selected or not, in or out of Edit
+          // Mode). A brand new gray node with nothing typed into it
+          // yet has nothing meaningful to mark complete, so it gets no
+          // checkbox (or icon) at all, same as before.
+          var showManualCheckbox = goalType === 'manual' && !!(n.text && n.text.trim());
+          var manualChecked = !!(n.goal && n.goal.manualComplete);
           var iconSrc = GOAL_TYPE_ICON_BY_COLOR[n.color];
-          var labelCls = 'mm-node-label' + (iconSrc ? ' mm-node-label-with-icon' : '');
-          var labelInner = iconSrc
-            ? '<img class="mm-node-icon" src="' + iconSrc + '" alt="">' + '<span class="mm-node-label-text">' + renderNodeLabelHtml(goalType, displayText) + '</span>'
-            : esc(displayText);
+          var hasLeftSlot = !!iconSrc || showManualCheckbox;
+          var labelCls = 'mm-node-label' + (hasLeftSlot ? ' mm-node-label-with-icon' : '');
+          // data-role="label"/editableAttr move onto the INNER text
+          // span (rather than sitting on the same element as the
+          // checkbox/icon, like a trackable type's icon always could
+          // safely be) only when there's a left slot to keep separate
+          // -- a checkbox living INSIDE a contenteditable region would
+          // otherwise get swept into "select all the label's text" on
+          // focus (see selectNode's own comment) or be at risk of the
+          // browser's own text-editing commands mangling it. The plain
+          // case (no left slot at all) keeps them on the single outer
+          // div exactly as before.
+          var labelInner;
+          if (hasLeftSlot) {
+            var leftSlotHtml = showManualCheckbox
+              ? '<input type="checkbox" class="mm-node-checkbox" data-role="manual-toggle" title="Mark complete"' + (manualChecked ? ' checked' : '') + '>'
+              : '<img class="mm-node-icon" src="' + iconSrc + '" alt="">';
+            labelInner = leftSlotHtml + '<span class="mm-node-label-text" data-role="label"' + editableAttr + '>' + renderNodeLabelHtml(goalType, displayText) + '</span>';
+          } else {
+            labelInner = esc(displayText);
+          }
           // The root is the one node every mindmap always keeps, so it
           // can't get a parent (which would just bury it under a new,
           // equally permanent root) or a sibling (it has no parent to
@@ -3539,9 +3591,14 @@ def render_mindmaps(player: Player) -> str:
           var popoverHtml = '';
           if (isAnchor && MM.multiSelectIds.size === 1) popoverHtml = renderNodePopoverHtml(n);
           else if (isAnchor && MM.multiSelectIds.size >= 2) popoverHtml = renderSharedChildPopoverHtml();
+          // data-role="label"/editableAttr already moved onto the inner
+          // text span above when hasLeftSlot -- this outer div only
+          // still carries them itself in the plain (no icon/checkbox)
+          // case, same as before.
+          var labelAttrs = hasLeftSlot ? '' : (' data-role="label"' + editableAttr);
           return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + completedCls + '" data-node-id="' + esc(n.id) + '" ' +
             'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
-            '<div class="' + labelCls + '" data-role="label"' + editableAttr + '>' + labelInner + '</div>' +
+            '<div class="' + labelCls + '"' + labelAttrs + '>' + labelInner + '</div>' +
             edgeButtonsHtml +
             popoverHtml +
             '</div>';
@@ -3676,19 +3733,21 @@ def render_mindmaps(player: Player) -> str:
       // delete button and still wrapping an empty shell) is what keeps
       // selecting the root from showing a visible-but-empty popover box.
       function renderNodePopoverHtml(node) {
-        if (node.parentId === null) return '';
-        if (!MM.editMode) {
-          // Nothing to show for a non-gray node while just viewing --
-          // there's no action available on it at all outside Edit Mode.
-          if (GOAL_TYPE_BY_COLOR[node.color] !== 'manual') return '';
-          return '<div class="mm-node-popover" data-role="popover">' + renderGoalFieldsHtml(node) + '</div>';
-        }
+        // Nothing renders outside Edit Mode at all -- a node isn't
+        // clickable there in the first place (see the pointerdown
+        // delegation above), so there's never a selection for a
+        // popover to attach to. Ticking a gray goal complete, the one
+        // thing this used to still offer while just viewing, is now
+        // the checkbox right on the node itself instead (see
+        // renderNodeLabelHtml) -- it needs no popover and no
+        // selection to work.
+        if (node.parentId === null || !MM.editMode) return '';
         var goalType = GOAL_TYPE_BY_COLOR[node.color];
         // Every trackable type gets a Save button alongside Delete;
-        // manual has nothing to "save" (its own criteria form is
-        // gated out entirely in Edit Mode -- see renderGoalFieldsHtml
-        // -- ticking it complete is a view-mode-only action), so it's
-        // just Delete alone.
+        // manual has no criteria form at all here (see
+        // renderGoalFieldsHtml -- ticking it complete is the checkbox
+        // on the node itself, not anything this popover saves), so
+        // it's just Delete alone.
         var showSave = !!goalType && goalType !== 'manual';
         var actionsHtml = '<div class="mm-popover-actions" data-role="popover-actions">' +
           (showSave ? '<button type="button" class="btn-secondary mm-goal-save-btn" data-role="goal-save">SAVE</button>' : '') +
@@ -3773,26 +3832,22 @@ def render_mindmaps(player: Player) -> str:
       // The current color's goal-criteria fields, prefilled from the
       // node's own `goal` (see clean_goal/default_goal in
       // app/mindmaps.py for the exact shape each type stores) --
-      // "gray"/manual is the one-button toggle, but ONLY outside Edit
-      // Mode (ticking a goal off is a "using it" action, not an
-      // "editing its criteria" one -- see MM.editMode's own comment;
-      // Edit Mode's popover shows the type picker + Save/Delete row
-      // around this instead, see renderNodePopoverHtml), "white"/null
+      // "gray"/manual has no criteria to fill in at all (ticking it
+      // complete is the checkbox right on the node itself now, see
+      // renderNodeLabelHtml, not anything in this popover), "white"/null
       // (the root) never reaches this function at all any more (see
       // renderNodePopoverHtml's own early return), and the rest get a
       // small form whose fields are read fresh off the DOM by the
       // popover's own Save button (see the goal-save click delegation
       // above) -- nothing here is tracked in JS state, so there's
       // nothing to keep in sync with what the player's actually typed.
+      // This whole function only ever runs in Edit Mode now (see
+      // renderNodePopoverHtml's own early return), so there's no
+      // separate view-mode branch to gate here either.
       function renderGoalFieldsHtml(node) {
         var goal = node.goal || {};
         var type = GOAL_TYPE_BY_COLOR[node.color];
-        if (type === 'manual') {
-          if (MM.editMode) return '';
-          var label = (goal.manualComplete ? 'Mark incomplete' : 'Mark complete');
-          return '<button type="button" class="btn-secondary mm-manual-toggle-btn" data-role="manual-toggle">' + esc(label) + '</button>';
-        }
-        if (!type) return '';
+        if (type === 'manual' || !type) return '';
         var fields = '';
         if (type === 'kc') {
           // No more activity-type dropdown -- the search field below
@@ -4139,17 +4194,22 @@ def render_mindmaps(player: Player) -> str:
       // rejected edit does, via apiCall's own showError -- nothing
       // needs undoing since the server never actually changed anything.
       // `closePopover` -- true only for the popover's own Save button
-      // (see the goal-save click delegation above), never for the
-      // gray manual-complete toggle, which also funnels through here
-      // but has no "popup" of its own to close -- deselects the node
-      // once the save actually succeeds, which is what closes the
-      // popover (it only ever shows for the selected node -- see
+      // (see the goal-save click delegation above), never for the gray
+      // manual-complete checkbox (see saveSelectedNodeGoal below), which
+      // has no "popup" of its own to close -- deselects the node once
+      // the save actually succeeds, which is what closes the popover
+      // (it only ever shows for the selected node -- see
       // renderNodePopoverHtml). Left alone (not deselected) on a
       // failed save, so the player can fix whatever the error was
-      // without having to reselect the node and start over.
-      async function saveSelectedNodeGoal(goal, closePopover) {
+      // without having to reselect the node and start over. Takes an
+      // explicit `nodeId` rather than always reading selectedNode()
+      // because the manual-complete checkbox (see renderNodeLabelHtml)
+      // now lives right on the node itself and works on ANY gray node,
+      // selected or not, in or out of Edit Mode -- see its own click
+      // handler above.
+      async function saveNodeGoal(nodeId, goal, closePopover) {
         var mm = activeMindmap();
-        var node = selectedNode();
+        var node = mm && mm.nodes.find(function (n) { return n.id === nodeId; });
         if (!mm || !node) return;
         var mmId = mm.id;
         var preNodes = mm.nodes;
@@ -4165,6 +4225,13 @@ def render_mindmaps(player: Player) -> str:
           MM.multiSelectIds = new Set();
         }
         render();
+      }
+      // Thin wrapper over saveNodeGoal for the Edit-Mode popover's own
+      // Save button, which only ever acts on whatever's currently
+      // selected.
+      function saveSelectedNodeGoal(goal, closePopover) {
+        if (!MM.selectedNodeId) return;
+        return saveNodeGoal(MM.selectedNodeId, goal, closePopover);
       }
 
       // Only the selected node is ever contenteditable, so the label
@@ -4192,7 +4259,12 @@ def render_mindmaps(player: Player) -> str:
         if (!mm) return;
         var mmId = mm.id;
         var preNodes = mm.nodes;
-        var body = { relative_to: nodeId, relation: relation, text: 'New', color: 'gray' };
+        // Empty, not a "New" placeholder -- selectNode below focuses +
+        // selects the new node's label the instant it renders, so the
+        // player just starts typing into a blank box (see
+        // app/mindmaps.py's add_node, which now leaves an empty text
+        // exactly as given instead of substituting its own default).
+        var body = { relative_to: nodeId, relation: relation, text: '', color: 'gray' };
         if (relation === 'sibling') body.before = !!before;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -4260,7 +4332,9 @@ def render_mindmaps(player: Player) -> str:
         var preNodes = mm.nodes;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/shared-child', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ parent_ids: Array.from(MM.multiSelectIds), text: 'New', color: 'gray' }),
+          // Empty for the same reason addNodeRelativeTo's own body is --
+          // see that function's comment.
+          body: JSON.stringify({ parent_ids: Array.from(MM.multiSelectIds), text: '', color: 'gray' }),
         });
         if (!data) return;
         MM.data = data;
