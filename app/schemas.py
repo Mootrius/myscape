@@ -677,6 +677,23 @@ class UpdateMindMapNodeRequest(BaseModel):
     color: Optional[str] = None
 
 
+class AddMindMapNodeBetweenRequest(BaseModel):
+    """A new node placed as a shared sibling of two or more existing
+    ones -- the node canvas's shift-click multi-select -- see
+    add_node_between in app/mindmaps.py."""
+
+    relative_ids: List[str]
+    text: Optional[str] = None
+    color: Optional[str] = None
+
+    @field_validator("relative_ids")
+    @classmethod
+    def check_relative_ids(cls, value: List[str]) -> List[str]:
+        if len(value) < 2:
+            raise ValueError("relative_ids must include at least two nodes.")
+        return value
+
+
 class MindMapsState(BaseModel):
     """Documents (not enforced) the payload every Mindmaps endpoint
     returns: {"mindmaps": [...]}, each with id/name/createdAt/nodes --

@@ -2431,6 +2431,11 @@ def render_mindmaps(player: Player) -> str:
           <div class="mm-menu" id="mmMenu" style="display:none;"></div>
         </div>
       </div>
+      <div class="mm-multiselect-bar" id="mmMultiBar" style="display:none;">
+        <span id="mmMultiBarText"></span>
+        <button class="btn-secondary" id="mmMultiBarAdd" type="button">Add node between</button>
+        <button class="btn-secondary" id="mmMultiBarClear" type="button">Clear</button>
+      </div>
       <div class="mm-canvas" id="mmCanvas">
         <div class="mm-zoom-controls">
           <button type="button" id="mmZoomIn" title="Zoom in">+</button>
@@ -2467,6 +2472,7 @@ def render_mindmaps(player: Player) -> str:
         activeMindmapId: null,
         selectedNodeId: null,
         focusNodeId: null, // one-shot: focus + select this node's text on the next render
+        multiSelectIds: new Set(), // shift-clicked nodes, for "add a shared sibling between them"
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
         zoom: 1,
@@ -2735,11 +2741,27 @@ def render_mindmaps(player: Player) -> str:
       // text cursor somewhere inside an already-editable node's label
       // would blow away and rebuild that very DOM node out from under
       // the browser's own click-to-focus handling, losing the caret
-      // position it was just about to set.
+      // position it was just about to set. A plain (non-shift) select
+      // always clears any active shift-click multi-selection too --
+      // the two are separate modes, and mixing them would be
+      // confusing (edit-one-node vs. mark-several-for-a-shared-sibling).
       function selectNode(id) {
-        if (id === MM.selectedNodeId) return;
+        var hadMultiSelect = MM.multiSelectIds.size > 0;
+        if (hadMultiSelect) MM.multiSelectIds.clear();
+        if (id === MM.selectedNodeId && !hadMultiSelect) return;
         MM.selectedNodeId = id;
         MM.focusNodeId = id; // focus + select this node's text on the next render, if any
+        render();
+      }
+
+      // Shift-clicking a node toggles it in/out of the multi-select set
+      // used by "add a shared sibling between them" (see the
+      // #mmMultiBar wiring and addNodeBetweenSelected below) -- kept
+      // entirely separate from the single-node selectNode above, so it
+      // never touches MM.selectedNodeId/the edit popover.
+      function toggleMultiSelect(id) {
+        if (MM.multiSelectIds.has(id)) MM.multiSelectIds.delete(id);
+        else MM.multiSelectIds.add(id);
         render();
       }
 
@@ -2752,6 +2774,7 @@ def render_mindmaps(player: Player) -> str:
         // the click delegation below) -- only a plain click on the
         // node itself (its body/label) selects it.
         if (e.target.closest('.mm-edge-btn') || e.target.closest('[data-role="popover"]')) return;
+        if (e.shiftKey) { toggleMultiSelect(el.getAttribute('data-node-id')); return; }
         selectNode(el.getAttribute('data-node-id'));
       });
 
@@ -2818,6 +2841,12 @@ def render_mindmaps(player: Player) -> str:
           var isSelected = n.id === MM.selectedNodeId;
           var isRoot = n.parentId === null;
           var selectedCls = isSelected ? ' selected' : '';
+          // Shift-click multi-select (see toggleMultiSelect) -- a
+          // distinct ring from the single-node "selected" one above,
+          // so the two modes (edit-one-node vs. mark-several-for-a-
+          // shared-sibling) stay visually distinguishable even if a
+          // node somehow ends up in both.
+          var multiSelectedCls = MM.multiSelectIds.has(n.id) ? ' multi-selected' : '';
           // Only the selected node is ever contenteditable -- typing
           // directly into a node is how its text changes now (see the
           // focusout/keydown delegation above), so this only needs to
@@ -2829,7 +2858,7 @@ def render_mindmaps(player: Player) -> str:
           // share one under) -- only its "add child" edge button shows.
           // The backend enforces the same rule; this just keeps the
           // dead-end options from ever being offered in the first place.
-          return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + '" data-node-id="' + esc(n.id) + '" ' +
+          return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + multiSelectedCls + '" data-node-id="' + esc(n.id) + '" ' +
             'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
             '<div class="mm-node-label" data-role="label"' + editableAttr + '>' + esc(n.text) + '</div>' +
             (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-top" data-relation="parent" title="Add parent">+</button>') +
@@ -2939,7 +2968,7 @@ def render_mindmaps(player: Player) -> str:
         }
         if (!MM.data.mindmaps.length) {
           wrapEl.style.display = '';
-          msgEl.textContent = "You don't have any mindmaps yet -- create your first one to get started.";
+          msgEl.textContent = '';
           createBtn.style.display = '';
           bodyEl.style.display = 'none';
           return;
@@ -2950,7 +2979,31 @@ def render_mindmaps(player: Player) -> str:
         var mm = activeMindmap();
         document.getElementById('mmSwitchName').textContent = mm ? mm.name : '';
         renderMenu();
+        pruneMultiSelect(mm);
         if (mm) renderCanvas(mm);
+        renderMultiSelectBar();
+      }
+
+      // Drops any multi-selected id that no longer exists in the
+      // active mindmap -- a node in the set could vanish out from
+      // under it (deleted directly, or via switching to a different
+      // mindmap entirely) without ever going through toggleMultiSelect.
+      function pruneMultiSelect(mm) {
+        if (!mm) { MM.multiSelectIds.clear(); return; }
+        var validIds = new Set(mm.nodes.map(function (n) { return n.id; }));
+        MM.multiSelectIds.forEach(function (id) {
+          if (!validIds.has(id)) MM.multiSelectIds.delete(id);
+        });
+      }
+
+      function renderMultiSelectBar() {
+        var bar = document.getElementById('mmMultiBar');
+        var n = MM.multiSelectIds.size;
+        if (!n) { bar.style.display = 'none'; return; }
+        bar.style.display = 'flex';
+        document.getElementById('mmMultiBarText').textContent =
+          n + (n === 1 ? ' node selected' : ' nodes selected');
+        document.getElementById('mmMultiBarAdd').disabled = n < 2;
       }
 
       // ---- Mindmap switcher menu -----------------------------------------
@@ -3111,6 +3164,33 @@ def render_mindmaps(player: Player) -> str:
         );
         if (data) { MM.data = data; MM.selectedNodeId = null; render(); }
       }
+
+      // ---- Multi-select: add a shared sibling between several nodes ------
+
+      // Adds one new node as a shared sibling of every node currently
+      // in MM.multiSelectIds (shift-click, see toggleMultiSelect) --
+      // "on the same level" only means one thing in this data model:
+      // sharing a parent, so if the selected nodes don't, the backend
+      // rejects it and the usual showError() surfaces why, the same
+      // way an invalid relation on a single add already does.
+      async function addNodeBetweenSelected() {
+        var mm = activeMindmap();
+        if (!mm || MM.multiSelectIds.size < 2) return;
+        const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/between', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ relative_ids: Array.from(MM.multiSelectIds), text: 'New', color: 'gray' }),
+        });
+        if (data) {
+          MM.data = data;
+          MM.multiSelectIds.clear();
+          selectNode(data.newNodeId || null);
+        }
+      }
+      document.getElementById('mmMultiBarAdd').addEventListener('click', addNodeBetweenSelected);
+      document.getElementById('mmMultiBarClear').addEventListener('click', function () {
+        MM.multiSelectIds.clear();
+        render();
+      });
 
       // ---- Boot -----------------------------------------------------------
 

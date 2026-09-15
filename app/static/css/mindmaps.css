@@ -36,7 +36,7 @@
 .mm-menu {
   position: absolute; top: 100%; left: 50%; transform: translateX(-50%); z-index: 5;
   margin-top: 6px; background: var(--panel); border: 1px solid var(--border);
-  min-width: 220px; max-width: 320px; max-height: 320px; overflow-y: auto;
+  min-width: 160px; max-width: 240px; max-height: 320px; overflow-y: auto;
   display: flex; flex-direction: column;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
@@ -49,6 +49,12 @@
 .mm-menu-item.active { color: var(--gold); }
 .mm-menu-item.danger:hover { color: var(--red); }
 .mm-menu-divider { border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* The New/Rename/Delete actions (not the mindmap-switch rows above
+   them, which show the player's own mindmap names and stay
+   left-aligned/normal-case as list items should) -- centered and
+   all-caps to read as actions rather than more list entries. */
+#mmMenuNew, #mmMenuRename, #mmMenuDelete { text-align: center; text-transform: uppercase; }
 
 /* Inline new/rename form -- same shape as .pg-setup-form
    (purchase-goals.css), duplicated for the same self-contained-
@@ -71,6 +77,20 @@ button.primary#mmNameSave, .mm-name-form-save {
 }
 .btn-secondary:hover { border-color: var(--gold-dim); color: var(--text); }
 .btn-secondary:disabled { opacity: 0.5; cursor: default; }
+
+/* Shown only while one or more nodes are shift-click multi-selected
+   (see toggleMultiSelect in the page script) -- lets the player add
+   one new node as a shared sibling of everything currently selected,
+   or back out of the multi-select entirely. Sits between the
+   mindmap-switcher header and the canvas, same shape as .mm-name-form
+   above. */
+.mm-multiselect-bar {
+  display: flex; gap: 10px; justify-content: center; align-items: center;
+  margin-bottom: 14px;
+}
+.mm-multiselect-bar span {
+  color: var(--text-dim); font-size: 11.5px; letter-spacing: 0.02em; text-transform: uppercase;
+}
 
 /* ---- Canvas -------------------------------------------------------- */
 
@@ -191,6 +211,12 @@ button.primary#mmNameSave, .mm-name-form-save {
    the node's own border rather than leaving a gap around it. */
 .mm-node.selected { outline: 1px solid var(--gold); outline-offset: 0; z-index: 2; }
 
+/* Shift-click multi-select (see toggleMultiSelect) -- a dashed blue
+   ring, deliberately different from the single-node gold outline
+   above, so "marked for a shared sibling" never reads as "this is the
+   node I'm editing" or vice versa. */
+.mm-node.multi-selected { outline: 2px dashed var(--blue); outline-offset: 2px; z-index: 2; }
+
 /* ---- Per-node hover controls -----------------------------------------
    Small "+" buttons on each of a node's four edges, shown only while
    hovering that node -- the direct replacement for the old toolbar's
@@ -270,8 +296,11 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-empty { color: var(--text-faint); font-size: 13px; margin: 0 0 16px; }
 /* button.primary (myscape.css) defaults to width: 100% -- wrong for a
    single centered call-to-action button, same fix as
-   button.primary#pgNameSave/#mmNameSave above. */
+   button.primary#pgNameSave/#mmNameSave above. Also matches those
+   buttons' own all-caps treatment (myscape.css's button.primary
+   doesn't apply text-transform on its own). */
 button.primary#mmCreateFirstBtn {
   width: auto; padding: 0 22px; height: 32px;
   display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
 }

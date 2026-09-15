@@ -175,6 +175,49 @@ def add_node(
     raise ValueError("relation must be 'parent', 'child', or 'sibling'.")
 
 
+def add_node_between(
+    nodes: List[Dict], relative_ids: List[str], text: Optional[str] = None, color: Optional[str] = None
+) -> "tuple[List[Dict], str]":
+    """Returns a NEW node list with one extra node inserted as a shared
+    sibling of two or more existing nodes -- the node canvas's
+    shift-click multi-select ("hold shift and select multiple nodes on
+    the same level"). Its order is the midpoint between the LOWEST and
+    HIGHEST order among `relative_ids`, so it lands between them
+    regardless of how many other siblings (selected or not) happen to
+    sit in that gap -- the same midpoint idea _order_after/_order_before
+    already use for a single sibling, just spanning the whole selected
+    range instead of one neighbor.
+
+    "On the same level" only really means one thing in this data model:
+    sharing a parent (a node has exactly one, so a sibling can only
+    ever belong to one of them) -- raises ValueError if fewer than two
+    ids are given, any id doesn't exist, or the given nodes don't all
+    share the same parent (including any of them being the root, which
+    has no parent to share)."""
+    if len(relative_ids) < 2:
+        raise ValueError("Select at least two nodes on the same level to add a node between them.")
+    relatives = []
+    for relative_id in relative_ids:
+        relative = _find(nodes, relative_id)
+        if relative is None:
+            raise ValueError("That node no longer exists.")
+        relatives.append(relative)
+
+    parent_id = relatives[0]["parentId"]
+    if parent_id is None or any(r["parentId"] != parent_id for r in relatives):
+        raise ValueError("Selected nodes must all be siblings (on the same level, under the same parent) to add a node between them.")
+
+    orders = [r["order"] for r in relatives]
+    new_node = {
+        "id": str(uuid.uuid4()),
+        "text": _clean_text(text),
+        "color": _clean_color(color),
+        "parentId": parent_id,
+        "order": (min(orders) + max(orders)) / 2.0,
+    }
+    return nodes + [new_node], new_node["id"]
+
+
 def update_node(nodes: List[Dict], node_id: str, text: Optional[str] = None, color: Optional[str] = None) -> List[Dict]:
     """Returns a NEW node list with the given node's text and/or color
     replaced -- whichever of the two is not None. Raises ValueError if
