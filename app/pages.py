@@ -2593,6 +2593,23 @@ def render_mindmaps(player: Player) -> str:
         // moves that one node's own rendered position; it can't disturb
         // any other node's column/slot, since leafCounter bookkeeping
         // above is already done by the time this runs.
+        //
+        // That average-of-parents target has no idea what else already
+        // occupies that row, though -- if the shared child's primary
+        // parent has OTHER (ordinary) children too, or any other node
+        // just happens to land nearby, the naive nudge above can walk
+        // the shared child right on top of it (e.g. add a shared child
+        // below A+B, then add a second, ordinary child under A -- the
+        // shared child's "centered between A and B" target can collide
+        // with that new sibling's own column). So the nudge is clamped
+        // against every other same-row (same depth) node's CURRENT
+        // position, keeping at least one full column's width between
+        // centers -- same minimum spacing the grid already guarantees
+        // between any two ordinary leaf columns -- and only walks as
+        // far toward the average as that leaves room for. If two
+        // neighbors box it in on both sides too tightly to fit at all
+        // (packed row), it falls back to its own pre-nudge column
+        // rather than force an overlap.
         nodes.forEach(function (n) {
           if (!n.extraParentIds || !n.extraParentIds.length) return;
           var linkedIds = [n.parentId].concat(n.extraParentIds);
@@ -2603,7 +2620,33 @@ def render_mindmaps(player: Player) -> str:
           });
           if (!centers.length) return;
           var avgCenter = centers.reduce(function (a, b) { return a + b; }, 0) / centers.length;
-          positions[n.id].x = avgCenter - NODE_WIDTH / 2;
+
+          var ownDepth = positions[n.id].depth;
+          var minAllowed = -Infinity, maxAllowed = Infinity;
+          Object.keys(positions).forEach(function (otherId) {
+            if (otherId === n.id) return;
+            var otherPos = positions[otherId];
+            if (otherPos.depth !== ownDepth) return;
+            var otherCenter = otherPos.x + NODE_WIDTH / 2;
+            if (otherCenter <= avgCenter) {
+              minAllowed = Math.max(minAllowed, otherCenter + COL_WIDTH);
+            } else {
+              maxAllowed = Math.min(maxAllowed, otherCenter - COL_WIDTH);
+            }
+          });
+
+          var clampedCenter = avgCenter;
+          if (minAllowed > maxAllowed) {
+            // No room to fit anywhere near the average without
+            // overlapping a neighbor on both sides -- stay put at the
+            // node's own (collision-free, by construction) column
+            // instead of forcing an overlap.
+            clampedCenter = positions[n.id].x + NODE_WIDTH / 2;
+          } else {
+            if (clampedCenter < minAllowed) clampedCenter = minAllowed;
+            if (clampedCenter > maxAllowed) clampedCenter = maxAllowed;
+          }
+          positions[n.id].x = clampedCenter - NODE_WIDTH / 2;
         });
 
         return {
