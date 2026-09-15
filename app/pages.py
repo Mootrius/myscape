@@ -2431,11 +2431,6 @@ def render_mindmaps(player: Player) -> str:
           <div class="mm-menu" id="mmMenu" style="display:none;"></div>
         </div>
       </div>
-      <div class="mm-multiselect-bar" id="mmMultiBar" style="display:none;">
-        <span id="mmMultiBarText"></span>
-        <button class="btn-secondary" id="mmMultiBarAdd" type="button">Add shared child</button>
-        <button class="btn-secondary" id="mmMultiBarClear" type="button">Clear</button>
-      </div>
       <div class="mm-canvas" id="mmCanvas">
         <div class="mm-zoom-controls">
           <button type="button" id="mmZoomIn" title="Zoom in">+</button>
@@ -2470,9 +2465,22 @@ def render_mindmaps(player: Player) -> str:
       var MM = {
         data: null,
         activeMindmapId: null,
+        // The "anchor" node -- the last one clicked (plain or shift) --
+        // used to place the popover/button below and, when it's the
+        // only node selected, as the contenteditable target. Always
+        // one of the ids currently in multiSelectIds (see selectNode/
+        // extendMultiSelect/pruneMultiSelect, which all keep the two in
+        // sync).
         selectedNodeId: null,
         focusNodeId: null, // one-shot: focus + select this node's text on the next render
-        multiSelectIds: new Set(), // shift-clicked nodes, for "add a shared child below them"
+        // Every currently-selected node -- a plain click replaces this
+        // whole set with just the clicked node; shift-click adds to (or
+        // removes from) whatever's already selected instead of starting
+        // over, so selecting more than one always starts with a normal
+        // click on the first node, then shift-clicks for the rest. All
+        // of them get the same gold "selected" ring (see renderCanvas)
+        // -- there's no visually separate "multi-select mode" anymore.
+        multiSelectIds: new Set(),
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
         zoom: 1,
@@ -2760,32 +2768,51 @@ def render_mindmaps(player: Player) -> str:
 
       // ---- Node selection + click delegation ---------------------------
 
-      // Selecting the node that's ALREADY selected is a deliberate
-      // no-op (no re-render) -- otherwise a click meant to place the
-      // text cursor somewhere inside an already-editable node's label
-      // would blow away and rebuild that very DOM node out from under
-      // the browser's own click-to-focus handling, losing the caret
-      // position it was just about to set. A plain (non-shift) select
-      // always clears any active shift-click multi-selection too --
-      // the two are separate modes, and mixing them would be
-      // confusing (edit-one-node vs. mark-several-for-a-shared-child).
+      // A plain (non-shift) click/select REPLACES the whole selection
+      // with just this one node (or clears everything if id is null --
+      // the canvas's own click-to-deselect) -- this is also how a
+      // multi-selection collapses back down to a single node. Selecting
+      // exactly what's already selected is a deliberate no-op (no
+      // re-render) -- otherwise a click meant to place the text cursor
+      // somewhere inside an already-editable node's label would blow
+      // away and rebuild that very DOM node out from under the
+      // browser's own click-to-focus handling, losing the caret
+      // position it was just about to set.
       function selectNode(id) {
-        var hadMultiSelect = MM.multiSelectIds.size > 0;
-        if (hadMultiSelect) MM.multiSelectIds.clear();
-        if (id === MM.selectedNodeId && !hadMultiSelect) return;
+        var alreadyJustThis = id === MM.selectedNodeId && (
+          (id === null && MM.multiSelectIds.size === 0) ||
+          (id !== null && MM.multiSelectIds.size === 1 && MM.multiSelectIds.has(id))
+        );
+        if (alreadyJustThis) return;
         MM.selectedNodeId = id;
+        MM.multiSelectIds = new Set(id ? [id] : []);
         MM.focusNodeId = id; // focus + select this node's text on the next render, if any
         render();
       }
 
-      // Shift-clicking a node toggles it in/out of the multi-select set
-      // used by "add a shared child below them" (see the #mmMultiBar
-      // wiring and addSharedChildSelected below) -- kept entirely
-      // separate from the single-node selectNode above, so it never
-      // touches MM.selectedNodeId/the edit popover.
-      function toggleMultiSelect(id) {
-        if (MM.multiSelectIds.has(id)) MM.multiSelectIds.delete(id);
-        else MM.multiSelectIds.add(id);
+      // Shift-clicking a node ADDS it to (or, if it's already in there,
+      // removes it from) whatever's currently selected -- selectNode
+      // above is what starts a selection (even a shift-click on an
+      // otherwise-empty selection just becomes the same as a plain
+      // click), this only ever extends or trims one already in
+      // progress. The most recently touched node becomes the new
+      // anchor (see MM.selectedNodeId's own comment) so the popover/
+      // button always tracks wherever the player's attention last was;
+      // removing the current anchor falls back to whatever's left.
+      // Never auto-focuses text editing -- typing while several nodes
+      // are marked would be ambiguous about which one it's for.
+      function extendMultiSelect(id) {
+        if (MM.multiSelectIds.has(id)) {
+          MM.multiSelectIds.delete(id);
+          if (MM.selectedNodeId === id) {
+            var remaining = Array.from(MM.multiSelectIds);
+            MM.selectedNodeId = remaining.length ? remaining[remaining.length - 1] : null;
+          }
+        } else {
+          MM.multiSelectIds.add(id);
+          MM.selectedNodeId = id;
+        }
+        MM.focusNodeId = null;
         render();
       }
 
@@ -2794,11 +2821,12 @@ def render_mindmaps(player: Player) -> str:
         if (!el) return;
         commitActiveLabelIfEditing();
         e.stopPropagation();
-        // Edge buttons and the color popover handle themselves (via
-        // the click delegation below) -- only a plain click on the
-        // node itself (its body/label) selects it.
+        // Edge buttons and the node popover (color swatches, or the
+        // "add shared child" button) handle themselves (via the click
+        // delegation below) -- only a plain click on the node itself
+        // (its body/label) selects it.
         if (e.target.closest('.mm-edge-btn') || e.target.closest('[data-role="popover"]')) return;
-        if (e.shiftKey) { toggleMultiSelect(el.getAttribute('data-node-id')); return; }
+        if (e.shiftKey) { extendMultiSelect(el.getAttribute('data-node-id')); return; }
         selectNode(el.getAttribute('data-node-id'));
       });
 
@@ -2820,7 +2848,8 @@ def render_mindmaps(player: Player) -> str:
         }
         var swatch = e.target.closest('.mm-swatch');
         if (swatch) { updateSelectedNode({ color: swatch.getAttribute('data-color') }); return; }
-        if (e.target.closest('[data-role="delete"]')) deleteSelectedNode();
+        if (e.target.closest('[data-role="delete"]')) { deleteSelectedNode(); return; }
+        if (e.target.closest('[data-role="add-shared-child"]')) addSharedChildSelected();
       });
 
       // Committing an in-node text edit fires on focusout (bubbles,
@@ -2862,34 +2891,42 @@ def render_mindmaps(player: Player) -> str:
 
         document.getElementById('mmNodesLayer').innerHTML = mm.nodes.map(function (n) {
           var pos = layout.positions[n.id];
-          var isSelected = n.id === MM.selectedNodeId;
+          // Every selected node (whether it's the only one, or one of
+          // several shift-added to it) gets the exact same gold ring --
+          // there's no separate "multi-select" visual mode anymore.
+          var isSelected = MM.multiSelectIds.has(n.id);
+          var isAnchor = n.id === MM.selectedNodeId;
           var isRoot = n.parentId === null;
           var selectedCls = isSelected ? ' selected' : '';
-          // Shift-click multi-select (see toggleMultiSelect) -- a
-          // distinct ring from the single-node "selected" one above,
-          // so the two modes (edit-one-node vs. mark-several-for-a-
-          // shared-child) stay visually distinguishable even if a
-          // node somehow ends up in both.
-          var multiSelectedCls = MM.multiSelectIds.has(n.id) ? ' multi-selected' : '';
-          // Only the selected node is ever contenteditable -- typing
-          // directly into a node is how its text changes now (see the
-          // focusout/keydown delegation above), so this only needs to
-          // be live for the one node currently being edited.
-          var editableAttr = isSelected ? ' contenteditable="true" spellcheck="false"' : '';
+          // Only the sole selected node is ever contenteditable --
+          // typing directly into a node is how its text changes now
+          // (see the focusout/keydown delegation above), and that's
+          // ambiguous the moment more than one node is selected, so
+          // editing is off for all of them until the selection is back
+          // down to just one.
+          var editableAttr = (isSelected && MM.multiSelectIds.size === 1) ? ' contenteditable="true" spellcheck="false"' : '';
           // The root is the one node every mindmap always keeps, so it
           // can't get a parent (which would just bury it under a new,
           // equally permanent root) or a sibling (it has no parent to
           // share one under) -- only its "add child" edge button shows.
           // The backend enforces the same rule; this just keeps the
           // dead-end options from ever being offered in the first place.
-          return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + multiSelectedCls + '" data-node-id="' + esc(n.id) + '" ' +
+          // The popover below the anchor node is the color swatches +
+          // delete when it's the only thing selected, or the "add
+          // shared child" button once a second node's been shift-added
+          // -- see MM.selectedNodeId's own comment for why it's always
+          // the anchor's popover, never every selected node's own.
+          var popoverHtml = '';
+          if (isAnchor && MM.multiSelectIds.size === 1) popoverHtml = renderColorPopoverHtml(n);
+          else if (isAnchor && MM.multiSelectIds.size >= 2) popoverHtml = renderSharedChildPopoverHtml();
+          return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + '" data-node-id="' + esc(n.id) + '" ' +
             'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
             '<div class="mm-node-label" data-role="label"' + editableAttr + '>' + esc(n.text) + '</div>' +
             (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-top" data-relation="parent" title="Add parent">+</button>') +
             '<button type="button" class="mm-edge-btn mm-edge-bottom" data-relation="child" title="Add child">+</button>' +
             (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-left" data-relation="sibling" data-before="1" title="Add sibling">+</button>') +
             (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-right" data-relation="sibling" data-before="0" title="Add sibling">+</button>') +
-            (isSelected ? renderColorPopoverHtml(n) : '') +
+            popoverHtml +
             '</div>';
         }).join('');
 
@@ -3004,16 +3041,31 @@ def render_mindmaps(player: Player) -> str:
       // buttons (the add-relative ones are now the edge buttons above;
       // delete didn't have anywhere else to go once the toolbar was
       // removed, so it lives here too). The root node has no delete
-      // action, same rule the backend already enforces.
+      // action, same rule the backend already enforces. Shares its
+      // outer .mm-node-popover shell/position with
+      // renderSharedChildPopoverHtml below -- only one of the two is
+      // ever shown for a given node (see renderCanvas), depending on
+      // whether it's the sole selected node or the anchor of several.
       function renderColorPopoverHtml(node) {
         var swatches = NODE_COLORS.map(function (c) {
           var activeCls = (c === node.color) ? ' active' : '';
           return '<button type="button" class="mm-swatch mm-swatch-' + c + activeCls + '" data-color="' + c + '" title="' + c + '"></button>';
         }).join('');
         var isRoot = node.parentId === null;
-        return '<div class="mm-color-popover" data-role="popover">' +
+        return '<div class="mm-node-popover" data-role="popover">' +
           '<div class="mm-color-popover-swatches">' + swatches + '</div>' +
           (isRoot ? '' : '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>') +
+          '</div>';
+      }
+
+      // Shown instead of the color popover above once a SECOND node's
+      // been shift-added to the selection (see extendMultiSelect) --
+      // anchored the same way, below the anchor node (MM.selectedNodeId),
+      // but with a single action: create the shared child connecting
+      // every currently-selected node (see addSharedChildSelected).
+      function renderSharedChildPopoverHtml() {
+        return '<div class="mm-node-popover" data-role="popover">' +
+          '<button type="button" class="btn-secondary mm-add-shared-child-btn" data-role="add-shared-child">Add shared child</button>' +
           '</div>';
       }
 
@@ -3045,29 +3097,26 @@ def render_mindmaps(player: Player) -> str:
         renderMenu();
         pruneMultiSelect(mm);
         if (mm) renderCanvas(mm);
-        renderMultiSelectBar();
       }
 
-      // Drops any multi-selected id that no longer exists in the
-      // active mindmap -- a node in the set could vanish out from
-      // under it (deleted directly, or via switching to a different
-      // mindmap entirely) without ever going through toggleMultiSelect.
+      // Drops any selected id that no longer exists in the active
+      // mindmap -- a node could vanish out from under the selection
+      // (deleted directly, or via switching to a different mindmap
+      // entirely) without ever going through selectNode/
+      // extendMultiSelect. Also re-syncs the anchor (MM.selectedNodeId)
+      // if IT was the one pruned, falling back to whatever's left --
+      // same "most recently added" fallback extendMultiSelect uses when
+      // the anchor is removed by hand.
       function pruneMultiSelect(mm) {
-        if (!mm) { MM.multiSelectIds.clear(); return; }
+        if (!mm) { MM.multiSelectIds.clear(); MM.selectedNodeId = null; return; }
         var validIds = new Set(mm.nodes.map(function (n) { return n.id; }));
         MM.multiSelectIds.forEach(function (id) {
           if (!validIds.has(id)) MM.multiSelectIds.delete(id);
         });
-      }
-
-      function renderMultiSelectBar() {
-        var bar = document.getElementById('mmMultiBar');
-        var n = MM.multiSelectIds.size;
-        if (!n) { bar.style.display = 'none'; return; }
-        bar.style.display = 'flex';
-        document.getElementById('mmMultiBarText').textContent =
-          n + (n === 1 ? ' node selected' : ' nodes selected');
-        document.getElementById('mmMultiBarAdd').disabled = n < 2;
+        if (MM.selectedNodeId && !MM.multiSelectIds.has(MM.selectedNodeId)) {
+          var remaining = Array.from(MM.multiSelectIds);
+          MM.selectedNodeId = remaining.length ? remaining[remaining.length - 1] : null;
+        }
       }
 
       // ---- Mindmap switcher menu -----------------------------------------
@@ -3232,15 +3281,19 @@ def render_mindmaps(player: Player) -> str:
       // ---- Multi-select: add a shared child below several nodes ------
 
       // Adds one new node as a shared CHILD of every node currently in
-      // MM.multiSelectIds (shift-click, see toggleMultiSelect) -- e.g.
+      // MM.multiSelectIds (shift-click, see extendMultiSelect) -- e.g.
       // several "blocklist" nodes all feeding into one shared "setup"
-      // node below them. Unlike a normal single add, the selected
-      // nodes don't need to share a parent or sit at the same depth --
-      // see add_shared_child in app/mindmaps.py for why that's fine
-      // structurally; computeLayout/renderCanvas below draw the extra
-      // connector lines and nudge the new node's position to sit
-      // centered under the whole selected group (see their own
-      // extraParentIds handling).
+      // node below them. Wired to the "add shared child" button inside
+      // renderSharedChildPopoverHtml's popover (see the click
+      // delegation above), which only ever shows once 2+ nodes are
+      // selected, so the size check here is just a defensive floor,
+      // not something a player can normally trigger under. Unlike a
+      // normal single add, the selected nodes don't need to share a
+      // parent or sit at the same depth -- see add_shared_child in
+      // app/mindmaps.py for why that's fine structurally;
+      // computeLayout/renderCanvas draw the extra connector lines and
+      // nudge the new node's position to sit centered under the whole
+      // selected group (see their own extraParentIds handling).
       async function addSharedChildSelected() {
         var mm = activeMindmap();
         if (!mm || MM.multiSelectIds.size < 2) return;
@@ -3248,17 +3301,10 @@ def render_mindmaps(player: Player) -> str:
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ parent_ids: Array.from(MM.multiSelectIds), text: 'New', color: 'gray' }),
         });
-        if (data) {
-          MM.data = data;
-          MM.multiSelectIds.clear();
-          selectNode(data.newNodeId || null);
-        }
+        // selectNode below replaces MM.multiSelectIds with just the new
+        // node on its own -- no separate .clear() needed first.
+        if (data) { MM.data = data; selectNode(data.newNodeId || null); }
       }
-      document.getElementById('mmMultiBarAdd').addEventListener('click', addSharedChildSelected);
-      document.getElementById('mmMultiBarClear').addEventListener('click', function () {
-        MM.multiSelectIds.clear();
-        render();
-      });
 
       // ---- Boot -----------------------------------------------------------
 
