@@ -374,11 +374,11 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   text-transform: none; letter-spacing: normal; text-align: left;
   font-size: 9.5px; line-height: 1.35;
 }
-/* overscroll-behavior: contain here too -- same scroll-chaining reason
-   as .mm-suggestions/.mm-note-wrap textarea above, for a long note
-   read on the node's own flipped-over back face rather than its
-   popover's edit box. */
-.mm-node-note-text { width: 100%; height: 100%; overflow-y: auto; overscroll-behavior: contain; white-space: pre-wrap; word-break: break-word; }
+/* overscroll-behavior + contain: paint here too -- same scroll-chaining
+   AND blur-while-scrollable reasons as .mm-suggestions/.mm-note-wrap
+   textarea below, for a long note read on the node's own flipped-over
+   back face rather than its popover's edit box. */
+.mm-node-note-text { width: 100%; height: 100%; overflow-y: auto; overscroll-behavior: contain; contain: paint; white-space: pre-wrap; word-break: break-word; }
 
 /* The selected node's own brighten treatment + stacking rule is
    defined further below, alongside the edge buttons/color popover
@@ -743,6 +743,31 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
      scrolls itself and only itself, exactly like a player hitting the
      end of a normal dropdown expects. */
   overscroll-behavior: contain;
+  /* This is the actual fix for the blur that only shows up once there
+     are enough results to need this list's own scrollbar (confirmed:
+     no blur with too few results to overflow, blur returns the
+     instant there are enough to). A scrollable overflow:auto region
+     with actual overflowing content gets promoted to its own
+     compositing layer by the browser pre-emptively -- not just while
+     something's actively being dragged/scrolled in it, just for
+     BEING a real scroller ready to be scrolled smoothly -- and same
+     as every other promotion/demotion in this file's history, that
+     forces .mm-world (its ancestor, sharing one flattened layer with
+     every node's own text) to re-rasterize around it. Unlike the
+     will-change: transform attempt on .mm-world itself (reverted --
+     see git log), which tried to solve this by giving the big ANCESTOR
+     its own permanent layer and ended up blurring the entire canvas
+     at the wrong raster scale all the time, `contain: paint` doesn't
+     force this small element into its own GPU texture at all -- it's
+     a containment guarantee, not a compositing hint: it tells the
+     browser this box's own paint never needs to affect anything
+     outside its border box, so whatever compositing decision gets
+     made for ITS scrolling doesn't have to ripple out to .mm-world's
+     raster the way it currently does. Confirmed harmless here: this
+     element already clips to its own box via overflow-y: auto and
+     already establishes its own stacking context via z-index, both
+     of which `paint` containment implies anyway. */
+  contain: paint;
 }
 .mm-suggestions.show { display: block; }
 /* Normal case, NOT the all-caps every other bit of popover text
@@ -825,6 +850,11 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
      scrolled to its own top/bottom would otherwise hand the rest of
      the gesture off to the page underneath it. */
   overscroll-behavior: contain;
+  /* Same blur-while-scrollable fix as .mm-suggestions' own too (see
+     its comment for the full mechanism) -- a note long enough to need
+     this textarea's own scrollbar is the same kind of
+     actively-promotable scroller nested inside .mm-world. */
+  contain: paint;
 }
 .mm-note-wrap textarea.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-note-wrap textarea.mm-goal-input::placeholder { color: var(--text-faint); }
