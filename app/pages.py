@@ -4677,62 +4677,19 @@ def render_mindmaps(player: Player) -> str:
         btn.classList.add('mm-glow');
       }
 
-      // How long the squish half of the note flip takes -- kept as a
-      // constant since setTimeout below has to match it exactly (the
-      // face swap has to land right at the pinch point, not before or
-      // after it) and mindmaps.css's own transition duration on
-      // .mm-node-flip-inner is written to match this same number.
-      var NOTE_FLIP_HALF_MS = 130;
-
-      // Plays the note-toggle button's squish-swap-unsquish flip and,
-      // at the exact midpoint (when the node's scaled down to a
-      // sliver, mid-transition, so the swap itself is never visible),
-      // toggles MM.flippedNodeIds and re-renders with the OTHER face
-      // showing. This is a plain 2D transform (scaleX only) rather
-      // than the true 3D rotateY flip this first shipped with --
-      // rotateY needed backface-visibility to hide whichever face was
-      // facing away, and that combination (a 3D rendering context
-      // nested inside .mm-world, the same transformed layer every
-      // node on the canvas already paints into) is a well-documented
-      // browser compositing quirk that can soften text/icons for the
-      // WHOLE canvas the moment any node has a note, not just the
-      // flipped one. A 2D scaleX squish reads as a believable "flip"
-      // without ever invoking a 3D context anywhere on the page, so
-      // there's nothing left for that bug to trigger on.
-      //
-      // Driven with inline styles rather than a CSS class toggle
-      // because the squish and the unsquish are two DIFFERENT
-      // transitions bridged by a full re-render in between (the face
-      // swap) -- a class alone can't express "animate out, replace
-      // the DOM, then animate back in", but explicitly setting the
-      // start state, forcing a reflow, then setting the end state
-      // (the same remove/reflow/re-add trick glowEditModeButton uses
-      // for its own restartable animation) can.
+      // Toggles a node between its front (label) and back (note) face
+      // -- an immediate hard cut, no animation. This used to run a
+      // squish-swap-unsquish transition (and, before that, a true 3D
+      // rotateY), but a 3D-transform-based flip -- even the 2D
+      // scaleX version this passed through on the way here -- is more
+      // machinery than the hard cut the player actually wanted, so
+      // this is now just the plain toggle + re-render every other
+      // view-only action on a node already uses (see the
+      // manual-complete checkbox's own handler just above).
       function flipNodeNote(nodeId) {
-        var nodeEl = document.querySelector('.mm-node[data-node-id="' + nodeId + '"]');
-        var flipInner = nodeEl && nodeEl.querySelector('.mm-node-flip-inner');
-        if (!flipInner) return;
-        flipInner.style.transition = 'transform ' + NOTE_FLIP_HALF_MS + 'ms ease-in';
-        flipInner.style.transform = 'scaleX(0.02)';
-        setTimeout(function () {
-          if (MM.flippedNodeIds.has(nodeId)) MM.flippedNodeIds.delete(nodeId);
-          else MM.flippedNodeIds.add(nodeId);
-          render();
-          // render() just rebuilt this node's DOM from scratch, so
-          // freshEl starts life with no inline style at all (its
-          // resting state, scaleX(1), per mindmaps.css) -- pin it back
-          // to the squished end of the animation first, force a
-          // reflow so the browser actually registers that as the
-          // starting point, then transition back out to scaleX(1),
-          // same idea as the squish-in half above just run in reverse.
-          var freshEl = document.querySelector('.mm-node[data-node-id="' + nodeId + '"] .mm-node-flip-inner');
-          if (!freshEl) return;
-          freshEl.style.transition = 'none';
-          freshEl.style.transform = 'scaleX(0.02)';
-          void freshEl.offsetWidth;
-          freshEl.style.transition = 'transform ' + NOTE_FLIP_HALF_MS + 'ms ease-out';
-          freshEl.style.transform = 'scaleX(1)';
-        }, NOTE_FLIP_HALF_MS);
+        if (MM.flippedNodeIds.has(nodeId)) MM.flippedNodeIds.delete(nodeId);
+        else MM.flippedNodeIds.add(nodeId);
+        render();
       }
 
       // Called by every mutating action below with `preNodes` --

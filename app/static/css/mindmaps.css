@@ -322,34 +322,24 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
 .mm-node-purple.completed .mm-node-note-toggle { color: #6c549d; }
 .mm-node-white.completed .mm-node-note-toggle { color: #b8b3a8; }
 
-/* The actual flip: a plain 2D scaleX squish, NOT the true 3D rotateY
-   this first shipped with. That version needed backface-visibility to
-   hide whichever face was facing away, and that combination (a 3D
-   rendering context nested inside .mm-world, the same transformed
-   layer every node on the canvas already paints into) is a
-   well-documented browser compositing quirk that can soften every
-   node's text/icons across the WHOLE canvas the moment any one node
-   has a note -- not just the flipped one, and not fixed by pinning
-   .mm-world's own layer down either (tried that first). A 2D-only
-   transform never invokes a 3D context in the first place, so there's
-   nothing left for that bug to trigger on.
-   Only ever ONE face is in the DOM at a time (see renderCanvas's own
-   isFlipped branch) -- flipNodeNote (the page script) animates this
-   element down to a sliver, swaps which face is rendered at that
-   midpoint (invisible either way, since the node's scaled to nothing
-   right then), then animates back out -- so this rule only ever needs
-   a single resting transform, never two faces stacked or a flipped
-   variant of this class. inset:0 fills .mm-node's full bordered box
-   (ignoring its own padding, the same way any absolutely positioned
-   child of a padded box does), so the face itself reproduces that
-   4px/10px padding instead. transition is deliberately NOT set here --
-   flipNodeNote sets it inline per phase (squish in vs. ease back out),
-   since a plain CSS transition can't express "animate out, swap the
-   DOM, animate back in" on its own. */
-.mm-node-flip-inner {
-  position: absolute; inset: 0;
-  transform: scaleX(1);
-}
+/* The actual flip: an immediate hard cut, no animation -- flipNodeNote
+   (the page script) just toggles which face is in the DOM and
+   re-renders. Earlier drafts animated this (first a true 3D rotateY,
+   then a 2D scaleX squish once the rotateY version turned out to
+   soften text/icons across the WHOLE canvas, not just the flipped
+   node -- transform-style: preserve-3d + backface-visibility: hidden
+   are a well-documented pairing for exactly that, and the ancestor
+   they were degrading was .mm-world, the one transformed/panned/
+   zoomed layer every node and popover on the canvas already shares),
+   but the animation itself wasn't wanted on its own merits either, so
+   .mm-node-flip-inner carries no transform/transition of its own at
+   all now -- only ever ONE face is in the DOM at a time (see
+   renderCanvas's own isFlipped branch), nothing to hide or ease
+   between. inset:0 fills .mm-node's full bordered box (ignoring its
+   own padding, the same way any absolutely positioned child of a
+   padded box does), so the face itself reproduces that 4px/10px
+   padding instead. */
+.mm-node-flip-inner { position: absolute; inset: 0; }
 .mm-node-face {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
