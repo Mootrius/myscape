@@ -308,7 +308,18 @@
      "this is clickable" affordance. */
   color: inherit; text-decoration: none; cursor: pointer;
 }
-.loot-item-box:hover { border-color: var(--gold-dim); }
+.loot-item-box:hover {
+  border-color: var(--gold-dim);
+  /* The base rule above already resets text-decoration to none, but
+     that alone doesn't survive hovering -- myscape.css's global
+     a:hover { text-decoration: underline; } has the same specificity
+     (one element + :hover vs. one class here), so once the pointer is
+     over the box that rule can still win and underline the anchor,
+     which then draws its line across the qty/gp text inside even
+     though those spans never set text-decoration themselves. Reassert
+     none here (class + :hover beats element + :hover) to keep it off. */
+  text-decoration: none;
+}
 .loot-item-box-icon { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
