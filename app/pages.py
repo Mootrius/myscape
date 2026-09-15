@@ -2900,6 +2900,16 @@ def render_mindmaps(player: Player) -> str:
         if (!on && MM.multiSelectIds.size > 1) {
           MM.multiSelectIds = MM.selectedNodeId ? new Set([MM.selectedNodeId]) : new Set();
         }
+        // Entering edit mode also flips every flipped node back to its
+        // front face. The note-toggle (paper) icon is hidden for the
+        // whole duration of edit mode (see .mm-view-mode's rule in
+        // mindmaps.css) since the edge buttons' own "+" icons are
+        // already competing for the same corner of a node, so a note
+        // left flipped open from browsing would just be dead, unreadable
+        // clutter sitting there with no way to flip it back until edit
+        // mode is left again -- clearing the flip set up front means
+        // there's never a stuck-open back face to worry about instead.
+        if (on) MM.flippedNodeIds.clear();
         render();
       }
 

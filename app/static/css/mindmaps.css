@@ -305,10 +305,19 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
    left/top/width/height actually positions/sizes -- see .mm-node's own
    comment above), landing on a back face that shows the note text. The
    same button then shows a back-arrow instead, in the exact same spot,
-   to flip back. Works whether or not Edit Mode is on -- same "a view
-   action, not an edit one" reasoning as the gray manual-complete
-   checkbox above -- and is excluded from the pointerdown delegation's
-   Edit-Mode gate the same way that checkbox is (see the page script).
+   to flip back. Works from plain browsing (a view action, not an edit
+   one) the same way the gray manual-complete checkbox above does, and
+   is excluded from the pointerdown delegation's Edit-Mode gate the same
+   way that checkbox is (see the page script). It's hidden for the whole
+   duration of Edit Mode though (see the :not(.mm-view-mode) rule right
+   below) -- Edit Mode already pins its own "+" edge buttons to a node's
+   corners (see .mm-edge-btn), so this button would either collide with
+   those or just add more clutter for an action that isn't part of
+   editing anyway; setEditMode also force-flips every node back to its
+   front face the instant Edit Mode turns on (see the page script), so
+   there's never a back face left stranded with no way to flip back to
+   its front -- the hidden button couldn't be clicked to do that during
+   Edit Mode regardless.
    A node with no note gets none of this at all -- no button, no
    flip-inner wrapper, nothing to flip TO -- so it costs nothing in the
    common case. */
@@ -325,6 +334,11 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
   color: #676768;
 }
 .mm-node-note-toggle svg { width: 12px; height: 12px; display: block; }
+/* #mmNodesLayer only carries .mm-view-mode outside Edit Mode (see
+   renderCanvas's own nodesLayer.classList.toggle) -- so this hides the
+   note-toggle button specifically WHILE Edit Mode is on, per the note
+   toggle's own comment above. */
+#mmNodesLayer:not(.mm-view-mode) .mm-node-note-toggle { display: none; }
 /* Completed: filled solid with that color's own fill-color (see each
    .mm-node-<color>.completed rule below), so the icon becomes a shade
    DARKER than that exact fill instead -- one rule per color, same
