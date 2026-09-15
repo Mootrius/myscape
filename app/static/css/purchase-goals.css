@@ -295,10 +295,19 @@ button.primary#pgNameSave, .pg-setup-form-save {
    before this, .gear-slot.owned/.not-owned/.affordable (below, later
    in the cascade at equal specificity) always won out over
    .gear-slot:hover's border-color, so hovering a colored slot produced
-   no visible feedback at all. filter: brightness() lights up whatever
-   background and border are already there without overriding either. */
-.gear-slot:hover { filter: brightness(1.18); }
+   no visible feedback at all.
+   background-color rather than filter: brightness() -- filter lights
+   up the whole rendered box, item icon included, which reads as the
+   icon itself getting highlighted rather than the slot around it.
+   background-color only affects the flat color sitting behind the
+   icon. Same rgb(51,51,54) lift used for the loot tracker's own
+   hover highlight (see loot-tracker.css), so the two pages' hover
+   feedback matches; .filled gets its own hover rule right below since
+   it starts from a different base color (#1c1a14, not panel-2) and
+   needs its own, proportionally-brightened target instead. */
+.gear-slot:hover { background-color: rgb(51, 51, 54); }
 .gear-slot.filled { background: #1c1a14; }
+.gear-slot.filled:hover { background-color: rgb(38, 35, 27); }
 .gear-slot.picking { border-color: var(--gold); }
 /* -webkit-user-drag: none backs up the icon <img>'s draggable="false"
    attribute (see slotHtml in app/pages.py) -- Safari has a history of
@@ -386,11 +395,15 @@ button.primary#pgNameSave, .pg-setup-form-save {
    dragging a row's text doesn't just select it instead the way plain
    text in a draggable box normally would. */
 .gear-summary-row.draggable { cursor: grab; user-select: none; }
-/* Same filter: brightness() hover feedback as .gear-slot on the gear
-   grid (see the comment above it) -- only while draggable (i.e. only
-   in "custom" sort mode), since these rows aren't grabbable at all in
-   the other two sort modes and shouldn't look interactive there. */
-.gear-summary-row.draggable:hover { filter: brightness(1.18); }
+/* Same background-color hover feedback as .gear-slot on the gear grid
+   (see the comment above it -- background-color, not filter, so the
+   row's own icon and text don't brighten along with it) -- only while
+   draggable (i.e. only in "custom" sort mode), since these rows
+   aren't grabbable at all in the other two sort modes and shouldn't
+   look interactive there. .gear-summary-row's own background is
+   always panel-2 (no "filled" equivalent for rows), so this needs
+   only the one rule. */
+.gear-summary-row.draggable:hover { background-color: rgb(51, 51, 54); }
 .gear-summary-row.draggable.dragging { opacity: 0.4; cursor: grabbing; }
 .gear-summary-row.draggable.drag-over { outline: 2px dashed var(--gold); outline-offset: -2px; }
 
