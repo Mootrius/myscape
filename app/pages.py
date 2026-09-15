@@ -3523,6 +3523,7 @@ def render_mindmaps(player: Player) -> str:
           if (searchInputEl) searchInputEl.value = suggestionEl.getAttribute('data-value');
           var suggBox = searchWrap && searchWrap.querySelector('[data-role="mm-suggestions"]');
           if (suggBox) { suggBox.classList.remove('show'); suggBox.innerHTML = ''; }
+          showGoalSaveError(null);
           return;
         }
         // A segmented toggle option (see renderSegmentedToggleHtml) --
@@ -3538,6 +3539,7 @@ def render_mindmaps(player: Player) -> str:
           segGroup.querySelectorAll('.mm-segment-btn').forEach(function (b) { b.classList.toggle('active', b === segBtn); });
           var segHidden = segGroup.nextElementSibling;
           if (segHidden && segHidden.matches('input[type="hidden"]')) segHidden.value = segBtn.getAttribute('data-segment-value');
+          showGoalSaveError(null);
           // The skill target's valid range (AND its placeholder --
           // "Target level" vs. "Target experience") depends on which
           // metric is picked -- re-check/re-label it immediately
@@ -3739,6 +3741,13 @@ def render_mindmaps(player: Player) -> str:
       // quickly) -- each input gets its own independent debounce.
       var searchDebounceTimers = new WeakMap();
       document.getElementById('mmNodesLayer').addEventListener('input', function (e) {
+        // Any edit inside the goal-criteria form makes whatever
+        // goal-save-error is currently showing stale -- same "clear it
+        // the moment there's something worth trying again" treatment
+        // validateNodeText already gives the manual node's own error,
+        // just for the trackable-type one instead (see
+        // showGoalSaveError/saveNodeGoal).
+        if (e.target.closest('[data-role="goal-fields"]')) showGoalSaveError(null);
         var searchInput = e.target.closest('.mm-search-input');
         if (searchInput) {
           clearTimeout(searchDebounceTimers.get(searchInput));
@@ -3749,6 +3758,14 @@ def render_mindmaps(player: Player) -> str:
         if (targetInput && targetInput.closest('.mm-goal-fields')) validateSkillTarget(targetInput);
         var nodeTextInput = e.target.closest('[data-role="node-text-input"]');
         if (nodeTextInput) validateNodeText(nodeTextInput);
+      });
+      // Backstop for the skill/diary <select> fields -- 'input' fires
+      // for a <select> in every current browser, but 'change' is the
+      // one guaranteed everywhere a <select> has ever fired something,
+      // so this just makes sure a picked option clears the error even
+      // somewhere that doesn't.
+      document.getElementById('mmNodesLayer').addEventListener('change', function (e) {
+        if (e.target.closest('[data-role="goal-fields"]')) showGoalSaveError(null);
       });
       document.getElementById('mmNodesLayer').addEventListener('keydown', function (e) {
         var label = e.target.closest('[data-role="label"]');
@@ -3889,6 +3906,30 @@ def render_mindmaps(player: Player) -> str:
           errEl.textContent = '';
           errEl.classList.remove('show');
         }
+      }
+
+      // Shows (or, with a falsy msg, clears) a trackable node's own
+      // "you're missing something" error right in its popover -- see
+      // saveNodeGoal for where this actually gets called (a rejected
+      // save) and renderNodePopoverHtml for where the element itself
+      // lives. Used to be the page's own top error banner (#mmError,
+      // above the whole canvas -- see showError), same as any other
+      // failed request; moved down here instead since it's a form
+      // validation message about THIS popover specifically ("Set a
+      // target count.", "Pick an item.", ...), not a page-level
+      // failure, and the banner sits off past the top of the viewport
+      // on a canvas that usually fills the whole screen -- easy to
+      // miss entirely with the popover still open right in front of
+      // the player. No popover currently open (or a popover with no
+      // goal-save-error slot in it, e.g. the manual type, which never
+      // hits this path -- see saveNodeGoal's own comment) is a no-op,
+      // not an error.
+      function showGoalSaveError(msg) {
+        var errEl = document.querySelector('[data-role="popover"] [data-role="goal-save-error"]');
+        if (!errEl) return;
+        if (!msg) { errEl.textContent = ''; errEl.classList.remove('show'); return; }
+        errEl.textContent = msg;
+        errEl.classList.add('show');
       }
 
       // A trackable node's own text is no longer something the player
@@ -4323,10 +4364,19 @@ def render_mindmaps(player: Player) -> str:
           (showSave ? '<button type="button" class="btn-secondary mm-goal-save-btn" data-role="goal-save">SAVE</button>' : '') +
           '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>' +
           '</div>';
+        // A trackable type's own "you're missing something" error
+        // (server-validated -- see saveNodeGoal/showGoalSaveError and
+        // clean_goal in app/mindmaps.py for the actual per-field
+        // messages) lands here, right above Save/Delete -- the same
+        // "in the popover, not the page's top banner" treatment the
+        // manual node's own node-text-error already got, and it picks
+        // up that same .mm-node ancestor's uppercase styling for free,
+        // same as every other label in here.
         return '<div class="mm-node-popover mm-node-popover-wide" data-role="popover">' +
           renderGoalTypePickerHtml(node) +
           renderGoalFieldsHtml(node) +
           renderNoteFieldHtml(node) +
+          '<div class="mm-field-error mm-goal-save-error" data-role="goal-save-error"></div>' +
           actionsHtml +
           '</div>';
       }
@@ -4883,11 +4933,33 @@ def render_mindmaps(player: Player) -> str:
         if (!mm || !node) return;
         var mmId = mm.id;
         var preNodes = mm.nodes;
-        const data = await apiCall(
-          '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id) + '/goal',
-          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal: goal, note: note }) }
-        );
-        if (!data) return;
+        // Not the shared apiCall helper here -- that always routes a
+        // failed request to the page's top error banner (see
+        // showError), which is exactly what showGoalSaveError's own
+        // comment explains is the wrong place for a "you're missing a
+        // field" validation message from clean_goal (app/mindmaps.py).
+        // A 400 here IS specifically that (set_node_goal only ever
+        // rejects with one -- see the /goal route in app/main.py), so
+        // it goes to the popover instead; anything else (a dropped
+        // connection, a genuine server error) still isn't about any
+        // one field, so it keeps the old banner treatment.
+        var res, data;
+        try {
+          res = await fetch(
+            '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id) + '/goal',
+            { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal: goal, note: note }) }
+          );
+          data = await res.json().catch(function () { return {}; });
+        } catch (err) {
+          showError('Something went wrong. Please try again.');
+          return;
+        }
+        if (!res.ok) {
+          showGoalSaveError(describeError(data, 'Something went wrong. Please try again.'));
+          return;
+        }
+        showGoalSaveError(null);
+        showError(null);
         MM.data = data;
         if (isStillActiveMindmap(mmId)) recordUndoableEdit(preNodes);
         if (closePopover) {
