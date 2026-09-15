@@ -223,8 +223,9 @@ button.primary#mmNameSave, .mm-name-form-save {
    text-transform: uppercase -- everything else in the label still
    renders upper as normal. */
 .mm-node-x-lower { text-transform: lowercase; }
-/* The selected node's own outline + stacking rule is defined further
-   below, alongside the edge buttons/color popover it's shown with. */
+/* The selected node's own brighten treatment + stacking rule is
+   defined further below, alongside the edge buttons/color popover
+   it's shown with. */
 
 /* Each color is OUTLINED (panel background, colored border, plain
    text) by default -- a goal that hasn't been met yet -- and only
@@ -291,16 +292,40 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-node-white.completed:hover { background-color: #ffffff; }
 
 /* The selected node needs to paint above its unselected siblings --
-   both for its own outline and for the edge buttons/color popover
-   below, which are its DOM children and would otherwise be at the
-   mercy of plain document order against other .mm-node boxes that
-   happen to sit nearby. outline-offset: 0 hugs the ring right against
-   the node's own border rather than leaving a gap around it. */
+   both for its own brighten treatment and for the edge buttons/color
+   popover below, which are its DOM children and would otherwise be at
+   the mercy of plain document order against other .mm-node boxes that
+   happen to sit nearby. */
 /* A shift-added node (see extendMultiSelect in the page script) gets
-   this exact same class/ring -- there's no visually separate
+   this exact same class/treatment -- there's no visually separate
    "multi-select" mode, every currently-selected node just reads as
    "selected" the same way. */
-.mm-node.selected { outline: 1px solid var(--gold); outline-offset: 0; z-index: 2; }
+/* Selection reads as the same BRIGHTEN feedback every button-like box
+   on the site already gives on hover/press (.gear-slot, .loot-npc-box,
+   .dash-card, .mm-segment-btn.active -- see their own comments), made
+   STICKY here rather than transient, instead of the gold ring this
+   used to draw. This lifts every selected node's panel-2 background by
+   the same rgb(51,51,54) amount those other boxes use; each color's
+   own already-established "brightened" hover shade (immediately above)
+   is reused as its SELECTED border (while outlined) or background
+   (once completed/filled) below, so a selected node ends up looking
+   exactly like it does mid-hover, just held instead of momentary.
+   Order matches the color rules above. */
+.mm-node.selected { z-index: 2; background-color: rgb(51, 51, 54); }
+.mm-node-red.selected { border-color: #dd6857; }
+.mm-node-red.completed.selected { background-color: #dd6857; }
+.mm-node-orange.selected { border-color: #e0924f; }
+.mm-node-orange.completed.selected { background-color: #e0924f; }
+.mm-node-yellow.selected { border-color: #ddc86a; }
+.mm-node-yellow.completed.selected { background-color: #ddc86a; }
+.mm-node-green.selected { border-color: #80c868; }
+.mm-node-green.completed.selected { background-color: #80c868; }
+.mm-node-blue.selected { border-color: #68a1e1; }
+.mm-node-blue.completed.selected { background-color: #68a1e1; }
+.mm-node-purple.selected { border-color: #a084d9; }
+.mm-node-purple.completed.selected { background-color: #a084d9; }
+.mm-node-white.selected { border-color: #ffffff; }
+.mm-node-white.completed.selected { background-color: #ffffff; }
 
 /* ---- Per-node hover controls -----------------------------------------
    Small "+" buttons on each of a node's four edges, shown only while
