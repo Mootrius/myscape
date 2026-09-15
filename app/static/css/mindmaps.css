@@ -1,0 +1,218 @@
+/* Mindmaps -- goal/idea trees a player builds up node by node. Loaded
+   only by /dashboard/mindmaps (see app/pages.py's render_mindmaps),
+   same as loot-tracker.css/purchase-goals.css are each scoped to their
+   own page. No Maintrius equivalent to port here (brand new feature),
+   so nothing here is carried over from anywhere else -- see
+   app/mindmaps.py for the server-side tree logic this renders. */
+
+.mm-header {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-bottom: 14px; position: relative; flex-wrap: wrap;
+}
+
+.mm-menu-wrap { position: relative; }
+
+/* The switcher trigger -- shows the active mindmap's own name (not a
+   generic icon/label) since that's the one piece of context a player
+   needs at a glance, with a small caret marking it as a dropdown
+   rather than a plain button. */
+.mm-switch-btn {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  padding: 8px 16px; color: var(--text); font-family: inherit;
+  font-size: 12.5px; letter-spacing: 0.02em; text-transform: uppercase;
+  cursor: pointer; max-width: 320px;
+}
+.mm-switch-btn:hover { border-color: var(--gold-dim); }
+.mm-switch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-switch-caret { color: var(--text-dim); font-size: 9px; flex: none; }
+
+/* Same floating-panel treatment as .tracker-menu (purchase-goals.css)
+   -- duplicated rather than shared across a stylesheet boundary
+   neither page otherwise crosses -- but taller/wider, since this one
+   also doubles as the mindmap-switch list (one row per mindmap) on
+   top of the usual New/Rename/Delete actions, not just a few fixed
+   options. */
+.mm-menu {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%); z-index: 5;
+  margin-top: 6px; background: var(--panel); border: 1px solid var(--border);
+  min-width: 220px; max-width: 320px; max-height: 320px; overflow-y: auto;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.mm-menu-item {
+  background: none; border: none; text-align: left; padding: 9px 14px;
+  color: var(--text-dim); font-size: 11.5px; letter-spacing: 0.02em;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mm-menu-item:hover { background: var(--panel-2); color: var(--gold); }
+.mm-menu-item.active { color: var(--gold); }
+.mm-menu-item.danger:hover { color: var(--red); }
+.mm-menu-divider { border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* Inline new/rename form -- same shape as .pg-setup-form
+   (purchase-goals.css), duplicated for the same self-contained-
+   stylesheet reason as .mm-menu above. */
+.mm-name-form { display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 14px; }
+.mm-name-form input[type="text"] { flex: 1 1 280px; max-width: 360px; }
+button.primary#mmNameSave, .mm-name-form-save {
+  width: auto; flex: 0 0 auto;
+  padding: 0 22px; height: 32px; margin-top: 0;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.btn-secondary {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-dim); font-family: inherit;
+  padding: 0 16px; height: 32px;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.btn-secondary:hover { border-color: var(--gold-dim); color: var(--text); }
+.btn-secondary:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- Canvas -------------------------------------------------------- */
+
+/* A fixed-height viewport, not "however tall the tree is" -- a mindmap
+   can grow arbitrarily wide/tall (that's the whole point), so it pans
+   and zooms inside a stable frame instead of pushing the rest of the
+   page around every time a node is added. position: relative anchors
+   the zoom controls (absolute) and #mmWorld (also absolute, panned/
+   zoomed via its own transform) against this box's own top-left corner.
+   touch-action: none stops the browser's own scroll/zoom gestures from
+   fighting the pointer-drag panning below (see the script). */
+.mm-canvas {
+  position: relative; overflow: hidden;
+  height: 620px;
+  background: var(--panel-translucent); border: 1px solid var(--border);
+  cursor: grab; touch-action: none;
+}
+.mm-canvas.panning { cursor: grabbing; }
+
+/* transform-origin: 0 0 so panX/panY (translate) and zoom (scale) in
+   the script compose the way they're computed there -- top-left as
+   the fixed point, not the element's own center. */
+.mm-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+.mm-lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+.mm-lines path { stroke: var(--border); stroke-width: 1.5; fill: none; }
+
+.mm-zoom-controls {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.mm-zoom-controls button {
+  width: 28px; height: 28px; background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text-dim); font-family: inherit; font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.mm-zoom-controls button:hover { border-color: var(--gold-dim); color: var(--text); }
+#mmZoomReset { font-size: 9px; letter-spacing: 0.02em; text-transform: uppercase; }
+
+.mm-canvas-empty {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: var(--text-faint); font-size: 12px; text-align: center;
+}
+
+/* ---- Nodes ----------------------------------------------------------
+   Fixed width AND height (not "as tall as the text needs") so the
+   layout the script computes is pure arithmetic -- every node's box is
+   exactly the same size the layout math assumed, so connector lines
+   always meet a node's real top/bottom-center with no per-node
+   measurement pass needed. Longer text wraps up to 2 lines and is
+   clipped with an ellipsis past that rather than growing the box (see
+   the -webkit-line-clamp block below) -- a rare case for a short goal/
+   label, and one that keeps every row's vertical spacing predictable. */
+.mm-node {
+  position: absolute; box-sizing: border-box;
+  width: 160px; height: 46px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; font-size: 11.5px; letter-spacing: 0.02em; text-transform: uppercase;
+  line-height: 1.25; cursor: pointer; user-select: none;
+}
+.mm-node-label {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* A persistent ring (not a border-color swap, which would fight each
+   color's own border below) marking the one node the toolbar is
+   currently editing. */
+.mm-node.selected { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* Each color is a background + matching border + a hover-brightened
+   variant of that SAME background -- background-color only, the same
+   "brighten just the box, not its content" hover treatment used for
+   .loot-npc-box/.gear-slot elsewhere on the site (see loot-tracker.css
+   and purchase-goals.css), not filter: brightness(), so a node's own
+   text doesn't brighten along with it. Text color is picked per
+   background for contrast (dark text on the brighter gold/red/amber/
+   green/white fills, light text on the darker gray/blue ones) --
+   matching how a player's own reference mindmap tool did it. */
+.mm-node-gray { background: var(--panel-2); border-color: var(--border); color: var(--text); }
+.mm-node-gray:hover { background-color: rgb(51, 51, 54); }
+
+.mm-node-gold { background: var(--gold); border-color: var(--gold); color: #1a1408; }
+.mm-node-gold:hover { background-color: #ffab42; }
+
+.mm-node-red { background: var(--red); border-color: var(--red); color: #1a0f0c; }
+.mm-node-red:hover { background-color: #dd6857; }
+
+.mm-node-amber { background: var(--amber); border-color: var(--amber); color: #1a1408; }
+.mm-node-amber:hover { background-color: #fabe45; }
+
+.mm-node-green { background: var(--green); border-color: var(--green); color: #0e150c; }
+.mm-node-green:hover { background-color: #80c868; }
+
+.mm-node-blue { background: var(--blue); border-color: var(--blue); color: var(--text); }
+.mm-node-blue:hover { background-color: #68a1e1; }
+
+.mm-node-white { background: var(--text); border-color: var(--text); color: var(--bg); }
+.mm-node-white:hover { background-color: #ffffff; }
+
+/* ---- Selected-node toolbar ------------------------------------------
+   Docked below the canvas rather than floating next to the node itself
+   -- the node's on-screen position moves with pan/zoom, but this stays
+   put, so it's never fighting the canvas transform for where to sit. */
+.mm-toolbar {
+  margin-top: 14px; padding: 14px 16px;
+  background: var(--panel-translucent); border: 1px solid var(--border);
+}
+.mm-toolbar-empty { color: var(--text-faint); font-size: 12px; text-align: center; margin: 0; }
+.mm-toolbar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mm-toolbar-row + .mm-toolbar-row { margin-top: 12px; }
+
+.mm-node-text-input { width: 100%; }
+
+.mm-swatches { display: flex; align-items: center; gap: 8px; }
+.mm-swatch {
+  width: 24px; height: 24px; border: 1px solid var(--border); cursor: pointer; padding: 0;
+}
+.mm-swatch.active { outline: 2px solid var(--gold); outline-offset: 2px; }
+.mm-swatch-gray { background: var(--panel-2); }
+.mm-swatch-gold { background: var(--gold); }
+.mm-swatch-red { background: var(--red); }
+.mm-swatch-amber { background: var(--amber); }
+.mm-swatch-green { background: var(--green); }
+.mm-swatch-blue { background: var(--blue); }
+.mm-swatch-white { background: var(--text); }
+
+.mm-toolbar-actions { justify-content: center; }
+.mm-delete-btn:hover { border-color: var(--red); color: var(--red); }
+.mm-delete-btn:disabled:hover { border-color: var(--border); color: var(--text-dim); }
+
+/* ---- Zero-mindmaps state -------------------------------------------
+   Same shape as .pg-empty (purchase-goals.css): centered placeholder
+   copy, shown instead of the header/canvas/toolbar while the player
+   has no mindmaps yet (or none have loaded). */
+.mm-empty-wrap { text-align: center; padding: 40px 10px; }
+.mm-empty { color: var(--text-faint); font-size: 13px; margin: 0 0 16px; }
+/* button.primary (myscape.css) defaults to width: 100% -- wrong for a
+   single centered call-to-action button, same fix as
+   button.primary#pgNameSave/#mmNameSave above. */
+button.primary#mmCreateFirstBtn {
+  width: auto; padding: 0 22px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+}

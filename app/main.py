@@ -26,8 +26,9 @@ from app.auth import (
 from app.database import get_db
 from app.limiter import limiter
 from app.loot import build_loot_state, resolve_range, sync_loot_events
-from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, Player, PotionStorageItem, RunePouchItem
-from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_purchase_goals, render_signup
+from app.mindmaps import add_node, build_mindmaps_state, delete_node, new_root_node, update_node
+from app.models import BankItem, EquipmentItem, GearSetup, InventoryItem, MindMap, Player, PotionStorageItem, RunePouchItem
+from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_purchase_goals, render_signup
 from app.purchase_goals import (
     build_purchase_goals_state,
     get_mapping,
@@ -39,11 +40,13 @@ from app.purchase_goals import (
 from app.recipes import expand_recipe_components
 from app.routers import auth, linking
 from app.schemas import (
+    AddMindMapNodeRequest,
     BankOut,
     BankItemOut,
     BankSyncRequest,
     BankSyncResponse,
     CreateGearSetupRequest,
+    CreateMindMapRequest,
     EquipmentOut,
     EquipmentItemOut,
     EquipmentSyncRequest,
@@ -65,6 +68,7 @@ from app.schemas import (
     PotionStorageSyncRequest,
     PotionStorageSyncResponse,
     RenameGearSetupRequest,
+    RenameMindMapRequest,
     RunePouchOut,
     RunePouchItemOut,
     RunePouchSyncRequest,
@@ -73,6 +77,7 @@ from app.schemas import (
     SetGearSlotRequest,
     SetStillToPurchaseOrderRequest,
     SetStillToPurchaseSortRequest,
+    UpdateMindMapNodeRequest,
 )
 
 # A defensive upper bound, not a real OSRS limit -- the largest bank
@@ -523,6 +528,13 @@ def loot_tracker_page(player: Optional[Player] = Depends(get_optional_current_pl
     return render_loot_tracker(player)
 
 
+@app.get("/dashboard/mindmaps", response_class=HTMLResponse)
+def mindmaps_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    return render_mindmaps(player)
+
+
 @app.get("/api/gear-setups")
 def list_gear_setups(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
     """The combined state the Purchase Goals page polls (see
@@ -823,3 +835,120 @@ def set_still_to_purchase_order(
     ]
     db.commit()
     return build_purchase_goals_state(db, player)
+
+
+@app.get("/api/mindmaps")
+def list_mindmaps(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Every one of the player's mindmaps, each with its full node list
+    -- see build_mindmaps_state in app/mindmaps.py. Not pinned to a
+    Pydantic response_model, same reasoning as GET /api/gear-setups
+    above (see MindMapsState's docstring in app/schemas.py)."""
+    return build_mindmaps_state(db, player)
+
+
+@app.post("/api/mindmaps", status_code=status.HTTP_201_CREATED)
+def create_mindmap(
+    payload: CreateMindMapRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    name = (payload.name or "").strip() or "New Mindmap"
+    mindmap = MindMap(player_id=player.id, name=name, nodes=[new_root_node(name)])
+    db.add(mindmap)
+    db.commit()
+    return build_mindmaps_state(db, player)
+
+
+def _get_owned_mindmap(db: Session, player: Player, mindmap_id: str) -> MindMap:
+    try:
+        mindmap_uuid = uuid.UUID(mindmap_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="mindmap not found")
+    mindmap = (
+        db.query(MindMap)
+        .filter(MindMap.id == mindmap_uuid, MindMap.player_id == player.id)
+        .first()
+    )
+    if mindmap is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="mindmap not found")
+    return mindmap
+
+
+@app.patch("/api/mindmaps/{mindmap_id}")
+def rename_mindmap(
+    mindmap_id: str,
+    payload: RenameMindMapRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap.name = payload.name
+    db.commit()
+    return build_mindmaps_state(db, player)
+
+
+@app.delete("/api/mindmaps/{mindmap_id}")
+def delete_mindmap(
+    mindmap_id: str,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    db.delete(mindmap)
+    db.commit()
+    return build_mindmaps_state(db, player)
+
+
+@app.post("/api/mindmaps/{mindmap_id}/nodes", status_code=status.HTTP_201_CREATED)
+def add_mindmap_node(
+    mindmap_id: str,
+    payload: AddMindMapNodeRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    try:
+        new_nodes, new_node_id = add_node(mindmap.nodes, payload.relative_to, payload.relation, payload.text, payload.color)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    mindmap.nodes = new_nodes
+    db.commit()
+    state = build_mindmaps_state(db, player)
+    # See add_node's docstring in app/mindmaps.py -- handed back
+    # alongside the full state so the client can select the new node
+    # without diffing old vs. new node lists itself.
+    state["newNodeId"] = new_node_id
+    return state
+
+
+@app.patch("/api/mindmaps/{mindmap_id}/nodes/{node_id}")
+def update_mindmap_node(
+    mindmap_id: str,
+    node_id: str,
+    payload: UpdateMindMapNodeRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    try:
+        mindmap.nodes = update_node(mindmap.nodes, node_id, payload.text, payload.color)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    db.commit()
+    return build_mindmaps_state(db, player)
+
+
+@app.delete("/api/mindmaps/{mindmap_id}/nodes/{node_id}")
+def delete_mindmap_node(
+    mindmap_id: str,
+    node_id: str,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    try:
+        mindmap.nodes = delete_node(mindmap.nodes, node_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    db.commit()
+    return build_mindmaps_state(db, player)

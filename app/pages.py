@@ -47,6 +47,15 @@ try:
 except OSError:
     _LOOT_TRACKER_CSS_VERSION = 0
 
+# Same cache-busting trick again, for the Mindmaps page's own stylesheet.
+_MINDMAPS_CSS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "css", "mindmaps.css"
+)
+try:
+    _MINDMAPS_CSS_VERSION = int(os.path.getmtime(_MINDMAPS_CSS_PATH))
+except OSError:
+    _MINDMAPS_CSS_VERSION = 0
+
 
 def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
     """The single link/button that goes on each side of the centered
@@ -346,6 +355,7 @@ def render_landing(player: Optional[Player]) -> str:
 # so a returning player recognizes them at a glance.
 _ICON_COINS = "/static/img/icon-coins.png"
 _ICON_BONES = "/static/img/icon-dragon-bones.png"
+_ICON_CLUE_SCROLL = "/static/img/icon-clue-scroll.png"
 
 
 def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
@@ -392,11 +402,24 @@ def render_dashboard(player: Player) -> str:
         )
         + "</a>"
     )
+    mindmaps_card = (
+        '<a href="/dashboard/mindmaps" style="display:block;color:inherit;text-decoration:none;">'
+        + _dash_card(
+            _ICON_CLUE_SCROLL,
+            "Clue scroll",
+            "Mindmaps",
+            "Organize your goals into a mindmap -- start from one idea and branch "
+            "out with parent, child, and sibling nodes, each recolorable to "
+            "however you like to group things.",
+        )
+        + "</a>"
+    )
 
     body = f"""
     <div class="dash-grid">
       {purchase_goals_card}
       {loot_tracker_card}
+      {mindmaps_card}
     </div>
     """
     return _shell(title="Dashboard — myscape", player=player, body=body)
@@ -2360,6 +2383,597 @@ def render_loot_tracker(player: Player) -> str:
     """
     return _shell(
         title="Loot Tracker — myscape",
+        player=player,
+        body=body,
+        extra_script=script,
+        extra_head=extra_head,
+    )
+
+
+def render_mindmaps(player: Player) -> str:
+    """The Mindmaps page -- brand new feature, no Maintrius equivalent to
+    port. Same overall shape as Purchase Goals/Loot Tracker: a static
+    HTML skeleton, everything below it rendered client-side from one
+    polled-once JSON payload (GET /api/mindmaps, see app/mindmaps.py's
+    build_mindmaps_state), so every mutation endpoint can just hand back
+    the freshly recomputed state and let the same render() redraw
+    everything. Unlike those two pages, there's no background poll --
+    nothing external (no RuneLite plugin, no wiki prices) ever changes a
+    mindmap out from under the player, so there's nothing to poll for
+    that their own last action here hasn't already applied.
+
+    The canvas (pan/zoom, node layout, the elbow connector lines) is
+    plain positioned <div>s plus one <svg> overlay, laid out by a small
+    from-scratch tree-layout algorithm in the script below -- see
+    computeLayout there for the how and why (fixed node width/height,
+    matching mindmaps.css exactly, so the whole layout is arithmetic
+    with no DOM-measurement pass needed)."""
+    extra_head = f'<link rel="stylesheet" href="/static/css/mindmaps.css?v={_MINDMAPS_CSS_VERSION}" />'
+    body = """
+    <h2 class="page-title">Mindmaps</h2>
+    <div class="auth-error" id="mmError"></div>
+    <div class="mm-name-form" id="mmNameForm" style="display:none;">
+      <input type="text" id="mmNameInput" placeholder="Mindmap name" maxlength="60" />
+      <button class="primary mm-name-form-save" id="mmNameSave" type="button">Save</button>
+      <button class="btn-secondary" id="mmNameCancel" type="button">Cancel</button>
+    </div>
+    <div class="mm-empty-wrap" id="mmEmptyWrap">
+      <p class="mm-empty" id="mmEmptyMsg">Loading&hellip;</p>
+      <button class="primary" id="mmCreateFirstBtn" type="button" style="display:none;">Create your first mindmap</button>
+    </div>
+    <div id="mmBody" style="display:none;">
+      <div class="mm-header">
+        <div class="mm-menu-wrap">
+          <button class="mm-switch-btn" id="mmSwitchBtn" type="button" title="Switch or manage mindmaps">
+            <span class="mm-switch-name" id="mmSwitchName"></span>
+            <span class="mm-switch-caret">&#9662;</span>
+          </button>
+          <div class="mm-menu" id="mmMenu" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="mm-canvas" id="mmCanvas">
+        <div class="mm-zoom-controls">
+          <button type="button" id="mmZoomIn" title="Zoom in">+</button>
+          <button type="button" id="mmZoomOut" title="Zoom out">&minus;</button>
+          <button type="button" id="mmZoomReset" title="Reset view">&#8635;</button>
+        </div>
+        <div class="mm-world" id="mmWorld">
+          <svg class="mm-lines" id="mmLines"></svg>
+          <div id="mmNodesLayer"></div>
+        </div>
+      </div>
+      <div class="mm-toolbar" id="mmToolbar">
+        <p class="mm-toolbar-empty" id="mmToolbarEmpty">Select a node to edit it.</p>
+        <div id="mmToolbarBody" style="display:none;">
+          <div class="mm-toolbar-row">
+            <input type="text" id="mmNodeText" class="mm-node-text-input" maxlength="120" placeholder="Node text" />
+          </div>
+          <div class="mm-toolbar-row">
+            <div class="mm-swatches" id="mmSwatches"></div>
+          </div>
+          <div class="mm-toolbar-row mm-toolbar-actions">
+            <button class="btn-secondary" id="mmAddParent" type="button">+ Parent</button>
+            <button class="btn-secondary" id="mmAddChild" type="button">+ Child</button>
+            <button class="btn-secondary" id="mmAddSibling" type="button">+ Sibling</button>
+            <button class="btn-secondary mm-delete-btn" id="mmDeleteNode" type="button">Delete node</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+    script = """
+    (function () {
+      // Matches mindmaps.css's .mm-node width/height exactly -- the
+      // whole layout below is pure arithmetic on these constants (no
+      // DOM measurement pass), so a mismatch here would show up as
+      // connector lines not quite meeting a node's actual edges.
+      var NODE_WIDTH = 160;
+      var NODE_HEIGHT = 46;
+      var COL_WIDTH = 190;   // horizontal spacing between sibling leaf columns
+      var ROW_HEIGHT = 110;  // vertical spacing between depth levels
+      var MARGIN = 60;       // breathing room around the whole tree inside the world
+
+      // Mirrors NODE_COLORS in app/mindmaps.py -- the fixed palette a
+      // node's color can be, in the order the toolbar's swatches show
+      // them.
+      var NODE_COLORS = ['gray', 'gold', 'red', 'amber', 'green', 'blue', 'white'];
+
+      var MM = {
+        data: null,
+        activeMindmapId: null,
+        selectedNodeId: null,
+        nameFormMode: null, // 'new' | 'rename' | null
+        pan: { x: 0, y: 0 },
+        zoom: 1,
+        lastLayout: null, // set by renderCanvas, read by recenterOnNode
+      };
+
+      // Same "remember what was open across a reload" convenience as
+      // Purchase Goals' own ACTIVE_SETUP_STORAGE_KEY (see
+      // render_purchase_goals in app/pages.py) -- per-browser, not
+      // per-player, for the same reasons documented there.
+      var ACTIVE_MINDMAP_STORAGE_KEY = 'myscape:mindmaps:activeMindmapId';
+      function loadStoredActiveMindmapId() {
+        try { return localStorage.getItem(ACTIVE_MINDMAP_STORAGE_KEY); } catch (e) { return null; }
+      }
+      function setActiveMindmapId(id) {
+        MM.activeMindmapId = id;
+        try {
+          if (id) localStorage.setItem(ACTIVE_MINDMAP_STORAGE_KEY, id);
+          else localStorage.removeItem(ACTIVE_MINDMAP_STORAGE_KEY);
+        } catch (e) { /* ignore -- see comment above */ }
+      }
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      function showError(msg) {
+        var el = document.getElementById('mmError');
+        if (!msg) { el.classList.remove('show'); el.textContent = ''; return; }
+        el.textContent = msg;
+        el.classList.add('show');
+      }
+
+      async function apiCall(url, options) {
+        try {
+          const res = await fetch(url, options);
+          const data = await res.json().catch(function () { return {}; });
+          if (!res.ok) {
+            showError(describeError(data, 'Something went wrong. Please try again.'));
+            return null;
+          }
+          showError(null);
+          return data;
+        } catch (err) {
+          showError('Something went wrong. Please try again.');
+          return null;
+        }
+      }
+
+      function activeMindmap() {
+        if (!MM.data || !MM.activeMindmapId) return null;
+        return MM.data.mindmaps.find(function (m) { return m.id === MM.activeMindmapId; }) || null;
+      }
+
+      function selectedNode() {
+        var mm = activeMindmap();
+        if (!mm || !MM.selectedNodeId) return null;
+        return mm.nodes.find(function (n) { return n.id === MM.selectedNodeId; }) || null;
+      }
+
+      // ---- Tree layout ----------------------------------------------------
+      // A from-scratch top-down tree layout (no library) -- deliberately
+      // simple over a "correct" Reingold-Tilford implementation: every
+      // leaf gets its own column (so subtrees can never overlap), and
+      // each parent centers over the span of its own immediate children
+      // (the midpoint between the first and last, not an average across
+      // all of them, which is what keeps a parent visually centered over
+      // an asymmetric set of children the same way a family tree diagram
+      // usually reads). Good enough for how these trees actually grow;
+      // worth revisiting if a very lopsided tree ever looks obviously off.
+      function computeLayout(nodes) {
+        var childrenMap = new Map();
+        nodes.forEach(function (n) {
+          if (!childrenMap.has(n.parentId)) childrenMap.set(n.parentId, []);
+          childrenMap.get(n.parentId).push(n);
+        });
+        childrenMap.forEach(function (list) { list.sort(function (a, b) { return a.order - b.order; }); });
+
+        var root = nodes.find(function (n) { return n.parentId === null; });
+        var positions = {};
+        var leafCounter = { value: 0 };
+        var maxDepth = 0;
+
+        function walk(node, depth) {
+          maxDepth = Math.max(maxDepth, depth);
+          var kids = childrenMap.get(node.id) || [];
+          var unitX;
+          if (kids.length === 0) {
+            unitX = leafCounter.value;
+            leafCounter.value += 1;
+          } else {
+            var childXs = kids.map(function (c) { return walk(c, depth + 1); });
+            unitX = (childXs[0] + childXs[childXs.length - 1]) / 2;
+          }
+          positions[node.id] = { x: unitX * COL_WIDTH + MARGIN, y: depth * ROW_HEIGHT + MARGIN, depth: depth };
+          return unitX;
+        }
+        if (root) walk(root, 0);
+
+        return {
+          positions: positions,
+          childrenMap: childrenMap,
+          root: root,
+          worldWidth: Math.max(1, leafCounter.value) * COL_WIDTH + MARGIN * 2,
+          worldHeight: (maxDepth + 1) * ROW_HEIGHT + MARGIN * 2,
+        };
+      }
+
+      // ---- Pan/zoom ---------------------------------------------------
+
+      function applyTransform() {
+        document.getElementById('mmWorld').style.transform =
+          'translate(' + MM.pan.x + 'px, ' + MM.pan.y + 'px) scale(' + MM.zoom + ')';
+      }
+
+      function setZoom(z) {
+        MM.zoom = Math.max(0.4, Math.min(2, z));
+        applyTransform();
+      }
+
+      // Pans the canvas so the given node sits centered in the current
+      // viewport, at the current zoom -- uses MM.lastLayout (set by the
+      // most recent renderCanvas), so this only makes sense to call
+      // right after a render.
+      function recenterOnNode(nodeId) {
+        var layout = MM.lastLayout;
+        var pos = layout && layout.positions[nodeId];
+        if (!pos) return;
+        var canvas = document.getElementById('mmCanvas');
+        var viewW = canvas.clientWidth, viewH = canvas.clientHeight;
+        var centerX = pos.x + NODE_WIDTH / 2, centerY = pos.y + NODE_HEIGHT / 2;
+        MM.pan.x = viewW / 2 - centerX * MM.zoom;
+        MM.pan.y = viewH / 2 - centerY * MM.zoom;
+        applyTransform();
+      }
+
+      function resetView() {
+        var mm = activeMindmap();
+        MM.zoom = 1;
+        if (mm && mm.nodes.length) recenterOnNode(mm.nodes.find(function (n) { return n.parentId === null; }).id);
+        else applyTransform();
+      }
+
+      var canvasEl = document.getElementById('mmCanvas');
+      var panState = { active: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0, moved: false };
+      canvasEl.addEventListener('pointerdown', function (e) {
+        // A node's own handler owns clicks on it (selection), and the
+        // zoom control buttons need their native click to fire
+        // normally -- setPointerCapture below would otherwise redirect
+        // that click's events to the canvas instead, since they're
+        // also DOM descendants of it, silently swallowing the button
+        // press.
+        if (e.target.closest('.mm-node') || e.target.closest('.mm-zoom-controls')) return;
+        panState.active = true;
+        panState.moved = false;
+        panState.startX = e.clientX;
+        panState.startY = e.clientY;
+        panState.startPanX = MM.pan.x;
+        panState.startPanY = MM.pan.y;
+        canvasEl.setPointerCapture(e.pointerId);
+        canvasEl.classList.add('panning');
+      });
+      canvasEl.addEventListener('pointermove', function (e) {
+        if (!panState.active) return;
+        var dx = e.clientX - panState.startX, dy = e.clientY - panState.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panState.moved = true;
+        MM.pan.x = panState.startPanX + dx;
+        MM.pan.y = panState.startPanY + dy;
+        applyTransform();
+      });
+      function endPan() {
+        if (!panState.active) return;
+        panState.active = false;
+        canvasEl.classList.remove('panning');
+        if (!panState.moved) selectNode(null); // a plain click on empty canvas deselects
+      }
+      canvasEl.addEventListener('pointerup', endPan);
+      canvasEl.addEventListener('pointercancel', endPan);
+      canvasEl.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        setZoom(MM.zoom + (e.deltaY < 0 ? 0.12 : -0.12));
+      }, { passive: false });
+
+      document.getElementById('mmZoomIn').addEventListener('click', function () { setZoom(MM.zoom + 0.15); });
+      document.getElementById('mmZoomOut').addEventListener('click', function () { setZoom(MM.zoom - 0.15); });
+      document.getElementById('mmZoomReset').addEventListener('click', resetView);
+
+      // ---- Node selection + click delegation ---------------------------
+
+      function selectNode(id) {
+        MM.selectedNodeId = id;
+        render();
+      }
+
+      document.getElementById('mmNodesLayer').addEventListener('pointerdown', function (e) {
+        var el = e.target.closest('.mm-node');
+        if (!el) return;
+        e.stopPropagation();
+        selectNode(el.getAttribute('data-node-id'));
+      });
+
+      // ---- Rendering ----------------------------------------------------
+
+      function renderCanvas(mm) {
+        var layout = computeLayout(mm.nodes);
+        MM.lastLayout = layout;
+
+        var world = document.getElementById('mmWorld');
+        world.style.width = layout.worldWidth + 'px';
+        world.style.height = layout.worldHeight + 'px';
+
+        document.getElementById('mmNodesLayer').innerHTML = mm.nodes.map(function (n) {
+          var pos = layout.positions[n.id];
+          var selectedCls = (n.id === MM.selectedNodeId) ? ' selected' : '';
+          return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + '" data-node-id="' + esc(n.id) + '" ' +
+            'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
+            '<div class="mm-node-label">' + esc(n.text) + '</div>' +
+            '</div>';
+        }).join('');
+
+        var svg = document.getElementById('mmLines');
+        svg.setAttribute('width', layout.worldWidth);
+        svg.setAttribute('height', layout.worldHeight);
+        var pathsHtml = '';
+        layout.childrenMap.forEach(function (kids, parentId) {
+          if (parentId === null || !kids.length) return; // the null bucket just holds the root itself, not a real edge
+          var parentPos = layout.positions[parentId];
+          if (!parentPos) return;
+          var parentCenterX = parentPos.x + NODE_WIDTH / 2;
+          var parentBottomY = parentPos.y + NODE_HEIGHT;
+          var childTopY = parentPos.y + ROW_HEIGHT;
+          var busY = parentBottomY + (childTopY - parentBottomY) / 2;
+          var childXs = kids.map(function (k) { return layout.positions[k.id].x + NODE_WIDTH / 2; });
+          var minX = Math.min.apply(null, childXs), maxX = Math.max.apply(null, childXs);
+          var d = 'M ' + parentCenterX + ' ' + parentBottomY + ' L ' + parentCenterX + ' ' + busY + ' ';
+          if (kids.length > 1) d += 'M ' + minX + ' ' + busY + ' L ' + maxX + ' ' + busY + ' ';
+          childXs.forEach(function (cx) { d += 'M ' + cx + ' ' + busY + ' L ' + cx + ' ' + childTopY + ' '; });
+          pathsHtml += '<path d="' + d + '"></path>';
+        });
+        svg.innerHTML = pathsHtml;
+      }
+
+      function renderMenu() {
+        var rows = MM.data.mindmaps.map(function (m) {
+          var activeCls = (m.id === MM.activeMindmapId) ? ' active' : '';
+          return '<button type="button" class="mm-menu-item mm-menu-switch' + activeCls + '" data-mindmap-id="' +
+            esc(m.id) + '">' + esc(m.name) + '</button>';
+        }).join('');
+        document.getElementById('mmMenu').innerHTML = rows +
+          '<div class="mm-menu-divider"></div>' +
+          '<button type="button" class="mm-menu-item" id="mmMenuNew">New mindmap</button>' +
+          '<button type="button" class="mm-menu-item" id="mmMenuRename">Rename mindmap</button>' +
+          '<button type="button" class="mm-menu-item danger" id="mmMenuDelete">Delete mindmap</button>';
+      }
+
+      function renderToolbar() {
+        var node = selectedNode();
+        var emptyEl = document.getElementById('mmToolbarEmpty');
+        var bodyEl = document.getElementById('mmToolbarBody');
+        if (!node) {
+          emptyEl.style.display = '';
+          bodyEl.style.display = 'none';
+          return;
+        }
+        emptyEl.style.display = 'none';
+        bodyEl.style.display = '';
+
+        var textInput = document.getElementById('mmNodeText');
+        if (document.activeElement !== textInput) textInput.value = node.text;
+
+        document.getElementById('mmSwatches').innerHTML = NODE_COLORS.map(function (c) {
+          var activeCls = (c === node.color) ? ' active' : '';
+          return '<button type="button" class="mm-swatch mm-swatch-' + c + activeCls + '" data-color="' + c + '" title="' + c + '"></button>';
+        }).join('');
+
+        var isRoot = node.parentId === null;
+        document.getElementById('mmAddSibling').disabled = isRoot;
+        document.getElementById('mmDeleteNode').disabled = isRoot;
+      }
+
+      function render() {
+        var wrapEl = document.getElementById('mmEmptyWrap');
+        var msgEl = document.getElementById('mmEmptyMsg');
+        var createBtn = document.getElementById('mmCreateFirstBtn');
+        var bodyEl = document.getElementById('mmBody');
+
+        if (!MM.data) {
+          wrapEl.style.display = '';
+          msgEl.textContent = 'Loading…';
+          createBtn.style.display = 'none';
+          bodyEl.style.display = 'none';
+          return;
+        }
+        if (!MM.data.mindmaps.length) {
+          wrapEl.style.display = '';
+          msgEl.textContent = "You don't have any mindmaps yet -- create your first one to get started.";
+          createBtn.style.display = '';
+          bodyEl.style.display = 'none';
+          return;
+        }
+        wrapEl.style.display = 'none';
+        bodyEl.style.display = '';
+
+        var mm = activeMindmap();
+        document.getElementById('mmSwitchName').textContent = mm ? mm.name : '';
+        renderMenu();
+        if (mm) renderCanvas(mm);
+        renderToolbar();
+      }
+
+      // ---- Mindmap switcher menu -----------------------------------------
+
+      function closeMenu() { document.getElementById('mmMenu').style.display = 'none'; }
+      document.getElementById('mmSwitchBtn').addEventListener('click', function () {
+        var menu = document.getElementById('mmMenu');
+        menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+      });
+      document.addEventListener('click', function (e) {
+        var wrap = document.querySelector('.mm-menu-wrap');
+        if (wrap && !wrap.contains(e.target)) closeMenu();
+      });
+
+      document.getElementById('mmMenu').addEventListener('click', function (e) {
+        var switchBtn = e.target.closest('.mm-menu-switch');
+        if (switchBtn) {
+          closeMenu();
+          var id = switchBtn.getAttribute('data-mindmap-id');
+          if (id !== MM.activeMindmapId) {
+            setActiveMindmapId(id);
+            MM.selectedNodeId = null;
+            render();
+            resetView();
+          }
+          return;
+        }
+        if (e.target.id === 'mmMenuNew') { closeMenu(); openNameForm('new', ''); return; }
+        if (e.target.id === 'mmMenuRename') {
+          closeMenu();
+          var mm = activeMindmap();
+          if (mm) openNameForm('rename', mm.name);
+          return;
+        }
+        if (e.target.id === 'mmMenuDelete') { closeMenu(); deleteActiveMindmap(); return; }
+      });
+
+      async function deleteActiveMindmap() {
+        var mm = activeMindmap();
+        if (!mm) return;
+        if (!window.confirm('Delete "' + mm.name + '"? This cannot be undone.')) return;
+        const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id), { method: 'DELETE' });
+        if (data) {
+          MM.data = data;
+          MM.selectedNodeId = null;
+          setActiveMindmapId(data.mindmaps.length ? data.mindmaps[0].id : null);
+          render();
+          resetView();
+        }
+      }
+
+      // ---- New/rename mindmap form ---------------------------------------
+
+      function openNameForm(mode, initialValue) {
+        MM.nameFormMode = mode;
+        var form = document.getElementById('mmNameForm');
+        var input = document.getElementById('mmNameInput');
+        form.style.display = 'flex';
+        input.value = initialValue || '';
+        input.focus();
+      }
+      document.getElementById('mmCreateFirstBtn').addEventListener('click', function () { openNameForm('new', ''); });
+      document.getElementById('mmNameCancel').addEventListener('click', function () {
+        document.getElementById('mmNameForm').style.display = 'none';
+        MM.nameFormMode = null;
+      });
+      document.getElementById('mmNameSave').addEventListener('click', async function () {
+        var name = (document.getElementById('mmNameInput').value || '').trim();
+        if (!name) { showError('A mindmap name is required.'); return; }
+        var mode = MM.nameFormMode;
+        document.getElementById('mmNameForm').style.display = 'none';
+        MM.nameFormMode = null;
+        var data;
+        if (mode === 'new') {
+          data = await apiCall('/api/mindmaps', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
+          });
+          if (data) {
+            MM.data = data;
+            var created = data.mindmaps.find(function (m) { return m.name === name; }) || data.mindmaps[data.mindmaps.length - 1];
+            if (created) {
+              setActiveMindmapId(created.id);
+              MM.selectedNodeId = null;
+              render();
+              resetView();
+            }
+          }
+        } else if (mode === 'rename') {
+          var mm = activeMindmap();
+          if (!mm) return;
+          data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id), {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
+          });
+          if (data) { MM.data = data; render(); }
+        }
+      });
+
+      // ---- Selected-node toolbar actions ---------------------------------
+
+      async function updateSelectedNode(patch) {
+        var mm = activeMindmap();
+        var node = selectedNode();
+        if (!mm || !node) return;
+        const data = await apiCall(
+          '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }
+        );
+        if (data) { MM.data = data; render(); }
+      }
+
+      function commitNodeText() {
+        var node = selectedNode();
+        if (!node) return;
+        var input = document.getElementById('mmNodeText');
+        var val = (input.value || '').trim();
+        if (!val || val === node.text) { input.value = node.text; return; }
+        updateSelectedNode({ text: val });
+      }
+      document.getElementById('mmNodeText').addEventListener('blur', commitNodeText);
+      document.getElementById('mmNodeText').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mmNodeText').blur(); }
+      });
+
+      document.getElementById('mmToolbarBody').addEventListener('click', function (e) {
+        var swatch = e.target.closest('.mm-swatch');
+        if (swatch) updateSelectedNode({ color: swatch.getAttribute('data-color') });
+      });
+
+      async function addNodeRelative(relation) {
+        var mm = activeMindmap();
+        var node = selectedNode();
+        if (!mm || !node) return;
+        const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ relative_to: node.id, relation: relation, text: 'New idea', color: 'gray' }),
+        });
+        if (data) {
+          MM.data = data;
+          MM.selectedNodeId = data.newNodeId || MM.selectedNodeId;
+          render();
+          var input = document.getElementById('mmNodeText');
+          if (input) { input.focus(); input.select(); }
+        }
+      }
+      document.getElementById('mmAddParent').addEventListener('click', function () { addNodeRelative('parent'); });
+      document.getElementById('mmAddChild').addEventListener('click', function () { addNodeRelative('child'); });
+      document.getElementById('mmAddSibling').addEventListener('click', function () { addNodeRelative('sibling'); });
+
+      document.getElementById('mmDeleteNode').addEventListener('click', async function () {
+        var mm = activeMindmap();
+        var node = selectedNode();
+        if (!mm || !node || node.parentId === null) return;
+        if (!window.confirm('Delete "' + node.text + '" and everything below it? This cannot be undone.')) return;
+        const data = await apiCall(
+          '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
+          { method: 'DELETE' }
+        );
+        if (data) { MM.data = data; MM.selectedNodeId = null; render(); }
+      });
+
+      // ---- Boot -----------------------------------------------------------
+
+      async function loadState() {
+        const data = await apiCall('/api/mindmaps');
+        if (!data) return;
+        MM.data = data;
+        if (!MM.activeMindmapId || !data.mindmaps.some(function (m) { return m.id === MM.activeMindmapId; })) {
+          var stored = loadStoredActiveMindmapId();
+          var resolved = (stored && data.mindmaps.some(function (m) { return m.id === stored; }))
+            ? stored
+            : (data.mindmaps.length ? data.mindmaps[0].id : null);
+          setActiveMindmapId(resolved);
+        }
+        render();
+        resetView();
+      }
+
+      loadState();
+    })();
+    """
+    return _shell(
+        title="Mindmaps — myscape",
         player=player,
         body=body,
         extra_script=script,

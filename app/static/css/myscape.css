@@ -52,6 +52,13 @@
      values Maintrius itself used for the same purpose. */
   --amber: #d9a53c;
   --green: #6fae5a;
+  /* Added for Mindmaps' recolorable nodes (see mindmaps.css) -- there's
+     no Maintrius equivalent to carry a value over from like
+     --red/--amber/--green above, so this is a new pick, matched to
+     their same moderate saturation/lightness so all four sit together
+     as one consistent "categorical node color" family rather than one
+     visibly standing apart. */
+  --blue: #5a8cc4;
   --radius: 0px;
 }
 

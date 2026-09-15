@@ -80,6 +80,7 @@ class Player(Base):
     rune_pouch_items = relationship("RunePouchItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
     loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
+    mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -396,6 +397,43 @@ class GearSetup(Base):
     still_to_purchase_custom_order = Column(JSONB, nullable=True)
 
     player = relationship("Player", back_populates="gear_setups")
+
+
+class MindMap(Base):
+    """A player-created goal/idea tree -- the Mindmaps feature. A player
+    can have any number of these, same as GearSetup above, and for the
+    same reason `nodes` is one opaque JSONB blob rather than a normalized
+    child table: a mindmap is always read and written as a whole (open
+    the editor -> load every node; add/recolor/delete a node -> load the
+    current tree, mutate it, write the whole thing back), so there's no
+    "just this one row" access pattern a real table would be earning its
+    keep for, and a self-referencing node table would need its own
+    recursive-delete logic in exchange for nothing this blob doesn't
+    already give for free (see delete_node in app/mindmaps.py, which is
+    just a plain filter over a Python list).
+
+    `nodes` is a flat list of {"id": str, "parentId": str|None, "text":
+    str, "color": str, "order": float} dicts -- not nested, so a node's
+    position in the tree is entirely determined by its own parentId
+    (None for the single root) rather than by where it sits in the list.
+    `order` ranks a node among its own parent's other children (lower
+    sorts first); see app/mindmaps.py for how add_node picks a new
+    node's order when inserting it as a parent/child/sibling of an
+    existing one, and for the fixed set of valid `color` values.
+
+    All the tree-shape logic (inserting/deleting a node, keeping the
+    single-root invariant) lives in app/mindmaps.py, not here -- same
+    split as GearSetup/app/purchase_goals.py."""
+
+    __tablename__ = "mindmaps"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    nodes = Column(JSONB, nullable=False, default=list)
+
+    player = relationship("Player", back_populates="mindmaps")
 
 
 class LootEvent(Base):

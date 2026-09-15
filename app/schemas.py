@@ -633,3 +633,54 @@ class LootState(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+# -- Mindmaps ---------------------------------------------------------
+
+
+class CreateMindMapRequest(BaseModel):
+    name: str = ""
+
+
+class RenameMindMapRequest(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("name is required.")
+        return value
+
+
+class AddMindMapNodeRequest(BaseModel):
+    """One new node, placed relative to an existing one -- see add_node
+    in app/mindmaps.py for exactly what each relation does."""
+
+    relative_to: str
+    relation: str
+    text: Optional[str] = None
+    color: Optional[str] = None
+
+    @field_validator("relation")
+    @classmethod
+    def check_relation(cls, value: str) -> str:
+        if value not in ("parent", "child", "sibling"):
+            raise ValueError("relation must be 'parent', 'child', or 'sibling'.")
+        return value
+
+
+class UpdateMindMapNodeRequest(BaseModel):
+    text: Optional[str] = None
+    color: Optional[str] = None
+
+
+class MindMapsState(BaseModel):
+    """Documents (not enforced) the payload every Mindmaps endpoint
+    returns: {"mindmaps": [...]}, each with id/name/createdAt/nodes --
+    see build_mindmaps_state in app/mindmaps.py. Not pinned to a
+    response_model for the same reason GearSetupsState above isn't."""
+
+    class Config:
+        extra = "allow"
