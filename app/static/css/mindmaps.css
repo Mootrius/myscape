@@ -233,17 +233,21 @@ button.primary#mmNameSave, .mm-name-form-save {
    so it can't get squeezed by a long label next to it. Its color
    treatment diverges from that shared base rule on purpose though --
    it's sitting right on a node's own face rather than a settings row,
-   so it stays subtler: a lighter, barely-there box by default (the
-   node's own --panel-2 fill instead of the base rule's near-black),
-   and a gold OUTLINE -- border plus check, background left alone --
+   so it stays subtler: a dark-but-not-flat-black box by default (a
+   shade between the node's own --panel-2 fill and the page's own
+   --bg behind everything -- darker than the node it sits on, but
+   never quite as dark as the page itself) rather than the base rule's
+   even darker near-black, and a gold OUTLINE -- border plus a
+   slightly thinner check than the base rule's own (1.5px instead of
+   2px -- see the ::after override below), background left alone --
    once checked, rather than the base rule's solid gold fill with the
    check "cut out" of it. (input.mm-node-checkbox matches the base
    rule's own specificity so these actually win, source order alone
    wouldn't be reliable here.) */
 .mm-node-checkbox { flex: none; }
-input.mm-node-checkbox { background: var(--panel-2); }
-input.mm-node-checkbox:checked { background: var(--panel-2); border-color: var(--gold); }
-input.mm-node-checkbox:checked::after { border-color: var(--gold); }
+input.mm-node-checkbox { background: #1b1b1c; }
+input.mm-node-checkbox:checked { background: #1b1b1c; border-color: var(--gold); }
+input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width: 0 1.5px 1.5px 0; }
 .mm-node-label-text {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; min-width: 0;
@@ -268,14 +272,19 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); }
    "brighten just the box, not its content" hover treatment used for
    .loot-npc-box/.gear-slot elsewhere on the site, not
    filter: brightness(), so a node's own text doesn't brighten along
-   with it) with matching dark-vs-light text picked per fill color for
-   contrast; the outlined state keeps that same text color scheme
-   simple -- always var(--text), since there's no fill color behind it
-   to contrast against yet. Order matches NODE_COLORS in
-   app/mindmaps.py -- gray, red, orange, yellow, green, blue, purple,
-   white (no gold or amber here: those stay reserved for the site
-   accent color and Purchase Goals' affordability states respectively,
-   see --orange/--yellow's own comment in myscape.css). */
+   with it). Text is always BLACK once filled (a dark, same-hue tint
+   per color rather than flat #000 -- softer against a saturated fill
+   -- except gray/white, which have no hue of their own to tint from,
+   so they get a plain near-black instead) and always var(--text)
+   (white) while outlined, since there's no fill color behind it to
+   contrast against yet -- deliberately the SAME two colors for every
+   type, never picked per-color for contrast, so a glance at a node's
+   text color alone always says filled-or-not before its border color
+   has to. Order matches NODE_COLORS in app/mindmaps.py -- gray, red,
+   orange, yellow, green, blue, purple, white (no gold or amber here:
+   those stay reserved for the site accent color and Purchase Goals'
+   affordability states respectively, see --orange/--yellow's own
+   comment in myscape.css). */
 .mm-node-gray { background: var(--panel-2); border-color: var(--border); color: var(--text); }
 .mm-node-gray:hover { background-color: rgb(51, 51, 54); }
 /* Gray has no real "goal color" to fill in with, so its completed
@@ -285,7 +294,7 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); }
    which reads as "done" well enough on its own now that the gold
    accent already lives on the manual-complete checkbox itself (see
    .mm-node-checkbox above), not on the node's frame. */
-.mm-node-gray.completed { background: var(--border); border-color: var(--border); color: var(--text); }
+.mm-node-gray.completed { background: var(--border); border-color: var(--border); color: #1a1a1a; }
 .mm-node-gray.completed:hover { background-color: rgb(78, 78, 82); }
 
 .mm-node-red { background: var(--panel-2); border-color: var(--red); color: var(--text); }
@@ -310,12 +319,12 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); }
 
 .mm-node-blue { background: var(--panel-2); border-color: var(--blue); color: var(--text); }
 .mm-node-blue:hover { border-color: #68a1e1; }
-.mm-node-blue.completed { background: var(--blue); border-color: var(--blue); color: var(--text); }
+.mm-node-blue.completed { background: var(--blue); border-color: var(--blue); color: #0d121a; }
 .mm-node-blue.completed:hover { background-color: #68a1e1; }
 
 .mm-node-purple { background: var(--panel-2); border-color: var(--purple); color: var(--text); }
 .mm-node-purple:hover { border-color: #a084d9; }
-.mm-node-purple.completed { background: var(--purple); border-color: var(--purple); color: var(--text); }
+.mm-node-purple.completed { background: var(--purple); border-color: var(--purple); color: #140f1e; }
 .mm-node-purple.completed:hover { background-color: #a084d9; }
 
 .mm-node-white { background: var(--panel-2); border-color: var(--text); color: var(--text); }
@@ -479,14 +488,26 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); }
   image-rendering: pixelated;
 }
 /* MANUAL's own swatch -- same small colored box the old plain color
-   picker used, with a diagonal red slash standing in for "no tracked
-   goal" where every other option has a real icon image. */
+   picker used, but now it looks exactly like its own node's manual-
+   complete checkbox once checked (a gold box, gold check -- see
+   input.mm-node-checkbox:checked above) rather than a diagonal red
+   "no tracked goal" slash, standing in for a real icon image the way
+   every other option in this grid has one. Static -- always drawn
+   "checked" -- since this is what CHOOSING manual looks like, not an
+   interactive toggle of its own; scaled up slightly from the node
+   checkbox's own 16x16/4x8 proportions to this grid's 18x18 icon
+   slot, same 1.5px check thickness as that real checkbox for the
+   exact same "slightly thinner than the site's other checkboxes"
+   reason (see its own comment). */
 .mm-type-btn-swatch {
   position: relative; width: 18px; height: 18px; flex: none; background: var(--panel-2); border: 1px solid var(--border);
 }
+.mm-type-btn-swatch-manual { background: #1b1b1c; border-color: var(--gold); }
 .mm-type-btn-swatch-manual::after {
-  content: ''; position: absolute; left: 1px; right: 1px; top: 50%; height: 2px;
-  background: var(--red); transform: translateY(-50%) rotate(45deg);
+  content: ''; position: absolute; left: 5px; top: 2px;
+  width: 5px; height: 9px;
+  border: solid var(--gold); border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
 }
 .mm-type-btn-label { text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

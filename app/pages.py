@@ -3348,16 +3348,33 @@ def render_mindmaps(player: Player) -> str:
           if (!fieldsWrap) return;
           // A gray (manual) node's Save button commits its NAME, not a
           // goal -- see renderGoalFieldsHtml's "manual" branch and
-          // saveSelectedNodeText below. Blank, or unchanged from what's
-          // already saved, just closes the popover without a request --
-          // same "nothing worth sending" guard commitNodeTextFromLabel
-          // used to apply for the old inline-editable version of this
-          // same rename.
+          // saveSelectedNodeText below. A manual node MUST have text to
+          // be saved -- unlike every other type, it has no goal
+          // criteria of its own to fall back on, so a blank one is
+          // just an empty box with a checkbox next to it, not a real
+          // goal -- so a blank attempt is refused outright (same
+          // "Must be between..." red line under the field the skill
+          // target uses, just for this instead -- see
+          // validateNodeText's own comment for why this is the only
+          // place that ever shows it) rather than silently doing
+          // anything with it. Unchanged from what's already saved
+          // still just closes the popover without a request, same
+          // "nothing worth sending" guard commitNodeTextFromLabel used
+          // to apply for the old inline-editable version of this same
+          // rename.
           var nodeForSave = selectedNode();
           if (nodeForSave && GOAL_TYPE_BY_COLOR[nodeForSave.color] === 'manual') {
             var textInput = fieldsWrap.querySelector('[data-role="node-text-input"]');
             var textVal = textInput ? textInput.value.trim() : '';
-            if (textVal && textVal !== nodeForSave.text) {
+            if (!textVal) {
+              var textErrEl = textInput && textInput.parentElement && textInput.parentElement.querySelector('[data-role="node-text-error"]');
+              if (textErrEl) {
+                textErrEl.textContent = 'Must have text to save.';
+                textErrEl.classList.add('show');
+              }
+              return;
+            }
+            if (textVal !== nodeForSave.text) {
               saveSelectedNodeText(textVal, true);
             } else {
               MM.selectedNodeId = null;
@@ -3425,6 +3442,8 @@ def render_mindmaps(player: Player) -> str:
         }
         var targetInput = e.target.closest('[data-goal-field="target"]');
         if (targetInput && targetInput.closest('.mm-goal-fields')) validateSkillTarget(targetInput);
+        var nodeTextInput = e.target.closest('[data-role="node-text-input"]');
+        if (nodeTextInput) validateNodeText(nodeTextInput);
       });
       document.getElementById('mmNodesLayer').addEventListener('keydown', function (e) {
         var label = e.target.closest('[data-role="label"]');
@@ -3538,6 +3557,23 @@ def render_mindmaps(player: Player) -> str:
           errEl.textContent = 'Must be between ' + fmtNum(min) + ' and ' + fmtNum(max) + '.';
           errEl.classList.add('show');
         } else {
+          errEl.textContent = '';
+          errEl.classList.remove('show');
+        }
+      }
+
+      // Live "clear the error as you type" companion to the goal-save
+      // click delegation's own blank-text check below -- THAT is what
+      // actually shows this error, only once the player attempts a
+      // Save with nothing typed (not the instant a fresh popover opens
+      // empty -- nobody's tried to save anything wrong yet at that
+      // point, so nothing to flag). This just hides it again the
+      // moment there's something in the box worth saving, on every
+      // keystroke, same trigger as validateSkillTarget above.
+      function validateNodeText(input) {
+        var errEl = input.parentElement && input.parentElement.querySelector('[data-role="node-text-error"]');
+        if (!errEl) return;
+        if (input.value.trim() !== '') {
           errEl.textContent = '';
           errEl.classList.remove('show');
         }
@@ -4044,7 +4080,10 @@ def render_mindmaps(player: Player) -> str:
         if (!type) return '';
         if (type === 'manual') {
           return '<div class="mm-goal-fields" data-role="goal-fields">' +
-            '<input class="mm-goal-input" type="text" data-role="node-text-input" placeholder="Type something" maxlength="120" value="' + esc(node.text || '') + '">' +
+            '<div class="mm-goal-target-wrap">' +
+              '<input class="mm-goal-input" type="text" data-role="node-text-input" placeholder="Type something" maxlength="120" value="' + esc(node.text || '') + '">' +
+              '<div class="mm-field-error" data-role="node-text-error"></div>' +
+            '</div>' +
             '</div>';
         }
         var fields = '';
