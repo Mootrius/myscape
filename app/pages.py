@@ -2441,6 +2441,10 @@ def render_mindmaps(player: Player) -> str:
           <button type="button" id="mmZoomFit" title="Zoom to fit">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><line x1="20" y1="20" x2="15.5" y2="15.5"></line></svg>
           </button>
+          <div class="mm-zoom-divider"></div>
+          <button type="button" id="mmEditModeBtn" title="Toggle Edit Mode">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="M15 5l4 4"></path></svg>
+          </button>
         </div>
         <div class="mm-world" id="mmWorld">
           <svg class="mm-lines" id="mmLines"></svg>
@@ -2462,8 +2466,11 @@ def render_mindmaps(player: Player) -> str:
       var MARGIN = 60;       // breathing room around the whole tree inside the world
 
       // Mirrors NODE_COLORS in app/mindmaps.py -- the fixed palette a
-      // node's color can be, in the order the per-node color popover
-      // shows them.
+      // node's color can be (white is root-only, see that file's own
+      // comment). Not iterated to build the goal-type picker directly
+      // (see GOAL_TYPE_PICKER below, which also carries each color's
+      // label/icon), but every ".mm-node-<color>" CSS class still
+      // assumes exactly this set.
       var NODE_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'white'];
 
       // Everything below mirrors app/mindmaps.py's own goal-type
@@ -2479,6 +2486,31 @@ def render_mindmaps(player: Player) -> str:
         gray: 'manual', red: 'kc', orange: 'item', yellow: 'gp',
         green: 'skill', blue: 'quest', purple: 'diary', white: null,
       };
+      // The goal-type picker's own 7 options (see
+      // renderGoalTypePickerHtml) -- every NODE_COLORS entry except
+      // "white" (never player-pickable -- see NODE_COLORS' own
+      // comment in app/mindmaps.py), each labeled and iconed the way
+      // the player asked: the icon files are the OSRS clan-settings
+      // "rank titles" icons that best match each goal type visually
+      // (Beast/Carry/Explorer/Merchant/Quester/Achiever), saved
+      // locally under app/static/img/ rather than hot-linked from the
+      // wiki. "gray" has no icon file -- see its own comment in
+      // renderGoalTypePickerHtml for what it shows instead.
+      var GOAL_TYPE_PICKER = [
+        { color: 'gray', label: 'MANUAL' },
+        { color: 'red', label: 'KC', icon: '/static/img/icon-goal-kc.png' },
+        { color: 'orange', label: 'ITEM', icon: '/static/img/icon-goal-item.png' },
+        { color: 'yellow', label: 'GP', icon: '/static/img/icon-goal-gp.png' },
+        { color: 'green', label: 'SKILL', icon: '/static/img/icon-goal-skill.png' },
+        { color: 'blue', label: 'QUEST', icon: '/static/img/icon-goal-quest.png' },
+        { color: 'purple', label: 'DIARY', icon: '/static/img/icon-goal-diary.png' },
+      ];
+      // Icon path by color, for the same icon shown inside a node
+      // itself next to its (goal-derived) label text -- see
+      // goalDisplayText/renderCanvas. Built from GOAL_TYPE_PICKER
+      // rather than duplicated, so the two never drift out of sync.
+      var GOAL_TYPE_ICON_BY_COLOR = {};
+      GOAL_TYPE_PICKER.forEach(function (opt) { if (opt.icon) GOAL_TYPE_ICON_BY_COLOR[opt.color] = opt.icon; });
       // [value, label] pairs -- source_type strings LootEvent already
       // stores (see app/loot.py), not free-form text, so a kc goal's
       // "activity" field is a picklist rather than a typed field.
@@ -2575,9 +2607,9 @@ def render_mindmaps(player: Player) -> str:
         } catch (e) { /* ignore -- see comment above */ }
       }
 
-      // Edit Mode -- the toggle in the mindmap switcher menu (see
-      // renderMenu/mmMenuEditToggle) that splits the canvas into two
-      // very different interaction modes:
+      // Edit Mode -- the pencil toggle below the zoom controls (see
+      // #mmEditModeBtn/updateEditModeButton) that splits the canvas
+      // into two very different interaction modes:
       //
       //   - OFF (the default): the player can pan/zoom/select a node
       //     to look at it, and -- the one exception -- still click a
@@ -2981,6 +3013,7 @@ def render_mindmaps(player: Player) -> str:
       document.getElementById('mmZoomFit').addEventListener('click', zoomToFit);
       document.getElementById('mmUndoBtn').addEventListener('click', undo);
       document.getElementById('mmRedoBtn').addEventListener('click', redo);
+      document.getElementById('mmEditModeBtn').addEventListener('click', function () { setEditMode(!MM.editMode); });
 
       // ---- Node selection + click delegation ---------------------------
 
@@ -3002,11 +3035,17 @@ def render_mindmaps(player: Player) -> str:
         if (alreadyJustThis) return;
         MM.selectedNodeId = id;
         MM.multiSelectIds = new Set(id ? [id] : []);
-        // Only worth focusing/text-selecting outside Edit Mode's off
-        // -- the label isn't contenteditable then (see renderCanvas),
-        // so there'd be nothing for a browser focus/selection to
-        // actually land in.
-        MM.focusNodeId = (MM.editMode && id) ? id : null;
+        // Only worth focusing/text-selecting when the label is
+        // actually going to be contenteditable (see renderCanvas) --
+        // Edit Mode has to be on, AND the node has to be one of the
+        // free-text colors (gray/white); a trackable node's label is
+        // derived from its goal, not typed, so there's nothing for a
+        // browser focus/selection to land in there.
+        var mmForFocus = activeMindmap();
+        var nodeForFocus = mmForFocus && id ? mmForFocus.nodes.find(function (n) { return n.id === id; }) : null;
+        var focusGoalType = nodeForFocus ? GOAL_TYPE_BY_COLOR[nodeForFocus.color] : null;
+        var focusIsFreeText = (focusGoalType === 'manual' || !focusGoalType);
+        MM.focusNodeId = (MM.editMode && id && focusIsFreeText) ? id : null;
         render();
       }
 
@@ -3099,8 +3138,8 @@ def render_mindmaps(player: Player) -> str:
           );
           return;
         }
-        var swatch = e.target.closest('.mm-swatch');
-        if (swatch) { updateSelectedNode({ color: swatch.getAttribute('data-color') }); return; }
+        var typeBtn = e.target.closest('.mm-type-btn');
+        if (typeBtn) { updateSelectedNode({ color: typeBtn.getAttribute('data-color') }); return; }
         if (e.target.closest('[data-role="delete"]')) { deleteSelectedNode(); return; }
         if (e.target.closest('[data-role="add-shared-child"]')) { addSharedChildSelected(); return; }
         // The gray-node manual "Complete" toggle -- available whether
@@ -3159,6 +3198,57 @@ def render_mindmaps(player: Player) -> str:
 
       // ---- Rendering ----------------------------------------------------
 
+      function fmtNum(n) { return Number(n).toLocaleString('en-US'); }
+
+      // A trackable node's own text is no longer something the player
+      // types -- it's derived straight from its goal criteria (see
+      // clean_goal in app/mindmaps.py for the fields each type
+      // stores), formatted per the exact shape asked for:
+      //   kc:    "<count> kc at <activity>"
+      //   item:  "x<qty> <item>"
+      //   gp:    "<amount> gp"
+      //   skill: "<xp> <skill> xp"  or  "lvl <level> <skill>"
+      //   quest: "<quest name>"
+      //   diary: "<diary area> <tier>"
+      // Only ever called for the 6 trackable colors -- gray (manual)
+      // and white (the root) keep the player's own free-typed
+      // node.text instead (see renderCanvas, which branches on this
+      // before ever calling here). A goal that isn't fully filled in
+      // yet (a freshly recolored node -- see default_goal in
+      // app/mindmaps.py) has nothing to format, so it falls back to a
+      // plain placeholder naming what still needs choosing.
+      function goalDisplayText(node) {
+        var type = GOAL_TYPE_BY_COLOR[node.color];
+        var goal = node.goal || {};
+        if (type === 'kc') {
+          if (!goal.targetCount || !goal.sourceName) return 'Set KC goal';
+          return fmtNum(goal.targetCount) + ' kc at ' + goal.sourceName;
+        }
+        if (type === 'item') {
+          if (!goal.targetQty || !goal.itemName) return 'Set item goal';
+          return 'x' + fmtNum(goal.targetQty) + ' ' + goal.itemName;
+        }
+        if (type === 'gp') {
+          if (!goal.targetGp) return 'Set GP goal';
+          return fmtNum(goal.targetGp) + ' gp';
+        }
+        if (type === 'skill') {
+          if (!goal.skill || !goal.metric || !goal.target) return 'Set skill goal';
+          var skillLabel = titleCase(goal.skill);
+          return goal.metric === 'xp'
+            ? fmtNum(goal.target) + ' ' + skillLabel + ' xp'
+            : 'Lvl ' + goal.target + ' ' + skillLabel;
+        }
+        if (type === 'quest') {
+          return goal.questName || 'Set quest goal';
+        }
+        if (type === 'diary') {
+          if (!goal.area || !goal.tier) return 'Set diary goal';
+          return DIARY_AREA_LABELS[goal.area] + ' ' + titleCase(goal.tier);
+        }
+        return node.text;
+      }
+
       function renderCanvas(mm) {
         var layout = computeLayout(mm.nodes);
         MM.lastLayout = layout;
@@ -3182,14 +3272,21 @@ def render_mindmaps(player: Player) -> str:
           // derives itself), outlined otherwise -- see the
           // .mm-node-<color>.completed rules in mindmaps.css.
           var completedCls = n.completed ? ' completed' : '';
-          // Only the sole selected node is ever contenteditable --
-          // typing directly into a node is how its text changes now
-          // (see the focusout/keydown delegation above), and that's
-          // ambiguous the moment more than one node is selected, so
-          // editing is off for all of them until the selection is back
-          // down to just one. Also Edit-Mode-only, same as every other
-          // structural change -- see MM.editMode's own comment.
-          var editableAttr = (MM.editMode && isSelected && MM.multiSelectIds.size === 1) ? ' contenteditable="true" spellcheck="false"' : '';
+          // Only gray (manual) and white (the root) ever carry a
+          // free-typed label anymore -- every trackable color's text
+          // is derived from its own goal criteria instead (see
+          // goalDisplayText), so there's nothing left for the player
+          // to type into those. Combined with the same "only the sole
+          // selected node, only in Edit Mode" gating as before.
+          var goalType = GOAL_TYPE_BY_COLOR[n.color];
+          var isFreeText = (goalType === 'manual' || !goalType);
+          var editableAttr = (MM.editMode && isFreeText && isSelected && MM.multiSelectIds.size === 1) ? ' contenteditable="true" spellcheck="false"' : '';
+          var displayText = isFreeText ? n.text : goalDisplayText(n);
+          var iconSrc = GOAL_TYPE_ICON_BY_COLOR[n.color];
+          var labelCls = 'mm-node-label' + (iconSrc ? ' mm-node-label-with-icon' : '');
+          var labelInner = iconSrc
+            ? '<img class="mm-node-icon" src="' + iconSrc + '" alt="">' + '<span class="mm-node-label-text">' + esc(displayText) + '</span>'
+            : esc(displayText);
           // The root is the one node every mindmap always keeps, so it
           // can't get a parent (which would just bury it under a new,
           // equally permanent root) or a sibling (it has no parent to
@@ -3217,7 +3314,7 @@ def render_mindmaps(player: Player) -> str:
           else if (isAnchor && MM.multiSelectIds.size >= 2) popoverHtml = renderSharedChildPopoverHtml();
           return '<div class="mm-node mm-node-' + esc(n.color) + selectedCls + completedCls + '" data-node-id="' + esc(n.id) + '" ' +
             'style="left:' + pos.x + 'px; top:' + pos.y + 'px;">' +
-            '<div class="mm-node-label" data-role="label"' + editableAttr + '>' + esc(n.text) + '</div>' +
+            '<div class="' + labelCls + '" data-role="label"' + editableAttr + '>' + labelInner + '</div>' +
             edgeButtonsHtml +
             popoverHtml +
             '</div>';
@@ -3325,10 +3422,7 @@ def render_mindmaps(player: Player) -> str:
           '<div class="mm-menu-divider"></div>' +
           '<button type="button" class="mm-menu-item" id="mmMenuNew">New mindmap</button>' +
           '<button type="button" class="mm-menu-item" id="mmMenuRename">Rename mindmap</button>' +
-          '<button type="button" class="mm-menu-item danger" id="mmMenuDelete">Delete mindmap</button>' +
-          '<div class="mm-menu-divider"></div>' +
-          '<button type="button" class="mm-menu-item mm-menu-edit-toggle' + (MM.editMode ? ' active' : '') + '" id="mmMenuEditToggle">' +
-          'Edit Mode: ' + (MM.editMode ? 'On' : 'Off') + '</button>';
+          '<button type="button" class="mm-menu-item danger" id="mmMenuDelete">Delete mindmap</button>';
       }
 
       // The selected node's color swatches + per-color goal-criteria
@@ -3353,16 +3447,46 @@ def render_mindmaps(player: Player) -> str:
           if (GOAL_TYPE_BY_COLOR[node.color] !== 'manual') return '';
           return '<div class="mm-node-popover" data-role="popover">' + renderGoalFieldsHtml(node) + '</div>';
         }
-        var swatches = NODE_COLORS.map(function (c) {
-          var activeCls = (c === node.color) ? ' active' : '';
-          return '<button type="button" class="mm-swatch mm-swatch-' + c + activeCls + '" data-color="' + c + '" title="' + c + '"></button>';
-        }).join('');
         var isRoot = node.parentId === null;
+        // The root can't have a goal type at all (it's always white,
+        // structurally -- see NODE_COLORS' own comment in
+        // app/mindmaps.py), so it gets no picker, just the delete-less
+        // shell with nothing else to show.
+        var pickerHtml = isRoot ? '' : renderGoalTypePickerHtml(node);
         return '<div class="mm-node-popover mm-node-popover-wide" data-role="popover">' +
-          '<div class="mm-color-popover-swatches">' + swatches + '</div>' +
+          pickerHtml +
           renderGoalFieldsHtml(node) +
           (isRoot ? '' : '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>') +
           '</div>';
+      }
+
+      // The goal-TYPE picker -- what used to be a row of plain color
+      // swatches is now a grid of icon+label buttons, one per goal
+      // type (see GOAL_TYPE_PICKER), since the color alone doesn't
+      // say what a node actually tracks. Clicking one still just sets
+      // the node's `color` (data-color, same click delegation as the
+      // old swatches -- see the click handler above), which resets
+      // its goal back to blank for the new type (see update_node in
+      // app/mindmaps.py) the same way it always has; this is purely a
+      // richer way to choose that same color. "White" is deliberately
+      // NOT one of the options here -- it's reserved for the root
+      // node alone (see NODE_COLORS' own comment in app/mindmaps.py)
+      // and the backend silently refuses to apply it to anything
+      // else, so there's no point ever offering it as a choice.
+      function renderGoalTypePickerHtml(node) {
+        var buttons = GOAL_TYPE_PICKER.map(function (opt) {
+          var activeCls = (opt.color === node.color) ? ' active' : '';
+          var inner = (opt.color === 'gray')
+            // MANUAL has no clan-icon equivalent -- it's the "no
+            // tracked goal" choice, so its own swatch box carries a
+            // red diagonal slash instead of an icon, reading as
+            // "reset/remove tracking" the same way a "no" sign would.
+            ? '<span class="mm-type-btn-swatch mm-type-btn-swatch-manual"></span>'
+            : '<img class="mm-type-btn-icon" src="' + opt.icon + '" alt="">';
+          return '<button type="button" class="mm-type-btn' + activeCls + '" data-color="' + opt.color + '" title="' + opt.label + '">' +
+            inner + '<span class="mm-type-btn-label">' + opt.label + '</span></button>';
+        }).join('');
+        return '<div class="mm-type-picker">' + buttons + '</div>';
       }
 
       // The current color's goal-criteria fields, prefilled from the
@@ -3447,6 +3571,7 @@ def render_mindmaps(player: Player) -> str:
 
       function render() {
         updateHistoryButtons();
+        updateEditModeButton();
         var wrapEl = document.getElementById('mmEmptyWrap');
         var msgEl = document.getElementById('mmEmptyMsg');
         var createBtn = document.getElementById('mmCreateFirstBtn');
@@ -3531,7 +3656,6 @@ def render_mindmaps(player: Player) -> str:
           return;
         }
         if (e.target.id === 'mmMenuDelete') { closeMenu(); deleteActiveMindmap(); return; }
-        if (e.target.id === 'mmMenuEditToggle') { closeMenu(); setEditMode(!MM.editMode); return; }
       });
 
       async function deleteActiveMindmap() {
@@ -3612,6 +3736,16 @@ def render_mindmaps(player: Player) -> str:
         var redoBtn = document.getElementById('mmRedoBtn');
         if (undoBtn) undoBtn.disabled = !MM.undoStack.length;
         if (redoBtn) redoBtn.disabled = !MM.redoStack.length;
+      }
+
+      // The pencil toggle's own gold-when-on/gray-when-off state --
+      // called alongside updateHistoryButtons (see render()) rather
+      // than only from setEditMode, so a page load that restores
+      // Edit Mode from storage (see loadStoredEditMode) still paints
+      // the button correctly on its very first render.
+      function updateEditModeButton() {
+        var btn = document.getElementById('mmEditModeBtn');
+        if (btn) btn.classList.toggle('active', MM.editMode);
       }
 
       // Called by every mutating action below with `preNodes` --

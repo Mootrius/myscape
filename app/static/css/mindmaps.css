@@ -56,16 +56,6 @@
    all-caps to read as actions rather than more list entries. */
 #mmMenuNew, #mmMenuRename, #mmMenuDelete { text-align: center; text-transform: uppercase; }
 
-/* The Edit Mode toggle -- its own row below a second divider (see
-   renderMenu), same centered/all-caps treatment as the New/Rename/
-   Delete actions above it, but reads gold (like .mm-menu-item.active,
-   which normally marks the CURRENTLY OPEN mindmap in this same list)
-   whenever Edit Mode is actually on, so the menu itself is a quick
-   glance-able indicator of which mode the canvas is in without having
-   to open it and check. */
-.mm-menu-edit-toggle { text-align: center; text-transform: uppercase; }
-.mm-menu-edit-toggle.active { color: var(--gold); }
-
 /* Inline new/rename form -- same shape as .pg-setup-form
    (purchase-goals.css), duplicated for the same self-contained-
    stylesheet reason as .mm-menu above. */
@@ -151,7 +141,21 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-zoom-controls button:disabled {
   opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-dim);
 }
-#mmZoomFit svg { display: block; }
+#mmZoomFit svg, #mmEditModeBtn svg { display: block; }
+
+/* The Edit Mode pencil toggle -- its own row below the zoom cluster,
+   separated by the same .mm-zoom-divider seam the undo/redo pair
+   uses above the zoom buttons (same "different kind of action" logic:
+   view/navigate vs. edit). Plain --text-dim like every other zoom
+   button while off; solid gold border+icon while on (see
+   updateEditModeButton in the script) -- the one control in this
+   whole cluster that STAYS a certain color rather than just
+   hover-brightening, since it's a persistent mode indicator, not a
+   one-shot action button. */
+#mmEditModeBtn.active {
+  border-color: var(--gold); color: var(--gold);
+}
+#mmEditModeBtn.active:hover { border-color: var(--gold); color: var(--gold); }
 
 .mm-canvas-empty {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -176,6 +180,8 @@ button.primary#mmNameSave, .mm-name-form-save {
   text-align: center; font-size: 11.5px; letter-spacing: 0.02em; text-transform: uppercase;
   line-height: 1.25; cursor: pointer; user-select: none;
 }
+/* Plain form -- gray/white's own free-typed label, unchanged from
+   before: a straight 2-line clamp on the label itself. */
 .mm-node-label {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
@@ -186,9 +192,31 @@ button.primary#mmNameSave, .mm-name-form-save {
    relies on the same text-selection machinery user-select: none turns
    off -- without this override the caret can't be placed and the
    focus-then-select-all in the script's renderCanvas silently does
-   nothing. */
+   nothing. Only gray/white labels are ever contenteditable (see
+   renderCanvas) -- every trackable color's text is derived from its
+   goal instead, never typed. */
 .mm-node-label[contenteditable="true"] {
   cursor: text; outline: none; user-select: text; -webkit-user-select: text;
+}
+/* Icon form -- a trackable node's goal-type icon (see
+   GOAL_TYPE_ICON_BY_COLOR/goalDisplayText in the page script) sits to
+   the left of its own derived text; the clamp moves onto the inner
+   text span since the outer label is now a flex row, not a
+   webkit-box, and the icon needs to stay a fixed size regardless of
+   how much the text wraps. */
+.mm-node-label-with-icon {
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+}
+.mm-node-icon {
+  width: 16px; height: 16px; flex: none; object-fit: contain;
+  /* The source icons are tiny (13x13) OSRS sprites -- crisp
+     nearest-neighbor scaling reads far better blown up than the
+     browser's default smoothing, which just turns them to mush. */
+  image-rendering: pixelated;
+}
+.mm-node-label-text {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; min-width: 0;
 }
 /* The selected node's own outline + stacking rule is defined further
    below, alongside the edge buttons/color popover it's shown with. */
@@ -334,19 +362,43 @@ button.primary#mmNameSave, .mm-name-form-save {
    (a 3-field kc form vs. a 1-field gp form) settles at the same
    width instead of the popover visibly resizing type to type. */
 .mm-node-popover-wide { width: 208px; }
-.mm-color-popover-swatches { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 172px; }
-.mm-swatch {
-  width: 24px; height: 24px; border: 1px solid var(--border); cursor: pointer; padding: 0;
+
+/* ---- Goal-type picker (renderGoalTypePickerHtml) ---------------------
+   Replaces the old plain color-swatch row -- a 2-column grid of
+   icon+label buttons, one per goal type (MANUAL/KC/ITEM/GP/SKILL/
+   QUEST/DIARY -- see GOAL_TYPE_PICKER in the page script), so the
+   picker reads as "what kind of goal" rather than just "what color".
+   Clicking one still only ever sends a `color` (see the click
+   delegation), same request as the old swatches. */
+.mm-type-picker {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%;
 }
-.mm-swatch.active { outline: 2px solid var(--gold); outline-offset: 2px; }
-.mm-swatch-gray { background: var(--panel-2); }
-.mm-swatch-red { background: var(--red); }
-.mm-swatch-orange { background: var(--orange); }
-.mm-swatch-yellow { background: var(--yellow); }
-.mm-swatch-green { background: var(--green); }
-.mm-swatch-blue { background: var(--blue); }
-.mm-swatch-purple { background: var(--purple); }
-.mm-swatch-white { background: var(--text); }
+.mm-type-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: var(--panel-2); border: 1px solid var(--border); padding: 8px 4px;
+  color: var(--text-dim); font-family: inherit;
+  font-size: 9.5px; letter-spacing: 0.02em; cursor: pointer;
+}
+.mm-type-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.mm-type-btn.active { border-color: var(--gold); color: var(--gold); }
+.mm-type-btn-icon {
+  width: 20px; height: 20px; object-fit: contain;
+  /* The source icons are tiny (13x13) OSRS sprites -- crisp
+     nearest-neighbor scaling reads far better blown up than the
+     browser's default smoothing, which just turns them to mush. */
+  image-rendering: pixelated;
+}
+/* MANUAL's own swatch -- same small colored box the old plain color
+   picker used, with a diagonal red slash standing in for "no tracked
+   goal" where every other option has a real icon image. */
+.mm-type-btn-swatch {
+  position: relative; width: 20px; height: 20px; background: var(--panel-2); border: 1px solid var(--border);
+}
+.mm-type-btn-swatch-manual::after {
+  content: ''; position: absolute; left: 1px; right: 1px; top: 50%; height: 2px;
+  background: var(--red); transform: translateY(-50%) rotate(45deg);
+}
+.mm-type-btn-label { text-transform: uppercase; white-space: nowrap; }
 
 /* Shorter than .btn-secondary's own default 32px -- this one sits in
    a small popover, not a row of full-size buttons. */
