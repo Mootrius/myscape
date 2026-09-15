@@ -3400,6 +3400,19 @@ def render_mindmaps(player: Player) -> str:
         MM.redoStack = [];
       }
 
+      // True if the mindmap an in-flight edit was made against is
+      // still the one on screen. Every mutating action below captures
+      // its own mindmap's id before awaiting its request, then checks
+      // this once the response comes back: switching to a different
+      // mindmap resets ITS undo/redo history (see setActiveMindmapId),
+      // and a slower, earlier edit's response landing after that
+      // switch has nothing to do with the new mindmap's history --
+      // without this check it would pop/push onto (or select a node
+      // in) a history and tree that aren't its own.
+      function isStillActiveMindmap(mmId) {
+        return MM.activeMindmapId === mmId;
+      }
+
       // The actual PUT that restores a snapshot -- shared by both
       // undo and redo below, which only differ in which stack they
       // read from/push onto, and (like every other mutating action)
@@ -3415,28 +3428,34 @@ def render_mindmaps(player: Player) -> str:
       async function undo() {
         var mm = activeMindmap();
         if (!MM.undoStack.length || !mm) return;
+        var mmId = mm.id;
         var prev = MM.undoStack[MM.undoStack.length - 1];
         var preUndoNodes = mm.nodes;
         const data = await restoreNodesSnapshot(prev);
         if (!data) return;
-        MM.undoStack.pop();
-        MM.redoStack.push(preUndoNodes);
         MM.data = data;
-        MM.selectedNodeId = null;
+        if (isStillActiveMindmap(mmId)) {
+          MM.undoStack.pop();
+          MM.redoStack.push(preUndoNodes);
+          MM.selectedNodeId = null;
+        }
         render();
       }
 
       async function redo() {
         var mm = activeMindmap();
         if (!MM.redoStack.length || !mm) return;
+        var mmId = mm.id;
         var next = MM.redoStack[MM.redoStack.length - 1];
         var preRedoNodes = mm.nodes;
         const data = await restoreNodesSnapshot(next);
         if (!data) return;
-        MM.redoStack.pop();
-        MM.undoStack.push(preRedoNodes);
         MM.data = data;
-        MM.selectedNodeId = null;
+        if (isStillActiveMindmap(mmId)) {
+          MM.redoStack.pop();
+          MM.undoStack.push(preRedoNodes);
+          MM.selectedNodeId = null;
+        }
         render();
       }
 
@@ -3446,12 +3465,16 @@ def render_mindmaps(player: Player) -> str:
         var mm = activeMindmap();
         var node = selectedNode();
         if (!mm || !node) return;
+        var mmId = mm.id;
         var preNodes = mm.nodes;
         const data = await apiCall(
           '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
           { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }
         );
-        if (data) { recordUndoableEdit(preNodes); MM.data = data; render(); }
+        if (!data) return;
+        MM.data = data;
+        if (isStillActiveMindmap(mmId)) recordUndoableEdit(preNodes);
+        render();
       }
 
       // Only the selected node is ever contenteditable, so the label
@@ -3477,20 +3500,27 @@ def render_mindmaps(player: Player) -> str:
       async function addNodeRelativeTo(nodeId, relation, before) {
         var mm = activeMindmap();
         if (!mm) return;
+        var mmId = mm.id;
         var preNodes = mm.nodes;
         var body = { relative_to: nodeId, relation: relation, text: 'New', color: 'gray' };
         if (relation === 'sibling') body.before = !!before;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
-        if (data) {
+        if (!data) return;
+        MM.data = data;
+        if (isStillActiveMindmap(mmId)) {
           recordUndoableEdit(preNodes);
-          MM.data = data;
           // selectNode both selects and (since it's a different id
           // than whatever was selected before) queues the new node's
           // label to be focused + text-selected on the next render, so
-          // the player can start typing its name immediately.
+          // the player can start typing its name immediately. Only
+          // done if the player's still looking at this mindmap --
+          // otherwise the new node's id wouldn't belong to whatever
+          // mindmap IS on screen now.
           selectNode(data.newNodeId || null);
+        } else {
+          render();
         }
       }
 
@@ -3502,12 +3532,19 @@ def render_mindmaps(player: Player) -> str:
         var mm = activeMindmap();
         var node = selectedNode();
         if (!mm || !node || node.parentId === null) return;
+        var mmId = mm.id;
         var preNodes = mm.nodes;
         const data = await apiCall(
           '/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/' + encodeURIComponent(node.id),
           { method: 'DELETE' }
         );
-        if (data) { recordUndoableEdit(preNodes); MM.data = data; MM.selectedNodeId = null; render(); }
+        if (!data) return;
+        MM.data = data;
+        if (isStillActiveMindmap(mmId)) {
+          recordUndoableEdit(preNodes);
+          MM.selectedNodeId = null;
+        }
+        render();
       }
 
       // ---- Multi-select: add a shared child below several nodes ------
@@ -3529,14 +3566,24 @@ def render_mindmaps(player: Player) -> str:
       async function addSharedChildSelected() {
         var mm = activeMindmap();
         if (!mm || MM.multiSelectIds.size < 2) return;
+        var mmId = mm.id;
         var preNodes = mm.nodes;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/nodes/shared-child', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ parent_ids: Array.from(MM.multiSelectIds), text: 'New', color: 'gray' }),
         });
+        if (!data) return;
+        MM.data = data;
         // selectNode below replaces MM.multiSelectIds with just the new
-        // node on its own -- no separate .clear() needed first.
-        if (data) { recordUndoableEdit(preNodes); MM.data = data; selectNode(data.newNodeId || null); }
+        // node on its own -- no separate .clear() needed first. Only
+        // done if the player's still on this mindmap -- see
+        // isStillActiveMindmap's comment.
+        if (isStillActiveMindmap(mmId)) {
+          recordUndoableEdit(preNodes);
+          selectNode(data.newNodeId || null);
+        } else {
+          render();
+        }
       }
 
       // ---- Boot -----------------------------------------------------------
