@@ -95,8 +95,8 @@
    two groups when both actually have rows in them (see renderTable) --
    an all-pinned or all-unpinned list has no divider at all. */
 .pm-pinned-divider { margin: 6px 0 10px; border-top: 1px solid var(--gold-dim); }
-/* The pin toggle -- Feather's "map-pin" outline (see PIN_GLYPH in the
-   page's own script), absolutely positioned into the left gutter
+/* The pin toggle -- a hand-drawn thumbtack outline (see PIN_GLYPH in
+   the page's own script), absolutely positioned into the left gutter
    .pm-row's own padding-left reserves above, rather than a grid column
    of its own, since it's a sibling of the row's <a> (not a grid child
    of it) and so isn't part of that grid layout at all. Hidden until
@@ -123,11 +123,11 @@
   cursor: pointer;
   color: var(--text-dim);
   opacity: 0; pointer-events: none;
-  transition: opacity 0.12s, background-color 0.12s, color 0.12s;
+  transition: opacity 0.12s, color 0.12s;
 }
 .pm-pin-btn svg { display: block; }
 .pm-row-wrap:hover .pm-pin-btn { opacity: 1; pointer-events: auto; }
-.pm-pin-btn:hover { background-color: rgba(255, 255, 255, 0.08); color: var(--gold); }
+.pm-pin-btn:hover { color: var(--gold); }
 .pm-pin-btn.pinned { opacity: 1; pointer-events: auto; color: var(--gold); }
 .pm-pin-btn.pinned:hover { color: var(--text-dim); }
 /* Each data row is itself the link out to that item's OSRS Wiki page
@@ -193,7 +193,7 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
    over the icon column -- scoped to the header button specifically
    (both classes together) so the data rows' own icon+name cells above
    are untouched. */
-.pm-col-image.pm-sort-header { padding-left: 12px; }
+.pm-col-image.pm-sort-header { padding-left: 6px; }
 .pm-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }
 .pm-icon-blank { width: 26px; height: 26px; }
 .pm-row-name {
