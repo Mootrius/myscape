@@ -4,3 +4,9 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+
+# Weekly-refreshed local cache of item icon images (see
+# app/icon_cache.py) -- fetched on demand, not source, and rebuilt
+# automatically from an empty directory (same as this app's in-memory
+# wiki caches losing their contents on restart).
+/app/static/item-icons/

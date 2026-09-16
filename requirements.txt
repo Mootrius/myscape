@@ -6,3 +6,8 @@ python-dotenv==1.0.1
 slowapi==0.1.9
 itsdangerous==2.2.0
 alembic==1.20.0
+# zoneinfo (stdlib, used by app/icon_cache.py's weekly Thursday-refresh
+# cutoff) needs an IANA timezone database to resolve "America/New_York"
+# -- most systems already have one installed, but this guarantees it
+# regardless of what Render's underlying image ships with.
+tzdata==2024.2

@@ -10,7 +10,7 @@ from typing import Any, Optional
 from alembic import command
 from alembic.config import Config
 from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -24,6 +24,7 @@ from app.auth import (
     get_optional_current_player_from_session,
 )
 from app.database import get_db
+from app.icon_cache import resolve_cached_path
 from app.limiter import limiter
 from app.loot import build_loot_state, kc_counts_by_player, resolve_range, sync_loot_events
 from app.item_ids import find_item_ids
@@ -211,6 +212,25 @@ app.include_router(linking.router)
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+
+@app.get("/icon-cache/{filename}")
+def get_cached_icon(filename: str):
+    """Serves a locally cached item icon (see app/icon_cache.py) -- a
+    dedicated route rather than folding this into the /static mount
+    above so it can set its own long-lived Cache-Control: item_icon_url
+    only ever hands the browser one of these URLs once the file is
+    already sitting on disk and fresh for the week, so there's no harm
+    in the browser holding onto it for just as long -- it'll get a new,
+    different URL automatically once cached_icon_url() decides it's
+    time to refetch. resolve_cached_path re-validates the filename
+    itself (no path traversal out of the cache directory) rather than
+    trusting the URL alone."""
+    path = resolve_cached_path(filename)
+    if not path:
+        raise HTTPException(status_code=404)
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=604800, immutable"})
+
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

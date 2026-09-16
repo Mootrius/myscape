@@ -38,6 +38,7 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from app.icon_cache import cached_icon_url
 from app.item_ids import find_item_by_exact_name, find_item_icon, find_item_ids, search_item_names
 from app.models import (
     BankItem,
@@ -61,11 +62,18 @@ COINS_ITEM_ID = 995
 # identifying the tool and how to reach whoever runs it -- see
 # https://prices.runescape.wiki/osrs/faqs
 API_BASE = "https://prices.runescape.wiki/api/v2/osrs"
-# Icons are hotlinked directly by the browser rather than fetched by this
-# server -- the wiki's image hosting sits behind a Cloudflare bot
-# challenge that a plain server-side request can never pass (it requires
-# executing JS), but a real browser loading the page normally isn't a
-# bot and goes straight through.
+# Icons used to be hotlinked straight to the wiki from the browser on
+# every page load, on the assumption that the wiki's image host sat
+# behind a Cloudflare bot challenge a plain server-side request could
+# never pass. In practice a plain server-side request goes through
+# fine -- and the wiki's own Special:FilePath link is actually two
+# uncacheable redirects in front of the real (long-cacheable) image, so
+# hotlinking it meant re-hitting the wiki twice per icon on every single
+# refresh, which is what was tripping rate limits. item_icon_url below
+# now serves a locally cached copy when it has one fresh enough (see
+# app/icon_cache.py) and only falls back to this direct wiki link --
+# still needed for a brand new icon's very first render, or if a
+# server-side fetch ever does fail for any reason -- when it doesn't.
 ICON_PATH_BASE = "https://oldschool.runescape.wiki/w/Special:FilePath"
 USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 
@@ -155,7 +163,13 @@ def item_icon_url(icon_filename: Optional[str]) -> Optional[str]:
         return None
     if not _ICON_EXT_RE.search(icon_filename):
         icon_filename = icon_filename + ".png"
-    return ICON_PATH_BASE + "/" + urllib.parse.quote(icon_filename)
+    # Prefer our own weekly-refreshed local copy (see app/icon_cache.py);
+    # cached_icon_url returns None -- and, as a side effect, kicks off a
+    # background fetch to populate/refresh it for next time -- for
+    # anything missing or past this week's refresh window, in which case
+    # this falls straight through to the direct wiki hotlink exactly as
+    # it always has.
+    return cached_icon_url(icon_filename) or (ICON_PATH_BASE + "/" + urllib.parse.quote(icon_filename))
 
 
 def unit_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[str]]:
