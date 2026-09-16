@@ -283,15 +283,18 @@ button.primary#mmNameSave, .mm-name-form-save {
    gold here on purpose: the node's own frame/fill is what announces
    "done" now (see .mm-node-gray.completed's own comment below), so
    the checkbox itself stays quiet rather than competing with it. The
-   background DOES switch once checked though -- the same --gray-
-   bright used for the node's own completed fill, just so the black
-   outline/check actually reads against it instead of nearly
-   vanishing into the idle box's own near-black. (input.mm-node-
-   checkbox matches the base rule's own specificity so these actually
-   win, source order alone wouldn't be reliable here.) */
+   background DOES switch once checked though, to a gray so the black
+   outline/check actually reads against it instead of nearly vanishing
+   into the idle box's own near-black -- a step darker than --gray-
+   bright itself (rather than that exact value) so the small checkbox
+   still reads as its own separate control sitting on top of the
+   node's own (now much bigger) completed fill, not just a blank patch
+   of the same color. (input.mm-node-checkbox matches the base rule's
+   own specificity so these actually win, source order alone wouldn't
+   be reliable here.) */
 .mm-node-checkbox { flex: none; }
 input.mm-node-checkbox { background: #1b1b1c; }
-input.mm-node-checkbox:checked { background: var(--gray-bright); border-color: #000; }
+input.mm-node-checkbox:checked { background: #55555a; border-color: #000; }
 input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5px 1.5px 0; }
 .mm-node-label-text {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -671,9 +674,11 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 }
 /* MANUAL's own swatch -- same small colored box the old plain color
    picker used, but now it looks exactly like its own node's manual-
-   complete checkbox once checked (a gray-bright box, black outline
-   and check -- see input.mm-node-checkbox:checked above) rather than
-   a diagonal red "no tracked goal" slash, standing in for a real icon
+   complete checkbox once checked (a dark-gray box, black outline
+   and check -- see input.mm-node-checkbox:checked above, including
+   its own comment on why that background is a step darker than
+   --gray-bright rather than that value itself) rather than a
+   diagonal red "no tracked goal" slash, standing in for a real icon
    image the way every other option in this grid has one. Static --
    always drawn "checked" -- since this is what CHOOSING manual looks
    like, not an interactive toggle of its own; scaled up slightly from
@@ -684,7 +689,7 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-type-btn-swatch {
   position: relative; width: 18px; height: 18px; flex: none; background: var(--panel-2); border: 1px solid var(--border);
 }
-.mm-type-btn-swatch-manual { background: var(--gray-bright); border-color: #000; }
+.mm-type-btn-swatch-manual { background: #55555a; border-color: #000; }
 .mm-type-btn-swatch-manual::after {
   content: ''; position: absolute; left: 5px; top: 2px;
   width: 5px; height: 9px;
