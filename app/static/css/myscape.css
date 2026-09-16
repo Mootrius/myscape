@@ -485,7 +485,11 @@ footer {
    link, styled to match the site's signature gold link color exactly
    (same color/hover pair as .footer-trademark a below), rather than a
    boxed button, since it's a minor, occasional action sitting inside a
-   sentence right next to another inline link. */
+   sentence right next to another inline link. Uppercased in CSS same
+   as the header nav (see .nav-side above) rather than writing "UNLINK"
+   into the HTML itself -- the source text stays normal title case
+   either way (readable in the DOM, in an error message built off the
+   same word, etc.), only the on-page rendering changes. */
 .footer-linked-note button.link {
   background: none;
   border: none;
@@ -493,6 +497,8 @@ footer {
   font-size: inherit;
   font-family: inherit;
   text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   cursor: pointer;
   padding: 0;
   margin-left: 4px;
