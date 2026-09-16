@@ -368,10 +368,11 @@ _ICON_BONES = "/static/img/icon-dragon-bones.png"
 _ICON_CLUELESS_SCROLL = "/static/img/icon-clueless-scroll.png"
 # Hotlinked from the wiki (same as every in-page item icon -- see
 # item_icon_url in app/purchase_goals.py) rather than a bundled static
-# file like the three above, since a Looting Bag is a real OSRS item
-# with its own wiki icon already, and Possessions Monitoring is
-# fundamentally about what's sitting in exactly that kind of storage.
-_ICON_LOOTING_BAG = "https://oldschool.runescape.wiki/w/Special:FilePath/Looting%20bag.png"
+# file like the three above, since a Heavy casket is a real OSRS item
+# with its own wiki icon already -- a container stuffed full of loot is
+# a fitting stand-in for "everything you own", the same reasoning
+# behind Purchase Goals' coins and Loot Tracker's dragon bones above.
+_ICON_HEAVY_CASKET = "https://oldschool.runescape.wiki/w/Special:FilePath/Heavy%20casket.png"
 
 
 def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
@@ -433,12 +434,12 @@ def render_dashboard(player: Player) -> str:
     possessions_card = (
         '<a href="/dashboard/possessions" style="display:block;color:inherit;text-decoration:none;">'
         + _dash_card(
-            _ICON_LOOTING_BAG,
-            "Looting bag",
+            _ICON_HEAVY_CASKET,
+            "Heavy casket",
             "Possessions Monitoring",
-            "Keep an eye on what you own across your bank, inventory, and every "
-            "other storage. Set minimum stock trackers, flag items you're "
-            "holding too much of, and browse everything you own in one place.",
+            "Keep an eye on what you own across every storage in the game. "
+            "Search it all, sort by anything, and filter to your heart's "
+            "content — all in one place!",
         )
         + "</a>"
     )
@@ -5477,10 +5478,10 @@ def render_possessions(player: Player) -> str:
     /api/possessions/summary and kept current client-side the same way
     every other app page here works (see render_loot_tracker above).
 
-    One row per item: an icon + name, then QUANTITY (the full,
-    unabbreviated count, with a lowercase "x" in front), GE VALUE and HA
-    VALUE (each showing both the whole stack's value and one unit's
-    value -- a glance at either number alone answers a different
+    One row per item: an icon + name under ITEM, then QUANTITY (the
+    full, unabbreviated count, with a lowercase "x" in front), GE VALUE
+    and HA VALUE (each showing both the whole stack's value and one
+    unit's value -- a glance at either number alone answers a different
     question, "what's this stack worth" vs. "what's one of these
     worth"), and a green/red TRADEABLE? badge -- tradeable meaning
     specifically tradeable on the Grand Exchange
@@ -5488,7 +5489,11 @@ def render_possessions(player: Player) -> str:
     is already exactly that: true only when the item is found in the
     live GE mapping, false for anything player-tradeable-but-not-GE-
     listed the same as for a genuinely untradeable item -- never a
-    looser "can this be traded at all" definition).
+    looser "can this be traded at all" definition). Every row is the
+    same height regardless of whether its GE/HA cells actually have a
+    per-unit line to show (see valueCell below, which always renders
+    both lines -- the second one just empty when there's nothing to put
+    there -- rather than only emitting it when needed).
 
     Search and the location filters share one row, at the same height
     -- locations are multi-select buttons (styled like Purchase Goals'
@@ -5500,12 +5505,14 @@ def render_possessions(player: Player) -> str:
     per-location breakdown rather than re-polling the server on every
     toggle).
 
-    There's no separate sort control any more -- IMAGE/QUANTITY/GE
-    VALUE/HA VALUE are each a clickable header (see the
-    .pm-sort-header buttons below and updateSortHeaders/visibleRows in
-    the script) that sorts the table by that column, toggling
-    ascending/descending on repeat clicks the way a spreadsheet's
-    column headers do, with an arrow marking the active one.
+    There's no separate sort control any more -- every header (ITEM,
+    QUANTITY, GE VALUE, HA VALUE, TRADEABLE?) is a clickable
+    .pm-sort-header button (see updateSortHeaders/visibleRows in the
+    script) that sorts the table by that column, toggling ascending/
+    descending on repeat clicks the way a spreadsheet's column headers
+    do. Every header shares the same size and color, active or not --
+    an arrow is the only thing marking which one is currently active.
+    GE VALUE sorted highest-to-lowest is the default on load.
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/possessions.css?v={_POSSESSIONS_CSS_VERSION}" />'
 
@@ -5532,11 +5539,11 @@ def render_possessions(player: Player) -> str:
 
       <div class="pm-table" id="pmTable" style="display:none;">
         <div class="pm-row pm-row-header">
-          <button type="button" class="pm-col pm-col-image pm-sort-header" data-sort-key="alpha">Image<span class="pm-sort-arrow"></span></button>
+          <button type="button" class="pm-col pm-col-image pm-sort-header" data-sort-key="alpha">Item<span class="pm-sort-arrow"></span></button>
           <button type="button" class="pm-col pm-col-qty pm-sort-header" data-sort-key="qty">Quantity<span class="pm-sort-arrow"></span></button>
           <button type="button" class="pm-col pm-col-ge pm-sort-header" data-sort-key="ge">GE Value<span class="pm-sort-arrow"></span></button>
           <button type="button" class="pm-col pm-col-ha pm-sort-header" data-sort-key="ha">HA Value<span class="pm-sort-arrow"></span></button>
-          <div class="pm-col pm-col-tradeable">Tradeable?</div>
+          <button type="button" class="pm-col pm-col-tradeable pm-sort-header" data-sort-key="tradeable">Tradeable?<span class="pm-sort-arrow"></span></button>
         </div>
         <div id="pmRows"></div>
       </div>
@@ -5546,16 +5553,17 @@ def render_possessions(player: Player) -> str:
     script = """
     (function () {
       // The direction each column header starts in on its FIRST click --
-      // numeric columns start high-to-low (most owned/valuable first,
-      // the more useful default), the name column starts A-Z. A second
-      // click on the already-active header flips that, same as a
-      // spreadsheet's own column-header sort.
-      var SORT_DEFAULT_DIR = { alpha: 'asc', qty: 'desc', ge: 'desc', ha: 'desc' };
+      // numeric/boolean columns start high-to-low (most owned/valuable/
+      // tradeable first, the more useful default), the name column
+      // starts A-Z. A second click on the already-active header flips
+      // that, same as a spreadsheet's own column-header sort.
+      var SORT_DEFAULT_DIR = { alpha: 'asc', qty: 'desc', ge: 'desc', ha: 'desc', tradeable: 'desc' };
 
+      // GE VALUE, highest stack first, is the default sort on load.
       var state = {
         items: [],
         search: '',
-        sortKey: 'qty',
+        sortKey: 'ge',
         sortDir: 'desc',
         locations: { bank: true, equipment: true, inventory: true, potion_storage: true, rune_pouch: true, seed_vault: true, looting_bag: true },
       };
@@ -5678,6 +5686,8 @@ def render_possessions(player: Player) -> str:
             ascResult = ((a.item.gePrice || 0) * a.qty) - ((b.item.gePrice || 0) * b.qty);
           } else if (state.sortKey === 'ha') {
             ascResult = ((a.item.highAlch || 0) * a.qty) - ((b.item.highAlch || 0) * b.qty);
+          } else if (state.sortKey === 'tradeable') {
+            ascResult = (a.item.tradeable ? 1 : 0) - (b.item.tradeable ? 1 : 0);
           } else {
             ascResult = a.qty - b.qty;
           }
@@ -5686,27 +5696,32 @@ def render_possessions(player: Player) -> str:
         return out;
       }
 
-      // One value column's line(s) -- the whole stack's worth ("N gp",
+      // One value column's two lines -- the whole stack's worth ("N gp",
       // primary) and, only when there's more than one to distinguish it
-      // from, one unit's worth ("N EA", dim) -- or an em dash when this
+      // from, one unit's worth ("N ea", dim) -- or an em dash when this
       // item has no price on file at all (an untradeable item, or a
       // tradeable one the wiki just doesn't have current data for --
       // see build_possessions_summary's own comment in
       // app/possessions.py for why those two cases can't be told apart
       // from gePrice/highAlch alone, and why that's fine here). At
       // qty 1 the stack value and the unit value are the same number,
-      // so the "EA" line would just be a redundant repeat of the line
-      // right above it -- left off rather than shown twice.
+      // so the "ea" line would just be a redundant repeat of the line
+      // right above it -- left EMPTY rather than shown twice, but the
+      // second .pm-value-each div is still always rendered (never
+      // omitted) so every row comes out the same height whether or not
+      // it actually has a per-unit line's worth of text in it.
       function valueCell(unitValue, qty) {
         if (unitValue == null) {
-          return '<div class="pm-value-cell"><div class="pm-value-stack pm-value-none">&mdash;</div></div>';
+          return '<div class="pm-value-cell">' +
+            '<div class="pm-value-stack pm-value-none">&mdash;</div>' +
+            '<div class="pm-value-each"></div>' +
+          '</div>';
         }
-        var html = '<div class="pm-value-cell">' +
-          '<div class="pm-value-stack">' + fmtNum(unitValue * qty) + ' gp</div>';
-        if (qty > 1) {
-          html += '<div class="pm-value-each">' + fmtNum(unitValue) + ' EA</div>';
-        }
-        return html + '</div>';
+        var eachText = qty > 1 ? (fmtNum(unitValue) + ' ea') : '';
+        return '<div class="pm-value-cell">' +
+          '<div class="pm-value-stack">' + fmtNum(unitValue * qty) + ' gp</div>' +
+          '<div class="pm-value-each">' + eachText + '</div>' +
+        '</div>';
       }
 
       function renderTable() {
