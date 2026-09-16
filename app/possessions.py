@@ -23,7 +23,8 @@ approach as build_owned_pools -- a PossessionTracker row only ever
 remembers WHAT to watch and WHAT threshold matters, never a count of
 its own.
 """
-from typing import Dict, List, Optional
+import re
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -135,6 +136,134 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
     }
 
 
+# A "dose" item's own display name is always "Base name(N)" -- N being
+# how many doses/sips are left in that particular bottle (1-4 in OSRS,
+# never more) -- and the SAME potion shows up as a completely separate
+# item id per dose count (Prayer potion(4) and Prayer potion(1) are two
+# unrelated GE listings as far as the game's item table is concerned).
+# Left alone, that means the exact same potion the player is carrying
+# splits into up to four rows in the table below purely because some of
+# it has been sipped from. _dose_family below detects that pattern from
+# the name alone (no hardcoded potion list to keep updated as Jagex adds
+# new ones) so build_possessions_summary can fold every dose variant of
+# one potion back into a single row, counted in 1-dose units.
+_DOSE_NAME_RE = re.compile(r"^(.*\S)\s*\((\d)\)$")
+
+# A handful of non-potion items use this exact same "Name(N)" naming
+# convention for something that ISN'T a fungible quantity -- charges
+# left on one specific physical piece of jewelry (an Amulet of glory
+# with 1 charge left isn't "1/4 of a shared amulet supply" the way a
+# Prayer potion(1) is 1/4 of a shared potion supply). Merging those the
+# same way would misrepresent "one charge left on this ring, plus four
+# on that other ring" as "owning 5 of the same ring". Named here by
+# their base name (lowercase) so _dose_family skips them; add another
+# entry if a new charge-based accessory turns up behaving the same way.
+_DOSE_MERGE_EXCLUDE_BASE_NAMES = {
+    "amulet of glory",
+    "amulet of chemistry",
+    "ring of wealth",
+    "ring of dueling",
+    "ring of the elements",
+    "combat bracelet",
+    "skills necklace",
+    "games necklace",
+    "necklace of passage",
+    "digsite pendant",
+    "slayer ring",
+    "burning amulet",
+    "trailblazer amulet",
+}
+
+
+def _dose_family(name: str) -> Optional[Tuple[str, int]]:
+    """Returns (base_name, dose_count) when `name` is a dose-specific
+    potion name like "Super restore(3)", or None when it isn't one at
+    all (no trailing "(N)"), the parenthesized number isn't a real dose
+    count (outside 1-4 -- OSRS potions never have more than 4 doses),
+    or the base name is one of the non-potion charge items excluded
+    above."""
+    match = _DOSE_NAME_RE.match(name.strip())
+    if not match:
+        return None
+    base = match.group(1).strip()
+    dose = int(match.group(2))
+    if dose < 1 or dose > 4:
+        return None
+    if base.lower() in _DOSE_MERGE_EXCLUDE_BASE_NAMES:
+        return None
+    return base, dose
+
+
+def _merge_dose_families(items: List[dict]) -> List[dict]:
+    """Folds every dose variant of the same potion (see _dose_family)
+    into one row, counted in 1-dose units -- so "Prayer potion(4)" x5
+    and "Prayer potion(1)" x2 become a single "Prayer potion" row at
+    quantity 22 (5*4 + 2*1), rather than two separate rows for the same
+    potion. GE/high-alch "value" for the merged row is each variant's
+    own stack value added together and divided back out over the total
+    dose count -- a real owned-quantity-weighted average per dose,
+    rather than assuming doses price perfectly linearly (they don't
+    always) -- so the stack value shown (value per dose * total doses)
+    still adds up to exactly what the separate variants were worth.
+    The icon/tradeable flag shown for the merged row comes from
+    whichever owned variant has the most doses (closest to how the
+    potion normally looks, "full"). Items that aren't a dose variant at
+    all pass through untouched."""
+    plain: List[dict] = []
+    families: Dict[str, dict] = {}
+
+    for it in items:
+        fam = _dose_family(it["name"])
+        if fam is None:
+            plain.append(it)
+            continue
+        base, dose = fam
+        family = families.setdefault(base, {
+            "name": base,
+            "icon": it["icon"],
+            "tradeable": it["tradeable"],
+            "itemId": it["itemId"],
+            "bestDose": 0,
+            "totalDoses": 0,
+            "geValueTotal": 0.0,
+            "geKnown": False,
+            "haValueTotal": 0.0,
+            "haKnown": False,
+            "byLocation": {},
+        })
+        family["totalDoses"] += it["total"] * dose
+        if it["gePrice"] is not None:
+            family["geValueTotal"] += it["gePrice"] * it["total"]
+            family["geKnown"] = True
+        if it["highAlch"] is not None:
+            family["haValueTotal"] += it["highAlch"] * it["total"]
+            family["haKnown"] = True
+        if dose >= family["bestDose"]:
+            family["bestDose"] = dose
+            family["icon"] = it["icon"]
+            family["itemId"] = it["itemId"]
+            family["tradeable"] = it["tradeable"]
+        for loc, qty in it["byLocation"].items():
+            family["byLocation"][loc] = family["byLocation"].get(loc, 0) + qty * dose
+
+    merged = list(plain)
+    for family in families.values():
+        total_doses = family["totalDoses"]
+        if total_doses <= 0:
+            continue
+        merged.append({
+            "itemId": family["itemId"],
+            "name": family["name"],
+            "icon": family["icon"],
+            "tradeable": family["tradeable"],
+            "highAlch": (family["haValueTotal"] / total_doses) if family["haKnown"] else None,
+            "gePrice": (family["geValueTotal"] / total_doses) if family["geKnown"] else None,
+            "total": total_doses,
+            "byLocation": family["byLocation"],
+        })
+    return merged
+
+
 def search_trackable_items(query: str, limit: int = 20) -> List[dict]:
     """Item search for setting up a min/max tracker (sections 1/2) --
     reuses search_items' own three-tier startswith-then-contains
@@ -218,7 +347,10 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
     endpoint for every toggle flip (see renderItemList's own approach
     in the Loot Tracker page, which this section's box/sort/search UI
     otherwise mirrors closely -- see render_possessions in
-    app/pages.py)."""
+    app/pages.py). Potion dose variants of the same potion are folded
+    into one row here, counted in 1-dose units (see
+    _merge_dose_families) -- everything downstream of this function
+    just sees one row per potion, never per dose-specific item id."""
     mapping, mapping_error = get_mapping()
     prices, price_error = get_latest_prices()
     breakdown = get_owned_breakdown(db, player)
@@ -239,6 +371,8 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
             "total": entry["total"],
             "byLocation": entry["byLocation"],
         })
+
+    items = _merge_dose_families(items)
 
     return {"items": items, "mappingError": mapping_error, "priceError": price_error}
 

@@ -25,10 +25,20 @@
 .pm-control-group + .pm-control-group {
   padding-left: 14px; border-left: 1px solid var(--border);
 }
-.pm-search-group { flex: 1 1 220px; min-width: 180px; }
+.pm-search-group { flex: 1 1 220px; min-width: 180px; position: relative; }
 /* Same 32px height as .pm-filter-btn below, so the search box and the
-   location buttons beside it line up exactly. */
-.pm-search-group .loot-search { width: 100%; height: 32px; padding: 0 10px; font-size: 13px; box-sizing: border-box; }
+   location buttons beside it line up exactly. Right padding leaves
+   room for the CLEAR button below so typed text never runs under it. */
+.pm-search-group .loot-search { width: 100%; height: 32px; padding: 0 46px 0 10px; font-size: 13px; box-sizing: border-box; }
+/* Absolutely positioned over the search box's own right edge, shown
+   only while there's something to clear -- see updateSearchClear. */
+.pm-search-clear {
+  position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
+  background: none; border: none; padding: 0; margin: 0;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-faint); cursor: pointer;
+}
+.pm-search-clear:hover { color: var(--text); }
 .pm-location-group { flex: 0 1 auto; }
 
 /* Same visual recipe as Purchase Goals' own .sort-btn (purchase-

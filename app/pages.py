@@ -5462,21 +5462,24 @@ def render_mindmaps(player: Player) -> str:
 # reason to know about).
 _POSSESSION_LOCATIONS = [
     ("bank", "Bank"),
-    ("equipment", "Equipment"),
-    ("inventory", "Inventory"),
     ("potion_storage", "Potion Storage"),
-    ("rune_pouch", "Rune Pouch"),
     ("seed_vault", "Seed Vault"),
     ("looting_bag", "Looting Bag"),
+    ("rune_pouch", "Rune Pouch"),
+    ("equipment", "Equipment"),
+    ("inventory", "Inventory"),
 ]
 
 
 def render_possessions(player: Player) -> str:
     """The Possessions Monitoring page -- a single line-by-line table of
     everything the player currently owns across every synced storage
-    (see get_owned_breakdown in app/possessions.py), polled from GET
-    /api/possessions/summary and kept current client-side the same way
-    every other app page here works (see render_loot_tracker above).
+    (see get_owned_breakdown in app/possessions.py), fetched from GET
+    /api/possessions/summary on load and re-polled every 5 seconds
+    after that (same cadence as Purchase Goals' own PG.pollTimer in
+    this file) so a change made in-game -- moving something out of the
+    bank, say -- shows up here on its own shortly after, not only once
+    the page is manually refreshed.
 
     One row per item: an icon + name under ITEM, then QUANTITY (the
     full, unabbreviated count, with a lowercase "x" in front), GE VALUE
@@ -5496,14 +5499,18 @@ def render_possessions(player: Player) -> str:
     there -- rather than only emitting it when needed).
 
     Search and the location filters share one row, at the same height
-    -- locations are multi-select buttons (styled like Purchase Goals'
-    own .sort-btn -- see that page's renderSortButtons in this file),
-    toggled independently, all on by default, and purely reshape what
-    QUANTITY -- and therefore GE/HA VALUE, which scale off it -- counts
-    as owned (see shownQuantity below, which recomputes everything
-    client-side from the one already-fetched summary payload's own
-    per-location breakdown rather than re-polling the server on every
-    toggle).
+    -- the search box grows a CLEAR text button of its own at its far
+    right edge the moment there's something typed into it (hidden
+    again once the field's empty, whether that's from deleting the
+    text, clicking CLEAR, or just never having typed anything -- see
+    updateSearchClear). Locations are multi-select buttons (styled
+    like Purchase Goals' own .sort-btn -- see that page's
+    renderSortButtons in this file), toggled independently, all on by
+    default, and purely reshape what QUANTITY -- and therefore GE/HA
+    VALUE, which scale off it -- counts as owned (see shownQuantity
+    below, which recomputes everything client-side from the one
+    already-fetched summary payload's own per-location breakdown
+    rather than re-polling the server on every toggle).
 
     There's no separate sort control any more -- every header (ITEM,
     QUANTITY, GE VALUE, HA VALUE, TRADEABLE?) is a clickable
@@ -5529,6 +5536,7 @@ def render_possessions(player: Player) -> str:
       <div class="pm-controls-row">
         <div class="pm-control-group pm-search-group">
           <input type="text" class="loot-search" id="pmSearch" placeholder="Search for an item" autocomplete="off" />
+          <button type="button" class="pm-search-clear" id="pmSearchClear" style="display:none;">Clear</button>
         </div>
         <div class="pm-control-group pm-location-group">
           {location_buttons}
@@ -5653,9 +5661,29 @@ def render_possessions(player: Player) -> str:
         });
       });
 
-      document.getElementById('pmSearch').addEventListener('input', function (e) {
+      // ---- Search + its CLEAR button (shown only once there's text to
+      // clear, hidden again the moment the field goes back to empty --
+      // whether that's from typing, deleting, or clicking CLEAR itself) --
+
+      var pmSearchInput = document.getElementById('pmSearch');
+      var pmSearchClear = document.getElementById('pmSearchClear');
+
+      function updateSearchClear() {
+        pmSearchClear.style.display = pmSearchInput.value ? '' : 'none';
+      }
+
+      pmSearchInput.addEventListener('input', function (e) {
         state.search = e.target.value;
+        updateSearchClear();
         renderTable();
+      });
+
+      pmSearchClear.addEventListener('click', function () {
+        pmSearchInput.value = '';
+        state.search = '';
+        updateSearchClear();
+        renderTable();
+        pmSearchInput.focus();
       });
 
       // ---- Table --------------------------------------------------------
@@ -5770,6 +5798,12 @@ def render_possessions(player: Player) -> str:
 
       updateSortHeaders();
       loadSummary();
+      // Re-poll the same way Purchase Goals does (see PG.pollTimer
+      // above in this file) -- a plugin sync (moving something from
+      // the bank into inventory/equipment, say) should show up here on
+      // its own within a few seconds, not only once the page is
+      // manually refreshed.
+      setInterval(loadSummary, 5000);
     })();
     """
     return _shell(
