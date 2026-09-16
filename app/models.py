@@ -495,12 +495,12 @@ class GearSetup(Base):
     equipment = Column(JSONB, nullable=False, default=dict)
     inventory = Column(JSONB, nullable=False, default=lambda: [None] * 28)
     # How the "Still to Purchase" list on this setup is ordered --
-    # "low_to_high"/"high_to_low"/"alphabetical" are computed fresh on
-    # every read same as everything else here, but "custom" needs
-    # somewhere to remember the player's own drag-and-drop ordering
-    # between requests, hence still_to_purchase_custom_order below. See
-    # _still_to_purchase_summary in app/purchase_goals.py for how all of
-    # these are actually applied.
+    # "low_to_high"/"high_to_low"/"alphabetical"/"reverse_alphabetical"
+    # are computed fresh on every read same as everything else here, but
+    # "custom" needs somewhere to remember the player's own drag-and-drop
+    # ordering between requests, hence still_to_purchase_custom_order
+    # below. See _still_to_purchase_summary in app/purchase_goals.py for
+    # how all of these are actually applied.
     still_to_purchase_sort_mode = Column(String, nullable=False, default="low_to_high")
     # A list of {"slotType": "equipment"|"inventory", "slot": <str|int>}
     # entries, in the order the player last dragged them into -- the

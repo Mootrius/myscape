@@ -361,7 +361,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   border-radius: var(--radius);
   padding: 18px 20px;
 }
-/* The three "Still to purchase" sort-mode buttons -- replaced what used
+/* The five "Still to purchase" sort-mode buttons -- replaced what used
    to be a plain static heading label (see renderSortButtons in
    app/pages.py). */
 .gear-summary-sort { display: flex; gap: 6px; margin-bottom: 12px; }

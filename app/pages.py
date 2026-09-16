@@ -1294,11 +1294,17 @@ def render_purchase_goals(player: Player) -> str:
       // arrow showing which direction that sorts -- up for ascending
       // (cheapest first), down for descending (priciest first) -- same
       // shorthand the Loot Tracker's own sort tabs use now (see
-      // _sort_tabs in app/pages.py).
+      // _sort_tabs in app/pages.py). The old single "Alphabetical"
+      // button is likewise now two direction-specific tabs -- "A ↓"
+      // (A-to-Z) and "Z ↑" (Z-to-A) -- backed by the 'alphabetical'/
+      // 'reverse_alphabetical' sort_mode values (see
+      // STILL_TO_PURCHASE_SORT_MODES in app/schemas.py and
+      // _still_to_purchase_summary in app/purchase_goals.py).
       var STILL_TO_PURCHASE_SORT_MODES = [
         { key: 'low_to_high', label: 'GP \\u2191', title: 'GP, low to high' },
         { key: 'high_to_low', label: 'GP \\u2193', title: 'GP, high to low' },
-        { key: 'alphabetical', label: 'Alphabetical' },
+        { key: 'alphabetical', label: 'A \\u2193', title: 'A to Z' },
+        { key: 'reverse_alphabetical', label: 'Z \\u2191', title: 'Z to A' },
         { key: 'custom', label: 'Custom' },
       ];
 
@@ -1870,21 +1876,25 @@ def render_loot_tracker(player: Player) -> str:
         # for ascending/low-to-high -- same shorthand Purchase Goals'
         # own sort buttons use now, see STILL_TO_PURCHASE_SORT_MODES)
         # rather than spelling out "High to Low"/"Low to High" -- with
-        # six tabs sharing one row, the full text wrapped each button
-        # onto two lines, which was both harder to scan and taller than
-        # intended. "Alphabetical" is trimmed to "Alpha" (same idea, one
-        # more character saved) to make room for the eye toggle below as
-        # a 7th button on the same row without wrapping -- see
-        # .loot-sort-tab/.loot-hide-toggle in loot-tracker.css for the
-        # matching padding/font-size trim the rest of the row took to
-        # fit it too.
+        # this many tabs sharing one row, the full text wrapped each
+        # button onto two lines, which was both harder to scan and
+        # taller than intended. The old single "Alphabetical"/"Alpha"
+        # button is likewise now two -- "A ↓" (data-sort "alpha", A-to-Z)
+        # and "Z ↑" (data-sort "alpha-desc", Z-to-A) -- so each direction
+        # gets its own one-click tab instead of a single button that only
+        # ever sorted one way, matching the GP/count pairs beside it (see
+        # sortEntries below for the alpha-desc branch). That's an 8th
+        # button alongside the eye toggle now -- see .loot-sort-tab/
+        # .loot-hide-toggle in loot-tracker.css for the padding/font-size
+        # trim the row took to fit it.
         return f"""
           <div class="loot-sort-tabs" id="{tabs_id}">
             <button type="button" class="loot-sort-tab" data-sort="high" title="GP, high to low">GP &darr;</button>
             <button type="button" class="loot-sort-tab" data-sort="low" title="GP, low to high">GP &uarr;</button>
             <button type="button" class="loot-sort-tab" data-sort="count-high" title="{count_label}, high to low">{count_label} &darr;</button>
             <button type="button" class="loot-sort-tab" data-sort="count-low" title="{count_label}, low to high">{count_label} &uarr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="alpha">Alpha</button>
+            <button type="button" class="loot-sort-tab" data-sort="alpha" title="A to Z">A &darr;</button>
+            <button type="button" class="loot-sort-tab" data-sort="alpha-desc" title="Z to A">Z &uarr;</button>
             <button type="button" class="loot-sort-tab" data-sort="recent">Recent</button>
             <button type="button" class="loot-hide-toggle" id="{hide_toggle_id}" title="Show hidden">{_EYE_GLYPH_SVG}</button>
           </div>
@@ -2026,10 +2036,11 @@ def render_loot_tracker(player: Player) -> str:
       // (gp), 'count-high'/'count-low' sort by countKey (killCount for
       // NPCs, quantity for items -- each panel's own secondary number,
       // see _sort_tabs' count_label in app/pages.py for the matching tab
-      // labels), 'alpha' by nameKey, 'recent' by recentKey (an ISO
-      // timestamp -- lastKillAt for NPCs, lastDroppedAt for items)
-      // newest first. Never mutates the list it's given -- callers still
-      // hold the original (unsorted, unfiltered) array from lastData.
+      // labels), 'alpha'/'alpha-desc' by nameKey (A-to-Z / Z-to-A --
+      // the "A ↓"/"Z ↑" tabs), 'recent' by recentKey (an ISO timestamp
+      // -- lastKillAt for NPCs, lastDroppedAt for items) newest first.
+      // Never mutates the list it's given -- callers still hold the
+      // original (unsorted, unfiltered) array from lastData.
       function sortEntries(list, sortMode, nameKey, valueKey, recentKey, countKey) {
         var out = list.slice();
         if (sortMode === 'low') {
@@ -2040,6 +2051,8 @@ def render_loot_tracker(player: Player) -> str:
           out.sort(function (a, b) { return (a[countKey] || 0) - (b[countKey] || 0); });
         } else if (sortMode === 'alpha') {
           out.sort(function (a, b) { return (a[nameKey] || '').localeCompare(b[nameKey] || ''); });
+        } else if (sortMode === 'alpha-desc') {
+          out.sort(function (a, b) { return (b[nameKey] || '').localeCompare(a[nameKey] || ''); });
         } else if (sortMode === 'recent') {
           out.sort(function (a, b) { return new Date(b[recentKey] || 0) - new Date(a[recentKey] || 0); });
         } else {
