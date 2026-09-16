@@ -46,6 +46,7 @@ from app.models import (
     GearSetup,
     InventoryItem,
     LootingBagItem,
+    MenagerieItem,
     MindMap,
     PinnedPossessionItem,
     Player,
@@ -53,6 +54,7 @@ from app.models import (
     PotionStorageItem,
     RunePouchItem,
     SeedVaultItem,
+    TackleBoxItem,
 )
 from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_possessions, render_purchase_goals, render_signup
 from app.possessions import (
@@ -104,6 +106,10 @@ from app.schemas import (
     LootingBagSyncResponse,
     LootSyncRequest,
     LootSyncResponse,
+    MenagerieOut,
+    MenagerieItemOut,
+    MenagerieSyncRequest,
+    MenagerieSyncResponse,
     MoveGearSlotItemRequest,
     NpcSearchResponse,
     PlayerOut,
@@ -136,6 +142,10 @@ from app.schemas import (
     SkillsSyncRequest,
     SkillsSyncResponse,
     SyncStatusOut,
+    TackleBoxOut,
+    TackleBoxItemOut,
+    TackleBoxSyncRequest,
+    TackleBoxSyncResponse,
     UpdateMindMapNodeRequest,
 )
 
@@ -171,6 +181,15 @@ MAX_SEED_VAULT_ITEMS = 200
 # the main inventory, since it's filled the same way), so this mirrors
 # MAX_INVENTORY_ITEMS's own reasoning rather than being a fresh guess.
 MAX_LOOTING_BAG_ITEMS = INVENTORY_SIZE
+# The Menagerie's highest-tier pet house (Construction 92, Nature house)
+# holds 83 pets (71 + 12 extra slots) -- a generous multiple of that
+# real ceiling, same spirit as MAX_SEED_VAULT_ITEMS, rather than a
+# round-number guess.
+MAX_MENAGERIE_ITEMS = 100
+# A Tackle Box only ever stores 35 distinct kinds of item (a fixed,
+# documented ceiling, not a guess) -- a little headroom past that in
+# case a future update raises it, same spirit as MAX_RUNE_POUCH_ITEMS.
+MAX_TACKLE_BOX_ITEMS = 50
 # There are exactly 24 real OSRS skills (see SKILL_NAMES in
 # app/mindmaps.py) -- a real ceiling, not a guess.
 MAX_SKILLS_PER_SYNC = 24
@@ -329,7 +348,7 @@ def unlink_player(db: Session = Depends(get_db), player: Player = Depends(get_cu
 
 def _stamp_storage_synced(player: Player, storage_key: str, now: datetime) -> None:
     """Records that `storage_key` (one of POSSESSION_STORAGE_KEYS) was
-    just synced -- called from the bottom of every one of the seven
+    just synced -- called from the bottom of every one of the nine
     per-storage POST handlers below, right before their own db.commit()
     (storage_synced_at is a plain column on the same Player row already
     being flushed, so this never needs a commit of its own). See
@@ -655,6 +674,93 @@ def read_looting_bag(db: Session = Depends(get_db), player: Player = Depends(get
     )
     updated_at = items[0].updated_at if items else None
     return LootingBagOut(items=[LootingBagItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/menagerie", response_model=MenagerieSyncResponse)
+def sync_menagerie(
+    payload: MenagerieSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Player-Owned-House Menagerie's stored pets instead -- see
+    MyscapeClient#syncMenagerie in the Mootrius/myscape-plugin repo and
+    MenagerieItem's docstring in app/models.py. Full replace, never a
+    merge."""
+    if len(payload.items) > MAX_MENAGERIE_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_MENAGERIE_ITEMS}).",
+        )
+
+    db.query(MenagerieItem).filter(MenagerieItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(MenagerieItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "menagerie", now)
+    db.commit()
+
+    return MenagerieSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/menagerie", response_model=MenagerieOut)
+def read_menagerie(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Menagerie instead."""
+    items = (
+        db.query(MenagerieItem)
+        .filter(MenagerieItem.player_id == player.id)
+        .order_by(MenagerieItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return MenagerieOut(items=[MenagerieItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/tackle-box", response_model=TackleBoxSyncResponse)
+def sync_tackle_box(
+    payload: TackleBoxSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for a Tackle
+    Box's contents instead -- see MyscapeClient#syncTackleBox in the
+    Mootrius/myscape-plugin repo and TackleBoxItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_TACKLE_BOX_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_TACKLE_BOX_ITEMS}).",
+        )
+
+    db.query(TackleBoxItem).filter(TackleBoxItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(TackleBoxItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "tackle_box", now)
+    db.commit()
+
+    return TackleBoxSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/tackle-box", response_model=TackleBoxOut)
+def read_tackle_box(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the Tackle
+    Box instead."""
+    items = (
+        db.query(TackleBoxItem)
+        .filter(TackleBoxItem.player_id == player.id)
+        .order_by(TackleBoxItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return TackleBoxOut(items=[TackleBoxItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
 @app.get("/api/players/me/sync-status", response_model=SyncStatusOut)

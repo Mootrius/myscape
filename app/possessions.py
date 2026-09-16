@@ -34,12 +34,14 @@ from app.models import (
     EquipmentItem,
     InventoryItem,
     LootingBagItem,
+    MenagerieItem,
     PinnedPossessionItem,
     Player,
     PossessionTracker,
     PotionStorageItem,
     RunePouchItem,
     SeedVaultItem,
+    TackleBoxItem,
 )
 from app.purchase_goals import COINS_ITEM_ID, derived_price_for, get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
 
@@ -55,12 +57,14 @@ STORAGE_SOURCES = [
     ("rune_pouch", RunePouchItem),
     ("seed_vault", SeedVaultItem),
     ("looting_bag", LootingBagItem),
+    ("menagerie", MenagerieItem),
+    ("tackle_box", TackleBoxItem),
 ]
 
 
 def get_owned_breakdown(db: Session, player: Player) -> Dict[int, dict]:
     """Returns {item_id: {"itemName": str|None, "total": int,
-    "byLocation": {storage_key: int}}} across every one of the seven
+    "byLocation": {storage_key: int}}} across every one of the nine
     synced storages -- the single query this whole module (both the
     tracker sections and the full raw view) computes owned quantities
     from. itemName is whichever storage first reported a non-empty one

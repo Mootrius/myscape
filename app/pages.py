@@ -5849,6 +5849,8 @@ _POSSESSION_LOCATIONS = [
     ("seed_vault", "Seed Vault"),
     ("looting_bag", "Looting Bag"),
     ("rune_pouch", "Rune Pouch"),
+    ("menagerie", "Menagerie"),
+    ("tackle_box", "Tackle Box"),
     ("equipment", "Equipment"),
     ("inventory", "Inventory"),
 ]
@@ -5987,7 +5989,7 @@ def render_possessions(player: Player) -> str:
         search: '',
         sortKey: 'ge',
         sortDir: 'desc',
-        locations: { bank: true, equipment: true, inventory: true, potion_storage: true, rune_pouch: true, seed_vault: true, looting_bag: true },
+        locations: { bank: true, equipment: true, inventory: true, potion_storage: true, rune_pouch: true, seed_vault: true, looting_bag: true, menagerie: true, tackle_box: true },
       };
 
       function showError(msg) {

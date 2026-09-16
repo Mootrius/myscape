@@ -432,6 +432,98 @@ class LootingBagOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+# -- Menagerie: identical shape to Looting Bag/Seed Vault above, just a
+# separate container -- see MenagerieItem's docstring in app/models.py.
+# -------------------------------------------------------------------
+
+class MenagerieItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class MenagerieSyncRequest(BaseModel):
+    items: List[MenagerieItemIn]
+
+
+class MenagerieSyncResponse(BaseModel):
+    item_count: int
+
+
+class MenagerieItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class MenagerieOut(BaseModel):
+    items: List[MenagerieItemOut]
+    updated_at: Optional[datetime] = None
+
+
+# -- Tackle Box: identical shape to Looting Bag/Seed Vault/Menagerie
+# above, just a separate container -- see TackleBoxItem's docstring in
+# app/models.py. -----------------------------------------------------
+
+class TackleBoxItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class TackleBoxSyncRequest(BaseModel):
+    items: List[TackleBoxItemIn]
+
+
+class TackleBoxSyncResponse(BaseModel):
+    item_count: int
+
+
+class TackleBoxItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class TackleBoxOut(BaseModel):
+    items: List[TackleBoxItemOut]
+    updated_at: Optional[datetime] = None
+
+
 # -- Possessions Monitoring: the min/max item trackers (sections 1/2)
 # and the storage sync-status map the plugin side panel's Status
 # section reads -- see PossessionTracker/Player.storage_synced_at's
@@ -443,7 +535,7 @@ class LootingBagOut(BaseModel):
 #: endpoints need the same key spelling to stamp storage_synced_at with.
 POSSESSION_STORAGE_KEYS = [
     "bank", "equipment", "inventory", "potion_storage",
-    "rune_pouch", "seed_vault", "looting_bag",
+    "rune_pouch", "seed_vault", "looting_bag", "menagerie", "tackle_box",
 ]
 
 

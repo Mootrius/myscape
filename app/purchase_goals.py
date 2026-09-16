@@ -44,10 +44,12 @@ from app.models import (
     EquipmentItem,
     GearSetup,
     InventoryItem,
+    MenagerieItem,
     Player,
     PotionStorageItem,
     RunePouchItem,
     SeedVaultItem,
+    TackleBoxItem,
 )
 from app.recipes import find_recipe, search_recipe_names
 from app.schemas import GEAR_SETUP_EQUIPMENT_SLOTS, INVENTORY_SIZE
@@ -854,27 +856,34 @@ def _still_to_purchase_summary(
 
 def build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict[str, int]]:
     """Combines bank+inventory+equipment+potion storage+rune pouch+seed
-    vault into the same shape Maintrius's own load_character_snapshot()
-    produced (totalsById/totalsByName) -- the "everything currently
-    owned" pool every gear setup checks itself against independently
-    (see build_gear_setups, which takes a fresh copy of this per setup),
-    and also what an item-goal Mindmap node checks its target item's
-    count against (see evaluate_completion in app/mindmaps.py).
+    vault+menagerie+tackle box into the same shape Maintrius's own
+    load_character_snapshot() produced (totalsById/totalsByName) -- the
+    "everything currently owned" pool every gear setup checks itself
+    against independently (see build_gear_setups, which takes a fresh
+    copy of this per setup), and also what an item-goal Mindmap node
+    checks its target item's count against (see evaluate_completion in
+    app/mindmaps.py).
 
-    Potion storage, the rune pouch, and the seed vault (added alongside
-    PotionStorageItem/RunePouchItem/SeedVaultItem in app/models.py) slot
-    in here with zero special-casing: the plugin already reports each in
+    Potion storage, the rune pouch, the seed vault, the menagerie, and
+    the tackle box (added alongside PotionStorageItem/RunePouchItem/
+    SeedVaultItem/MenagerieItem/TackleBoxItem in app/models.py) slot in
+    here with zero special-casing: the plugin already reports each in
     the exact same item-id/quantity shape as bank/inventory/equipment
     (see MyscapePlugin#readPotionStorageItems/#readRunePouchItems/
-    #readSeedVaultItems in the Mootrius/myscape-plugin repo), so each
-    just needs its own query added, same as the other two. Runes owned
-    only inside a pouch (or seeds only inside the vault) would otherwise
-    never show up here at all -- RuneLite's normal inventory scan
-    reports the pouch itself as a single item, not what's stored inside
-    it, and the seed vault isn't part of any normal ItemContainer at
-    all -- so without this, a setup (or goal node) needing, say, fire
-    runes or ranarr seeds would keep listing them as missing even while
-    a full pouch or vault of them sat right there."""
+    #readSeedVaultItems/#readMenagerieItems/#readTackleBoxItems in the
+    Mootrius/myscape-plugin repo), so each just needs its own query
+    added, same as the others. Runes owned only inside a pouch (or
+    seeds only inside the vault, or a pet only in the menagerie, or gear
+    only in a tackle box) would otherwise never show up here at all --
+    RuneLite's normal inventory scan reports the pouch itself as a
+    single item, not what's stored inside it; the seed vault isn't part
+    of any ItemContainer at all; and the menagerie/tackle box, though
+    genuine ItemContainers same as the bank, are their own separate ones
+    this function's usual bank/inventory/equipment sweep never touches
+    -- so without this, a setup (or goal node) needing, say, fire runes,
+    ranarr seeds, a specific pet, or a barbed rod would keep listing
+    them as missing even while a full pouch, vault, menagerie, or tackle
+    box of them sat right there."""
     pool_by_id: Dict[int, int] = {}
     pool_by_name: Dict[str, int] = {}
 
@@ -895,6 +904,10 @@ def build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict
     for item in db.query(RunePouchItem).filter(RunePouchItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
     for item in db.query(SeedVaultItem).filter(SeedVaultItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(MenagerieItem).filter(MenagerieItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(TackleBoxItem).filter(TackleBoxItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
 
     return pool_by_id, pool_by_name

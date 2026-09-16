@@ -101,10 +101,11 @@ class Player(Base):
     diary_tiers = Column(JSONB, nullable=False, default=dict)
 
     # storage_synced_at: {<storage key>: <ISO 8601 timestamp>} for every
-    # one of the seven sources Possessions Monitoring's side-panel
+    # one of the nine sources Possessions Monitoring's side-panel
     # Status section reports on -- "bank", "equipment", "inventory",
-    # "potion_storage", "rune_pouch", "seed_vault", "looting_bag" --
-    # stamped every time that source's own sync endpoint is hit (see
+    # "potion_storage", "rune_pouch", "seed_vault", "looting_bag",
+    # "menagerie", "tackle_box" -- stamped every time that source's own
+    # sync endpoint is hit (see
     # each POST /api/players/me/<source> handler in app/main.py), full
     # replace of just that one key rather than the whole dict.
     #
@@ -128,6 +129,8 @@ class Player(Base):
     rune_pouch_items = relationship("RunePouchItem", back_populates="player", cascade="all, delete-orphan")
     seed_vault_items = relationship("SeedVaultItem", back_populates="player", cascade="all, delete-orphan")
     looting_bag_items = relationship("LootingBagItem", back_populates="player", cascade="all, delete-orphan")
+    menagerie_items = relationship("MenagerieItem", back_populates="player", cascade="all, delete-orphan")
+    tackle_box_items = relationship("TackleBoxItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
     loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
     mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
@@ -442,6 +445,73 @@ class LootingBagItem(Base):
     player = relationship("Player", back_populates="looting_bag_items")
 
     __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_looting_bag_items_player_item"),)
+
+
+class MenagerieItem(Base):
+    """The player's current Player-Owned-House Menagerie pet storage --
+    same full-snapshot, delete-and-replace model as every other
+    item-source table above. Synced by POST /api/players/me/menagerie
+    (see MyscapeClient#syncMenagerie in the Mootrius/myscape-plugin
+    repo).
+
+    Like Looting Bag/Seed Vault, this is a genuine ItemContainer
+    RuneLite exposes directly (InventoryID.POH_MENAGERIE_PETS), read
+    the same straightforward way Bank/Looting Bag are -- and, same
+    caveat as those two, it only reports real contents once the player
+    has actually viewed the Menagerie room at least once in the current
+    session (see MyscapePlugin#readMenagerieItems there). Every pet
+    quantity here is always exactly 1 (a pet isn't a stackable good the
+    way a seed or a potion is), but this stores plain item rows like
+    every other source rather than a boolean "owns pet X" flag, so a
+    pet-goal Mindmap node can count/match it exactly the same way an
+    item-goal node already does for anything else owned.
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above -- relevant here specifically because a pet has
+    no GE listing at all."""
+
+    __tablename__ = "menagerie_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="menagerie_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_menagerie_items_player_item"),)
+
+
+class TackleBoxItem(Base):
+    """The player's current Tackle Box contents -- same full-snapshot,
+    delete-and-replace model as every other item-source table above.
+    Synced by POST /api/players/me/tackle-box (see
+    MyscapeClient#syncTackleBox in the Mootrius/myscape-plugin repo).
+
+    Like Looting Bag/Seed Vault/Menagerie above, this is a genuine
+    ItemContainer RuneLite exposes directly (InventoryID.TACKLE_BOX),
+    read the same straightforward way Bank/Looting Bag are -- and, same
+    caveat as those, it only reports real contents once the player has
+    actually opened the Tackle Box at least once in the current session
+    (see MyscapePlugin#readTackleBoxItems there).
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above."""
+
+    __tablename__ = "tackle_box_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="tackle_box_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_tackle_box_items_player_item"),)
 
 
 class GearSetup(Base):
