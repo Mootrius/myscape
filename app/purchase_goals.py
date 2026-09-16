@@ -201,15 +201,35 @@ def unit_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[
 UNTRADEABLE_MAPPING_PATH = pathlib.Path(__file__).resolve().parent / "data" / "untradeable_mapping.json"
 _untradeable_mapping_index: Optional[Dict[str, list]] = None
 
+# Hand-picked one-off additions on top of the RuneLite-ported table
+# above, for an untradeable<->tradeable price link that table doesn't
+# happen to carry but we've found and want anyway. Kept as its own
+# small dict rather than edited into untradeable_mapping.json itself,
+# so a future re-run of scripts/fetch_untradeable_mapping.py (which
+# fully regenerates that file from RuneLite's own upstream data) can
+# never silently drop one of these -- get_untradeable_mapping merges
+# this in every time, after loading the file fresh. Same entry shape
+# as the JSON file's own: {untradeableItemId: [{"itemId":
+# tradeableItemId, "qty": int}, ...]}. Add more here as they turn up.
+_MANUAL_UNTRADEABLE_PRICE_LINKS: Dict[str, list] = {
+    # Chugging barrel (the assembled/charged Tempoross reward, item id
+    # 30000) has no GE listing of its own -- only Chugging barrel
+    # (disassembled), id 30002, is actually sold on the Grand Exchange
+    # -- so it prices the same way a charged/degraded item elsewhere in
+    # this table already does: 1:1 off its tradeable counterpart.
+    "30000": [{"itemId": 30002, "qty": 1}],
+}
+
 
 def get_untradeable_mapping() -> Dict[str, list]:
     global _untradeable_mapping_index
     if _untradeable_mapping_index is None:
         try:
             with open(UNTRADEABLE_MAPPING_PATH, "r", encoding="utf-8") as f:
-                _untradeable_mapping_index = json.load(f)
+                base = json.load(f)
         except (OSError, json.JSONDecodeError):
-            _untradeable_mapping_index = {}
+            base = {}
+        _untradeable_mapping_index = {**base, **_MANUAL_UNTRADEABLE_PRICE_LINKS}
     return _untradeable_mapping_index
 
 
