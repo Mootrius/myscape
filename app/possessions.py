@@ -41,7 +41,7 @@ from app.models import (
     RunePouchItem,
     SeedVaultItem,
 )
-from app.purchase_goals import derived_price_for, get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
+from app.purchase_goals import COINS_ITEM_ID, derived_price_for, get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
 
 # Storage key (matches schemas.POSSESSION_STORAGE_KEYS and
 # Player.storage_synced_at's own keys) -> the model table it's read
@@ -415,17 +415,37 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
     shows on hover in-game). TRADEABLE stays NO for these either way --
     it's a computed stand-in value, not a real GE listing -- geDerived
     on each item marks which rows that applies to, for the frontend to
-    show the distinction."""
+    show the distinction. Coins and Platinum tokens get the same
+    geDerived treatment from their own fixed gp-conversion rate instead
+    (see currency_gp_rate below), since neither is a real GE listing
+    either."""
     mapping, mapping_error = get_mapping()
     prices, price_error = get_latest_prices()
     breakdown = get_owned_breakdown(db, player)
+
+    # Coins and Platinum tokens are currency, not goods -- neither has a
+    # real Grand Exchange listing (both already show TRADEABLE: NO), but
+    # each has an unambiguous gp-equivalent "value" that's more useful
+    # here than the em dash they'd otherwise get: a coin's value is
+    # just its own face value (1 coin = 1gp), and a platinum token is
+    # worth exactly 1,000 coins -- the fixed rate the GE currency
+    # exchange counter itself converts at. Folded into the same
+    # geDerived path as any other computed stand-in value below (shown
+    # with the same leading "~" a Crystal helm's derived value gets --
+    # this is a computed number, never a real GE listing).
+    currency_gp_rate = {COINS_ITEM_ID: 1}
+    for platinum_id in find_item_ids("Platinum token") or []:
+        currency_gp_rate[platinum_id] = 1000
 
     items = []
     for item_id, entry in breakdown.items():
         if entry["total"] <= 0:
             continue
         display = resolve_item_display(item_id, entry["itemName"], mapping)
-        if display["tradeable"]:
+        if item_id in currency_gp_rate:
+            ge_price = currency_gp_rate[item_id]
+            ge_derived = True
+        elif display["tradeable"]:
             ge_price, _ = unit_price_for(item_id, prices)
             ge_derived = False
         else:
