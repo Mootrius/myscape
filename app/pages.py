@@ -2353,7 +2353,7 @@ def render_loot_tracker(player: Player) -> str:
         }
         function titleFor(b, i) {
           if (selectedNpc) {
-            return selectedNpc + ': ' + fmtGp(fillValue(b, i)) + ' gp \\u00b7 hour total ' + fmtGp(b.value) + ' gp';
+            return selectedNpc + ': ' + fmtGp(fillValue(b, i)) + ' gp \\u00b7 total ' + fmtGp(b.value) + ' gp';
           }
           return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount + ' kill' + (b.killCount === 1 ? '' : 's') : '');
         }
