@@ -440,10 +440,12 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
     shows on hover in-game). TRADEABLE stays NO for these either way --
     it's a computed stand-in value, not a real GE listing -- geDerived
     on each item marks which rows that applies to, for the frontend to
-    show the distinction. Coins and Platinum tokens get the same
-    geDerived treatment from their own fixed gp-conversion rate instead
-    (see currency_gp_rate below), since neither is a real GE listing
-    either."""
+    show the distinction (a leading "~", since it's an estimate rather
+    than a live listing). Coins and Platinum tokens get their own fixed
+    gp-conversion rate instead (see currency_gp_rate below), but NOT
+    geDerived -- unlike a Crystal helm's linked-item estimate, a coin's
+    gp value isn't an approximation of anything; it's exactly 1gp, by
+    definition, every time."""
     mapping, mapping_error = get_mapping()
     prices, price_error = get_latest_prices()
     breakdown = get_owned_breakdown(db, player)
@@ -454,10 +456,12 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
     # here than the em dash they'd otherwise get: a coin's value is
     # just its own face value (1 coin = 1gp), and a platinum token is
     # worth exactly 1,000 coins -- the fixed rate the GE currency
-    # exchange counter itself converts at. Folded into the same
-    # geDerived path as any other computed stand-in value below (shown
-    # with the same leading "~" a Crystal helm's derived value gets --
-    # this is a computed number, never a real GE listing).
+    # exchange counter itself converts at. geDerived is left False for
+    # these (see the frontend's valueCell in render_possessions, and
+    # this function's own docstring above) -- that flag exists to warn
+    # the player a number is an ESTIMATE, and a coin's gp value isn't
+    # one: it's exact, by definition, not "close enough" the way a
+    # Crystal helm's linked-item price is.
     currency_gp_rate = {COINS_ITEM_ID: 1}
     for platinum_id in find_item_ids("Platinum token") or []:
         currency_gp_rate[platinum_id] = 1000
@@ -469,7 +473,7 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
         display = resolve_item_display(item_id, entry["itemName"], mapping)
         if item_id in currency_gp_rate:
             ge_price = currency_gp_rate[item_id]
-            ge_derived = True
+            ge_derived = False
         elif display["tradeable"]:
             ge_price, _ = unit_price_for(item_id, prices)
             ge_derived = False
