@@ -5847,8 +5847,14 @@ def render_possessions(player: Player) -> str:
       // isn't a direct Grand Exchange listing at all -- an untradeable
       // item's value computed from a linked item instead (see
       // derived_price_for in app/purchase_goals.py; TRADEABLE still
-      // correctly reads NO for these) -- shown with a leading "~" and a
-      // tooltip so it doesn't read as a real GE price.
+      // correctly reads NO for these) -- shown with a leading "~" so it
+      // doesn't read as a real GE price. The tilde is wrapped in its
+      // own span rather than sitting inline in the text -- the pixel
+      // font (RuneScapePlain11) draws that glyph noticeably higher in
+      // its own em-box than digits/letters are, which without this
+      // dragged the whole "~N gp" line up a few px versus every other
+      // row; pm-derived-mark (possessions.css) pins it back down to the
+      // shared baseline.
       function valueCell(unitValue, qty, derived) {
         if (unitValue == null) {
           return '<div class="pm-value-cell">' +
@@ -5857,9 +5863,8 @@ def render_possessions(player: Player) -> str:
           '</div>';
         }
         var eachText = qty > 1 ? (fmtNum(unitValue) + ' ea') : '';
-        var titleAttr = derived ? ' title="Derived from a linked item\\'s GE price -- not a direct Grand Exchange listing"' : '';
-        var prefix = derived ? '~' : '';
-        return '<div class="pm-value-cell"' + titleAttr + '>' +
+        var prefix = derived ? '<span class="pm-derived-mark">~</span>' : '';
+        return '<div class="pm-value-cell">' +
           '<div class="pm-value-stack">' + prefix + fmtNum(unitValue * qty) + ' gp</div>' +
           '<div class="pm-value-each">' + (eachText ? (prefix + eachText) : '') + '</div>' +
         '</div>';

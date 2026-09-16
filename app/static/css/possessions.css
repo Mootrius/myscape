@@ -139,6 +139,15 @@
 .pm-value-stack { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .pm-value-stack.pm-value-none { color: var(--text-faint); }
 .pm-value-each { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; line-height: 1.2; min-height: 12px; }
+/* The "~" marking a derived (not a real GE listing) value -- see
+   valueCell in the page's own script. RuneScapePlain11's own tilde
+   glyph sits well above where a digit does in its em-box (drawn more
+   like a diacritic than a baseline symbol), which left inline in the
+   text was enough to drag the whole line's box -- and so the number
+   next to it -- up a few px versus every other row. Isolating it in
+   its own inline-block with line-height: 1 stops that glyph's tall
+   metrics from stretching the surrounding line at all. */
+.pm-derived-mark { display: inline-block; line-height: 1; vertical-align: baseline; }
 
 .pm-col-tradeable { text-align: center; }
 .pm-badge {
