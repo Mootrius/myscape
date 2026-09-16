@@ -88,11 +88,18 @@
   display: flex; flex-direction: column; gap: 3px;
   font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
 }
-.loot-range-custom-field input[type="date"] {
+.loot-range-custom-field input[type="text"] {
   padding: 5px 6px; font-size: 12px; color: var(--text);
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   color-scheme: dark;
 }
+/* Toggled on Apply (or cleared on the next keystroke -- see
+   applyCustomRange/its 'input' listener in the page script) when a
+   typed value isn't a real 'YYYY-MM-DD' date -- the one thing a native
+   <input type="date">'s own picker used to guarantee structurally,
+   now worth a visible nudge since a plain text field will happily
+   hold anything. */
+.loot-range-custom-field input[type="text"].invalid { border-color: var(--red); }
 .loot-range-apply {
   padding: 6px 8px;
   font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;

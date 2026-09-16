@@ -351,9 +351,11 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
 
 
 def render_landing(player: Optional[Player]) -> str:
-    # Logged-in visitors get redirected to /dashboard before this ever
-    # renders (see main.py) -- this stays player-aware only so the nav
-    # (and link banner) don't look broken if that ever changes.
+    # Renders for a logged-in player too now (see root() in main.py) --
+    # the header's "myscape" logo/nav and the footer's own linked-status
+    # note (both from _shell/player below) already handle either case
+    # correctly on their own, so this needs nothing extra here to
+    # support it.
     # No body copy for now -- just the header/nav over the background
     # video, until there's a real landing pitch to put here.
     body = ""
@@ -1933,10 +1935,10 @@ def render_loot_tracker(player: Player) -> str:
               <button type="button" class="loot-range-option" data-range="custom">CUSTOM</button>
               <div class="loot-range-custom" id="lootRangeCustom" style="display:none;">
                 <label class="loot-range-custom-field">Start
-                  <input type="date" id="lootRangeStart" />
+                  <input type="text" id="lootRangeStart" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false" />
                 </label>
                 <label class="loot-range-custom-field">End
-                  <input type="date" id="lootRangeEnd" />
+                  <input type="text" id="lootRangeEnd" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false" />
                 </label>
                 <button type="button" class="loot-range-apply" id="lootRangeApply">Apply</button>
               </div>
@@ -2780,6 +2782,24 @@ def render_loot_tracker(player: Player) -> str:
         var wrap = document.getElementById('lootChartRange');
         if (wrap && !wrap.contains(e.target)) closeRangeMenu();
       });
+      // Typed 'YYYY-MM-DD' rather than a native <input type="date">'s
+      // own calendar popup (see the input tags themselves) -- a plain
+      // text field the way the rest of this menu already reads, no
+      // separate widget popping up inside the range dropdown's own
+      // popup. Validated by hand here in place of whatever a browser's
+      // date picker would have guaranteed structurally: right shape
+      // AND an actual calendar date (rejects "2024-13-40", not just
+      // anything not matching the digits-dashes-digits-dashes-digits
+      // pattern).
+      function isValidIsoDate(s) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+        if (!m) return false;
+        var year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
+        if (month < 1 || month > 12) return false;
+        var daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+        return day >= 1 && day <= daysInMonth;
+      }
+
       document.getElementById('lootRangeMenu').addEventListener('click', function (e) {
         var opt = e.target.closest('.loot-range-option');
         if (!opt) return;
@@ -2794,6 +2814,8 @@ def render_loot_tracker(player: Player) -> str:
             if (!startInput.value) startInput.value = state.customStart || toIsoDate(weekAgo);
             if (!endInput.value) endInput.value = state.customEnd || toIsoDate(today);
           }
+          startInput.classList.remove('invalid');
+          endInput.classList.remove('invalid');
           document.getElementById('lootRangeCustom').style.display = 'flex';
           return;
         }
@@ -2803,10 +2825,16 @@ def render_loot_tracker(player: Player) -> str:
         updateRangeMenuActive();
         loadState();
       });
-      document.getElementById('lootRangeApply').addEventListener('click', function () {
-        var startVal = document.getElementById('lootRangeStart').value;
-        var endVal = document.getElementById('lootRangeEnd').value;
-        if (!startVal || !endVal) return;
+      function applyCustomRange() {
+        var startInput = document.getElementById('lootRangeStart');
+        var endInput = document.getElementById('lootRangeEnd');
+        var startVal = startInput.value.trim();
+        var endVal = endInput.value.trim();
+        var startOk = isValidIsoDate(startVal);
+        var endOk = isValidIsoDate(endVal);
+        startInput.classList.toggle('invalid', !startOk);
+        endInput.classList.toggle('invalid', !endOk);
+        if (!startOk || !endOk) return;
         state.rangeKey = 'custom';
         state.customStart = startVal;
         state.customEnd = endVal;
@@ -2814,6 +2842,18 @@ def render_loot_tracker(player: Player) -> str:
         closeRangeMenu();
         updateRangeMenuActive();
         loadState();
+      }
+      document.getElementById('lootRangeApply').addEventListener('click', applyCustomRange);
+      // Enter applies from either field -- there's no picker to close
+      // out of any more, so typing a date and hitting Enter is the
+      // natural way through this now, same as it would be for any
+      // other single-line text field.
+      ['lootRangeStart', 'lootRangeEnd'].forEach(function (id) {
+        var input = document.getElementById(id);
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') applyCustomRange();
+        });
+        input.addEventListener('input', function () { input.classList.remove('invalid'); });
       });
       updateRangeMenuActive();
 
