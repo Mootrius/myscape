@@ -1304,10 +1304,10 @@ def render_purchase_goals(player: Player) -> str:
       // STILL_TO_PURCHASE_SORT_MODES in app/schemas.py and
       // _still_to_purchase_summary in app/purchase_goals.py).
       var STILL_TO_PURCHASE_SORT_MODES = [
-        { key: 'low_to_high', label: 'GP \\u2191', title: 'GP, low to high' },
         { key: 'high_to_low', label: 'GP \\u2193', title: 'GP, high to low' },
-        { key: 'alphabetical', label: 'A \\u2191', title: 'A to Z' },
+        { key: 'low_to_high', label: 'GP \\u2191', title: 'GP, low to high' },
         { key: 'reverse_alphabetical', label: 'Z \\u2193', title: 'Z to A' },
+        { key: 'alphabetical', label: 'A \\u2191', title: 'A to Z' },
         { key: 'custom', label: 'Custom' },
       ];
 
@@ -1901,8 +1901,8 @@ def render_loot_tracker(player: Player) -> str:
             <button type="button" class="loot-sort-tab" data-sort="low" title="GP, low to high">GP &uarr;</button>
             <button type="button" class="loot-sort-tab" data-sort="count-high" title="{count_label}, high to low">{count_label} &darr;</button>
             <button type="button" class="loot-sort-tab" data-sort="count-low" title="{count_label}, low to high">{count_label} &uarr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="alpha" title="A to Z">A &uarr;</button>
             <button type="button" class="loot-sort-tab" data-sort="alpha-desc" title="Z to A">Z &darr;</button>
+            <button type="button" class="loot-sort-tab" data-sort="alpha" title="A to Z">A &uarr;</button>
             <button type="button" class="loot-sort-tab" data-sort="recent">Recent</button>
             <button type="button" class="loot-hide-toggle" id="{hide_toggle_id}" title="Show hidden">{_EYE_GLYPH_SVG}</button>
           </div>
