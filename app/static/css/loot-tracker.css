@@ -284,7 +284,7 @@
    A-to-Z/Z-to-A pair, plus recent -- see _sort_tabs in app/pages.py)
    plus the "show hidden" eye toggle (.loot-hide-toggle below) fit on
    one line now that they're all a short "label + arrow" (e.g. "GP ↓",
-   "A ↓") instead of spelled-out "High to Low"/"Low to High" or a lone
+   "A ↑") instead of spelled-out "High to Low"/"Low to High" or a lone
    "Alphabetical" button -- that trim made room for the eye toggle as
    an 8th button without wrapping, alongside shaving each tab's own
    padding/font-size down a notch from what fewer, wordier tabs
