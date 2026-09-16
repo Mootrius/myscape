@@ -1847,7 +1847,19 @@ def render_loot_tracker(player: Player) -> str:
     npcBucketValues/windowItems/npcItems shape."""
     extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
 
-    def _sort_tabs(tabs_id: str, count_label: str) -> str:
+    # Feather's own "eye" outline -- the "show hidden" toggle button
+    # below, and (as a JS string in the script further down) the
+    # per-tile hide/unhide button's own default state -- see
+    # EYE_GLYPH/EYE_OFF_GLYPH there for why this button never swaps to
+    # the crossed-out variant the way that one does.
+    _EYE_GLYPH_SVG = (
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>'
+        '<circle cx="12" cy="12" r="3"></circle></svg>'
+    )
+
+    def _sort_tabs(tabs_id: str, count_label: str, hide_toggle_id: str) -> str:
         # count_label names whichever secondary number that panel's own
         # boxes show beside gp -- "KC" for the NPC panel, "Qty" for the
         # item panel -- so its two new count-based tabs read naturally on
@@ -1860,15 +1872,21 @@ def render_loot_tracker(player: Player) -> str:
         # rather than spelling out "High to Low"/"Low to High" -- with
         # six tabs sharing one row, the full text wrapped each button
         # onto two lines, which was both harder to scan and taller than
-        # intended.
+        # intended. "Alphabetical" is trimmed to "Alpha" (same idea, one
+        # more character saved) to make room for the eye toggle below as
+        # a 7th button on the same row without wrapping -- see
+        # .loot-sort-tab/.loot-hide-toggle in loot-tracker.css for the
+        # matching padding/font-size trim the rest of the row took to
+        # fit it too.
         return f"""
           <div class="loot-sort-tabs" id="{tabs_id}">
             <button type="button" class="loot-sort-tab" data-sort="high" title="GP, high to low">GP &darr;</button>
             <button type="button" class="loot-sort-tab" data-sort="low" title="GP, low to high">GP &uarr;</button>
             <button type="button" class="loot-sort-tab" data-sort="count-high" title="{count_label}, high to low">{count_label} &darr;</button>
             <button type="button" class="loot-sort-tab" data-sort="count-low" title="{count_label}, low to high">{count_label} &uarr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="alpha">Alphabetical</button>
+            <button type="button" class="loot-sort-tab" data-sort="alpha">Alpha</button>
             <button type="button" class="loot-sort-tab" data-sort="recent">Recent</button>
+            <button type="button" class="loot-hide-toggle" id="{hide_toggle_id}" title="Show hidden">{_EYE_GLYPH_SVG}</button>
           </div>
         """
 
@@ -1918,7 +1936,7 @@ def render_loot_tracker(player: Player) -> str:
         <div class="loot-panel">
           <div class="loot-panel-controls">
             <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search for an NPC" autocomplete="off" />
-            {_sort_tabs("lootNpcSortTabs", "KC")}
+            {_sort_tabs("lootNpcSortTabs", "KC", "lootNpcHideToggle")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
             No NPC kills in this range yet.
@@ -1928,7 +1946,7 @@ def render_loot_tracker(player: Player) -> str:
         <div class="loot-panel">
           <div class="loot-panel-controls">
             <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search for an item" autocomplete="off" />
-            {_sort_tabs("lootItemSortTabs", "Qty")}
+            {_sort_tabs("lootItemSortTabs", "Qty", "lootItemHideToggle")}
           </div>
           <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
             No items dropped in this range yet.
@@ -1943,8 +1961,50 @@ def render_loot_tracker(player: Player) -> str:
       var state = {
         selectedNpc: null, npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '',
         rangeKey: '24h', customStart: null, customEnd: null,
+        // Purely local UI state, never persisted -- each panel's own
+        // "show hidden" eye toggle (see .loot-hide-toggle in
+        // loot-tracker.css). Off by default: a hidden NPC/item starts
+        // out actually gone from its panel, not just dimmed -- see
+        // visibleNpcEntries/visibleItemEntries below.
+        npcShowHidden: false, itemShowHidden: false,
       };
       var lastData = null;
+
+      // Feather's own "eye"/"eye-off" outlines -- the per-tile
+      // hide/unhide button baked into every NPC/item box (see
+      // renderNpcRow/renderItemList below), open when clicking would
+      // HIDE this tile, crossed-out when clicking would UNhide it.
+      // Same plain-line-icon convention as every other small control
+      // on this site (see PIN_GLYPH in render_possessions, this same
+      // file, for the most recent example) -- Feather has both of
+      // these as real icons already, unlike the thumbtack that pin
+      // button needed to hand-draw. The toggle button up in the sort
+      // row (see _EYE_GLYPH_SVG in render_loot_tracker) is the plain
+      // open eye only -- it doesn't hide anything itself, so it never
+      // needs the crossed-out state this one does.
+      var EYE_GLYPH = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+      var EYE_OFF_GLYPH = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+
+      // An NPC whose every item is individually hidden (see
+      // item.hidden, set server-side by build_loot_state in
+      // app/loot.py) has nothing left to show even though the NPC
+      // itself was never explicitly hidden -- treated the same as an
+      // explicit hide for display purposes (filtered out with the
+      // toggle off, dimmed with it on), even though the eye button on
+      // its own tile still only ever acts on the real, explicit
+      // n.hidden (see the click handler on #lootNpcRow below) -- hiding
+      // every item one at a time and having the NPC vanish as a side
+      // effect is a different action from explicitly hiding the NPC
+      // itself, and unhiding one item shouldn't require having also
+      // hidden the NPC by accident.
+      function npcAllItemsHidden(name) {
+        var items = lastData && lastData.npcItems && lastData.npcItems[name];
+        if (!items || !items.length) return false;
+        return items.every(function (it) { return it.hidden; });
+      }
+      function npcEffectiveHidden(n) {
+        return !!n.hidden || npcAllItemsHidden(n.sourceName);
+      }
 
       var RANGE_LABELS = {
         '24h': '24 HOURS', '1w': '1 WEEK', '1m': '1 MONTH',
@@ -2343,7 +2403,23 @@ def render_loot_tracker(player: Player) -> str:
           return;
         }
 
-        var sorted = sortEntries(filterByName(npcs, state.npcSearch, 'sourceName'), state.npcSort, 'sourceName', 'value', 'lastKillAt', 'killCount');
+        // With the toggle off (the default), a hidden NPC -- explicit
+        // or effective (see npcEffectiveHidden above) -- is filtered
+        // out here entirely, same as it never happened; with it on,
+        // every NPC shows, hidden ones just dimmed (see the
+        // hidden-entry class below) -- see .loot-hide-toggle in
+        // loot-tracker.css for the button that flips this.
+        var visible = state.npcShowHidden ? npcs : npcs.filter(function (n) { return !npcEffectiveHidden(n); });
+        if (!visible.length) {
+          emptyEl.textContent = npcs.length ? 'Every NPC in this range is hidden.' : 'No NPC kills in this range yet.';
+          emptyEl.style.display = '';
+          rowEl.innerHTML = '';
+          lastNpcKey = null;
+          npcRowRenderToken++;
+          return;
+        }
+
+        var sorted = sortEntries(filterByName(visible, state.npcSearch, 'sourceName'), state.npcSort, 'sourceName', 'value', 'lastKillAt', 'killCount');
         if (!sorted.length) {
           emptyEl.textContent = 'No NPCs match your search.';
           emptyEl.style.display = '';
@@ -2358,16 +2434,44 @@ def render_loot_tracker(player: Player) -> str:
           return n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kill' + (n.killCount === 1 ? '' : 's');
         }
 
-        var key = state.npcSearch + '\\u0001' + state.npcSort + '\\u0001' + sorted.map(function (n) { return n.sourceName; }).join('|');
+        // hiddenFlags folds into the key alongside everything else that
+        // already forces a rebuild (search/sort/toggle/the set itself)
+        // -- a hide/unhide can change WHICH entries are dimmed without
+        // changing the sorted set's membership or order at all (an
+        // already-hidden-and-shown NPC just getting explicitly hidden
+        // too, say), which the rest of the key wouldn't otherwise catch
+        // -- same fix Possessions Monitoring's own pinnedKey made to
+        // renderTable's key for the identical reason (see possessions.css/
+        // app/pages.py's render_possessions).
+        var hiddenFlags = sorted.map(function (n) { return npcEffectiveHidden(n) ? '1' : '0'; }).join('');
+        var key = state.npcSearch + '\\u0001' + state.npcSort + '\\u0001' + (state.npcShowHidden ? '1' : '0') + '\\u0001' +
+          hiddenFlags + '\\u0001' + sorted.map(function (n) { return n.sourceName; }).join('|');
         if (key !== lastNpcKey) {
           var html = sorted.map(function (n) {
             var active = state.selectedNpc === n.sourceName;
-            return '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
-              escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
-              iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
-              '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
-              '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
-            '</button>';
+            var hidden = npcEffectiveHidden(n);
+            var explicitHidden = !!n.hidden;
+            var eyeTitle = (explicitHidden ? 'Unhide ' : 'Hide ') + n.sourceName;
+            // A <button> can't validly nest inside another <button> --
+            // see .loot-npc-box-wrap in loot-tracker.css -- so the eye
+            // toggle is a DOM sibling of the box, not a child of it,
+            // both wrapped in one non-interactive div. That sibling
+            // relationship also means clicking the eye button never
+            // needs preventDefault/stopPropagation to keep it from
+            // also selecting the NPC underneath -- same reasoning as
+            // Possessions Monitoring's own pin button.
+            return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
+              '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
+                escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
+                '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
+                '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
+              '</button>' +
+              '<button type="button" class="loot-eye-btn" data-hide-name="' + escapeHtml(n.sourceName) +
+                '" data-hidden="' + (explicitHidden ? '1' : '0') + '" title="' + escapeHtml(eyeTitle) + '">' +
+                (hidden ? EYE_OFF_GLYPH : EYE_GLYPH) +
+              '</button>' +
+            '</div>';
           }).join('');
           // Preload every icon this new row needs before swapping the
           // HTML in, so the boxes and their pictures appear together
@@ -2386,11 +2490,16 @@ def render_loot_tracker(player: Player) -> str:
         // the existing boxes (and their <img> icons, avoiding the
         // flicker) but still refresh the kc/value text and title in
         // place, since a later poll can bump those numbers for an NPC
-        // that's still sorted into the same slot.
-        var boxes = rowEl.children;
+        // that's still sorted into the same slot. Queried by
+        // .loot-npc-box-wrap (not rowEl.children directly), same
+        // reasoning as renderTable's own patch branch in
+        // render_possessions -- keeps this correct even if a future
+        // change ever inserts a non-wrap sibling into #lootNpcRow.
+        var wraps = rowEl.querySelectorAll('.loot-npc-box-wrap');
         sorted.forEach(function (n, i) {
-          var box = boxes[i];
-          if (!box) return;
+          var wrap = wraps[i];
+          if (!wrap) return;
+          var box = wrap.querySelector('.loot-npc-box');
           box.classList.toggle('active', state.selectedNpc === n.sourceName);
           box.title = npcTitle(n);
           var kcEl = box.querySelector('.loot-npc-box-kc');
@@ -2416,8 +2525,13 @@ def render_loot_tracker(player: Player) -> str:
       function renderItemList(items) {
         var emptyEl = document.getElementById('lootItemEmpty');
         var listEl = document.getElementById('lootItemList');
-        if (!items.length) {
-          emptyEl.textContent = 'No items dropped in this range yet.';
+        // Same filter-out-unless-toggled-on treatment as
+        // renderNpcRow's own visible above -- no "effective" hiding to
+        // compute here, an item has no sub-items of its own to derive
+        // it from, so it.hidden alone decides.
+        var visible = state.itemShowHidden ? items : items.filter(function (it) { return !it.hidden; });
+        if (!visible.length) {
+          emptyEl.textContent = items.length ? 'Every item here is hidden.' : 'No items dropped in this range yet.';
           emptyEl.style.display = '';
           listEl.innerHTML = '';
           lastItemKey = null;
@@ -2425,7 +2539,7 @@ def render_loot_tracker(player: Player) -> str:
           return;
         }
 
-        var sorted = sortEntries(filterByName(items, state.itemSearch, 'itemName'), state.itemSort, 'itemName', 'value', 'lastDroppedAt', 'quantity');
+        var sorted = sortEntries(filterByName(visible, state.itemSearch, 'itemName'), state.itemSort, 'itemName', 'value', 'lastDroppedAt', 'quantity');
         if (!sorted.length) {
           emptyEl.textContent = 'No items match your search.';
           emptyEl.style.display = '';
@@ -2440,15 +2554,29 @@ def render_loot_tracker(player: Player) -> str:
           return it.itemName + ' \\u00d7 ' + fmtGp(it.quantity) + ' \\u2014 ' + fmtGp(it.value) + ' gp';
         }
 
+        // Same hiddenFlags addition, same reason, as renderNpcRow's key
+        // above.
+        var hiddenFlags = sorted.map(function (it) { return it.hidden ? '1' : '0'; }).join('');
         var key = (state.selectedNpc || '') + '\\u0001' + state.itemSearch + '\\u0001' + state.itemSort + '\\u0001' +
+          (state.itemShowHidden ? '1' : '0') + '\\u0001' + hiddenFlags + '\\u0001' +
           sorted.map(function (it) { return it.itemId != null ? it.itemId : it.itemName; }).join('|');
         if (key !== lastItemKey) {
           var html = sorted.map(function (it) {
-            return '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" title="' + escapeHtml(itemTitle(it)) + '">' +
-              iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
-              '<div class="loot-item-box-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
-              '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
-            '</a>';
+            var eyeTitle = (it.hidden ? 'Unhide ' : 'Hide ') + it.itemName;
+            // Same sibling-wrap reasoning as renderNpcRow's box above --
+            // an <a> can't validly contain a <button> either.
+            return '<div class="loot-item-box-wrap' + (it.hidden ? ' hidden-entry' : '') + '">' +
+              '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" title="' + escapeHtml(itemTitle(it)) + '">' +
+                iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
+                '<div class="loot-item-box-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
+                '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
+              '</a>' +
+              '<button type="button" class="loot-eye-btn" data-hide-item-id="' + (it.itemId != null ? it.itemId : '') +
+                '" data-hide-name="' + escapeHtml(it.itemName) + '" data-hidden="' + (it.hidden ? '1' : '0') +
+                '" title="' + escapeHtml(eyeTitle) + '">' +
+                (it.hidden ? EYE_OFF_GLYPH : EYE_GLYPH) +
+              '</button>' +
+            '</div>';
           }).join('');
           // Same preload-before-swap as renderNpcRow above -- this is
           // the branch that runs every time a different NPC gets
@@ -2468,16 +2596,53 @@ def render_loot_tracker(player: Player) -> str:
         // set/order didn't change, so keep the existing icons, but
         // still refresh the qty/value text and title in case a later
         // poll bumped either for an item still sorted into this slot.
-        var boxes = listEl.children;
+        var wraps = listEl.querySelectorAll('.loot-item-box-wrap');
         sorted.forEach(function (it, i) {
-          var box = boxes[i];
-          if (!box) return;
+          var wrap = wraps[i];
+          if (!wrap) return;
+          var box = wrap.querySelector('.loot-item-box');
           box.title = itemTitle(it);
           var qtyEl = box.querySelector('.loot-item-box-qty');
           if (qtyEl) qtyEl.textContent = '\\u00d7' + fmtGpCompact(it.quantity);
           var valEl = box.querySelector('.loot-item-box-value');
           if (valEl) valEl.textContent = fmtGpCompact(it.value) + ' gp';
         });
+      }
+
+      // ---- Hiding/unhiding an NPC or item (see the eye button baked
+      // into every box above, and the panel-level "show hidden" toggle
+      // wired up further below) -- each just calls the matching
+      // endpoint (see app/loot.py's set_npc_hidden/set_item_hidden)
+      // then does a full loadState() re-poll rather than patching
+      // client state by hand, same as picking a new range already
+      // does -- simpler, and correct by construction since the server
+      // is what actually knows how hiding something reshapes every
+      // total downstream of it (see build_loot_state's own docstring).
+      async function hideLootNpc(name) {
+        await fetch('/api/players/me/loot/hidden-npcs', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
+        });
+        await loadState();
+      }
+      async function unhideLootNpc(name) {
+        await fetch('/api/players/me/loot/hidden-npcs', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
+        });
+        await loadState();
+      }
+      async function hideLootItem(itemId, itemName) {
+        await fetch('/api/players/me/loot/hidden-items', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: itemId, item_name: itemName }),
+        });
+        await loadState();
+      }
+      async function unhideLootItem(itemId, itemName) {
+        await fetch('/api/players/me/loot/hidden-items', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: itemId, item_name: itemName }),
+        });
+        await loadState();
       }
 
       function rerenderChart(data) {
@@ -2489,6 +2654,18 @@ def render_loot_tracker(player: Player) -> str:
       }
 
       document.getElementById('lootNpcRow').addEventListener('click', function (e) {
+        // The eye button is a sibling of .loot-npc-box (see
+        // .loot-npc-box-wrap above), never a descendant of it, so a
+        // click on it can never also match .closest('.loot-npc-box')
+        // below -- checked first regardless, so this reads as the
+        // deliberate priority it is rather than relying on that.
+        var eyeBtn = e.target.closest('.loot-eye-btn');
+        if (eyeBtn) {
+          var eyeName = eyeBtn.getAttribute('data-hide-name');
+          if (eyeBtn.getAttribute('data-hidden') === '1') unhideLootNpc(eyeName);
+          else hideLootNpc(eyeName);
+          return;
+        }
         var btn = e.target.closest('.loot-npc-box');
         if (!btn || !lastData) return;
         var name = btn.getAttribute('data-npc');
@@ -2503,17 +2680,40 @@ def render_loot_tracker(player: Player) -> str:
         if (lastData) renderNpcRow(lastData.windowNpcs || []);
       });
       document.getElementById('lootNpcSortTabs').addEventListener('click', function (e) {
+        var toggleBtn = e.target.closest('.loot-hide-toggle');
+        if (toggleBtn) {
+          state.npcShowHidden = !state.npcShowHidden;
+          toggleBtn.classList.toggle('active', state.npcShowHidden);
+          if (lastData) renderNpcRow(lastData.windowNpcs || []);
+          return;
+        }
         var btn = e.target.closest('.loot-sort-tab');
         if (!btn || !lastData) return;
         state.npcSort = btn.getAttribute('data-sort');
         updateSortTabs('lootNpcSortTabs', state.npcSort);
         renderNpcRow(lastData.windowNpcs || []);
       });
+      document.getElementById('lootItemList').addEventListener('click', function (e) {
+        var eyeBtn = e.target.closest('.loot-eye-btn');
+        if (!eyeBtn) return;
+        var itemIdAttr = eyeBtn.getAttribute('data-hide-item-id');
+        var itemId = itemIdAttr ? parseInt(itemIdAttr, 10) : null;
+        var itemName = eyeBtn.getAttribute('data-hide-name');
+        if (eyeBtn.getAttribute('data-hidden') === '1') unhideLootItem(itemId, itemName);
+        else hideLootItem(itemId, itemName);
+      });
       document.getElementById('lootItemSearch').addEventListener('input', function (e) {
         state.itemSearch = e.target.value;
         renderItemList(currentItems());
       });
       document.getElementById('lootItemSortTabs').addEventListener('click', function (e) {
+        var toggleBtn = e.target.closest('.loot-hide-toggle');
+        if (toggleBtn) {
+          state.itemShowHidden = !state.itemShowHidden;
+          toggleBtn.classList.toggle('active', state.itemShowHidden);
+          renderItemList(currentItems());
+          return;
+        }
         var btn = e.target.closest('.loot-sort-tab');
         if (!btn) return;
         state.itemSort = btn.getAttribute('data-sort');
@@ -2618,10 +2818,17 @@ def render_loot_tracker(player: Player) -> str:
           // poll (its last kill in range just fell off the back of a
           // rolling preset like 24 HOURS) -- fall back to "all sources"
           // rather than silently showing a flat/empty fill for it
-          // forever.
+          // forever. Same fallback when it's now hidden (explicitly or
+          // via all its own items -- see npcEffectiveHidden above) with
+          // the NPC panel's own toggle off: its tile just vanished from
+          // the row, same as aging out, so there's no way left to click
+          // back to it either.
           var npcs = data.windowNpcs || [];
-          if (state.selectedNpc && !npcs.some(function (n) { return n.sourceName === state.selectedNpc; })) {
-            state.selectedNpc = null;
+          if (state.selectedNpc) {
+            var stillPresent = npcs.filter(function (n) { return n.sourceName === state.selectedNpc; })[0];
+            if (!stillPresent || (!state.npcShowHidden && npcEffectiveHidden(stillPresent))) {
+              state.selectedNpc = null;
+            }
           }
 
           document.getElementById('lootEmptyMsg').style.display = 'none';

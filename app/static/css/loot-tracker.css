@@ -179,24 +179,38 @@
    taller-than-wide shape. content is vertically centered inside
    whatever space that leaves rather than the box collapsing to fit
    it, same as before. */
+/* A non-interactive wrapper around each NPC box and its own eye-toggle
+   button (see .loot-eye-btn further down) -- a <button> can't validly
+   nest inside another <button>, so now that a per-tile hide/unhide
+   control exists, it has to be a DOM SIBLING of .loot-npc-box instead
+   of living inside it, both wrapped in this div (same reasoning, same
+   pattern as Possessions Monitoring's .pm-row-wrap/.pm-pin-btn -- see
+   possessions.css). All the sizing that used to live on .loot-npc-box
+   itself (flex-basis/height/aspect-ratio -- see that rule's own long
+   comment above for why each piece is there) moves here instead, since
+   this wrap is now .loot-npc-row's actual flex child; .loot-npc-box
+   just fills whatever box this reserves. position: relative anchors
+   .loot-eye-btn's absolute positioning to this wrap, not the page. */
+.loot-npc-box-wrap { flex: 0 0 calc((100% - 30px) / 4); box-sizing: border-box; position: relative; }
+@supports not (container-type: inline-size) {
+  .loot-npc-box-wrap { aspect-ratio: 3 / 4; }
+}
+@supports (container-type: inline-size) {
+  .loot-npc-box-wrap { height: calc((100cqw - 40px) / 3 + 8px); }
+}
 .loot-npc-box {
-  flex: 0 0 calc((100% - 30px) / 4); box-sizing: border-box;
+  width: 100%; height: 100%; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 10px 8px; cursor: pointer;
 }
-/* aspect-ratio and the cqw-based height below must not both apply at
-   once -- a flex item with a fixed flex-basis (its width) plus BOTH an
-   explicit height AND an aspect-ratio ends up with the aspect-ratio
-   also pulling on the width (observed in testing: the box came out
-   wider than its flex-basis), so these are split by feature query
-   instead of just letting the second declaration "win". */
-@supports not (container-type: inline-size) {
-  .loot-npc-box { aspect-ratio: 3 / 4; }
-}
-@supports (container-type: inline-size) {
-  .loot-npc-box { height: calc((100cqw - 40px) / 3 + 8px); }
-}
+/* A hidden NPC (or one whose every item is itself hidden -- see
+   npcEffectiveHidden in the script below) shown via the panel's own
+   "show hidden" eye toggle reads as present but de-emphasized, not
+   gone -- dims the box itself rather than the wrap, so the absolutely-
+   positioned .loot-eye-btn (a sibling, not a child of .loot-npc-box)
+   stays at full opacity once hovered instead of inheriting this too. */
+.loot-npc-box-wrap.hidden-entry .loot-npc-box { opacity: 0.45; }
 /* Matches .gear-slot's hover feedback on Purchase Goals (lighting the
    box up, rather than recoloring the border, on hover -- see that
    file's own comment on .gear-slot:hover for why) -- but as a plain
@@ -266,18 +280,19 @@
    above) that's no longer needed, and this is shorter, matching how
    the Purchase Goals page's own sort row looks.
 
-   All six tabs (gp/count/alphabetical/recent, each with a high-to-low
-   pair -- see _sort_tabs in app/pages.py) fit on one line now that the
-   gp/count ones are a short "label + arrow" (e.g. "GP ↓") instead
-   of spelled-out "High to Low"/"Low to High" -- the full text used to
-   wrap each of those buttons onto two lines at this width, which was
-   both harder to scan and taller than intended (that's what previously
-   forced these onto two wrapped rows of three; no longer needed). */
-.loot-sort-tabs { display: flex; gap: 6px; }
+   All six sort tabs (gp/count/alphabetical/recent, each with a
+   high-to-low pair -- see _sort_tabs in app/pages.py) plus the "show
+   hidden" eye toggle (.loot-hide-toggle below) fit on one line now
+   that the gp/count ones are a short "label + arrow" (e.g. "GP ↓")
+   instead of spelled-out "High to Low"/"Low to High", and
+   "Alphabetical" is just "Alpha" -- both trims made room for that 7th
+   button without wrapping, alongside shaving each tab's own padding/
+   font-size down a notch from what six alone needed. */
+.loot-sort-tabs { display: flex; gap: 5px; }
 .loot-sort-tab {
   flex: 1;
-  padding: 6px 4px;
-  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 5px 3px;
+  font-size: 10px; letter-spacing: 0.02em; text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
@@ -285,6 +300,30 @@
 }
 .loot-sort-tab:hover { border-color: var(--gold-dim); color: var(--text); }
 .loot-sort-tab.active { border-color: var(--gold); color: var(--gold); }
+
+/* The "show hidden" eye toggle -- same box model/colors as
+   .loot-sort-tab beside it (so the row reads as one consistent set of
+   seven buttons, not six-plus-an-outlier), just icon-only and a fixed
+   width instead of flex: 1, so it doesn't steal space from the six
+   text tabs proportionally. .active (toggled on -- every hidden NPC/
+   item in this panel now shown, dimmed -- see the script below) reuses
+   .loot-sort-tab.active's own gold treatment, the same "currently on"
+   language Edit Mode's own button uses elsewhere on the site (see
+   #mmEditModeBtn.active in mindmaps.css). The icon itself is always
+   the plain open eye -- unlike the per-tile .loot-eye-btn, which swaps
+   to a crossed-out eye for an already-hidden tile, this button doesn't
+   hide anything itself, so there's no second state to draw. */
+.loot-hide-toggle {
+  flex: 0 0 26px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 5px 0;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.loot-hide-toggle svg { display: block; }
+.loot-hide-toggle:hover { border-color: var(--gold-dim); color: var(--text); }
+.loot-hide-toggle.active { border-color: var(--gold); color: var(--gold); }
 
 @media (max-width: 640px) {
   .loot-panels { flex-direction: column; }
@@ -306,8 +345,14 @@
    box's own aspect-ratio: 3/4 above (which pins it to taller-than-wide
    instead). Smaller than the NPC box beside it, matching how much less
    there is to show per item. */
+/* Same sibling-wrap reasoning as .loot-npc-box-wrap above -- an <a>
+   (see .loot-item-box below) can't validly contain a <button> either,
+   so the per-tile eye-toggle button is this wrap's other child, not
+   nested inside the item box itself. Sizing moves here from
+   .loot-item-box for the same reason. */
+.loot-item-box-wrap { flex: 0 0 calc((100% - 40px) / 6); aspect-ratio: 1 / 1; box-sizing: border-box; position: relative; }
 .loot-item-box {
-  flex: 0 0 calc((100% - 40px) / 6); aspect-ratio: 1 / 1; box-sizing: border-box;
+  width: 100%; height: 100%; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 4px;
@@ -318,6 +363,9 @@
      "this is clickable" affordance. */
   color: inherit; text-decoration: none; cursor: pointer;
 }
+/* Same "dim the box itself, not the wrap" reasoning as
+   .loot-npc-box-wrap.hidden-entry above. */
+.loot-item-box-wrap.hidden-entry .loot-item-box { opacity: 0.45; }
 .loot-item-box:hover {
   /* Same background-only brightening as .loot-npc-box:hover above
      (see its comment) instead of recoloring the border. */
@@ -335,3 +383,32 @@
 .loot-item-box-icon { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
+
+/* ---------- the per-tile hide/unhide control -- one of these lives in
+   every .loot-npc-box-wrap and .loot-item-box-wrap (see both above),
+   absolutely positioned into that wrap's own top-right corner. A plain
+   line-outline icon (an open eye when clicking would HIDE this tile,
+   a crossed-out one when clicking would UNhide it -- see EYE_GLYPH/
+   EYE_OFF_GLYPH in the script below), gray at rest and gold on hover --
+   same convention, and deliberately the same plain color-swap with no
+   background highlight box behind it, as Possessions Monitoring's own
+   .pm-pin-btn (possessions.css). Hidden until its own wrap is hovered,
+   for BOTH an already-visible tile (hover to reveal "hide this") and
+   an already-hidden one shown dimmed via the panel's own "show
+   hidden" toggle (hover to reveal "bring this back") -- unlike
+   .pm-pin-btn, a hidden tile's button does NOT stay visible without
+   hovering; hover is how you get at it either way. ---------- */
+.loot-eye-btn {
+  position: absolute; top: 4px; right: 4px;
+  width: 18px; height: 18px; padding: 0; margin: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text-dim);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.12s, color 0.12s;
+}
+.loot-eye-btn svg { display: block; }
+.loot-npc-box-wrap:hover .loot-eye-btn,
+.loot-item-box-wrap:hover .loot-eye-btn { opacity: 1; pointer-events: auto; }
+.loot-eye-btn:hover { color: var(--gold); }

@@ -133,6 +133,7 @@ class Player(Base):
     mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
     possession_trackers = relationship("PossessionTracker", back_populates="player", cascade="all, delete-orphan")
     pinned_possession_items = relationship("PinnedPossessionItem", back_populates="player", cascade="all, delete-orphan")
+    hidden_loot_entries = relationship("HiddenLootEntry", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -694,4 +695,45 @@ class PinnedPossessionItem(Base):
 
     __table_args__ = (
         UniqueConstraint("player_id", "item_id", name="uq_pinned_possession_items_player_item"),
+    )
+
+
+class HiddenLootEntry(Base):
+    """One NPC or item a player has hidden from Loot Tracker (see
+    app/loot.py's build_loot_state, which reads this table to strip a
+    hidden NPC's kills/value out of the chart and header totals
+    entirely, and to subtract a hidden item's value out of any NPC/
+    window total it would otherwise count toward) -- the eye-icon
+    button on each NPC/item tile in render_loot_tracker, app/pages.py.
+
+    Both kinds share one table (kind="npc"/"item") rather than two,
+    since neither needs any column the other doesn't and a single
+    "is this key hidden" lookup covers both call sites in
+    build_loot_state identically.
+
+    `key` is a case-insensitive identity string, never the raw display
+    name/id alone, so a hide made against one casing of an NPC name
+    (or made before an item's own name was known) still matches later:
+    an NPC's key is just its lowercased, trimmed sourceName (loot
+    events carry no numeric NPC id to key off instead); an item's key
+    is "id:<itemId>" when the drop resolved to a real item id, else
+    "name:<lowercased itemName>" for the rare drop that never
+    resolved one -- the exact same two-tier fallback
+    _add_item_totals already keys its own per-item totals dicts by
+    (see loot_hide_key in app/loot.py, the single place both this
+    table's writes and build_loot_state's reads compute that key, so
+    the two can never drift apart)."""
+
+    __tablename__ = "hidden_loot_entries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)
+    key = Column(String, nullable=False)
+    hidden_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="hidden_loot_entries")
+
+    __table_args__ = (
+        UniqueConstraint("player_id", "kind", "key", name="uq_hidden_loot_entries_player_kind_key"),
     )

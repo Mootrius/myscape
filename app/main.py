@@ -26,7 +26,7 @@ from app.auth import (
 from app.database import get_db
 from app.icon_cache import resolve_cached_path
 from app.limiter import limiter
-from app.loot import build_loot_state, kc_counts_by_player, resolve_range, sync_loot_events
+from app.loot import build_loot_state, kc_counts_by_player, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
 from app.item_ids import find_item_ids
 from app.npc_names import search_npc_names
 from app.quest_names import search_quest_names
@@ -90,6 +90,8 @@ from app.schemas import (
     EquipmentSyncResponse,
     EQUIPMENT_SLOTS,
     GEAR_SETUP_EQUIPMENT_SLOTS,
+    HideLootItemRequest,
+    HideLootNpcRequest,
     INVENTORY_SIZE,
     InventoryOut,
     InventoryItemOut,
@@ -806,6 +808,42 @@ def read_loot(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start/end must be YYYY-MM-DD dates.")
     range_start, range_end = resolve_range(range, start_dt, end_dt)
     return build_loot_state(db, player, range_start, range_end)
+
+
+@app.post("/api/players/me/loot/hidden-npcs")
+def hide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Hides one NPC from Loot Tracker -- the eye button on an NPC
+    tile's hover corner in render_loot_tracker, app/pages.py. See
+    set_npc_hidden in app/loot.py for what this actually removes from
+    the tracker's own totals."""
+    set_npc_hidden(db, player, payload.name, True)
+    return {"ok": True}
+
+
+@app.delete("/api/players/me/loot/hidden-npcs")
+def unhide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Reverses hide_loot_npc above -- the same eye button, now shown on
+    a dimmed (already-hidden) tile once the panel's own "show hidden"
+    toggle has revealed it."""
+    set_npc_hidden(db, player, payload.name, False)
+    return {"ok": True}
+
+
+@app.post("/api/players/me/loot/hidden-items")
+def hide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Hides one item from Loot Tracker -- same eye-button affordance as
+    hide_loot_npc above, one level down (see set_item_hidden in
+    app/loot.py)."""
+    set_item_hidden(db, player, payload.item_id, payload.item_name, True)
+    return {"ok": True}
+
+
+@app.delete("/api/players/me/loot/hidden-items")
+def unhide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Reverses hide_loot_item above -- same relationship as
+    unhide_loot_npc has to hide_loot_npc."""
+    set_item_hidden(db, player, payload.item_id, payload.item_name, False)
+    return {"ok": True}
 
 
 @app.get("/api/items/search", response_model=ItemSearchResponse)

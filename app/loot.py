@@ -69,7 +69,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
-from app.models import LootEvent, Player
+from app.models import HiddenLootEntry, LootEvent, Player
 from app.purchase_goals import COINS_ITEM_ID, ICON_PATH_BASE, get_latest_prices, get_mapping, item_icon_url
 
 # The timerange presets the chart's range button offers (see
@@ -229,7 +229,100 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
     return ICON_PATH_BASE + "/" + urllib.parse.quote(filename)
 
 
-def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict) -> Tuple[List[dict], int]:
+# ---- Hiding NPCs/items out of the tracker (see HiddenLootEntry's own
+# docstring in app/models.py) -----------------------------------------
+#
+# Both key functions below are the single place a hide/unhide write (in
+# main.py) and build_loot_state's own reads compute a HiddenLootEntry
+# key from a raw name/id, so the two can never drift apart -- storing
+# ANY other derived form (the display name's original casing, say)
+# would risk a hide made one way not matching a lookup made another.
+
+
+def npc_hide_key(name: Optional[str]) -> str:
+    """An NPC's identity for hiding purposes -- loot events carry no
+    numeric NPC id to key off (see LootEvent's docstring in
+    app/models.py), so this is the same sourceName build_loot_state
+    already groups kills by, just trimmed/lowercased so a hide made
+    against one casing still matches a kill logged with another."""
+    return (name or "").strip().lower()
+
+
+def item_hide_key(item_id: Optional[int], item_name: Optional[str]) -> str:
+    """An item's identity for hiding purposes -- the same two-tier
+    fallback _add_item_totals already keys its own per-item totals
+    dicts by (itemId when the drop resolved to a real item id, else
+    itemName for the rare drop that never resolved one), just
+    stringified with a tier prefix so an id and a same-looking name can
+    never collide in the same key space."""
+    if item_id is not None:
+        return "id:" + str(item_id)
+    return "name:" + (item_name or "").strip().lower()
+
+
+def hidden_npc_keys(db: Session, player: Player) -> set:
+    """Every NPC this player currently has hidden (see npc_hide_key),
+    as a plain set -- build_loot_state's only use for this is
+    membership, same as pinned_item_ids in app/possessions.py."""
+    rows = (
+        db.query(HiddenLootEntry.key)
+        .filter(HiddenLootEntry.player_id == player.id, HiddenLootEntry.kind == "npc")
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+def hidden_item_keys(db: Session, player: Player) -> set:
+    """Every item this player currently has hidden (see item_hide_key),
+    as a plain set -- same role as hidden_npc_keys above, just the
+    other kind."""
+    rows = (
+        db.query(HiddenLootEntry.key)
+        .filter(HiddenLootEntry.player_id == player.id, HiddenLootEntry.kind == "item")
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+def set_npc_hidden(db: Session, player: Player, name: str, hidden: bool) -> None:
+    """Hides or unhides one NPC by name (see the eye button on each NPC
+    tile in render_loot_tracker, app/pages.py) -- idempotent either
+    way, same as Possessions Monitoring's pin/unpin endpoints: hiding
+    an already-hidden NPC, or unhiding one that isn't, is a no-op
+    rather than an error."""
+    key = npc_hide_key(name)
+    existing = (
+        db.query(HiddenLootEntry)
+        .filter(HiddenLootEntry.player_id == player.id, HiddenLootEntry.kind == "npc", HiddenLootEntry.key == key)
+        .first()
+    )
+    if hidden and not existing:
+        db.add(HiddenLootEntry(player_id=player.id, kind="npc", key=key))
+        db.commit()
+    elif not hidden and existing:
+        db.delete(existing)
+        db.commit()
+
+
+def set_item_hidden(db: Session, player: Player, item_id: Optional[int], item_name: Optional[str], hidden: bool) -> None:
+    """Hides or unhides one item by the same (itemId, itemName) ->
+    item_hide_key resolution build_loot_state itself uses -- same
+    idempotence as set_npc_hidden above."""
+    key = item_hide_key(item_id, item_name)
+    existing = (
+        db.query(HiddenLootEntry)
+        .filter(HiddenLootEntry.player_id == player.id, HiddenLootEntry.kind == "item", HiddenLootEntry.key == key)
+        .first()
+    )
+    if hidden and not existing:
+        db.add(HiddenLootEntry(player_id=player.id, kind="item", key=key))
+        db.commit()
+    elif not hidden and existing:
+        db.delete(existing)
+        db.commit()
+
+
+def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict, hidden_items: set) -> Tuple[List[dict], int]:
     resolved = []
     total_value = 0
     for raw in raw_items:
@@ -268,6 +361,12 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict) -> Tuple[L
             "icon": icon,
             "quantity": quantity,
             "value": value,
+            # Same (itemId, itemName) -> key resolution as
+            # item_hide_key/_add_item_totals -- see that function's own
+            # comment for why this can only ever be set here, once, and
+            # simply copied through by every downstream totals dict
+            # rather than recomputed anywhere else.
+            "hidden": item_hide_key(canonical_id, item_name) in hidden_items,
         })
     return resolved, total_value
 
@@ -296,6 +395,11 @@ def _add_item_totals(bucket: Dict[object, dict], items: List[dict], occurred_at:
                 "quantity": 0,
                 "value": 0,
                 "lastDroppedAt": occurred_at,
+                # Same value for every event that folds into this key
+                # (a pure lookup against the player's hidden-item set,
+                # see item_hide_key), so capturing it once here on
+                # first sight is as good as recomputing it every fold.
+                "hidden": it["hidden"],
             }
             bucket[key] = totals
         totals["quantity"] += it["quantity"]
@@ -324,9 +428,25 @@ def build_loot_state(db: Session, player: Player, start: datetime, end: datetime
     per NPC actually killed in it, that NPC's own per-bucket value
     array, and that NPC's own item breakdown), and an all-NPCs item
     breakdown for when nothing is selected -- see the module docstring
-    for what this covers today and what's still to come."""
+    for what this covers today and what's still to come.
+
+    A hidden NPC's kills are excluded from buckets/windowValue/
+    windowKills entirely, as if they'd never happened -- but its own
+    entry in windowNpcs is still built normally (just flagged
+    "hidden": True) so the eye-toggle button in render_loot_tracker,
+    app/pages.py can still show/dim it, and drilling into it still
+    works. A hidden ITEM instead just has its own value subtracted out
+    of every total it would otherwise count toward (bucket/window/NPC
+    values alike -- see visible_value below), whichever NPC (or
+    non-NPC source) it came from, while its own entry in windowItems/
+    npcItems is likewise kept and flagged rather than dropped -- same
+    eye-toggle treatment, one level down. See HiddenLootEntry's own
+    docstring in app/models.py for the full hide/unhide model this
+    implements."""
     mapping, mapping_error = get_mapping()
     prices, prices_error = get_latest_prices()
+    hidden_npcs = hidden_npc_keys(db, player)
+    hidden_items = hidden_item_keys(db, player)
 
     num_buckets, bucket_width, granularity = _bucket_plan(start, end)
     bucket_seconds = bucket_width.total_seconds()
@@ -385,11 +505,27 @@ def build_loot_state(db: Session, player: Player, start: datetime, end: datetime
         if idx < 0:
             continue
 
-        items, event_value = _resolve_loot_items(event.items or [], mapping, prices)
-        buckets[idx]["value"] += event_value
-        buckets[idx]["killCount"] += 1
+        items, _raw_event_value = _resolve_loot_items(event.items or [], mapping, prices, hidden_items)
+        # What this event actually contributes to any total -- every
+        # OTHER item's value, minus whichever of its items the player
+        # has individually hidden (see item_hide_key/_resolve_loot_items
+        # above). Used for buckets below regardless of source_type, and
+        # again for this NPC's own totals further down -- the two
+        # numbers are the same computation, just added to different
+        # places.
+        visible_value = sum(it["value"] for it in items if not it["hidden"])
+        is_npc = event.source_type == "npc"
+        npc_hidden = is_npc and npc_hide_key(event.source_name) in hidden_npcs
 
-        if event.source_type == "npc":
+        # A hidden NPC's kill is excluded from the chart/header totals
+        # entirely (see this function's own docstring) -- a non-NPC
+        # event (no NPC identity to hide) always lands here instead,
+        # same as before this feature existed.
+        if not npc_hidden:
+            buckets[idx]["value"] += visible_value
+            buckets[idx]["killCount"] += 1
+
+        if is_npc:
             name = event.source_name
             totals = npc_totals.get(name)
             if totals is None:
@@ -400,16 +536,34 @@ def build_loot_state(db: Session, player: Player, start: datetime, end: datetime
                     "killCount": 0,
                     "value": 0,
                     "lastKillAt": event.occurred_at,
+                    "hidden": npc_hide_key(name) in hidden_npcs,
                 }
                 npc_totals[name] = totals
                 npc_bucket_values[name] = [0] * num_buckets
                 npc_items[name] = {}
+            # This NPC's OWN tile always reflects its real kill count
+            # and (item-hidden-filtered) value, whether or not the NPC
+            # itself is hidden -- so revealing it via the eye toggle
+            # shows real numbers, not zeroes, to decide whether to
+            # unhide it. Only the chart/header totals above skip a
+            # hidden NPC's contribution.
             totals["killCount"] += 1
-            totals["value"] += event_value
-            npc_bucket_values[name][idx] += event_value
+            totals["value"] += visible_value
+            npc_bucket_values[name][idx] += visible_value
 
+            # This NPC's own item breakdown always gets every item
+            # (hidden or not -- see _add_item_totals, which now carries
+            # each item's own "hidden" flag through untouched) so
+            # drilling into a hidden NPC, or one with some items
+            # hidden, still shows its full picture. The combined
+            # "ALL NPCs" view below is different: a hidden NPC's items
+            # don't fold into it at all, matching how its kills don't
+            # fold into the chart/header totals above -- hiding an NPC
+            # removes it from the combined picture outright, not just
+            # dims it there.
             _add_item_totals(npc_items[name], items, event.occurred_at)
-            _add_item_totals(window_item_totals, items, event.occurred_at)
+            if not npc_hidden:
+                _add_item_totals(window_item_totals, items, event.occurred_at)
 
     # Same sort as the old tool's own "monsters" list: most-killed
     # first, value as the tiebreaker. The frontend re-sorts this itself

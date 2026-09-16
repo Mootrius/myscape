@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from app.mindmaps import DIARY_AREAS, DIARY_TIERS, SKILL_NAMES
 
@@ -884,6 +884,44 @@ class LootSyncResponse(BaseModel):
     # were already on file; see LootEvent's docstring), not just a
     # smaller-than-expected count to be surprised by.
     added_count: int
+
+
+class HideLootNpcRequest(BaseModel):
+    """POST/DELETE /api/players/me/loot/hidden-npcs -- see the eye
+    button on each NPC tile in render_loot_tracker, app/pages.py. name
+    is matched against a kill's own sourceName via npc_hide_key in
+    app/loot.py (trimmed/lowercased), so any casing that actually
+    appears in this player's loot history will match."""
+
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def check_non_empty(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("name must not be empty.")
+        return value
+
+
+class HideLootItemRequest(BaseModel):
+    """POST/DELETE /api/players/me/loot/hidden-items -- same idea as
+    HideLootNpcRequest above, one level down. item_id/item_name are
+    resolved to a single identity the same way item_hide_key in
+    app/loot.py does (item_id when given, else item_name) -- at least
+    one of the two must be present, same requirement _resolve_loot_items
+    already effectively has for naming an item at all."""
+
+    item_id: Optional[int] = None
+    item_name: Optional[str] = None
+
+    @model_validator(mode="after")
+    def check_has_identity(self):
+        item_name = (self.item_name or "").strip()
+        if self.item_id is None and not item_name:
+            raise ValueError("item_id or item_name is required.")
+        self.item_name = item_name or None
+        return self
 
 
 class LootState(BaseModel):
