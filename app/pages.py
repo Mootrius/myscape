@@ -5855,18 +5855,27 @@ def render_possessions(player: Player) -> str:
       // dragged the whole "~N gp" line up a few px versus every other
       // row; pm-derived-mark (possessions.css) pins it back down to the
       // shared baseline.
+      // The "each" line is only emitted when there's actually a per-unit
+      // price to show (qty > 1). Earlier this always rendered an empty
+      // <div class="pm-value-each"> as a spacer so every row matched
+      // height -- but that reserved a blank second line under every
+      // qty-1 (or unpriced) value, which left the visible number sitting
+      // in the top half of that two-line space instead of centered in
+      // the row like every other single-line column. Omitting the div
+      // entirely lets .pm-row's own align-items: center do the
+      // centering, same as it already does for the QTY/TRADEABLE cells.
       function valueCell(unitValue, qty, derived) {
         if (unitValue == null) {
           return '<div class="pm-value-cell">' +
             '<div class="pm-value-stack pm-value-none">&mdash;</div>' +
-            '<div class="pm-value-each"></div>' +
           '</div>';
         }
         var eachText = qty > 1 ? (fmtNum(unitValue) + ' ea') : '';
         var prefix = derived ? '<span class="pm-derived-mark">~</span>' : '';
+        var eachHtml = eachText ? ('<div class="pm-value-each">' + prefix + eachText + '</div>') : '';
         return '<div class="pm-value-cell">' +
           '<div class="pm-value-stack">' + prefix + fmtNum(unitValue * qty) + ' gp</div>' +
-          '<div class="pm-value-each">' + (eachText ? (prefix + eachText) : '') + '</div>' +
+          eachHtml +
         '</div>';
       }
 
