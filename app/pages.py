@@ -5453,11 +5453,11 @@ def render_mindmaps(player: Player) -> str:
 
 
 # Every storage source Possessions Monitoring reads from, in the fixed
-# order the location-toggle row and every per-item breakdown always
+# order the location-filter row and every per-item breakdown always
 # lists them -- same key spelling as POSSESSION_STORAGE_KEYS in
 # app/schemas.py (kept as a separate, display-labeled copy here rather
 # than importing that list directly, since this pairs each key with
-# the human label the checkbox itself shows, which schemas.py has no
+# the human label its own filter button shows, which schemas.py has no
 # reason to know about).
 _POSSESSION_LOCATIONS = [
     ("bank", "Bank"),
@@ -5471,42 +5471,40 @@ _POSSESSION_LOCATIONS = [
 
 
 def render_possessions(player: Player) -> str:
-    """The Possessions Monitoring page -- same shape as every other app
-    page here (render_loot_tracker/render_mindmaps above): a thin
-    server-rendered shell, everything below it drawn/kept current
-    client-side from polled JSON (GET /api/possessions/trackers and GET
-    /api/possessions/summary -- see app/possessions.py's
-    build_trackers_state/build_possessions_summary for the exact
-    shape each returns).
+    """The Possessions Monitoring page -- a single line-by-line table of
+    everything the player currently owns across every synced storage
+    (see get_owned_breakdown in app/possessions.py), polled from GET
+    /api/possessions/summary and kept current client-side the same way
+    every other app page here works (see render_loot_tracker above).
 
-    Three sections, all reading the same underlying owned-quantity data
-    computed fresh from the last-synced bank/equipment/inventory/potion
-    storage/rune pouch/seed vault/looting bag snapshots (see
-    get_owned_breakdown in app/possessions.py) -- nothing here is a
-    cached amount that could drift stale, the same "always read the
-    live snapshot" approach Purchase Goals already uses:
+    One row per item: an icon + name, then QUANTITY (the full,
+    unabbreviated count, with a lowercase "x" in front), GE VALUE and HA
+    VALUE (each showing both the whole stack's value and one unit's
+    value -- a glance at either number alone answers a different
+    question, "what's this stack worth" vs. "what's one of these
+    worth"), and a green/red TRADEABLE? badge -- tradeable meaning
+    specifically tradeable on the Grand Exchange
+    (resolve_item_display's own "tradeable" field in app/possessions.py
+    is already exactly that: true only when the item is found in the
+    live GE mapping, false for anything player-tradeable-but-not-GE-
+    listed the same as for a genuinely untradeable item -- never a
+    looser "can this be traded at all" definition).
 
-    1. Minimum trackers -- a fill-toward-target progress bar per
-       tracked item (see renderMinTrackers in the script below), red
-       below half, amber up to the target, green at or past it.
-    2. Maximum trackers -- a small red/green box per tracked item (see
-       renderMaxTrackers below) -- green at or under the target, red
-       once it's exceeded, so an excess is easy to spot at a glance.
-    3. Every item currently owned anywhere, in the same small-icon-box
-       grid the Loot Tracker's item panel uses (see .loot-item-box in
-       loot-tracker.css, reused here rather than duplicated), with its
-       own search/sort controls (mirroring _sort_tabs there) plus two
-       rows of toggles: which of High Alch/GE Value/Tradeable to show
-       on each box, and which locations count toward the quantity shown
-       at all -- both toggle rows are purely client-side (see
-       computeShownQuantity/renderAllGrid below), recomputed from the
-       one already-fetched summary payload's own per-location
-       breakdown rather than re-polling the server on every flip.
+    Search, sort, and the location filters all sit on one row, in that
+    order, each its own button/input group -- sort is single-select,
+    styled and behaved exactly like Purchase Goals' own .sort-btn row
+    (see renderSortButtons there in this file); locations are
+    multi-select (same visual style, toggled independently, all on by
+    default) and purely reshape what QUANTITY -- and therefore GE/HA
+    VALUE, which scale off it -- counts as owned (see shownQuantity
+    below, which recomputes everything client-side from the one
+    already-fetched summary payload's own per-location breakdown rather
+    than re-polling the server on every toggle).
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/possessions.css?v={_POSSESSIONS_CSS_VERSION}" />'
 
-    location_checkboxes = "".join(
-        f'<label class="pm-toggle"><input type="checkbox" class="pm-location-toggle" data-location="{key}" checked /> {escape(label)}</label>'
+    location_buttons = "".join(
+        f'<button type="button" class="pm-filter-btn active" data-location="{key}">{escape(label)}</button>'
         for key, label in _POSSESSION_LOCATIONS
     )
 
@@ -5515,81 +5513,46 @@ def render_possessions(player: Player) -> str:
     <div class="auth-error" id="pmError"></div>
 
     <section class="pm-section">
-      <div class="pm-section-header">
-        <h3>Minimum Trackers</h3>
-        <button type="button" class="pm-add-btn" id="pmAddMinBtn">+ Add tracker</button>
+      <div class="pm-controls-row">
+        <div class="pm-control-group pm-search-group">
+          <input type="text" class="loot-search" id="pmSearch" placeholder="Search for an item" autocomplete="off" />
+        </div>
+        <div class="pm-control-group pm-sort-group" id="pmSortButtons"></div>
+        <div class="pm-control-group pm-location-group">
+          {location_buttons}
+        </div>
       </div>
-      <p class="pm-section-hint">Keep at least this many on hand -- the bar fills red&nbsp;&rarr;&nbsp;amber&nbsp;&rarr;&nbsp;green as you approach the target.</p>
-      <p class="pg-empty" id="pmMinEmpty" style="display:none;">No minimum trackers yet.</p>
-      <div class="pm-min-grid" id="pmMinGrid"></div>
-    </section>
 
-    <section class="pm-section">
-      <div class="pm-section-header">
-        <h3>Maximum Trackers</h3>
-        <button type="button" class="pm-add-btn" id="pmAddMaxBtn">+ Add tracker</button>
-      </div>
-      <p class="pm-section-hint">Flag an item once you're holding more than this -- green at or under, red once you've got excess to sell off.</p>
-      <p class="pg-empty" id="pmMaxEmpty" style="display:none;">No maximum trackers yet.</p>
-      <div class="pm-max-grid" id="pmMaxGrid"></div>
-    </section>
+      <p class="pg-empty" id="pmEmpty" style="display:none;">Nothing synced yet.</p>
 
-    <section class="pm-section">
-      <div class="pm-section-header">
-        <h3>All Possessions</h3>
+      <div class="pm-table" id="pmTable" style="display:none;">
+        <div class="pm-row pm-row-header">
+          <div class="pm-col pm-col-image">Image</div>
+          <div class="pm-col pm-col-qty">Quantity</div>
+          <div class="pm-col pm-col-ge">GE Value</div>
+          <div class="pm-col pm-col-ha">HA Value</div>
+          <div class="pm-col pm-col-tradeable">Tradeable?</div>
+        </div>
+        <div id="pmRows"></div>
       </div>
-      <div class="pm-all-controls">
-        <input type="text" class="loot-search" id="pmAllSearch" placeholder="Search for an item" autocomplete="off" />
-        <div class="loot-sort-tabs" id="pmAllSortTabs">
-          <button type="button" class="loot-sort-tab" data-sort="qty-high" title="Quantity, high to low">Qty &darr;</button>
-          <button type="button" class="loot-sort-tab" data-sort="qty-low" title="Quantity, low to high">Qty &uarr;</button>
-          <button type="button" class="loot-sort-tab" data-sort="value-high" title="GE value, high to low">Value &darr;</button>
-          <button type="button" class="loot-sort-tab" data-sort="value-low" title="GE value, low to high">Value &uarr;</button>
-          <button type="button" class="loot-sort-tab" data-sort="alpha">Alphabetical</button>
-        </div>
-        <div class="pm-toggle-row">
-          <span class="pm-toggle-label">Show on each item:</span>
-          <label class="pm-toggle"><input type="checkbox" class="pm-display-toggle" data-field="highAlch" checked /> High Alch value</label>
-          <label class="pm-toggle"><input type="checkbox" class="pm-display-toggle" data-field="gePrice" checked /> GE value</label>
-          <label class="pm-toggle"><input type="checkbox" class="pm-display-toggle" data-field="tradeable" checked /> Tradeable</label>
-        </div>
-        <div class="pm-toggle-row">
-          <span class="pm-toggle-label">Locations:</span>
-          {location_checkboxes}
-        </div>
-      </div>
-      <p class="pg-empty" id="pmAllEmpty" style="display:none;">Nothing synced yet.</p>
-      <div class="pm-item-grid" id="pmAllGrid"></div>
     </section>
-
-    <div class="pm-add-overlay" id="pmAddOverlay" style="display:none;">
-      <div class="pm-add-card">
-        <h4 id="pmAddTitle">Add tracker</h4>
-        <input type="text" class="loot-search" id="pmAddSearch" placeholder="Search for an item" autocomplete="off" />
-        <div class="pm-add-results" id="pmAddResults"></div>
-        <div class="pm-add-selected" id="pmAddSelected" style="display:none;"></div>
-        <label class="pm-add-qty-label" id="pmAddQtyLabel">Target quantity
-          <input type="number" min="1" step="1" class="pm-add-qty-input" id="pmAddQty" />
-        </label>
-        <div class="auth-error" id="pmAddError"></div>
-        <div class="pm-add-actions">
-          <button type="button" class="link" id="pmAddCancel">Cancel</button>
-          <button type="button" class="primary" id="pmAddSave" disabled>Save</button>
-        </div>
-      </div>
-    </div>
     """
 
     script = """
     (function () {
-      var LOCATION_KEYS = ['bank', 'equipment', 'inventory', 'potion_storage', 'rune_pouch', 'seed_vault', 'looting_bag'];
+      var SORT_MODES = [
+        { key: 'qty-high', label: 'Qty \\u2193', title: 'Quantity, high to low' },
+        { key: 'qty-low', label: 'Qty \\u2191', title: 'Quantity, low to high' },
+        { key: 'value-high', label: 'Value \\u2193', title: 'GE value, high to low' },
+        { key: 'value-low', label: 'Value \\u2191', title: 'GE value, low to high' },
+        { key: 'alpha', label: 'Alphabetical' },
+      ];
 
       var state = {
-        minTrackers: [], maxTrackers: [], allItems: [],
-        allSearch: '', allSort: 'qty-high',
-        display: { highAlch: true, gePrice: true, tradeable: true },
+        items: [],
+        search: '',
+        sort: 'qty-high',
         locations: { bank: true, equipment: true, inventory: true, potion_storage: true, rune_pouch: true, seed_vault: true, looting_bag: true },
-        addKind: null, addSelected: null,
       };
 
       function showError(msg) {
@@ -5615,16 +5578,12 @@ def render_possessions(player: Player) -> str:
         }
       }
 
-      function fmtGp(n) {
-        return (n || 0).toLocaleString('en-US');
-      }
-
-      function fmtGpCompact(n) {
-        var sign = n < 0 ? '-' : '';
-        var abs = Math.abs(n || 0);
-        if (abs >= 1e6) return sign + (abs / 1e6).toFixed(abs >= 1e7 ? 0 : 1).replace(/\\.0$/, '') + 'M';
-        if (abs >= 1e3) return sign + (abs / 1e3).toFixed(abs >= 1e4 ? 0 : 1).replace(/\\.0$/, '') + 'k';
-        return sign + Math.round(abs).toLocaleString('en-US');
+      // Full, unabbreviated numbers everywhere on this page -- comma
+      // thousands separators for readability, never a compact "15k"/
+      // "1.2M" form (see this function's callers: QUANTITY, and both
+      // the stack and per-unit lines of GE VALUE/HA VALUE).
+      function fmtNum(n) {
+        return Math.round(n || 0).toLocaleString('en-US');
       }
 
       function escapeHtml(s) {
@@ -5633,68 +5592,49 @@ def render_possessions(player: Player) -> str:
         return div.innerHTML;
       }
 
-      function iconImg(src, cls) {
-        if (!src) return '<div class="' + cls + ' pm-icon-blank"></div>';
-        return '<img class="' + cls + '" src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\\'none\\'" />';
+      function iconImg(src) {
+        if (!src) return '<div class="pm-row-icon pm-icon-blank"></div>';
+        return '<img class="pm-row-icon" src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\\'none\\'" />';
       }
 
-      // ---- Minimum trackers (section 1) -------------------------------
+      // ---- Sort (single-select -- same look/behavior as Purchase
+      // Goals' own .sort-btn row, see renderSortButtons there) --------
 
-      function minTrackerColor(owned, target) {
-        var ratio = target > 0 ? owned / target : 0;
-        if (ratio >= 1) return 'var(--green)';
-        if (ratio >= 0.5) return 'var(--amber)';
-        return 'var(--red)';
-      }
-
-      function renderMinTrackers() {
-        var grid = document.getElementById('pmMinGrid');
-        var empty = document.getElementById('pmMinEmpty');
-        if (!state.minTrackers.length) {
-          grid.innerHTML = '';
-          empty.style.display = '';
-          return;
-        }
-        empty.style.display = 'none';
-        grid.innerHTML = state.minTrackers.map(function (t) {
-          var pct = t.targetQuantity > 0 ? Math.min(100, (t.ownedQuantity / t.targetQuantity) * 100) : 0;
-          var color = minTrackerColor(t.ownedQuantity, t.targetQuantity);
-          return '<div class="pm-min-card" data-tracker-id="' + t.id + '">' +
-            iconImg(t.icon, 'pm-min-icon') +
-            '<div class="pm-min-body">' +
-              '<div class="pm-min-name" title="' + escapeHtml(t.itemName) + '">' + escapeHtml(t.itemName) + '</div>' +
-              '<div class="progress-track pm-min-track"><div class="progress-fill" style="width:' + pct + '%; background:' + color + ';"></div></div>' +
-              '<div class="pm-min-count">' + fmtGp(t.ownedQuantity) + ' / ' +
-                '<input type="number" min="1" step="1" class="pm-target-input" data-tracker-id="' + t.id + '" value="' + t.targetQuantity + '" /></div>' +
-            '</div>' +
-            '<button type="button" class="pm-remove-btn" data-tracker-id="' + t.id + '" title="Remove tracker">&times;</button>' +
-          '</div>';
+      function renderSortButtons() {
+        var el = document.getElementById('pmSortButtons');
+        el.innerHTML = SORT_MODES.map(function (m) {
+          var cls = 'pm-sort-btn' + (m.key === state.sort ? ' active' : '');
+          var titleAttr = m.title ? ' title="' + m.title + '"' : '';
+          return '<button type="button" class="' + cls + '" data-sort="' + m.key + '"' + titleAttr + '>' + m.label + '</button>';
         }).join('');
+        el.querySelectorAll('.pm-sort-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var mode = btn.getAttribute('data-sort');
+            if (mode === state.sort) return;
+            state.sort = mode;
+            renderSortButtons();
+            renderTable();
+          });
+        });
       }
 
-      // ---- Maximum trackers (section 2) -------------------------------
+      // ---- Locations (multi-select, all on by default) ----------------
 
-      function renderMaxTrackers() {
-        var grid = document.getElementById('pmMaxGrid');
-        var empty = document.getElementById('pmMaxEmpty');
-        if (!state.maxTrackers.length) {
-          grid.innerHTML = '';
-          empty.style.display = '';
-          return;
-        }
-        empty.style.display = 'none';
-        grid.innerHTML = state.maxTrackers.map(function (t) {
-          var excess = t.ownedQuantity > t.targetQuantity;
-          return '<div class="pm-max-box ' + (excess ? 'pm-max-excess' : 'pm-max-ok') + '" data-tracker-id="' + t.id + '" title="' + escapeHtml(t.itemName) + '">' +
-            '<button type="button" class="pm-remove-btn pm-max-remove" data-tracker-id="' + t.id + '" title="Remove tracker">&times;</button>' +
-            iconImg(t.icon, 'pm-max-icon') +
-            '<div class="pm-max-qty">' + fmtGpCompact(t.ownedQuantity) + '</div>' +
-            '<div class="pm-max-target">max <input type="number" min="1" step="1" class="pm-target-input pm-max-target-input" data-tracker-id="' + t.id + '" value="' + t.targetQuantity + '" /></div>' +
-          '</div>';
-        }).join('');
-      }
+      document.querySelectorAll('.pm-filter-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var key = btn.getAttribute('data-location');
+          state.locations[key] = !state.locations[key];
+          btn.classList.toggle('active', state.locations[key]);
+          renderTable();
+        });
+      });
 
-      // ---- All possessions (section 3) --------------------------------
+      document.getElementById('pmSearch').addEventListener('input', function (e) {
+        state.search = e.target.value;
+        renderTable();
+      });
+
+      // ---- Table --------------------------------------------------------
 
       function shownQuantity(item) {
         var total = 0;
@@ -5704,243 +5644,89 @@ def render_possessions(player: Player) -> str:
         return total;
       }
 
-      function visibleAllItems() {
-        var q = state.allSearch.toLowerCase();
+      function visibleRows() {
+        var q = state.search.toLowerCase();
         var out = [];
-        for (var i = 0; i < state.allItems.length; i++) {
-          var item = state.allItems[i];
+        for (var i = 0; i < state.items.length; i++) {
+          var item = state.items[i];
           var qty = shownQuantity(item);
           if (qty <= 0) continue;
           if (q && item.name.toLowerCase().indexOf(q) === -1) continue;
           out.push({ item: item, qty: qty });
         }
         out.sort(function (a, b) {
-          if (state.allSort === 'qty-low') return a.qty - b.qty;
-          if (state.allSort === 'value-high') return ((b.item.gePrice || 0) * b.qty) - ((a.item.gePrice || 0) * a.qty);
-          if (state.allSort === 'value-low') return ((a.item.gePrice || 0) * a.qty) - ((b.item.gePrice || 0) * b.qty);
-          if (state.allSort === 'alpha') return a.item.name.localeCompare(b.item.name);
+          if (state.sort === 'qty-low') return a.qty - b.qty;
+          if (state.sort === 'value-high') return ((b.item.gePrice || 0) * b.qty) - ((a.item.gePrice || 0) * a.qty);
+          if (state.sort === 'value-low') return ((a.item.gePrice || 0) * a.qty) - ((b.item.gePrice || 0) * b.qty);
+          if (state.sort === 'alpha') return a.item.name.localeCompare(b.item.name);
           return b.qty - a.qty;
         });
         return out;
       }
 
-      function renderAllGrid() {
-        var grid = document.getElementById('pmAllGrid');
-        var empty = document.getElementById('pmAllEmpty');
-        var visible = visibleAllItems();
-        if (!state.allItems.length) {
-          grid.innerHTML = '';
+      // One value column's two lines -- the whole stack's worth (bold,
+      // primary) and one unit's worth ("N each", dim) -- or an em dash
+      // when this item has no price on file at all (an untradeable
+      // item, or a tradeable one the wiki just doesn't have current
+      // data for -- see build_possessions_summary's own comment in
+      // app/possessions.py for why those two cases can't be told apart
+      // from gePrice/highAlch alone, and why that's fine here).
+      function valueCell(unitValue, qty) {
+        if (unitValue == null) {
+          return '<div class="pm-value-cell"><div class="pm-value-stack pm-value-none">&mdash;</div></div>';
+        }
+        return '<div class="pm-value-cell">' +
+          '<div class="pm-value-stack">' + fmtNum(unitValue * qty) + '</div>' +
+          '<div class="pm-value-each">' + fmtNum(unitValue) + ' each</div>' +
+        '</div>';
+      }
+
+      function renderTable() {
+        var table = document.getElementById('pmTable');
+        var rowsEl = document.getElementById('pmRows');
+        var empty = document.getElementById('pmEmpty');
+
+        if (!state.items.length) {
+          table.style.display = 'none';
           empty.textContent = 'Nothing synced yet.';
           empty.style.display = '';
           return;
         }
+
+        var visible = visibleRows();
         if (!visible.length) {
-          grid.innerHTML = '';
+          table.style.display = 'none';
           empty.textContent = 'No items match your search/location filters.';
           empty.style.display = '';
           return;
         }
+
         empty.style.display = 'none';
-        grid.innerHTML = visible.map(function (v) {
+        table.style.display = '';
+        rowsEl.innerHTML = visible.map(function (v) {
           var item = v.item;
-          var extra = '';
-          if (state.display.highAlch && item.highAlch != null) {
-            extra += '<div class="pm-item-box-extra">HA ' + fmtGpCompact(item.highAlch) + '</div>';
-          }
-          if (state.display.gePrice && item.gePrice != null) {
-            extra += '<div class="pm-item-box-extra pm-item-box-ge">GE ' + fmtGpCompact(item.gePrice) + '</div>';
-          }
-          if (state.display.tradeable) {
-            extra += '<div class="pm-item-box-extra">' + (item.tradeable ? 'Tradeable' : 'Untradeable') + '</div>';
-          }
-          return '<div class="pm-item-box" title="' + escapeHtml(item.name) + '">' +
-            iconImg(item.icon, 'pm-item-box-icon') +
-            '<div class="pm-item-box-qty">\\u00d7' + fmtGpCompact(v.qty) + '</div>' +
-            extra +
+          var tradeableCls = item.tradeable ? 'pm-badge-yes' : 'pm-badge-no';
+          var tradeableText = item.tradeable ? 'YES' : 'NO';
+          return '<div class="pm-row" title="' + escapeHtml(item.name) + '">' +
+            '<div class="pm-col pm-col-image">' + iconImg(item.icon) +
+              '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></div>' +
+            '<div class="pm-col pm-col-qty">x' + fmtNum(v.qty) + '</div>' +
+            '<div class="pm-col pm-col-ge">' + valueCell(item.gePrice, v.qty) + '</div>' +
+            '<div class="pm-col pm-col-ha">' + valueCell(item.highAlch, v.qty) + '</div>' +
+            '<div class="pm-col pm-col-tradeable"><span class="pm-badge ' + tradeableCls + '">' + tradeableText + '</span></div>' +
           '</div>';
         }).join('');
-      }
-
-      document.getElementById('pmAllSearch').addEventListener('input', function (e) {
-        state.allSearch = e.target.value;
-        renderAllGrid();
-      });
-      document.getElementById('pmAllSortTabs').addEventListener('click', function (e) {
-        var btn = e.target.closest('.loot-sort-tab');
-        if (!btn) return;
-        state.allSort = btn.getAttribute('data-sort');
-        var btns = document.getElementById('pmAllSortTabs').querySelectorAll('.loot-sort-tab');
-        for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('active', btns[i] === btn);
-        renderAllGrid();
-      });
-      document.querySelectorAll('.pm-display-toggle').forEach(function (cb) {
-        cb.addEventListener('change', function () {
-          state.display[cb.getAttribute('data-field')] = cb.checked;
-          renderAllGrid();
-        });
-      });
-      document.querySelectorAll('.pm-location-toggle').forEach(function (cb) {
-        cb.addEventListener('change', function () {
-          state.locations[cb.getAttribute('data-location')] = cb.checked;
-          renderAllGrid();
-        });
-      });
-
-      // ---- Loading + polling ------------------------------------------
-
-      async function loadTrackers() {
-        var data = await apiCall('/api/possessions/trackers');
-        if (!data) return;
-        state.minTrackers = data.minTrackers || [];
-        state.maxTrackers = data.maxTrackers || [];
-        renderMinTrackers();
-        renderMaxTrackers();
       }
 
       async function loadSummary() {
         var data = await apiCall('/api/possessions/summary');
         if (!data) return;
-        state.allItems = data.items || [];
-        renderAllGrid();
+        state.items = data.items || [];
+        renderTable();
       }
 
-      function loadAll() {
-        loadTrackers();
-        loadSummary();
-      }
-
-      // ---- Removing / editing a tracker's target ----------------------
-
-      document.addEventListener('click', async function (e) {
-        var removeBtn = e.target.closest('.pm-remove-btn');
-        if (removeBtn) {
-          var id = removeBtn.getAttribute('data-tracker-id');
-          removeBtn.disabled = true;
-          var res = await fetch('/api/possessions/trackers/' + id, { method: 'DELETE' });
-          if (res.ok) {
-            state.minTrackers = state.minTrackers.filter(function (t) { return t.id !== id; });
-            state.maxTrackers = state.maxTrackers.filter(function (t) { return t.id !== id; });
-            renderMinTrackers();
-            renderMaxTrackers();
-          } else {
-            showError('Could not remove that tracker. Please try again.');
-            removeBtn.disabled = false;
-          }
-        }
-      });
-
-      document.addEventListener('change', async function (e) {
-        var input = e.target.closest('.pm-target-input');
-        if (!input) return;
-        var id = input.getAttribute('data-tracker-id');
-        var value = parseInt(input.value, 10);
-        if (!value || value < 1) { input.value = input.defaultValue; return; }
-        var data = await apiCall('/api/possessions/trackers/' + id, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_quantity: value }),
-        });
-        if (!data) { input.value = input.defaultValue; return; }
-        state.minTrackers = data.minTrackers || [];
-        state.maxTrackers = data.maxTrackers || [];
-        renderMinTrackers();
-        renderMaxTrackers();
-      });
-
-      // ---- Add-tracker overlay -----------------------------------------
-
-      var overlay = document.getElementById('pmAddOverlay');
-      var addSearch = document.getElementById('pmAddSearch');
-      var addResults = document.getElementById('pmAddResults');
-      var addSelected = document.getElementById('pmAddSelected');
-      var addQty = document.getElementById('pmAddQty');
-      var addSave = document.getElementById('pmAddSave');
-      var addSearchDebounce = null;
-
-      function openAddOverlay(kind) {
-        state.addKind = kind;
-        state.addSelected = null;
-        document.getElementById('pmAddTitle').textContent =
-          kind === 'min' ? 'Add a minimum tracker' : 'Add a maximum tracker';
-        addSearch.value = '';
-        addResults.innerHTML = '';
-        addSelected.style.display = 'none';
-        addQty.value = '';
-        addSave.disabled = true;
-        document.getElementById('pmAddError').classList.remove('show');
-        overlay.style.display = 'flex';
-        addSearch.focus();
-      }
-
-      function closeAddOverlay() {
-        overlay.style.display = 'none';
-      }
-
-      document.getElementById('pmAddMinBtn').addEventListener('click', function () { openAddOverlay('min'); });
-      document.getElementById('pmAddMaxBtn').addEventListener('click', function () { openAddOverlay('max'); });
-      document.getElementById('pmAddCancel').addEventListener('click', closeAddOverlay);
-      overlay.addEventListener('click', function (e) { if (e.target === overlay) closeAddOverlay(); });
-
-      addSearch.addEventListener('input', function () {
-        clearTimeout(addSearchDebounce);
-        var q = addSearch.value.trim();
-        if (!q) { addResults.innerHTML = ''; return; }
-        addSearchDebounce = setTimeout(async function () {
-          var res = await fetch('/api/possessions/search-items?q=' + encodeURIComponent(q));
-          var data = await res.json().catch(function () { return { results: [] }; });
-          var results = data.results || [];
-          addResults.innerHTML = results.map(function (r) {
-            return '<button type="button" class="pm-add-result" data-item-id="' + r.id + '" data-item-name="' + escapeHtml(r.name) + '" data-icon="' + escapeHtml(r.icon || '') + '" data-tradeable="' + (r.tradeable ? '1' : '0') + '">' +
-              iconImg(r.icon, 'pm-add-result-icon') +
-              '<span>' + escapeHtml(r.name) + '</span>' +
-            '</button>';
-          }).join('');
-        }, 200);
-      });
-
-      addResults.addEventListener('click', function (e) {
-        var btn = e.target.closest('.pm-add-result');
-        if (!btn) return;
-        state.addSelected = {
-          id: parseInt(btn.getAttribute('data-item-id'), 10),
-          name: btn.getAttribute('data-item-name'),
-          icon: btn.getAttribute('data-icon') || null,
-        };
-        addResults.innerHTML = '';
-        addSearch.value = state.addSelected.name;
-        addSelected.style.display = 'flex';
-        addSelected.innerHTML = iconImg(state.addSelected.icon, 'pm-add-selected-icon') +
-          '<span>' + escapeHtml(state.addSelected.name) + '</span>';
-        addSave.disabled = !addQty.value;
-        addQty.focus();
-      });
-
-      addQty.addEventListener('input', function () {
-        addSave.disabled = !state.addSelected || !addQty.value || parseInt(addQty.value, 10) < 1;
-      });
-
-      addSave.addEventListener('click', async function () {
-        if (!state.addSelected || !addQty.value) return;
-        addSave.disabled = true;
-        var data = await apiCall('/api/possessions/trackers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kind: state.addKind,
-            item_id: state.addSelected.id,
-            item_name: state.addSelected.name,
-            target_quantity: parseInt(addQty.value, 10),
-          }),
-        });
-        if (!data) { addSave.disabled = false; return; }
-        state.minTrackers = data.minTrackers || [];
-        state.maxTrackers = data.maxTrackers || [];
-        renderMinTrackers();
-        renderMaxTrackers();
-        closeAddOverlay();
-      });
-
-      loadAll();
+      renderSortButtons();
+      loadSummary();
     })();
     """
     return _shell(

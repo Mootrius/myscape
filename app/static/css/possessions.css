@@ -1,179 +1,103 @@
-/* Possessions Monitoring -- three independent sections on one page (see
-   render_possessions in app/pages.py for the full breakdown of what
-   each one shows). Self-contained per this project's established
-   per-page-CSS convention -- nothing here is shared with or imported
-   by another page's stylesheet, even where a rule looks identical to
-   one in loot-tracker.css/purchase-goals.css. */
+/* Possessions Monitoring -- a single line-by-line table of everything
+   currently owned across every synced storage (see render_possessions
+   in app/pages.py for the full breakdown of what each column shows).
+   Self-contained per this project's established per-page-CSS
+   convention -- nothing here is shared with or imported by another
+   page's stylesheet, even where a rule looks identical to one in
+   loot-tracker.css/purchase-goals.css. */
 
 .pm-section {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 18px 20px; margin-bottom: 22px;
 }
 
-.pm-section-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin-bottom: 4px;
-}
-.pm-section-header h3 {
-  margin: 0; font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase; font-weight: normal;
-}
+/* ---- Controls row: search, then sort, then locations, each its own
+   group -- left to right, in that order, exactly as asked for. A
+   vertical rule between groups (rather than gap spacing alone) is what
+   makes each one read as its own separate section within the shared
+   row, not one long run of buttons. ---------------------------------- */
 
-.pm-section-hint {
-  color: var(--text-faint); font-size: 12.5px; margin: 2px 0 14px;
+.pm-controls-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 14px;
+  margin-bottom: 16px;
 }
+.pm-control-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.pm-control-group + .pm-control-group {
+  padding-left: 14px; border-left: 1px solid var(--border);
+}
+.pm-search-group { flex: 1 1 220px; min-width: 180px; }
+.pm-search-group .loot-search { width: 100%; height: 32px; padding: 0 10px; font-size: 13px; }
+.pm-sort-group, .pm-location-group { flex: 0 1 auto; }
 
-/* Matches .mm-name-form-save's "shrink a full-width button down to an
-   inline pill" override (mindmaps.css) -- same button.primary base,
-   just sized to sit beside a section heading instead of stacked below
-   a form. */
-.pm-add-btn {
-  background: var(--gold); color: #221c10; border: none; border-radius: var(--radius);
-  padding: 0 16px; height: 30px;
+/* Same visual recipe as Purchase Goals' own .sort-btn (purchase-
+   goals.css) -- deliberately re-declared here rather than shared
+   across files, per this project's per-page-CSS convention. Sort
+   (.pm-sort-btn) is single-select, toggled by rebuilding the active
+   class server-... client-side (see renderSortButtons); locations
+   (.pm-filter-btn) are multi-select, each toggled independently and on
+   by default -- same look, different selection rule. */
+.pm-sort-btn, .pm-filter-btn {
+  padding: 6px 10px;
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
-  cursor: pointer; white-space: nowrap;
-}
-.pm-add-btn:hover { background: #ffab42; }
-
-/* ---- Section 1: minimum trackers -- fill-toward-target bars -------- */
-
-.pm-min-grid { display: flex; flex-direction: column; gap: 10px; }
-
-.pm-min-card {
-  display: flex; align-items: center; gap: 12px;
+  color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px 12px; position: relative;
+  cursor: pointer;
+  text-align: center;
 }
-.pm-min-icon { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }
-.pm-min-body { flex: 1 1 auto; min-width: 0; }
-.pm-min-name {
-  font-size: 13px; color: var(--text); margin-bottom: 6px;
+.pm-sort-btn:hover, .pm-filter-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pm-sort-btn.active, .pm-filter-btn.active { border-color: var(--gold); color: var(--gold); }
+
+/* ---- The table itself ---------------------------------------------- */
+
+.pm-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) 110px 130px 130px 84px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+}
+.pm-row + .pm-row { border-top: 1px solid var(--border); }
+
+.pm-row-header {
+  padding: 0 6px 8px;
+  font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint);
+}
+.pm-row-header .pm-col-qty,
+.pm-row-header .pm-col-ge,
+.pm-row-header .pm-col-ha,
+.pm-row-header .pm-col-tradeable { text-align: center; }
+
+.pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pm-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }
+.pm-icon-blank { width: 26px; height: 26px; }
+.pm-row-name {
+  font-size: 13px; color: var(--text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.pm-min-track { width: 100%; }
-.pm-min-count {
-  margin-top: 6px; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums;
-  display: flex; align-items: center; gap: 4px;
+
+.pm-col-qty {
+  text-align: center; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums;
 }
 
-/* ---- Section 2: maximum trackers -- red/green excess boxes ---------- */
+.pm-col-ge, .pm-col-ha { text-align: center; }
+.pm-value-cell { display: flex; flex-direction: column; gap: 1px; }
+.pm-value-stack { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; }
+.pm-value-stack.pm-value-none { color: var(--text-faint); }
+.pm-value-each { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
-.pm-max-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-
-.pm-max-box {
-  flex: 0 0 92px; aspect-ratio: 1 / 1; box-sizing: border-box;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  border-radius: var(--radius); padding: 6px; position: relative;
-  border: 1px solid var(--border);
+.pm-col-tradeable { text-align: center; }
+.pm-badge {
+  display: inline-block; padding: 2px 10px; border-radius: var(--radius);
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  border: 1px solid transparent;
 }
-.pm-max-box.pm-max-ok { background: rgba(111, 174, 90, 0.12); border-color: var(--green); }
-.pm-max-box.pm-max-excess { background: rgba(192, 90, 76, 0.14); border-color: var(--red); }
-.pm-max-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; }
-.pm-max-qty { font-size: 11px; color: var(--text); font-variant-numeric: tabular-nums; }
-.pm-max-target {
-  font-size: 9px; color: var(--text-dim); display: flex; align-items: center; gap: 3px;
-}
-
-/* ---- Shared: the small quantity-target <input> embedded inline in a
-   min card / max box -- deliberately styled, not the browser default,
-   per the project's "no prompt() dialogs" convention (see
-   render_possessions's own docstring in app/pages.py). ---------------- */
-.pm-target-input {
-  width: 56px; height: 22px; padding: 0 6px; font-size: 11px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-variant-numeric: tabular-nums;
-}
-.pm-max-target-input { width: 46px; }
-
-.pm-remove-btn {
-  position: absolute; top: 4px; right: 6px;
-  background: none; border: none; color: var(--text-faint); font-size: 15px; line-height: 1;
-  cursor: pointer; padding: 2px 4px;
-}
-.pm-remove-btn:hover { color: var(--red); }
-.pm-max-remove { top: 3px; right: 4px; font-size: 13px; }
-
-/* ---- Section 3: all possessions -- search/sort/toggles + item grid - */
-
-.pm-all-controls { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
-
-.pm-toggle-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 16px; }
-.pm-toggle-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.03em; }
-.pm-toggle {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; color: var(--text-dim); cursor: pointer; user-select: none;
-}
-.pm-toggle input[type="checkbox"] { margin: 0; }
-
-/* Same fixed six-per-row box grid as .loot-item-box (loot-tracker.css)
-   -- deliberately re-declared here rather than reused across files,
-   per this project's per-page-CSS convention -- with one extra row
-   (.pm-item-box-extra) per toggled-on value line instead of the loot
-   box's single fixed gp line, since here the box can show zero to
-   three extra lines depending on which toggles are on. */
-.pm-item-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.pm-item-box {
-  flex: 0 0 calc((100% - 40px) / 6); aspect-ratio: 1 / 1; box-sizing: border-box;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 4px; overflow: hidden;
-}
-.pm-item-box-icon { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
-.pm-icon-blank { width: 24px; height: 24px; }
-.pm-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
-.pm-item-box-extra { font-size: 8px; color: var(--text-faint); line-height: 1.3; font-variant-numeric: tabular-nums; }
-.pm-item-box-ge { color: var(--gold-dim); }
+.pm-badge-yes { background: rgba(111, 174, 90, 0.14); border-color: var(--green); color: var(--green); }
+.pm-badge-no { background: rgba(192, 90, 76, 0.14); border-color: var(--red); color: var(--red); }
 
 @media (max-width: 640px) {
-  .pm-item-box { flex: 0 0 calc((100% - 16px) / 3); }
-}
-
-/* ---- Add-tracker overlay -------------------------------------------- */
-
-.pm-add-overlay {
-  position: fixed; inset: 0; background: rgba(10, 9, 7, 0.72);
-  display: flex; align-items: center; justify-content: center; z-index: 200;
-  padding: 20px;
-}
-.pm-add-card {
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 22px; width: 100%; max-width: 380px;
-}
-.pm-add-card h4 { margin: 0 0 14px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: normal; }
-
-.pm-add-results {
-  max-height: 220px; overflow-y: auto; margin-top: 6px;
-  display: flex; flex-direction: column; gap: 2px;
-}
-.pm-add-result {
-  display: flex; align-items: center; gap: 8px;
-  background: none; border: none; border-radius: var(--radius);
-  padding: 6px 8px; text-align: left; cursor: pointer; color: var(--text-dim); font-size: 13px;
-}
-.pm-add-result:hover { background: var(--panel-2); color: var(--text); }
-.pm-add-result-icon { width: 20px; height: 20px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }
-
-.pm-add-selected {
-  display: flex; align-items: center; gap: 8px; margin-top: 10px;
-  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px 10px; font-size: 13px; color: var(--text);
-}
-.pm-add-selected-icon { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
-
-.pm-add-qty-label {
-  display: block; margin-top: 14px; font-size: 11px; color: var(--text-faint);
-  text-transform: uppercase; letter-spacing: 0.03em;
-}
-.pm-add-qty-input { width: 100%; height: 34px; padding: 0 10px; font-size: 13px; margin-top: 6px; }
-
-.pm-add-actions {
-  display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 18px;
-}
-/* Same "shrink the full-width button" override as .mm-name-form-save
-   (mindmaps.css) -- .primary defaults to width: 100% stacked below a
-   form, not what's wanted beside a Cancel link in this overlay's
-   footer row. */
-.pm-add-actions button.primary {
-  width: auto; flex: 0 0 auto; margin-top: 0;
-  padding: 0 20px; height: 34px; font-size: 12px;
-  display: inline-flex; align-items: center; justify-content: center;
+  .pm-row {
+    grid-template-columns: minmax(140px, 1.6fr) 80px 96px 96px 66px;
+    gap: 6px;
+  }
+  .pm-row-name { font-size: 12px; }
 }

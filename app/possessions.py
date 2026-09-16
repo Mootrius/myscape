@@ -77,33 +77,61 @@ def get_owned_breakdown(db: Session, player: Player) -> Dict[int, dict]:
     return breakdown
 
 
+# A handful of items don't just show a bigger pile of the same picture
+# as more of them are held (RuneScape's "xN" quantity overlay already
+# handles that for every ordinary item) -- Coins and Abyssal Pearls are
+# actual in-game currency stacks whose own artwork changes at set
+# thresholds (see the OSRS Wiki's "Coins" article for the full
+# 1/2/3/4/5/25/100/250/1000/10000 sequence; Abyssal Pearls tops out at
+# 5). Both the live GE mapping and the item_ids.json snapshot only ever
+# carry the base ("1") appearance for these -- neither holds a stack
+# size to pick a bigger image from -- so this table overrides the wiki
+# icon FILENAME outright to whichever file is that item's biggest
+# denomination, regardless of how many the player actually owns (a
+# handful of coins showing the 10,000gp pile image is a cosmetic choice
+# for a nicer-looking row, not a claim about the real stack size --
+# QUANTITY is what actually tells the player how many they have). Add
+# another entry here if another such item turns up.
+_STACK_ICON_OVERRIDES = {
+    995: "Coins 10000.png",
+    26792: "Abyssal pearls 5.png",
+}
+
+
 def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: dict) -> dict:
     """Returns {"name", "icon", "tradeable", "highAlch"} for one real
     item id -- tries the live GE mapping first (real icon, high alch,
     and the definitive tradeable=True), then falls back to the
     item_ids.json snapshot by name (for an untradeable item, whose id
     never appears in the GE mapping at all), then to the bare id/name a
-    storage table itself already had on file."""
+    storage table itself already had on file. The icon filename is
+    resolved from whichever of those tiers applies, then run through
+    _STACK_ICON_OVERRIDES before being turned into a URL -- see that
+    table's own comment."""
     meta = mapping.get(str(item_id))
     if meta:
-        return {
-            "name": meta.get("name") or fallback_name or f"Item #{item_id}",
-            "icon": item_icon_url(meta.get("icon")),
-            "tradeable": True,
-            "highAlch": meta.get("highalch"),
-        }
-    icon = None
-    name = fallback_name
-    if fallback_name:
-        snap = find_item_by_exact_name(fallback_name)
-        if snap:
-            icon = item_icon_url(snap.get("icon"))
-            name = snap.get("name") or fallback_name
+        icon_filename = meta.get("icon")
+        name = meta.get("name") or fallback_name or f"Item #{item_id}"
+        tradeable = True
+        high_alch = meta.get("highalch")
+    else:
+        icon_filename = None
+        name = fallback_name
+        tradeable = False
+        high_alch = None
+        if fallback_name:
+            snap = find_item_by_exact_name(fallback_name)
+            if snap:
+                icon_filename = snap.get("icon")
+                name = snap.get("name") or fallback_name
+        name = name or f"Item #{item_id}"
+
+    icon_filename = _STACK_ICON_OVERRIDES.get(item_id, icon_filename)
     return {
-        "name": name or f"Item #{item_id}",
-        "icon": icon,
-        "tradeable": False,
-        "highAlch": None,
+        "name": name,
+        "icon": item_icon_url(icon_filename),
+        "tradeable": tradeable,
+        "highAlch": high_alch,
     }
 
 
