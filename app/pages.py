@@ -1935,10 +1935,10 @@ def render_loot_tracker(player: Player) -> str:
               <button type="button" class="loot-range-option" data-range="custom">CUSTOM</button>
               <div class="loot-range-custom" id="lootRangeCustom" style="display:none;">
                 <label class="loot-range-custom-field">Start
-                  <input type="text" id="lootRangeStart" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false" />
+                  <input type="text" id="lootRangeStart" value="____-__-__" placeholder="YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" />
                 </label>
                 <label class="loot-range-custom-field">End
-                  <input type="text" id="lootRangeEnd" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off" spellcheck="false" />
+                  <input type="text" id="lootRangeEnd" value="____-__-__" placeholder="YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" />
                 </label>
                 <button type="button" class="loot-range-apply" id="lootRangeApply">Apply</button>
               </div>
@@ -2786,11 +2786,56 @@ def render_loot_tracker(player: Player) -> str:
       // own calendar popup (see the input tags themselves) -- a plain
       // text field the way the rest of this menu already reads, no
       // separate widget popping up inside the range dropdown's own
-      // popup. Validated by hand here in place of whatever a browser's
-      // date picker would have guaranteed structurally: right shape
-      // AND an actual calendar date (rejects "2024-13-40", not just
-      // anything not matching the digits-dashes-digits-dashes-digits
-      // pattern).
+      // popup. A bare text field would happily hold anything though,
+      // so the 'd' slots below get masked live as you type (digits
+      // only, dashes fixed in place, unfilled slots shown as "_") --
+      // structural guidance a native date picker gave away for free --
+      // and isValidIsoDate covers what the mask can't: an actual
+      // calendar date, not just the right shape (rejects "2024-13-40").
+      var DATE_MASK = 'dddd-dd-dd';
+
+      function digitsOnly(s) {
+        return (s || '').replace(/\D/g, '').slice(0, 8);
+      }
+
+      function maskValueFromDigits(digits) {
+        var out = '', di = 0;
+        for (var i = 0; i < DATE_MASK.length; i++) {
+          if (DATE_MASK[i] === 'd') {
+            out += di < digits.length ? digits[di] : '_';
+            di++;
+          } else {
+            out += DATE_MASK[i];
+          }
+        }
+        return out;
+      }
+
+      // Blank in the sense that matters here -- no digits actually
+      // typed yet -- covers both a genuinely empty string and the
+      // all-underscores mask skeleton these inputs start with (see
+      // their own value="____-__-__" in the HTML above).
+      function isBlankMaskValue(s) {
+        return digitsOnly(s).length === 0;
+      }
+
+      function applyDateMask(input) {
+        var digits = digitsOnly(input.value);
+        input.value = maskValueFromDigits(digits);
+        // Cursor lands right after the last filled digit (skipping
+        // past whichever dash/underscore comes next) every time, so a
+        // plain typing-then-backspacing flow always edits from the end
+        // -- the one thing this simple a mask doesn't handle well is
+        // clicking into the middle of an already-filled date to tweak
+        // one digit; clearing and retyping is the way through that.
+        var pos = 0, di = 0;
+        for (var i = 0; i < DATE_MASK.length; i++) {
+          if (DATE_MASK[i] === 'd' && di < digits.length) { pos = i + 1; di++; }
+        }
+        input.setSelectionRange(pos, pos);
+        input.classList.remove('invalid');
+      }
+
       function isValidIsoDate(s) {
         var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
         if (!m) return false;
@@ -2807,12 +2852,12 @@ def render_loot_tracker(player: Player) -> str:
         if (key === 'custom') {
           var startInput = document.getElementById('lootRangeStart');
           var endInput = document.getElementById('lootRangeEnd');
-          if (!startInput.value || !endInput.value) {
+          if (isBlankMaskValue(startInput.value) || isBlankMaskValue(endInput.value)) {
             var today = new Date();
             var weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
             var toIsoDate = function (d) { return d.toISOString().slice(0, 10); };
-            if (!startInput.value) startInput.value = state.customStart || toIsoDate(weekAgo);
-            if (!endInput.value) endInput.value = state.customEnd || toIsoDate(today);
+            if (isBlankMaskValue(startInput.value)) startInput.value = state.customStart || toIsoDate(weekAgo);
+            if (isBlankMaskValue(endInput.value)) endInput.value = state.customEnd || toIsoDate(today);
           }
           startInput.classList.remove('invalid');
           endInput.classList.remove('invalid');
@@ -2853,7 +2898,7 @@ def render_loot_tracker(player: Player) -> str:
         input.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') applyCustomRange();
         });
-        input.addEventListener('input', function () { input.classList.remove('invalid'); });
+        input.addEventListener('input', function () { applyDateMask(input); });
       });
       updateRangeMenuActive();
 
