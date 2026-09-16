@@ -24,7 +24,7 @@ from app.auth import (
     get_optional_current_player_from_session,
 )
 from app.database import get_db
-from app.icon_cache import resolve_cached_path
+from app.icon_cache import ensure_cached_icon_path
 from app.limiter import limiter
 from app.loot import build_loot_state, kc_counts_by_player, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
 from app.item_ids import find_item_ids
@@ -220,17 +220,19 @@ app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 @app.get("/icon-cache/{filename}")
 def get_cached_icon(filename: str):
-    """Serves a locally cached item icon (see app/icon_cache.py) -- a
-    dedicated route rather than folding this into the /static mount
-    above so it can set its own long-lived Cache-Control: item_icon_url
-    only ever hands the browser one of these URLs once the file is
-    already sitting on disk and fresh for the week, so there's no harm
-    in the browser holding onto it for just as long -- it'll get a new,
-    different URL automatically once cached_icon_url() decides it's
-    time to refetch. resolve_cached_path re-validates the filename
-    itself (no path traversal out of the cache directory) rather than
-    trusting the URL alone."""
-    path = resolve_cached_path(filename)
+    """Serves a (possibly not-yet-fetched) item icon -- a dedicated
+    route rather than folding this into the /static mount above so it
+    can set its own long-lived Cache-Control, and so it can do more
+    than a plain static-file lookup: item_icon_url (app/purchase_goals.py)
+    hands out this URL for every icon unconditionally now, never a
+    direct wiki hotlink, so ensure_cached_icon_path (app/icon_cache.py)
+    is what actually fetches-and-caches an icon this is the first
+    request for -- see that module's own top-of-file comment for why
+    that fetch happens here, briefly blocking this one request, rather
+    than falling back to letting the browser hit the wiki directly.
+    Re-validates the filename itself (no path traversal out of the
+    cache directory) rather than trusting the URL alone."""
+    path = ensure_cached_icon_path(filename)
     if not path:
         raise HTTPException(status_code=404)
     return FileResponse(path, headers={"Cache-Control": "public, max-age=604800, immutable"})

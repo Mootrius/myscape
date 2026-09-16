@@ -2191,8 +2191,8 @@ def render_loot_tracker(player: Player) -> str:
       // just its in-game name -- the same name this page already gets
       // back as itemName -- with spaces URL-encoded, same as this
       // file's own icon URLs already do server-side (see
-      // item_icon_url/ICON_PATH_BASE in app/purchase_goals.py, which
-      // percent-encodes the icon filename the same way); MediaWiki
+      // item_icon_url in app/purchase_goals.py, which percent-encodes
+      // the icon filename the same way); MediaWiki
       // normalizes a %20 the same as an underscore, so this needs no
       // separate space-to-underscore step. A name that isn't actually
       // an article title (a rare mismatch) lands on the wiki's own

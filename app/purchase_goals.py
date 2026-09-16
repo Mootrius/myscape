@@ -38,7 +38,6 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.icon_cache import cached_icon_url
 from app.item_ids import find_item_by_exact_name, find_item_icon, find_item_ids, search_item_names
 from app.models import (
     BankItem,
@@ -70,11 +69,12 @@ API_BASE = "https://prices.runescape.wiki/api/v2/osrs"
 # uncacheable redirects in front of the real (long-cacheable) image, so
 # hotlinking it meant re-hitting the wiki twice per icon on every single
 # refresh, which is what was tripping rate limits. item_icon_url below
-# now serves a locally cached copy when it has one fresh enough (see
-# app/icon_cache.py) and only falls back to this direct wiki link --
-# still needed for a brand new icon's very first render, or if a
-# server-side fetch ever does fail for any reason -- when it doesn't.
-ICON_PATH_BASE = "https://oldschool.runescape.wiki/w/Special:FilePath"
+# (and npc_icon_url in app/loot.py) now always points at our own
+# /icon-cache/<filename> route instead (see app/icon_cache.py) --
+# nothing in this file talks to the wiki's image host directly any
+# more, so there's no ICON_PATH_BASE constant here either; icon_cache.py
+# has its own copy of the wiki's Special:FilePath base for the one
+# place that still needs it.
 USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 
 # How long cached data is considered fresh before hitting the wiki API
@@ -163,13 +163,16 @@ def item_icon_url(icon_filename: Optional[str]) -> Optional[str]:
         return None
     if not _ICON_EXT_RE.search(icon_filename):
         icon_filename = icon_filename + ".png"
-    # Prefer our own weekly-refreshed local copy (see app/icon_cache.py);
-    # cached_icon_url returns None -- and, as a side effect, kicks off a
-    # background fetch to populate/refresh it for next time -- for
-    # anything missing or past this week's refresh window, in which case
-    # this falls straight through to the direct wiki hotlink exactly as
-    # it always has.
-    return cached_icon_url(icon_filename) or (ICON_PATH_BASE + "/" + urllib.parse.quote(icon_filename))
+    # Always our own /icon-cache/<filename> route (app/main.py) now,
+    # never a direct wiki hotlink -- that route (via
+    # ensure_cached_icon_path in app/icon_cache.py) is what actually
+    # fetches-and-caches an icon this is the first request for. See
+    # that module's own top-of-file comment for why handing the browser
+    # a direct wiki fallback here, even just for a brand new icon's
+    # first render, was itself enough to trip the wiki's rate limiting
+    # on a page -- Possessions Monitoring especially -- showing enough
+    # never-before-seen icons at once.
+    return "/icon-cache/" + urllib.parse.quote(icon_filename)
 
 
 def unit_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[str]]:

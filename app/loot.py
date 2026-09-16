@@ -70,7 +70,7 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.models import HiddenLootEntry, LootEvent, Player
-from app.purchase_goals import COINS_ITEM_ID, ICON_PATH_BASE, get_latest_prices, get_mapping, item_icon_url
+from app.purchase_goals import COINS_ITEM_ID, get_latest_prices, get_mapping, item_icon_url
 
 # The timerange presets the chart's range button offers (see
 # render_loot_tracker in app/pages.py), each a fixed lookback from
@@ -222,11 +222,18 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
     has an id-keyed mapping API to look item icons up in; NPCs have no
     equivalent, so this is a guess. Some bosses (multiple combat forms,
     no single infobox image) will 404 -- the frontend quietly hides the
-    image when that happens, same as item icons already do."""
+    image when that happens, same as item icons already do.
+
+    Routed through our own /icon-cache/<filename> route exactly like
+    item_icon_url, rather than a direct wiki hotlink -- see
+    app/icon_cache.py's own top-of-file comment for why a direct
+    fallback there was itself enough to trip the wiki's rate limiting;
+    the same is just as true of NPC portraits, which used to bypass the
+    cache entirely."""
     if not name:
         return None
     filename = name if _ICON_EXT_RE.search(name) else name + ".png"
-    return ICON_PATH_BASE + "/" + urllib.parse.quote(filename)
+    return "/icon-cache/" + urllib.parse.quote(filename)
 
 
 # ---- Hiding NPCs/items out of the tracker (see HiddenLootEntry's own
