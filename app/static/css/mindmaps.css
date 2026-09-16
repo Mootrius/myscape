@@ -276,17 +276,20 @@ button.primary#mmNameSave, .mm-name-form-save {
    shade between the node's own --panel-2 fill and the page's own
    --bg behind everything -- darker than the node it sits on, but
    never quite as dark as the page itself) rather than the base rule's
-   even darker near-black, and a gold OUTLINE -- border plus a
+   even darker near-black, and a black OUTLINE -- border plus a
    slightly thinner check than the base rule's own (1.5px instead of
    2px -- see the ::after override below), background left alone --
-   once checked, rather than the base rule's solid gold fill with the
-   check "cut out" of it. (input.mm-node-checkbox matches the base
-   rule's own specificity so these actually win, source order alone
-   wouldn't be reliable here.) */
+   once checked, rather than the base rule's solid gold fill with a
+   dark check cut out of it. Black rather than gold here on purpose:
+   the node's own frame/fill is what announces "done" now (see
+   .mm-node-gray.completed's own comment below), so the checkbox
+   itself stays quiet rather than competing with it. (input.mm-node-
+   checkbox matches the base rule's own specificity so these actually
+   win, source order alone wouldn't be reliable here.) */
 .mm-node-checkbox { flex: none; }
 input.mm-node-checkbox { background: #1b1b1c; }
-input.mm-node-checkbox:checked { background: #1b1b1c; border-color: var(--gold); }
-input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width: 0 1.5px 1.5px 0; }
+input.mm-node-checkbox:checked { background: #1b1b1c; border-color: #000; }
+input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5px 1.5px 0; }
 .mm-node-label-text {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; min-width: 0;
@@ -344,9 +347,11 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
    DARKER than that exact fill instead -- one rule per color, same
    "match what it's sitting on, just a shade off" logic the default
    rule above already follows against panel-2. Gray's completed fill is
-   var(--border), not a hue of its own (see .mm-node-gray.completed's
-   own comment below), so it gets the equivalent dark-gray treatment. */
-.mm-node-gray.completed .mm-node-note-toggle { color: #2d2d30; }
+   var(--gray-bright), not a hue of its own (see .mm-node-gray.completed's
+   own comment below), so it gets the equivalent dark-gray treatment,
+   recalibrated to the same ~78% lightness ratio every other color's
+   own darkened icon uses against its fill. */
+.mm-node-gray.completed .mm-node-note-toggle { color: #56565a; }
 .mm-node-red.completed .mm-node-note-toggle { color: #96463b; }
 .mm-node-orange.completed .mm-node-note-toggle { color: #9d5f30; }
 .mm-node-yellow.completed .mm-node-note-toggle { color: #9d8c42; }
@@ -441,17 +446,20 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
    those stay reserved for the site accent color and Purchase Goals'
    affordability states respectively, see --orange/--yellow's own
    comment in myscape.css). */
-.mm-node-gray { background: var(--panel-2); border-color: var(--border); color: var(--text); }
+.mm-node-gray { background: var(--panel-2); border-color: var(--gray-bright); color: var(--text); }
 .mm-node-gray:hover { background-color: rgb(51, 51, 54); }
 /* Gray has no real "goal color" to fill in with, so its completed
    state doesn't introduce one either -- the border stays exactly
-   var(--border), same as the unfinished state, never gold. Instead
-   that same border color gets poured in as the fill once complete,
-   which reads as "done" well enough on its own now that the gold
-   accent already lives on the manual-complete checkbox itself (see
-   .mm-node-checkbox above), not on the node's frame. */
-.mm-node-gray.completed { background: var(--border); border-color: var(--border); color: #1a1a1a; }
-.mm-node-gray.completed:hover { background-color: rgb(78, 78, 82); }
+   var(--gray-bright), same as the unfinished state, never gold.
+   Instead that same border color gets poured in as the fill once
+   complete. That fill is a dedicated, brighter neutral gray rather
+   than reusing the site's ordinary (much dimmer) --border value --
+   see --gray-bright's own comment in myscape.css -- so it reads as
+   "done" with the same visual weight every other node color's own
+   completed fill has, and since it's shared with the border above,
+   the unfinished frame gets that same brightening for free. */
+.mm-node-gray.completed { background: var(--gray-bright); border-color: var(--gray-bright); color: #1a1a1a; }
+.mm-node-gray.completed:hover { background-color: #7f7f85; }
 
 .mm-node-red { background: var(--panel-2); border-color: var(--red); color: var(--text); }
 .mm-node-red:hover { border-color: #dd6857; }
@@ -660,10 +668,10 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
 }
 /* MANUAL's own swatch -- same small colored box the old plain color
    picker used, but now it looks exactly like its own node's manual-
-   complete checkbox once checked (a gold box, gold check -- see
-   input.mm-node-checkbox:checked above) rather than a diagonal red
-   "no tracked goal" slash, standing in for a real icon image the way
-   every other option in this grid has one. Static -- always drawn
+   complete checkbox once checked (a dark box, black outline and check
+   -- see input.mm-node-checkbox:checked above) rather than a diagonal
+   red "no tracked goal" slash, standing in for a real icon image the
+   way every other option in this grid has one. Static -- always drawn
    "checked" -- since this is what CHOOSING manual looks like, not an
    interactive toggle of its own; scaled up slightly from the node
    checkbox's own 16x16/4x8 proportions to this grid's 18x18 icon
@@ -673,11 +681,11 @@ input.mm-node-checkbox:checked::after { border-color: var(--gold); border-width:
 .mm-type-btn-swatch {
   position: relative; width: 18px; height: 18px; flex: none; background: var(--panel-2); border: 1px solid var(--border);
 }
-.mm-type-btn-swatch-manual { background: #1b1b1c; border-color: var(--gold); }
+.mm-type-btn-swatch-manual { background: #1b1b1c; border-color: #000; }
 .mm-type-btn-swatch-manual::after {
   content: ''; position: absolute; left: 5px; top: 2px;
   width: 5px; height: 9px;
-  border: solid var(--gold); border-width: 0 1.5px 1.5px 0;
+  border: solid #000; border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
 }
 .mm-type-btn-label { text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

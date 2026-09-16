@@ -73,6 +73,15 @@
      what those two variables mean anywhere else. */
   --orange: #c97a3d;
   --yellow: #c9b355;
+  /* Mindmaps' gray/manual node has no hue of its own to fill in with,
+     so its "completed" background (and, since the two are shared on
+     purpose -- see mindmaps.css -- its uncompleted border too) reused
+     plain --border. That read as noticeably dimmer than every other
+     node color's own completed fill (all sitting around 50-60%
+     lightness), so this is a dedicated, brighter neutral gray for
+     just that pairing -- --border itself is untouched since it's
+     still used all over the site for ordinary panel/input borders. */
+  --gray-bright: #6e6e74;
   --radius: 0px;
 }
 
