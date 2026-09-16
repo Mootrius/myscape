@@ -5707,15 +5707,20 @@ def render_possessions(player: Player) -> str:
         return '<img class="pm-row-icon" src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\\'none\\'" />';
       }
 
-      // Feather Icons' own "map-pin" path (stroke="currentColor", no
-      // fill) -- the same line-outline-icon family every other small
-      // control on this site already draws from (see, e.g., Mindmaps'
+      // A drawing-pin/thumbtack glyph, not a map marker -- pinning an
+      // item here is "stick this to the top of the list", not "here's
+      // a location", so the icon should read as a physical pushpin
+      // (flat head, tapered body, needle poking out below) rather than
+      // the teardrop-plus-dot map-pin shape. Feather Icons has no
+      // literal thumbtack, so this is hand-drawn to match its exact
+      // stroke conventions (same line-outline-icon family every other
+      // small control on this site draws from -- see, e.g., Mindmaps'
       // zoom-to-fit/undo/redo/edit-mode SVGs in this file), rather than
       // an emoji glyph. One markup shared by both pinned/unpinned states
       // -- see .pm-pin-btn/.pinned in possessions.css for how gray vs.
       // gold is told apart instead (color alone, currentColor picks it
       // up automatically, never a different icon).
-      var PIN_GLYPH = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>';
+      var PIN_GLYPH = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8"></path><path d="M9 4v6l-2 4v2h10v-2l-2-4V4"></path><path d="M12 16v5"></path></svg>';
 
       // Same wiki-search-redirect link every item icon/name on this
       // page opens (see Loot Tracker's own wikiItemUrl in this file for
