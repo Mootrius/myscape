@@ -40,16 +40,21 @@ from sqlalchemy.orm import Session
 
 from app.item_ids import find_item_by_exact_name, find_item_icon, find_item_ids, search_item_names
 from app.models import (
+    ArmourCaseItem,
     BankItem,
     EquipmentItem,
+    FancyDressBoxItem,
     GearSetup,
     InventoryItem,
-    MenagerieItem,
+    MagicCapeRackItem,
+    MagicWardrobeItem,
     Player,
     PotionStorageItem,
     RunePouchItem,
     SeedVaultItem,
     TackleBoxItem,
+    ToyBoxItem,
+    TreasureChestItem,
 )
 from app.recipes import find_recipe, search_recipe_names
 from app.schemas import GEAR_SETUP_EQUIPMENT_SLOTS, INVENTORY_SIZE
@@ -856,34 +861,41 @@ def _still_to_purchase_summary(
 
 def build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict[str, int]]:
     """Combines bank+inventory+equipment+potion storage+rune pouch+seed
-    vault+menagerie+tackle box into the same shape Maintrius's own
-    load_character_snapshot() produced (totalsById/totalsByName) -- the
-    "everything currently owned" pool every gear setup checks itself
-    against independently (see build_gear_setups, which takes a fresh
-    copy of this per setup), and also what an item-goal Mindmap node
-    checks its target item's count against (see evaluate_completion in
-    app/mindmaps.py).
+    vault+tackle box+the six Costume Room storages into the same shape
+    Maintrius's own load_character_snapshot() produced
+    (totalsById/totalsByName) -- the "everything currently owned" pool
+    every gear setup checks itself against independently (see
+    build_gear_setups, which takes a fresh copy of this per setup), and
+    also what an item-goal Mindmap node checks its target item's count
+    against (see evaluate_completion in app/mindmaps.py).
 
-    Potion storage, the rune pouch, the seed vault, the menagerie, and
-    the tackle box (added alongside PotionStorageItem/RunePouchItem/
-    SeedVaultItem/MenagerieItem/TackleBoxItem in app/models.py) slot in
-    here with zero special-casing: the plugin already reports each in
-    the exact same item-id/quantity shape as bank/inventory/equipment
-    (see MyscapePlugin#readPotionStorageItems/#readRunePouchItems/
-    #readSeedVaultItems/#readMenagerieItems/#readTackleBoxItems in the
+    Potion storage, the rune pouch, the seed vault, the tackle box, and
+    the six Costume Room storages (Magic Wardrobe, Armour Case, Fancy
+    Dress Box, Toy Box, Treasure Chest, Magic Cape Rack -- added
+    alongside PotionStorageItem/RunePouchItem/SeedVaultItem/
+    TackleBoxItem/MagicWardrobeItem/ArmourCaseItem/FancyDressBoxItem/
+    ToyBoxItem/TreasureChestItem/MagicCapeRackItem in app/models.py)
+    slot in here with zero special-casing: the plugin already reports
+    each in the exact same item-id/quantity shape as
+    bank/inventory/equipment (see
+    MyscapePlugin#readPotionStorageItems/#readRunePouchItems/
+    #readSeedVaultItems/#readTackleBoxItems/#readMagicWardrobeItems/
+    #readArmourCaseItems/#readFancyDressBoxItems/#readToyBoxItems/
+    #readTreasureChestItems/#readMagicCapeRackItems in the
     Mootrius/myscape-plugin repo), so each just needs its own query
     added, same as the others. Runes owned only inside a pouch (or
-    seeds only inside the vault, or a pet only in the menagerie, or gear
-    only in a tackle box) would otherwise never show up here at all --
-    RuneLite's normal inventory scan reports the pouch itself as a
-    single item, not what's stored inside it; the seed vault isn't part
-    of any ItemContainer at all; and the menagerie/tackle box, though
-    genuine ItemContainers same as the bank, are their own separate ones
-    this function's usual bank/inventory/equipment sweep never touches
-    -- so without this, a setup (or goal node) needing, say, fire runes,
-    ranarr seeds, a specific pet, or a barbed rod would keep listing
-    them as missing even while a full pouch, vault, menagerie, or tackle
-    box of them sat right there."""
+    seeds only inside the vault, or a costume piece only in a Costume
+    Room storage, or gear only in a tackle box) would otherwise never
+    show up here at all -- RuneLite's normal inventory scan reports the
+    pouch itself as a single item, not what's stored inside it; the
+    seed vault isn't part of any ItemContainer at all; and the tackle
+    box/Costume Room storages, though genuine ItemContainers same as
+    the bank, are their own separate ones this function's usual
+    bank/inventory/equipment sweep never touches -- so without this, a
+    setup (or goal node) needing, say, fire runes, ranarr seeds, a
+    stored cape, or a barbed rod would keep listing them as missing
+    even while a full pouch, vault, Costume Room storage, or tackle box
+    of them sat right there."""
     pool_by_id: Dict[int, int] = {}
     pool_by_name: Dict[str, int] = {}
 
@@ -905,9 +917,19 @@ def build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict
         add(item.item_id, item.item_name, item.quantity)
     for item in db.query(SeedVaultItem).filter(SeedVaultItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(MenagerieItem).filter(MenagerieItem.player_id == player.id).all():
-        add(item.item_id, item.item_name, item.quantity)
     for item in db.query(TackleBoxItem).filter(TackleBoxItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(MagicWardrobeItem).filter(MagicWardrobeItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(ArmourCaseItem).filter(ArmourCaseItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(FancyDressBoxItem).filter(FancyDressBoxItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(ToyBoxItem).filter(ToyBoxItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(TreasureChestItem).filter(TreasureChestItem.player_id == player.id).all():
+        add(item.item_id, item.item_name, item.quantity)
+    for item in db.query(MagicCapeRackItem).filter(MagicCapeRackItem.player_id == player.id).all():
         add(item.item_id, item.item_name, item.quantity)
 
     return pool_by_id, pool_by_name

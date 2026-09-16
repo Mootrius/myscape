@@ -41,12 +41,15 @@ from app.mindmaps import (
     update_node,
 )
 from app.models import (
+    ArmourCaseItem,
     BankItem,
     EquipmentItem,
+    FancyDressBoxItem,
     GearSetup,
     InventoryItem,
     LootingBagItem,
-    MenagerieItem,
+    MagicCapeRackItem,
+    MagicWardrobeItem,
     MindMap,
     PinnedPossessionItem,
     Player,
@@ -55,6 +58,8 @@ from app.models import (
     RunePouchItem,
     SeedVaultItem,
     TackleBoxItem,
+    ToyBoxItem,
+    TreasureChestItem,
 )
 from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_possessions, render_purchase_goals, render_signup
 from app.possessions import (
@@ -78,6 +83,10 @@ from app.routers import auth, linking
 from app.schemas import (
     AddMindMapNodeRequest,
     AddMindMapSharedChildRequest,
+    ArmourCaseOut,
+    ArmourCaseItemOut,
+    ArmourCaseSyncRequest,
+    ArmourCaseSyncResponse,
     BankOut,
     BankItemOut,
     BankSyncRequest,
@@ -91,6 +100,10 @@ from app.schemas import (
     EquipmentSyncRequest,
     EquipmentSyncResponse,
     EQUIPMENT_SLOTS,
+    FancyDressBoxOut,
+    FancyDressBoxItemOut,
+    FancyDressBoxSyncRequest,
+    FancyDressBoxSyncResponse,
     GEAR_SETUP_EQUIPMENT_SLOTS,
     HideLootItemRequest,
     HideLootNpcRequest,
@@ -106,10 +119,14 @@ from app.schemas import (
     LootingBagSyncResponse,
     LootSyncRequest,
     LootSyncResponse,
-    MenagerieOut,
-    MenagerieItemOut,
-    MenagerieSyncRequest,
-    MenagerieSyncResponse,
+    MagicCapeRackOut,
+    MagicCapeRackItemOut,
+    MagicCapeRackSyncRequest,
+    MagicCapeRackSyncResponse,
+    MagicWardrobeOut,
+    MagicWardrobeItemOut,
+    MagicWardrobeSyncRequest,
+    MagicWardrobeSyncResponse,
     MoveGearSlotItemRequest,
     NpcSearchResponse,
     PlayerOut,
@@ -146,6 +163,14 @@ from app.schemas import (
     TackleBoxItemOut,
     TackleBoxSyncRequest,
     TackleBoxSyncResponse,
+    ToyBoxOut,
+    ToyBoxItemOut,
+    ToyBoxSyncRequest,
+    ToyBoxSyncResponse,
+    TreasureChestOut,
+    TreasureChestItemOut,
+    TreasureChestSyncRequest,
+    TreasureChestSyncResponse,
     UpdateMindMapNodeRequest,
 )
 
@@ -181,15 +206,34 @@ MAX_SEED_VAULT_ITEMS = 200
 # the main inventory, since it's filled the same way), so this mirrors
 # MAX_INVENTORY_ITEMS's own reasoning rather than being a fresh guess.
 MAX_LOOTING_BAG_ITEMS = INVENTORY_SIZE
-# The Menagerie's highest-tier pet house (Construction 92, Nature house)
-# holds 83 pets (71 + 12 extra slots) -- a generous multiple of that
-# real ceiling, same spirit as MAX_SEED_VAULT_ITEMS, rather than a
-# round-number guess.
-MAX_MENAGERIE_ITEMS = 100
 # A Tackle Box only ever stores 35 distinct kinds of item (a fixed,
 # documented ceiling, not a guess) -- a little headroom past that in
 # case a future update raises it, same spirit as MAX_RUNE_POUCH_ITEMS.
 MAX_TACKLE_BOX_ITEMS = 50
+# The Costume Room's smaller single-container storages (Magic
+# Wardrobe, Armour Case, Fancy Dress Box) each hold a few dozen
+# distinct set pieces/outfits at most even at their top upgrade tier --
+# a generous multiple of that, same spirit as MAX_SEED_VAULT_ITEMS,
+# rather than a round-number guess.
+MAX_MAGIC_WARDROBE_ITEMS = 200
+MAX_ARMOUR_CASE_ITEMS = 200
+MAX_FANCY_DRESS_BOX_ITEMS = 200
+# The Toy Box holds every non-tradeable holiday reward the player owns
+# -- more of these accumulate every year, so this leaves generous
+# headroom past the current real total rather than being a tight fit.
+MAX_TOY_BOX_ITEMS = 200
+# The Treasure Chest merges six separate Treasure Trail difficulty
+# tiers into one sync (see TreasureChestItem's docstring in
+# app/models.py), and clue reward pools run into the hundreds of
+# distinct items across all six combined -- generous headroom past
+# that, not a round-number guess.
+MAX_TREASURE_CHEST_ITEMS = 600
+# The Cape Rack merges two widget pages into one sync (see
+# MagicCapeRackItem's docstring in app/models.py) and only ever holds
+# capes -- skill capes (trimmed and untrimmed), god capes, quest cape,
+# and the handful of other capes the game has -- so this is a generous
+# multiple of that real, much smaller ceiling.
+MAX_MAGIC_CAPE_RACK_ITEMS = 100
 # There are exactly 24 real OSRS skills (see SKILL_NAMES in
 # app/mindmaps.py) -- a real ceiling, not a guess.
 MAX_SKILLS_PER_SYNC = 24
@@ -348,7 +392,7 @@ def unlink_player(db: Session = Depends(get_db), player: Player = Depends(get_cu
 
 def _stamp_storage_synced(player: Player, storage_key: str, now: datetime) -> None:
     """Records that `storage_key` (one of POSSESSION_STORAGE_KEYS) was
-    just synced -- called from the bottom of every one of the nine
+    just synced -- called from the bottom of every one of the fourteen
     per-storage POST handlers below, right before their own db.commit()
     (storage_synced_at is a plain column on the same Player row already
     being flushed, so this never needs a commit of its own). See
@@ -676,50 +720,6 @@ def read_looting_bag(db: Session = Depends(get_db), player: Player = Depends(get
     return LootingBagOut(items=[LootingBagItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
-@app.post("/api/players/me/menagerie", response_model=MenagerieSyncResponse)
-def sync_menagerie(
-    payload: MenagerieSyncRequest,
-    db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
-):
-    """Same contract as POST /api/players/me/bank above, for the
-    Player-Owned-House Menagerie's stored pets instead -- see
-    MyscapeClient#syncMenagerie in the Mootrius/myscape-plugin repo and
-    MenagerieItem's docstring in app/models.py. Full replace, never a
-    merge."""
-    if len(payload.items) > MAX_MENAGERIE_ITEMS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Too many items in one sync (max {MAX_MENAGERIE_ITEMS}).",
-        )
-
-    db.query(MenagerieItem).filter(MenagerieItem.player_id == player.id).delete()
-    now = datetime.now(timezone.utc)
-    for item in payload.items:
-        db.add(MenagerieItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
-            quantity=item.quantity, updated_at=now,
-        ))
-    _stamp_storage_synced(player, "menagerie", now)
-    db.commit()
-
-    return MenagerieSyncResponse(item_count=len(payload.items))
-
-
-@app.get("/api/players/me/menagerie", response_model=MenagerieOut)
-def read_menagerie(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the
-    Menagerie instead."""
-    items = (
-        db.query(MenagerieItem)
-        .filter(MenagerieItem.player_id == player.id)
-        .order_by(MenagerieItem.item_id)
-        .all()
-    )
-    updated_at = items[0].updated_at if items else None
-    return MenagerieOut(items=[MenagerieItemOut.model_validate(item) for item in items], updated_at=updated_at)
-
-
 @app.post("/api/players/me/tackle-box", response_model=TackleBoxSyncResponse)
 def sync_tackle_box(
     payload: TackleBoxSyncRequest,
@@ -761,6 +761,264 @@ def read_tackle_box(db: Session = Depends(get_db), player: Player = Depends(get_
     )
     updated_at = items[0].updated_at if items else None
     return TackleBoxOut(items=[TackleBoxItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/magic-wardrobe", response_model=MagicWardrobeSyncResponse)
+def sync_magic_wardrobe(
+    payload: MagicWardrobeSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Magic Wardrobe's stored gear instead -- see MyscapeClient#syncMagicWardrobe in the
+    Mootrius/myscape-plugin repo and MagicWardrobeItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_MAGIC_WARDROBE_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_MAGIC_WARDROBE_ITEMS}).",
+        )
+
+    db.query(MagicWardrobeItem).filter(MagicWardrobeItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(MagicWardrobeItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "magic_wardrobe", now)
+    db.commit()
+
+    return MagicWardrobeSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/magic-wardrobe", response_model=MagicWardrobeOut)
+def read_magic_wardrobe(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Magic Wardrobe's stored gear instead."""
+    items = (
+        db.query(MagicWardrobeItem)
+        .filter(MagicWardrobeItem.player_id == player.id)
+        .order_by(MagicWardrobeItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return MagicWardrobeOut(items=[MagicWardrobeItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/armour-case", response_model=ArmourCaseSyncResponse)
+def sync_armour_case(
+    payload: ArmourCaseSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Armour Case's stored gear instead -- see MyscapeClient#syncArmourCase in the
+    Mootrius/myscape-plugin repo and ArmourCaseItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_ARMOUR_CASE_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_ARMOUR_CASE_ITEMS}).",
+        )
+
+    db.query(ArmourCaseItem).filter(ArmourCaseItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(ArmourCaseItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "armour_case", now)
+    db.commit()
+
+    return ArmourCaseSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/armour-case", response_model=ArmourCaseOut)
+def read_armour_case(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Armour Case's stored gear instead."""
+    items = (
+        db.query(ArmourCaseItem)
+        .filter(ArmourCaseItem.player_id == player.id)
+        .order_by(ArmourCaseItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return ArmourCaseOut(items=[ArmourCaseItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/fancy-dress-box", response_model=FancyDressBoxSyncResponse)
+def sync_fancy_dress_box(
+    payload: FancyDressBoxSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Fancy Dress Box's stored outfits instead -- see MyscapeClient#syncFancyDressBox in the
+    Mootrius/myscape-plugin repo and FancyDressBoxItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_FANCY_DRESS_BOX_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_FANCY_DRESS_BOX_ITEMS}).",
+        )
+
+    db.query(FancyDressBoxItem).filter(FancyDressBoxItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(FancyDressBoxItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "fancy_dress_box", now)
+    db.commit()
+
+    return FancyDressBoxSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/fancy-dress-box", response_model=FancyDressBoxOut)
+def read_fancy_dress_box(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Fancy Dress Box's stored outfits instead."""
+    items = (
+        db.query(FancyDressBoxItem)
+        .filter(FancyDressBoxItem.player_id == player.id)
+        .order_by(FancyDressBoxItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return FancyDressBoxOut(items=[FancyDressBoxItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/toy-box", response_model=ToyBoxSyncResponse)
+def sync_toy_box(
+    payload: ToyBoxSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Toy Box's stored holiday items instead -- see MyscapeClient#syncToyBox in the
+    Mootrius/myscape-plugin repo and ToyBoxItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_TOY_BOX_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_TOY_BOX_ITEMS}).",
+        )
+
+    db.query(ToyBoxItem).filter(ToyBoxItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(ToyBoxItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "toy_box", now)
+    db.commit()
+
+    return ToyBoxSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/toy-box", response_model=ToyBoxOut)
+def read_toy_box(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Toy Box's stored holiday items instead."""
+    items = (
+        db.query(ToyBoxItem)
+        .filter(ToyBoxItem.player_id == player.id)
+        .order_by(ToyBoxItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return ToyBoxOut(items=[ToyBoxItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/treasure-chest", response_model=TreasureChestSyncResponse)
+def sync_treasure_chest(
+    payload: TreasureChestSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Treasure Chest's stored clue rewards instead -- see MyscapeClient#syncTreasureChest in the
+    Mootrius/myscape-plugin repo and TreasureChestItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_TREASURE_CHEST_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_TREASURE_CHEST_ITEMS}).",
+        )
+
+    db.query(TreasureChestItem).filter(TreasureChestItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(TreasureChestItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "treasure_chest", now)
+    db.commit()
+
+    return TreasureChestSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/treasure-chest", response_model=TreasureChestOut)
+def read_treasure_chest(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Treasure Chest's stored clue rewards instead."""
+    items = (
+        db.query(TreasureChestItem)
+        .filter(TreasureChestItem.player_id == player.id)
+        .order_by(TreasureChestItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return TreasureChestOut(items=[TreasureChestItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/magic-cape-rack", response_model=MagicCapeRackSyncResponse)
+def sync_magic_cape_rack(
+    payload: MagicCapeRackSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Cape Rack's stored capes instead -- see MyscapeClient#syncMagicCapeRack in the
+    Mootrius/myscape-plugin repo and MagicCapeRackItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_MAGIC_CAPE_RACK_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_MAGIC_CAPE_RACK_ITEMS}).",
+        )
+
+    db.query(MagicCapeRackItem).filter(MagicCapeRackItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(MagicCapeRackItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "magic_cape_rack", now)
+    db.commit()
+
+    return MagicCapeRackSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/magic-cape-rack", response_model=MagicCapeRackOut)
+def read_magic_cape_rack(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Cape Rack's stored capes instead."""
+    items = (
+        db.query(MagicCapeRackItem)
+        .filter(MagicCapeRackItem.player_id == player.id)
+        .order_by(MagicCapeRackItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return MagicCapeRackOut(items=[MagicCapeRackItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
 @app.get("/api/players/me/sync-status", response_model=SyncStatusOut)

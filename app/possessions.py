@@ -30,11 +30,14 @@ from sqlalchemy.orm import Session
 
 from app.item_ids import find_item_by_exact_name, find_item_ids
 from app.models import (
+    ArmourCaseItem,
     BankItem,
     EquipmentItem,
+    FancyDressBoxItem,
     InventoryItem,
     LootingBagItem,
-    MenagerieItem,
+    MagicCapeRackItem,
+    MagicWardrobeItem,
     PinnedPossessionItem,
     Player,
     PossessionTracker,
@@ -42,6 +45,8 @@ from app.models import (
     RunePouchItem,
     SeedVaultItem,
     TackleBoxItem,
+    ToyBoxItem,
+    TreasureChestItem,
 )
 from app.purchase_goals import COINS_ITEM_ID, derived_price_for, get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
 
@@ -57,14 +62,19 @@ STORAGE_SOURCES = [
     ("rune_pouch", RunePouchItem),
     ("seed_vault", SeedVaultItem),
     ("looting_bag", LootingBagItem),
-    ("menagerie", MenagerieItem),
     ("tackle_box", TackleBoxItem),
+    ("magic_wardrobe", MagicWardrobeItem),
+    ("armour_case", ArmourCaseItem),
+    ("fancy_dress_box", FancyDressBoxItem),
+    ("toy_box", ToyBoxItem),
+    ("treasure_chest", TreasureChestItem),
+    ("magic_cape_rack", MagicCapeRackItem),
 ]
 
 
 def get_owned_breakdown(db: Session, player: Player) -> Dict[int, dict]:
     """Returns {item_id: {"itemName": str|None, "total": int,
-    "byLocation": {storage_key: int}}} across every one of the nine
+    "byLocation": {storage_key: int}}} across every one of the fourteen
     synced storages -- the single query this whole module (both the
     tracker sections and the full raw view) computes owned quantities
     from. itemName is whichever storage first reported a non-empty one
