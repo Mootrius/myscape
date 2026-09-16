@@ -72,17 +72,17 @@
 
 /* Every header doubles as a sort control -- a plain <button> reset
    back down to this row's own text styling (rather than default
-   button chrome). All headers stay the same size/color whether or
-   not they're the active sort column; the arrow span
-   (.pm-sort-arrow), filled in by updateSortHeaders only for
-   whichever one is currently active, is the sole indicator of which
-   column is driving the sort. */
+   button chrome). All headers share the same size regardless of
+   which one is active; the active column is called out in gold
+   (text + arrow together), same as .pm-filter-btn.active elsewhere
+   on this page. */
 .pm-sort-header {
   background: none; border: none; padding: 0; margin: 0; font: inherit;
   color: inherit; letter-spacing: inherit; text-transform: inherit;
   cursor: pointer; width: 100%;
 }
 .pm-sort-header:hover { color: var(--text); }
+.pm-sort-header.active { color: var(--gold); }
 .pm-sort-arrow { display: inline-block; }
 
 .pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; }
