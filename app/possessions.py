@@ -40,7 +40,7 @@ from app.models import (
     RunePouchItem,
     SeedVaultItem,
 )
-from app.purchase_goals import get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
+from app.purchase_goals import derived_price_for, get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
 
 # Storage key (matches schemas.POSSESSION_STORAGE_KEYS and
 # Player.storage_synced_at's own keys) -> the model table it's read
@@ -293,6 +293,12 @@ def _merge_dose_families(items: List[dict], mapping: dict) -> List[dict]:
             "tradeable": dose1_tradeable if dose1_item_id is not None else family["tradeable"],
             "highAlch": (family["haValueTotal"] / total_doses) if family["haKnown"] else None,
             "gePrice": (family["geValueTotal"] / total_doses) if family["geKnown"] else None,
+            # Dose-variant potions are always GE-tradeable in OSRS (no
+            # known untradeable one exists), so a merged row's own value
+            # is always a real GE price, never a derived one -- unlike
+            # every other row, geDerived isn't carried through per-
+            # variant here since there's nothing real to average.
+            "geDerived": False,
             "total": total_doses,
             "byLocation": family["byLocation"],
         })
@@ -385,7 +391,15 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
     app/pages.py). Potion dose variants of the same potion are folded
     into one row here, counted in 1-dose units (see
     _merge_dose_families) -- everything downstream of this function
-    just sees one row per potion, never per dose-specific item id."""
+    just sees one row per potion, never per dose-specific item id.
+
+    An untradeable item still gets a GE value here whenever RuneLite's
+    own ported Item Prices data links it to one (see derived_price_for
+    in app/purchase_goals.py -- the same "GE: 5.47M gp" a Crystal helm
+    shows on hover in-game). TRADEABLE stays NO for these either way --
+    it's a computed stand-in value, not a real GE listing -- geDerived
+    on each item marks which rows that applies to, for the frontend to
+    show the distinction."""
     mapping, mapping_error = get_mapping()
     prices, price_error = get_latest_prices()
     breakdown = get_owned_breakdown(db, player)
@@ -395,7 +409,21 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
         if entry["total"] <= 0:
             continue
         display = resolve_item_display(item_id, entry["itemName"], mapping)
-        ge_price, _ = unit_price_for(item_id, prices) if display["tradeable"] else (None, None)
+        if display["tradeable"]:
+            ge_price, _ = unit_price_for(item_id, prices)
+            ge_derived = False
+        else:
+            # Not Grand Exchange tradeable, but a lot of untradeables
+            # still have a real GE-derived value -- the same "GE: 5.47M
+            # gp" a Crystal helm shows on hover in-game, ported from
+            # RuneLite's own Item Prices plugin data (see
+            # derived_price_for/get_untradeable_mapping in
+            # app/purchase_goals.py). TRADEABLE stays NO either way --
+            # this is a computed stand-in value, not a real GE listing
+            # -- geDerived just lets the frontend mark it as such
+            # (see valueCell in render_possessions).
+            ge_price, _ = derived_price_for(item_id, prices)
+            ge_derived = ge_price is not None
         items.append({
             "itemId": item_id,
             "name": display["name"],
@@ -403,6 +431,7 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
             "tradeable": display["tradeable"],
             "highAlch": display["highAlch"],
             "gePrice": ge_price,
+            "geDerived": ge_derived,
             "total": entry["total"],
             "byLocation": entry["byLocation"],
         })

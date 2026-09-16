@@ -5831,18 +5831,25 @@ def render_possessions(player: Player) -> str:
       // One value column's two lines -- the whole stack's worth ("N gp",
       // primary) and, only when there's more than one to distinguish it
       // from, one unit's worth ("N ea", dim) -- or an em dash when this
-      // item has no price on file at all (an untradeable item, or a
-      // tradeable one the wiki just doesn't have current data for --
-      // see build_possessions_summary's own comment in
-      // app/possessions.py for why those two cases can't be told apart
-      // from gePrice/highAlch alone, and why that's fine here). At
-      // qty 1 the stack value and the unit value are the same number,
-      // so the "ea" line would just be a redundant repeat of the line
-      // right above it -- left EMPTY rather than shown twice, but the
-      // second .pm-value-each div is still always rendered (never
-      // omitted) so every row comes out the same height whether or not
-      // it actually has a per-unit line's worth of text in it.
-      function valueCell(unitValue, qty) {
+      // item has no price on file at all (an untradeable item with no
+      // linked value either, or a tradeable one the wiki just doesn't
+      // have current data for -- see build_possessions_summary's own
+      // comment in app/possessions.py for why those two cases can't be
+      // told apart from gePrice/highAlch alone, and why that's fine
+      // here). At qty 1 the stack value and the unit value are the same
+      // number, so the "ea" line would just be a redundant repeat of
+      // the line right above it -- left EMPTY rather than shown twice,
+      // but the second .pm-value-each div is still always rendered
+      // (never omitted) so every row comes out the same height whether
+      // or not it actually has a per-unit line's worth of text in it.
+      //
+      // `derived` (GE column only, item.geDerived) marks a value that
+      // isn't a direct Grand Exchange listing at all -- an untradeable
+      // item's value computed from a linked item instead (see
+      // derived_price_for in app/purchase_goals.py; TRADEABLE still
+      // correctly reads NO for these) -- shown with a leading "~" and a
+      // tooltip so it doesn't read as a real GE price.
+      function valueCell(unitValue, qty, derived) {
         if (unitValue == null) {
           return '<div class="pm-value-cell">' +
             '<div class="pm-value-stack pm-value-none">&mdash;</div>' +
@@ -5850,9 +5857,11 @@ def render_possessions(player: Player) -> str:
           '</div>';
         }
         var eachText = qty > 1 ? (fmtNum(unitValue) + ' ea') : '';
-        return '<div class="pm-value-cell">' +
-          '<div class="pm-value-stack">' + fmtNum(unitValue * qty) + ' gp</div>' +
-          '<div class="pm-value-each">' + eachText + '</div>' +
+        var titleAttr = derived ? ' title="Derived from a linked item\\'s GE price -- not a direct Grand Exchange listing"' : '';
+        var prefix = derived ? '~' : '';
+        return '<div class="pm-value-cell"' + titleAttr + '>' +
+          '<div class="pm-value-stack">' + prefix + fmtNum(unitValue * qty) + ' gp</div>' +
+          '<div class="pm-value-each">' + (eachText ? (prefix + eachText) : '') + '</div>' +
         '</div>';
       }
 
@@ -5864,7 +5873,7 @@ def render_possessions(player: Player) -> str:
           '<a class="pm-col pm-col-image" href="' + wikiItemUrl(item.name) + '" target="_blank" rel="noopener">' + iconImg(item.icon) +
             '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></a>' +
           '<div class="pm-col pm-col-qty">x' + fmtNum(v.qty) + '</div>' +
-          '<div class="pm-col pm-col-ge">' + valueCell(item.gePrice, v.qty) + '</div>' +
+          '<div class="pm-col pm-col-ge">' + valueCell(item.gePrice, v.qty, item.geDerived) + '</div>' +
           '<div class="pm-col pm-col-ha">' + valueCell(item.highAlch, v.qty) + '</div>' +
           '<div class="pm-col pm-col-tradeable"><span class="pm-badge ' + tradeableCls + '">' + tradeableText + '</span></div>' +
         '</div>';
@@ -5939,7 +5948,7 @@ def render_possessions(player: Player) -> str:
           var qtyEl = row.querySelector('.pm-col-qty');
           if (qtyEl) qtyEl.textContent = 'x' + fmtNum(v.qty);
           var geEl = row.querySelector('.pm-col-ge');
-          if (geEl) geEl.innerHTML = valueCell(item.gePrice, v.qty);
+          if (geEl) geEl.innerHTML = valueCell(item.gePrice, v.qty, item.geDerived);
           var haEl = row.querySelector('.pm-col-ha');
           if (haEl) haEl.innerHTML = valueCell(item.highAlch, v.qty);
           var badge = row.querySelector('.pm-badge');

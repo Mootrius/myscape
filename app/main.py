@@ -65,9 +65,7 @@ from app.purchase_goals import (
     build_owned_pools,
     build_purchase_goals_state,
     get_mapping,
-    is_crystal_armour_piece,
-    is_elidinis_ward_f,
-    is_faerdhinen_or_saeldor,
+    has_derived_price,
     search_items,
 )
 from app.recipes import expand_recipe_components
@@ -1081,20 +1079,18 @@ def set_gear_slot(
             payload.item.item_id is None
             and not payload.item.components
             and payload.item.item_name
-            and not is_crystal_armour_piece(payload.item.item_name)
-            and not is_faerdhinen_or_saeldor(payload.item.item_name)
-            and not is_elidinis_ward_f(payload.item.item_name)
+            and not has_derived_price(payload.item.item_name)
         ):
-            # Crystal helm/body/legs, Bow of Faerdhinen/Blade of
-            # Saeldor, and Elidinis' ward (f) are skipped here -- the
-            # wiki's own recipe data for the first two is unreliable,
-            # and simply doesn't exist at all for the ward (see
-            # _crystal_armour_seed_price's, _faerdhinen_saeldor_price's,
-            # and _elidinis_ward_f_price's docstrings in
-            # app/purchase_goals.py), and they're priced against the
-            # relevant seed(s)/ingredients directly at read time
-            # instead, so there's nothing useful to auto-expand into up
-            # front.
+            # Anything the ported RuneLite table already has a linked GE
+            # value for (has_derived_price/derived_price_by_name in
+            # app/purchase_goals.py -- Crystal helm/body/legs, charged
+            # weapons, Bow of Faerdhinen/Blade of Saeldor, Elidinis'
+            # ward (f), and ~900 more) is skipped here: it's priced
+            # directly off that linked value at read time regardless of
+            # whatever components this would expand into (some of which,
+            # for a few of these specific items, the wiki's own recipe
+            # data gets outright wrong or simply doesn't have at all),
+            # so there's nothing useful to auto-expand into up front.
             mapping, _ = get_mapping()
             auto_components = expand_recipe_components(payload.item.item_name, mapping)
             if auto_components:
