@@ -79,21 +79,21 @@ def get_owned_breakdown(db: Session, player: Player) -> Dict[int, dict]:
     return breakdown
 
 
-# A handful of items don't just show a bigger pile of the same picture
-# as more of them are held (RuneScape's "xN" quantity overlay already
-# handles that for every ordinary item) -- Coins and Abyssal Pearls are
-# actual in-game currency stacks whose own artwork changes at set
-# thresholds (see the OSRS Wiki's "Coins" article for the full
-# 1/2/3/4/5/25/100/250/1000/10000 sequence; Abyssal Pearls tops out at
-# 5). Both the live GE mapping and the item_ids.json snapshot only ever
-# carry the base ("1") appearance for these -- neither holds a stack
-# size to pick a bigger image from -- so this table overrides the wiki
-# icon FILENAME outright to whichever file is that item's biggest
-# denomination, regardless of how many the player actually owns (a
-# handful of coins showing the 10,000gp pile image is a cosmetic choice
-# for a nicer-looking row, not a claim about the real stack size --
-# QUANTITY is what actually tells the player how many they have). Add
-# another entry here if another such item turns up.
+# Coins and Abyssal Pearls are actual in-game currency stacks whose own
+# artwork changes at set thresholds (see the OSRS Wiki's "Coins"
+# article for the full 1/2/3/4/5/25/100/250/1000/10000 sequence;
+# Abyssal Pearls tops out at 5) -- but neither is a GE-tradeable item
+# (no listing, so never in the live mapping), and the wiki's own
+# File:Coins.png / File:Abyssal pearls.png redirects (see the general
+# fallback in resolve_item_display below) don't reliably land on the
+# BIGGEST denomination either -- Coins.png redirects to the 100gp pile,
+# not 10,000gp. So these two stay pinned here to the exact file we
+# actually want, regardless of how many the player owns (a handful of
+# coins showing the 10,000gp pile image is a cosmetic choice for a
+# nicer-looking row, not a claim about the real stack size -- QUANTITY
+# is what actually tells the player how many they have). Add another
+# entry here only if some other item's own bare-name redirect turns out
+# not to land on the size we want either.
 _STACK_ICON_OVERRIDES = {
     995: "Coins 10000.png",
     26792: "Abyssal pearls 5.png",
@@ -105,11 +105,37 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
     item id -- tries the live GE mapping first (real icon, high alch,
     and the definitive tradeable=True), then falls back to the
     item_ids.json snapshot by name (for an untradeable item, whose id
-    never appears in the GE mapping at all), then to the bare id/name a
-    storage table itself already had on file. The icon filename is
-    resolved from whichever of those tiers applies, then run through
-    _STACK_ICON_OVERRIDES before being turned into a URL -- see that
-    table's own comment."""
+    never appears in the GE mapping at all) for a corrected/canonical
+    name, then to the bare id/name a storage table itself already had
+    on file.
+
+    The ICON filename for that untradeable branch deliberately does NOT
+    use item_ids.json's own stored "icon" field, even though that
+    lookup is sitting right there -- that field was captured from
+    whichever image the wiki's Infobox_item data marks as an item's
+    "default_version", which for every stackable/denominated item (the
+    exact items this bit us on -- Tokkul, Stardust, Platinum tokens,
+    and friends, none of which have a GE listing) is consistently the
+    SMALLEST ("1") variant, not the biggest. Same root cause the
+    _STACK_ICON_OVERRIDES table above exists for on Coins/Abyssal
+    Pearls, just silently wrong for every OTHER such item instead of
+    loudly wrong for two well-known ones.
+
+    Loot Tracker's own item icon resolution (see _resolve_loot_items in
+    app/loot.py) sidesteps this entirely by falling back to the bare
+    item NAME as the filename instead of a snapshot lookup, and that
+    turns out to already do exactly the right thing here: the OSRS
+    Wiki maintains File:<Name>.png (no denomination suffix) as a
+    REDIRECT to whichever version IT treats as that item's default/
+    biggest-looking icon -- confirmed directly against the wiki's own
+    API, e.g. File:Dragonfruit tree seed.png -> File:Dragonfruit tree
+    seed 5.png, File:Abyssal pearls.png -> File:Abyssal pearls 5.png
+    (matching the hardcoded override above on its own). So the bare
+    name is used here too, the same fallback Loot Tracker already
+    relies on, rather than reproducing its own separate one -- run
+    through _STACK_ICON_OVERRIDES afterward for the two items (Coins
+    being the motivating case) where that redirect still doesn't land
+    on the specific denomination we want."""
     meta = mapping.get(str(item_id))
     if meta:
         icon_filename = meta.get("icon")
@@ -117,16 +143,15 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
         tradeable = True
         high_alch = meta.get("highalch")
     else:
-        icon_filename = None
         name = fallback_name
         tradeable = False
         high_alch = None
         if fallback_name:
             snap = find_item_by_exact_name(fallback_name)
             if snap:
-                icon_filename = snap.get("icon")
                 name = snap.get("name") or fallback_name
         name = name or f"Item #{item_id}"
+        icon_filename = name
 
     icon_filename = _STACK_ICON_OVERRIDES.get(item_id, icon_filename)
     return {
