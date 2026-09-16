@@ -5707,13 +5707,15 @@ def render_possessions(player: Player) -> str:
         return '<img class="pm-row-icon" src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\\'none\\'" />';
       }
 
-      // A plain pushpin glyph (rendered via the browser's own emoji
-      // font, same as the sort arrows just below falling back off the
-      // page's custom pixel font for characters it doesn't have) --
-      // one glyph shared by both states, see .pm-pin-btn/.pinned in
-      // possessions.css for how pinned-vs-not is told apart instead
-      // (color/always-visible, not a different icon).
-      var PIN_GLYPH = '\\u{1F4CC}';
+      // Feather Icons' own "map-pin" path (stroke="currentColor", no
+      // fill) -- the same line-outline-icon family every other small
+      // control on this site already draws from (see, e.g., Mindmaps'
+      // zoom-to-fit/undo/redo/edit-mode SVGs in this file), rather than
+      // an emoji glyph. One markup shared by both pinned/unpinned states
+      // -- see .pm-pin-btn/.pinned in possessions.css for how gray vs.
+      // gold is told apart instead (color alone, currentColor picks it
+      // up automatically, never a different icon).
+      var PIN_GLYPH = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>';
 
       // Same wiki-search-redirect link every item icon/name on this
       // page opens (see Loot Tracker's own wikiItemUrl in this file for

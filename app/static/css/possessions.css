@@ -95,28 +95,41 @@
    two groups when both actually have rows in them (see renderTable) --
    an all-pinned or all-unpinned list has no divider at all. */
 .pm-pinned-divider { margin: 6px 0 10px; border-top: 1px solid var(--gold-dim); }
-/* The pin toggle -- a plain pushpin glyph (see PIN_GLYPH in the page's
-   own script), absolutely positioned into the left gutter .pm-row's
-   own padding-left reserves above, rather than a grid column of its
-   own, since it's a sibling of the row's <a> (not a grid child of it)
-   and so isn't part of that grid layout at all. Hidden until the row
-   is hovered (see .pm-row-wrap:hover below) UNLESS the item is already
-   pinned, in which case it stays visible and gold -- an already-pinned
+/* The pin toggle -- Feather's "map-pin" outline (see PIN_GLYPH in the
+   page's own script), absolutely positioned into the left gutter
+   .pm-row's own padding-left reserves above, rather than a grid column
+   of its own, since it's a sibling of the row's <a> (not a grid child
+   of it) and so isn't part of that grid layout at all. Hidden until
+   the row is hovered (see .pm-row-wrap:hover below) UNLESS the item is
+   already pinned, in which case it stays visible -- an already-pinned
    row should always show *why* without needing a hover, the same way
-   a browser's own pinned tabs don't hide their pin icon. */
+   a browser's own pinned tabs don't hide their pin icon.
+
+   Color follows the same "plain gray line icon, same family as
+   Mindmaps' zoom/undo/redo/edit-mode SVGs (see .mm-zoom-controls
+   button in mindmaps.css)" convention, but with its own hover twist:
+   an unpinned pin is --text-dim at rest and turns gold on hover (the
+   normal "you can act on this" affordance), while a pinned one is the
+   reverse -- gold at rest, since it's already active, and back to
+   --text-dim on hover, previewing the gray "unpinned" look you'd get
+   by clicking it. .pinned:hover's two classes plus :hover outrank the
+   plain :hover rule below regardless of source order, so this doesn't
+   depend on which rule happens to come first in the file. */
 .pm-pin-btn {
   position: absolute; left: 1px; top: 50%; transform: translateY(-50%);
   width: 20px; height: 20px; padding: 0; margin: 0;
   display: flex; align-items: center; justify-content: center;
   background: none; border: none; border-radius: var(--radius);
-  font-size: 12px; line-height: 1; cursor: pointer;
-  color: var(--text-faint);
+  cursor: pointer;
+  color: var(--text-dim);
   opacity: 0; pointer-events: none;
-  transition: opacity 0.12s, background-color 0.12s;
+  transition: opacity 0.12s, background-color 0.12s, color 0.12s;
 }
+.pm-pin-btn svg { display: block; }
 .pm-row-wrap:hover .pm-pin-btn { opacity: 1; pointer-events: auto; }
-.pm-pin-btn:hover { background-color: rgba(255, 255, 255, 0.08); }
+.pm-pin-btn:hover { background-color: rgba(255, 255, 255, 0.08); color: var(--gold); }
 .pm-pin-btn.pinned { opacity: 1; pointer-events: auto; color: var(--gold); }
+.pm-pin-btn.pinned:hover { color: var(--text-dim); }
 /* Each data row is itself the link out to that item's OSRS Wiki page
    now (an <a class="pm-row">, built by rowHtml in the page's own
    script) -- .pm-row-header stays a plain, non-clickable <div>, which
@@ -174,6 +187,13 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
    doesn't need or get its own hover affordance -- no underline, no
    separate highlight, just the row's shared background lighting up). */
 .pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* The ITEM header text itself sits flush-left in its button by default,
+   lining up with the left edge of the 26px icon below it rather than
+   that icon's center. Nudge it right just enough to read as centered
+   over the icon column -- scoped to the header button specifically
+   (both classes together) so the data rows' own icon+name cells above
+   are untouched. */
+.pm-col-image.pm-sort-header { padding-left: 12px; }
 .pm-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }
 .pm-icon-blank { width: 26px; height: 26px; }
 .pm-row-name {
