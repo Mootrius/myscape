@@ -134,9 +134,17 @@
 .loot-bar-outline.active { border-color: var(--gold-dim); }
 .loot-bar-fill {
   position: absolute; left: 0; right: 0; bottom: 0; background: var(--gold-dim);
-  transition: height 0.5s ease, background-color 0.5s ease;
+  transition: height 0.5s ease, background-color 0.5s ease, opacity 0.12s ease;
 }
 .loot-bar-fill.has-value { background: var(--gold); }
+/* Hovering a bar (title="..." above is its native tooltip -- the bars
+   aren't clickable, just hoverable) fades the fill down a bit as
+   nice, cheap visual confirmation of which one the pointer is actually
+   over -- keyed off .loot-bar-col:hover rather than .loot-bar-fill:hover
+   itself so the whole column's hit area (including the part of the
+   column above a short bar) triggers it, not just the fill's own
+   pixels. */
+.loot-bar-col:hover .loot-bar-fill { opacity: 0.7; }
 .loot-bar-x-labels { display: flex; gap: 3px; padding-left: 10px; margin-top: 6px; }
 .loot-bar-x-label { flex: 1 1 0; text-align: center; font-size: 9px; color: var(--text-faint); white-space: nowrap; }
 .loot-bar-x-label.now { text-align: right; }
