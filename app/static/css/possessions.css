@@ -11,11 +11,11 @@
   padding: 18px 20px; margin-bottom: 22px;
 }
 
-/* ---- Controls row: search, then sort, then locations, each its own
-   group -- left to right, in that order, exactly as asked for. A
-   vertical rule between groups (rather than gap spacing alone) is what
-   makes each one read as its own separate section within the shared
-   row, not one long run of buttons. ---------------------------------- */
+/* ---- Controls row: search, then the location filters, side by side
+   at the same height -- sorting now lives on the table's own column
+   headers instead (see .pm-sort-header further down). A vertical rule
+   between the two groups (rather than gap spacing alone) is what makes
+   each one read as its own separate section within the shared row. */
 
 .pm-controls-row {
   display: flex; align-items: center; flex-wrap: wrap; gap: 14px;
@@ -26,26 +26,29 @@
   padding-left: 14px; border-left: 1px solid var(--border);
 }
 .pm-search-group { flex: 1 1 220px; min-width: 180px; }
-.pm-search-group .loot-search { width: 100%; height: 32px; padding: 0 10px; font-size: 13px; }
-.pm-sort-group, .pm-location-group { flex: 0 1 auto; }
+/* Same 32px height as .pm-filter-btn below, so the search box and the
+   location buttons beside it line up exactly. */
+.pm-search-group .loot-search { width: 100%; height: 32px; padding: 0 10px; font-size: 13px; box-sizing: border-box; }
+.pm-location-group { flex: 0 1 auto; }
 
 /* Same visual recipe as Purchase Goals' own .sort-btn (purchase-
    goals.css) -- deliberately re-declared here rather than shared
-   across files, per this project's per-page-CSS convention. Sort
-   (.pm-sort-btn) is single-select, toggled by rebuilding the active
-   class server-... client-side (see renderSortButtons); locations
-   (.pm-filter-btn) are multi-select, each toggled independently and on
-   by default -- same look, different selection rule. */
-.pm-sort-btn, .pm-filter-btn {
-  padding: 6px 10px;
+   across files, per this project's per-page-CSS convention. Multi-
+   select: each button toggles independently and all start on. Fixed
+   32px height (rather than sizing purely off padding) so every button
+   lines up with the search box beside it regardless of font
+   rendering. */
+.pm-filter-btn {
+  height: 32px; padding: 0 10px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
   text-align: center;
 }
-.pm-sort-btn:hover, .pm-filter-btn:hover { border-color: var(--gold-dim); color: var(--text); }
-.pm-sort-btn.active, .pm-filter-btn.active { border-color: var(--gold); color: var(--gold); }
+.pm-filter-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pm-filter-btn.active { border-color: var(--gold); color: var(--gold); }
 
 /* ---- The table itself ---------------------------------------------- */
 
@@ -66,6 +69,20 @@
 .pm-row-header .pm-col-ge,
 .pm-row-header .pm-col-ha,
 .pm-row-header .pm-col-tradeable { text-align: center; }
+
+/* IMAGE/QUANTITY/GE VALUE/HA VALUE headers double as sort controls --
+   a plain <button> reset back down to this row's own text styling
+   (rather than default button chrome), with the arrow span
+   (.pm-sort-arrow) filled in by updateSortHeaders only for whichever
+   one is currently active. */
+.pm-sort-header {
+  background: none; border: none; padding: 0; margin: 0; font: inherit;
+  color: inherit; letter-spacing: inherit; text-transform: inherit;
+  cursor: pointer; width: 100%;
+}
+.pm-sort-header:hover { color: var(--text); }
+.pm-sort-header.active { color: var(--gold); }
+.pm-sort-arrow { display: inline-block; }
 
 .pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .pm-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }

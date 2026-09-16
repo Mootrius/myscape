@@ -5490,16 +5490,22 @@ def render_possessions(player: Player) -> str:
     listed the same as for a genuinely untradeable item -- never a
     looser "can this be traded at all" definition).
 
-    Search, sort, and the location filters all sit on one row, in that
-    order, each its own button/input group -- sort is single-select,
-    styled and behaved exactly like Purchase Goals' own .sort-btn row
-    (see renderSortButtons there in this file); locations are
-    multi-select (same visual style, toggled independently, all on by
-    default) and purely reshape what QUANTITY -- and therefore GE/HA
-    VALUE, which scale off it -- counts as owned (see shownQuantity
-    below, which recomputes everything client-side from the one
-    already-fetched summary payload's own per-location breakdown rather
-    than re-polling the server on every toggle).
+    Search and the location filters share one row, at the same height
+    -- locations are multi-select buttons (styled like Purchase Goals'
+    own .sort-btn -- see that page's renderSortButtons in this file),
+    toggled independently, all on by default, and purely reshape what
+    QUANTITY -- and therefore GE/HA VALUE, which scale off it -- counts
+    as owned (see shownQuantity below, which recomputes everything
+    client-side from the one already-fetched summary payload's own
+    per-location breakdown rather than re-polling the server on every
+    toggle).
+
+    There's no separate sort control any more -- IMAGE/QUANTITY/GE
+    VALUE/HA VALUE are each a clickable header (see the
+    .pm-sort-header buttons below and updateSortHeaders/visibleRows in
+    the script) that sorts the table by that column, toggling
+    ascending/descending on repeat clicks the way a spreadsheet's
+    column headers do, with an arrow marking the active one.
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/possessions.css?v={_POSSESSIONS_CSS_VERSION}" />'
 
@@ -5517,7 +5523,6 @@ def render_possessions(player: Player) -> str:
         <div class="pm-control-group pm-search-group">
           <input type="text" class="loot-search" id="pmSearch" placeholder="Search for an item" autocomplete="off" />
         </div>
-        <div class="pm-control-group pm-sort-group" id="pmSortButtons"></div>
         <div class="pm-control-group pm-location-group">
           {location_buttons}
         </div>
@@ -5527,10 +5532,10 @@ def render_possessions(player: Player) -> str:
 
       <div class="pm-table" id="pmTable" style="display:none;">
         <div class="pm-row pm-row-header">
-          <div class="pm-col pm-col-image">Image</div>
-          <div class="pm-col pm-col-qty">Quantity</div>
-          <div class="pm-col pm-col-ge">GE Value</div>
-          <div class="pm-col pm-col-ha">HA Value</div>
+          <button type="button" class="pm-col pm-col-image pm-sort-header" data-sort-key="alpha">Image<span class="pm-sort-arrow"></span></button>
+          <button type="button" class="pm-col pm-col-qty pm-sort-header" data-sort-key="qty">Quantity<span class="pm-sort-arrow"></span></button>
+          <button type="button" class="pm-col pm-col-ge pm-sort-header" data-sort-key="ge">GE Value<span class="pm-sort-arrow"></span></button>
+          <button type="button" class="pm-col pm-col-ha pm-sort-header" data-sort-key="ha">HA Value<span class="pm-sort-arrow"></span></button>
           <div class="pm-col pm-col-tradeable">Tradeable?</div>
         </div>
         <div id="pmRows"></div>
@@ -5540,18 +5545,18 @@ def render_possessions(player: Player) -> str:
 
     script = """
     (function () {
-      var SORT_MODES = [
-        { key: 'qty-high', label: 'Qty \\u2193', title: 'Quantity, high to low' },
-        { key: 'qty-low', label: 'Qty \\u2191', title: 'Quantity, low to high' },
-        { key: 'value-high', label: 'Value \\u2193', title: 'GE value, high to low' },
-        { key: 'value-low', label: 'Value \\u2191', title: 'GE value, low to high' },
-        { key: 'alpha', label: 'Alphabetical' },
-      ];
+      // The direction each column header starts in on its FIRST click --
+      // numeric columns start high-to-low (most owned/valuable first,
+      // the more useful default), the name column starts A-Z. A second
+      // click on the already-active header flips that, same as a
+      // spreadsheet's own column-header sort.
+      var SORT_DEFAULT_DIR = { alpha: 'asc', qty: 'desc', ge: 'desc', ha: 'desc' };
 
       var state = {
         items: [],
         search: '',
-        sort: 'qty-high',
+        sortKey: 'qty',
+        sortDir: 'desc',
         locations: { bank: true, equipment: true, inventory: true, potion_storage: true, rune_pouch: true, seed_vault: true, looting_bag: true },
       };
 
@@ -5597,26 +5602,37 @@ def render_possessions(player: Player) -> str:
         return '<img class="pm-row-icon" src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\\'none\\'" />';
       }
 
-      // ---- Sort (single-select -- same look/behavior as Purchase
-      // Goals' own .sort-btn row, see renderSortButtons there) --------
+      // ---- Sort (click a column header -- see SORT_DEFAULT_DIR above) --
 
-      function renderSortButtons() {
-        var el = document.getElementById('pmSortButtons');
-        el.innerHTML = SORT_MODES.map(function (m) {
-          var cls = 'pm-sort-btn' + (m.key === state.sort ? ' active' : '');
-          var titleAttr = m.title ? ' title="' + m.title + '"' : '';
-          return '<button type="button" class="' + cls + '" data-sort="' + m.key + '"' + titleAttr + '>' + m.label + '</button>';
-        }).join('');
-        el.querySelectorAll('.pm-sort-btn').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            var mode = btn.getAttribute('data-sort');
-            if (mode === state.sort) return;
-            state.sort = mode;
-            renderSortButtons();
-            renderTable();
-          });
+      var sortHeaders = document.querySelectorAll('.pm-sort-header');
+
+      function updateSortHeaders() {
+        sortHeaders.forEach(function (btn) {
+          var key = btn.getAttribute('data-sort-key');
+          var arrow = btn.querySelector('.pm-sort-arrow');
+          if (key === state.sortKey) {
+            btn.classList.add('active');
+            arrow.textContent = state.sortDir === 'asc' ? ' \\u2191' : ' \\u2193';
+          } else {
+            btn.classList.remove('active');
+            arrow.textContent = '';
+          }
         });
       }
+
+      sortHeaders.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var key = btn.getAttribute('data-sort-key');
+          if (key === state.sortKey) {
+            state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            state.sortKey = key;
+            state.sortDir = SORT_DEFAULT_DIR[key] || 'desc';
+          }
+          updateSortHeaders();
+          renderTable();
+        });
+      });
 
       // ---- Locations (multi-select, all on by default) ----------------
 
@@ -5655,30 +5671,42 @@ def render_possessions(player: Player) -> str:
           out.push({ item: item, qty: qty });
         }
         out.sort(function (a, b) {
-          if (state.sort === 'qty-low') return a.qty - b.qty;
-          if (state.sort === 'value-high') return ((b.item.gePrice || 0) * b.qty) - ((a.item.gePrice || 0) * a.qty);
-          if (state.sort === 'value-low') return ((a.item.gePrice || 0) * a.qty) - ((b.item.gePrice || 0) * b.qty);
-          if (state.sort === 'alpha') return a.item.name.localeCompare(b.item.name);
-          return b.qty - a.qty;
+          var ascResult;
+          if (state.sortKey === 'alpha') {
+            ascResult = a.item.name.localeCompare(b.item.name);
+          } else if (state.sortKey === 'ge') {
+            ascResult = ((a.item.gePrice || 0) * a.qty) - ((b.item.gePrice || 0) * b.qty);
+          } else if (state.sortKey === 'ha') {
+            ascResult = ((a.item.highAlch || 0) * a.qty) - ((b.item.highAlch || 0) * b.qty);
+          } else {
+            ascResult = a.qty - b.qty;
+          }
+          return state.sortDir === 'asc' ? ascResult : -ascResult;
         });
         return out;
       }
 
-      // One value column's two lines -- the whole stack's worth (bold,
-      // primary) and one unit's worth ("N each", dim) -- or an em dash
-      // when this item has no price on file at all (an untradeable
-      // item, or a tradeable one the wiki just doesn't have current
-      // data for -- see build_possessions_summary's own comment in
+      // One value column's line(s) -- the whole stack's worth ("N gp",
+      // primary) and, only when there's more than one to distinguish it
+      // from, one unit's worth ("N EA", dim) -- or an em dash when this
+      // item has no price on file at all (an untradeable item, or a
+      // tradeable one the wiki just doesn't have current data for --
+      // see build_possessions_summary's own comment in
       // app/possessions.py for why those two cases can't be told apart
-      // from gePrice/highAlch alone, and why that's fine here).
+      // from gePrice/highAlch alone, and why that's fine here). At
+      // qty 1 the stack value and the unit value are the same number,
+      // so the "EA" line would just be a redundant repeat of the line
+      // right above it -- left off rather than shown twice.
       function valueCell(unitValue, qty) {
         if (unitValue == null) {
           return '<div class="pm-value-cell"><div class="pm-value-stack pm-value-none">&mdash;</div></div>';
         }
-        return '<div class="pm-value-cell">' +
-          '<div class="pm-value-stack">' + fmtNum(unitValue * qty) + '</div>' +
-          '<div class="pm-value-each">' + fmtNum(unitValue) + ' each</div>' +
-        '</div>';
+        var html = '<div class="pm-value-cell">' +
+          '<div class="pm-value-stack">' + fmtNum(unitValue * qty) + ' gp</div>';
+        if (qty > 1) {
+          html += '<div class="pm-value-each">' + fmtNum(unitValue) + ' EA</div>';
+        }
+        return html + '</div>';
       }
 
       function renderTable() {
@@ -5725,7 +5753,7 @@ def render_possessions(player: Player) -> str:
         renderTable();
       }
 
-      renderSortButtons();
+      updateSortHeaders();
       loadSummary();
     })();
     """
