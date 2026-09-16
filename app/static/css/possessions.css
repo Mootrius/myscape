@@ -95,7 +95,20 @@
 .pm-sort-header.active { color: var(--gold); }
 .pm-sort-arrow { display: inline-block; }
 
-.pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Shared by both the ITEM header button (.pm-col-image.pm-sort-header)
+   and each data row's own link out to that item's OSRS Wiki page
+   (.pm-col-image alone, an <a> -- see wikiItemUrl/rowHtml in the
+   script) -- color/text-decoration/cursor here are redundant no-ops
+   on the header button (already handled by .pm-sort-header above) but
+   exactly what resets the anchor's default link styling back to how
+   this cell always looked. */
+.pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; color: inherit; text-decoration: none; cursor: pointer; }
+/* Only the row link's own underline (via .pm-row-name below) reads as
+   the hover affordance -- suppressing it here first stops the
+   anchor's global a:hover rule (myscape.css) from also drawing its
+   line across the icon. */
+.pm-col-image:hover { text-decoration: none; }
+.pm-col-image:hover .pm-row-name { text-decoration: underline; }
 .pm-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }
 .pm-icon-blank { width: 26px; height: 26px; }
 .pm-row-name {

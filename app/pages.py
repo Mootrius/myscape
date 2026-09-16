@@ -2126,6 +2126,33 @@ def render_loot_tracker(player: Player) -> str:
           'onerror="this.style.display=\\'none\\'" />';
       }
 
+      // Loads every one of these icon URLs (skipping any falsy one) in
+      // the background BEFORE the caller swaps in the HTML that
+      // references them, so a brand new row of boxes (switching NPCs,
+      // or a search/sort that reshuffles the set) paints already
+      // decoded instead of the icons visibly popping in a beat after
+      // the boxes themselves already changed. Capped at
+      // ICON_PRELOAD_TIMEOUT_MS so one slow or dead wiki image can
+      // never hold the swap up indefinitely -- iconImg's own onerror
+      // still hides a genuinely broken icon once it's actually in the
+      // DOM either way, preload or not.
+      var ICON_PRELOAD_TIMEOUT_MS = 400;
+      function preloadIcons(urls) {
+        var pending = urls.filter(Boolean).map(function (src) {
+          return new Promise(function (resolve) {
+            var img = new Image();
+            img.onload = resolve;
+            img.onerror = resolve;
+            img.src = src;
+          });
+        });
+        if (!pending.length) return Promise.resolve();
+        return Promise.race([
+          Promise.all(pending),
+          new Promise(function (resolve) { setTimeout(resolve, ICON_PRELOAD_TIMEOUT_MS); }),
+        ]);
+      }
+
       function escapeHtml(s) {
         var div = document.createElement('div');
         div.textContent = s == null ? '' : String(s);
@@ -2298,6 +2325,12 @@ def render_loot_tracker(player: Player) -> str:
       // keystroke would find an unchanged-looking key (same NPCs, same
       // order coincidentally) and skip rebuilding.
       var lastNpcKey = null;
+      // Bumped on every rebuild kicked off below -- guards the
+      // preloadIcons().then() callback so a slow-to-resolve rebuild
+      // that a newer one has since superseded (search/sort changed
+      // again, say, while the first preload was still in flight) never
+      // clobbers the row with stale boxes once it finally does resolve.
+      var npcRowRenderToken = 0;
       function renderNpcRow(npcs) {
         var emptyEl = document.getElementById('lootNpcEmpty');
         var rowEl = document.getElementById('lootNpcRow');
@@ -2306,6 +2339,7 @@ def render_loot_tracker(player: Player) -> str:
           emptyEl.style.display = '';
           rowEl.innerHTML = '';
           lastNpcKey = null;
+          npcRowRenderToken++;
           return;
         }
 
@@ -2315,6 +2349,7 @@ def render_loot_tracker(player: Player) -> str:
           emptyEl.style.display = '';
           rowEl.innerHTML = '';
           lastNpcKey = null;
+          npcRowRenderToken++;
           return;
         }
         emptyEl.style.display = 'none';
@@ -2325,8 +2360,7 @@ def render_loot_tracker(player: Player) -> str:
 
         var key = state.npcSearch + '\\u0001' + state.npcSort + '\\u0001' + sorted.map(function (n) { return n.sourceName; }).join('|');
         if (key !== lastNpcKey) {
-          lastNpcKey = key;
-          rowEl.innerHTML = sorted.map(function (n) {
+          var html = sorted.map(function (n) {
             var active = state.selectedNpc === n.sourceName;
             return '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
               escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
@@ -2335,6 +2369,16 @@ def render_loot_tracker(player: Player) -> str:
               '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
             '</button>';
           }).join('');
+          // Preload every icon this new row needs before swapping the
+          // HTML in, so the boxes and their pictures appear together
+          // instead of the icons popping in a beat after the (empty-
+          // looking) boxes already showed.
+          var token = ++npcRowRenderToken;
+          preloadIcons(sorted.map(function (n) { return n.icon; })).then(function () {
+            if (token !== npcRowRenderToken) return;
+            lastNpcKey = key;
+            rowEl.innerHTML = html;
+          });
           return;
         }
 
@@ -2367,6 +2411,8 @@ def render_loot_tracker(player: Player) -> str:
       // switching NPCs or search/sort always rebuilds (new icons) while
       // an unchanged poll reuses the existing DOM (no icon flicker).
       var lastItemKey = null;
+      // Same reasoning/guard as npcRowRenderToken above.
+      var itemListRenderToken = 0;
       function renderItemList(items) {
         var emptyEl = document.getElementById('lootItemEmpty');
         var listEl = document.getElementById('lootItemList');
@@ -2375,6 +2421,7 @@ def render_loot_tracker(player: Player) -> str:
           emptyEl.style.display = '';
           listEl.innerHTML = '';
           lastItemKey = null;
+          itemListRenderToken++;
           return;
         }
 
@@ -2384,6 +2431,7 @@ def render_loot_tracker(player: Player) -> str:
           emptyEl.style.display = '';
           listEl.innerHTML = '';
           lastItemKey = null;
+          itemListRenderToken++;
           return;
         }
         emptyEl.style.display = 'none';
@@ -2395,14 +2443,24 @@ def render_loot_tracker(player: Player) -> str:
         var key = (state.selectedNpc || '') + '\\u0001' + state.itemSearch + '\\u0001' + state.itemSort + '\\u0001' +
           sorted.map(function (it) { return it.itemId != null ? it.itemId : it.itemName; }).join('|');
         if (key !== lastItemKey) {
-          lastItemKey = key;
-          listEl.innerHTML = sorted.map(function (it) {
+          var html = sorted.map(function (it) {
             return '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" title="' + escapeHtml(itemTitle(it)) + '">' +
               iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
               '<div class="loot-item-box-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
               '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
             '</a>';
           }).join('');
+          // Same preload-before-swap as renderNpcRow above -- this is
+          // the branch that runs every time a different NPC gets
+          // selected (its own key includes state.selectedNpc), which
+          // is exactly when this list's icons are most likely to be
+          // brand new and otherwise pop in a beat after the boxes.
+          var token = ++itemListRenderToken;
+          preloadIcons(sorted.map(function (it) { return it.icon; })).then(function () {
+            if (token !== itemListRenderToken) return;
+            lastItemKey = key;
+            listEl.innerHTML = html;
+          });
           return;
         }
 
@@ -5481,22 +5539,37 @@ def render_possessions(player: Player) -> str:
     bank, say -- shows up here on its own shortly after, not only once
     the page is manually refreshed.
 
-    One row per item: an icon + name under ITEM, then QUANTITY (the
-    full, unabbreviated count, with a lowercase "x" in front), GE VALUE
-    and HA VALUE (each showing both the whole stack's value and one
-    unit's value -- a glance at either number alone answers a different
-    question, "what's this stack worth" vs. "what's one of these
-    worth"), and a green/red TRADEABLE? badge -- tradeable meaning
-    specifically tradeable on the Grand Exchange
-    (resolve_item_display's own "tradeable" field in app/possessions.py
-    is already exactly that: true only when the item is found in the
-    live GE mapping, false for anything player-tradeable-but-not-GE-
-    listed the same as for a genuinely untradeable item -- never a
-    looser "can this be traded at all" definition). Every row is the
-    same height regardless of whether its GE/HA cells actually have a
-    per-unit line to show (see valueCell below, which always renders
-    both lines -- the second one just empty when there's nothing to put
-    there -- rather than only emitting it when needed).
+    One row per item: an icon + name under ITEM -- both wrapped in one
+    link (see wikiItemUrl/rowHtml in the script) out to that item's
+    OSRS Wiki page, opened in a new tab, same as Loot Tracker's own
+    item boxes already do -- then QUANTITY (the full, unabbreviated
+    count, with a lowercase "x" in front), GE VALUE and HA VALUE (each
+    showing both the whole stack's value and one unit's value -- a
+    glance at either number alone answers a different question,
+    "what's this stack worth" vs. "what's one of these worth"), and a
+    green/red TRADEABLE? badge -- tradeable meaning specifically
+    tradeable on the Grand Exchange (resolve_item_display's own
+    "tradeable" field in app/possessions.py is already exactly that:
+    true only when the item is found in the live GE mapping, false for
+    anything player-tradeable-but-not-GE-listed the same as for a
+    genuinely untradeable item -- never a looser "can this be traded at
+    all" definition). Every row is the same height regardless of
+    whether its GE/HA cells actually have a per-unit line to show (see
+    valueCell below, which always renders both lines -- the second one
+    just empty when there's nothing to put there -- rather than only
+    emitting it when needed).
+
+    A poll only rebuilds a row's HTML (and so its <img> icon) when the
+    visible set/order of items has actually changed; an unchanged poll
+    -- by far the common case every 5 seconds -- just patches each
+    existing row's quantity/value/tradeable text in place instead,
+    leaving every icon untouched. When a rebuild IS needed, the new
+    icons are preloaded before the HTML swap so they appear together
+    with their rows instead of popping in a beat later (see
+    preloadIcons/renderTable in the script -- same fix as Loot
+    Tracker's own NPC/item boxes use, for the same reason: rebuilding
+    live <img> elements on every poll, whether or not anything shown
+    had actually changed, was what made these icons flicker).
 
     Search and the location filters share one row, at the same height
     -- the search box grows a CLEAR text button of its own at its far
@@ -5616,6 +5689,37 @@ def render_possessions(player: Player) -> str:
       function iconImg(src) {
         if (!src) return '<div class="pm-row-icon pm-icon-blank"></div>';
         return '<img class="pm-row-icon" src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\\'none\\'" />';
+      }
+
+      // Same wiki-search-redirect link every item icon/name on this
+      // page opens (see Loot Tracker's own wikiItemUrl in this file for
+      // the identical approach, self-contained here per this project's
+      // per-page-script convention rather than shared between them).
+      function wikiItemUrl(name) {
+        return 'https://oldschool.runescape.wiki/w/Special:Search?search=' + encodeURIComponent(name || '') + '&go=Go';
+      }
+
+      // Loads every one of these icon URLs in the background before
+      // the caller swaps in HTML that references them, so a rebuilt
+      // table paints already decoded instead of icons popping in a
+      // beat after the rows themselves already changed -- see the
+      // identical helper (and its own fuller comment) in Loot Tracker's
+      // script in this file.
+      var ICON_PRELOAD_TIMEOUT_MS = 400;
+      function preloadIcons(urls) {
+        var pending = urls.filter(Boolean).map(function (src) {
+          return new Promise(function (resolve) {
+            var img = new Image();
+            img.onload = resolve;
+            img.onerror = resolve;
+            img.src = src;
+          });
+        });
+        if (!pending.length) return Promise.resolve();
+        return Promise.race([
+          Promise.all(pending),
+          new Promise(function (resolve) { setTimeout(resolve, ICON_PRELOAD_TIMEOUT_MS); }),
+        ]);
       }
 
       // ---- Sort (click a column header -- see SORT_DEFAULT_DIR above) --
@@ -5752,6 +5856,33 @@ def render_possessions(player: Player) -> str:
         '</div>';
       }
 
+      function rowHtml(v) {
+        var item = v.item;
+        var tradeableCls = item.tradeable ? 'pm-badge-yes' : 'pm-badge-no';
+        var tradeableText = item.tradeable ? 'YES' : 'NO';
+        return '<div class="pm-row" title="' + escapeHtml(item.name) + '">' +
+          '<a class="pm-col pm-col-image" href="' + wikiItemUrl(item.name) + '" target="_blank" rel="noopener">' + iconImg(item.icon) +
+            '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></a>' +
+          '<div class="pm-col pm-col-qty">x' + fmtNum(v.qty) + '</div>' +
+          '<div class="pm-col pm-col-ge">' + valueCell(item.gePrice, v.qty) + '</div>' +
+          '<div class="pm-col pm-col-ha">' + valueCell(item.highAlch, v.qty) + '</div>' +
+          '<div class="pm-col pm-col-tradeable"><span class="pm-badge ' + tradeableCls + '">' + tradeableText + '</span></div>' +
+        '</div>';
+      }
+
+      // Rebuilding every row's HTML (and so its <img> icon) on every
+      // single 5-second poll -- even when nothing the table actually
+      // shows had changed -- was what made these icons flicker
+      // regularly. Same fix as Loot Tracker's NPC/item boxes: only
+      // rebuild when the visible set/order of items has actually
+      // changed (dedup key below), otherwise just patch each existing
+      // row's qty/value/tradeable text in place and leave its icon
+      // untouched; and when a rebuild IS needed, preload the new
+      // icons before swapping the HTML in so they don't pop in a beat
+      // after the rows already changed.
+      var lastPmKey = null;
+      var pmTableRenderToken = 0;
+
       function renderTable() {
         var table = document.getElementById('pmTable');
         var rowsEl = document.getElementById('pmRows');
@@ -5761,6 +5892,8 @@ def render_possessions(player: Player) -> str:
           table.style.display = 'none';
           empty.textContent = 'Nothing synced yet.';
           empty.style.display = '';
+          lastPmKey = null;
+          pmTableRenderToken++;
           return;
         }
 
@@ -5769,24 +5902,52 @@ def render_possessions(player: Player) -> str:
           table.style.display = 'none';
           empty.textContent = 'No items match your search/location filters.';
           empty.style.display = '';
+          lastPmKey = null;
+          pmTableRenderToken++;
           return;
         }
 
         empty.style.display = 'none';
         table.style.display = '';
-        rowsEl.innerHTML = visible.map(function (v) {
+
+        var activeLocations = Object.keys(state.locations).filter(function (k) { return state.locations[k]; }).sort().join(',');
+        var key = state.sortKey + '\\u0001' + state.sortDir + '\\u0001' + state.search + '\\u0001' + activeLocations + '\\u0001' +
+          visible.map(function (v) { return v.item.itemId; }).join('|');
+
+        if (key !== lastPmKey) {
+          var html = visible.map(rowHtml).join('');
+          var token = ++pmTableRenderToken;
+          preloadIcons(visible.map(function (v) { return v.item.icon; })).then(function () {
+            if (token !== pmTableRenderToken) return;
+            lastPmKey = key;
+            rowsEl.innerHTML = html;
+          });
+          return;
+        }
+
+        // Same item set/order as last render (key unchanged) -- reuse
+        // the existing rows (and their <img> icons) but still refresh
+        // the quantity/value/tradeable text in place, since a later
+        // poll can change those numbers for an item still sorted into
+        // the same slot.
+        var rows = rowsEl.children;
+        visible.forEach(function (v, i) {
+          var row = rows[i];
+          if (!row) return;
           var item = v.item;
-          var tradeableCls = item.tradeable ? 'pm-badge-yes' : 'pm-badge-no';
-          var tradeableText = item.tradeable ? 'YES' : 'NO';
-          return '<div class="pm-row" title="' + escapeHtml(item.name) + '">' +
-            '<div class="pm-col pm-col-image">' + iconImg(item.icon) +
-              '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></div>' +
-            '<div class="pm-col pm-col-qty">x' + fmtNum(v.qty) + '</div>' +
-            '<div class="pm-col pm-col-ge">' + valueCell(item.gePrice, v.qty) + '</div>' +
-            '<div class="pm-col pm-col-ha">' + valueCell(item.highAlch, v.qty) + '</div>' +
-            '<div class="pm-col pm-col-tradeable"><span class="pm-badge ' + tradeableCls + '">' + tradeableText + '</span></div>' +
-          '</div>';
-        }).join('');
+          row.title = item.name;
+          var qtyEl = row.querySelector('.pm-col-qty');
+          if (qtyEl) qtyEl.textContent = 'x' + fmtNum(v.qty);
+          var geEl = row.querySelector('.pm-col-ge');
+          if (geEl) geEl.innerHTML = valueCell(item.gePrice, v.qty);
+          var haEl = row.querySelector('.pm-col-ha');
+          if (haEl) haEl.innerHTML = valueCell(item.highAlch, v.qty);
+          var badge = row.querySelector('.pm-badge');
+          if (badge) {
+            badge.className = 'pm-badge ' + (item.tradeable ? 'pm-badge-yes' : 'pm-badge-no');
+            badge.textContent = item.tradeable ? 'YES' : 'NO';
+          }
+        });
       }
 
       async function loadSummary() {
