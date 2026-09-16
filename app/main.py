@@ -261,9 +261,16 @@ def on_startup():
 
 @app.get("/", response_class=HTMLResponse)
 def root(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
-    if player:
-        return RedirectResponse("/dashboard", status_code=302)
-    return render_landing(None)
+    # Used to redirect a logged-in player straight to /dashboard, on the
+    # theory that they'd have no reason to want the landing page once
+    # they're already a user -- but that also meant the header's own
+    # "myscape" logo link (plain href="/", same as it's always been)
+    # could never actually take a logged-in player back to the landing
+    # page itself, only bounce them right back to whatever dashboard
+    # page they were already on. render_landing is player-aware (see
+    # its own docstring) specifically so it can render properly either
+    # way now.
+    return render_landing(player)
 
 
 @app.get("/signup", response_class=HTMLResponse)
