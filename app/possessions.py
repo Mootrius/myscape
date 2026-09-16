@@ -194,10 +194,31 @@ def _dose_family(name: str) -> Optional[Tuple[str, int]]:
     return base, dose
 
 
-def _merge_dose_families(items: List[dict]) -> List[dict]:
+def _resolve_dose1_display(base: str, mapping: dict) -> Tuple[str, Optional[str], bool, Optional[int]]:
+    """Returns (name, icon, tradeable, itemId) for `base`'s own 1-dose
+    variant, e.g. "Super attack" -> Super attack(1)'s own name/icon/
+    tradeable/item id -- looked up by name (find_item_ids) and then
+    resolved the normal way (resolve_item_display), same as every
+    other row on this page, rather than assuming a linear icon-naming
+    pattern. `name` is always "{base}(1)" (the in-game convention, no
+    space before the parenthesis) even on the rare miss below, so the
+    merged row's own QUANTITY always reads as "this many 1-dose
+    bottles" regardless of whether the icon/tradeable/itemId lookup
+    itself succeeded. icon/itemId come back None on a miss (no real
+    "(1)" item id on file for this base name at all) -- the caller
+    falls back to an owned variant's own icon/id in that case."""
+    name = f"{base}(1)"
+    ids = find_item_ids(name)
+    if not ids:
+        return name, None, False, None
+    display = resolve_item_display(ids[0], name, mapping)
+    return display["name"], display["icon"], display["tradeable"], ids[0]
+
+
+def _merge_dose_families(items: List[dict], mapping: dict) -> List[dict]:
     """Folds every dose variant of the same potion (see _dose_family)
     into one row, counted in 1-dose units -- so "Prayer potion(4)" x5
-    and "Prayer potion(1)" x2 become a single "Prayer potion" row at
+    and "Prayer potion(1)" x2 become a single "Prayer potion(1)" row at
     quantity 22 (5*4 + 2*1), rather than two separate rows for the same
     potion. GE/high-alch "value" for the merged row is each variant's
     own stack value added together and divided back out over the total
@@ -205,10 +226,19 @@ def _merge_dose_families(items: List[dict]) -> List[dict]:
     rather than assuming doses price perfectly linearly (they don't
     always) -- so the stack value shown (value per dose * total doses)
     still adds up to exactly what the separate variants were worth.
-    The icon/tradeable flag shown for the merged row comes from
-    whichever owned variant has the most doses (closest to how the
-    potion normally looks, "full"). Items that aren't a dose variant at
-    all pass through untouched."""
+
+    The merged row's own name always ends in "(1)" -- same in-game
+    naming convention as every other dose variant, no space before the
+    parenthesis (e.g. "Divine super combat potion(1)") -- and its icon
+    is that same 1-dose bottle's own artwork, resolved by name via
+    resolve_item_display exactly like every other row (see
+    _resolve_dose1_display below), so QUANTITY's x_ number always
+    matches what's actually pictured: however many 1-dose bottles
+    worth of this potion are owned, never a picture of some other dose
+    count. This holds even when the player doesn't happen to own any
+    real 1-dose bottles right now -- the 1-dose item id/icon come from
+    the game's own item data, not from what's in the breakdown. Items
+    that aren't a dose variant at all pass through untouched."""
     plain: List[dict] = []
     families: Dict[str, dict] = {}
 
@@ -238,6 +268,10 @@ def _merge_dose_families(items: List[dict]) -> List[dict]:
         if it["highAlch"] is not None:
             family["haValueTotal"] += it["highAlch"] * it["total"]
             family["haKnown"] = True
+        # Fallback only -- used when _resolve_dose1_display can't find a
+        # real "(1)" item id below, which should be rare (every
+        # standard potion has one): whichever owned variant has the
+        # most doses, closest to how the potion normally looks "full".
         if dose >= family["bestDose"]:
             family["bestDose"] = dose
             family["icon"] = it["icon"]
@@ -251,11 +285,12 @@ def _merge_dose_families(items: List[dict]) -> List[dict]:
         total_doses = family["totalDoses"]
         if total_doses <= 0:
             continue
+        dose1_name, dose1_icon, dose1_tradeable, dose1_item_id = _resolve_dose1_display(family["name"], mapping)
         merged.append({
-            "itemId": family["itemId"],
-            "name": family["name"],
-            "icon": family["icon"],
-            "tradeable": family["tradeable"],
+            "itemId": dose1_item_id if dose1_item_id is not None else family["itemId"],
+            "name": dose1_name,
+            "icon": dose1_icon if dose1_icon is not None else family["icon"],
+            "tradeable": dose1_tradeable if dose1_item_id is not None else family["tradeable"],
             "highAlch": (family["haValueTotal"] / total_doses) if family["haKnown"] else None,
             "gePrice": (family["geValueTotal"] / total_doses) if family["geKnown"] else None,
             "total": total_doses,
@@ -372,7 +407,7 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
             "byLocation": entry["byLocation"],
         })
 
-    items = _merge_dose_families(items)
+    items = _merge_dose_families(items, mapping)
 
     return {"items": items, "mappingError": mapping_error, "priceError": price_error}
 
