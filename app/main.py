@@ -47,6 +47,7 @@ from app.models import (
     InventoryItem,
     LootingBagItem,
     MindMap,
+    PinnedPossessionItem,
     Player,
     PossessionTracker,
     PotionStorageItem,
@@ -58,6 +59,7 @@ from app.possessions import (
     build_possessions_summary,
     build_trackers_state,
     next_sort_order,
+    pinned_item_ids,
     resolve_item_display,
     search_trackable_items,
 )
@@ -972,6 +974,49 @@ def delete_possession_tracker(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracker not found.")
     db.delete(tracker)
     db.commit()
+
+
+@app.post("/api/possessions/pins/{item_id}")
+def pin_possession_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Pins one item to the top of section 3's list (see
+    PinnedPossessionItem's own docstring in app/models.py, and the pin
+    button on each row in render_possessions). item_id always comes
+    from a row already on screen -- the client only ever calls this
+    with an id lifted straight off /api/possessions/summary's own
+    payload -- so, unlike a tracker, there's no item_name to carry and
+    nothing to validate against a search. Idempotent: pinning an
+    already-pinned item is a no-op rather than an error, the same
+    reasoning as re-adding an existing tracker just updating it instead
+    of failing -- a player clicking an already-filled pin button
+    should never see an error banner over it."""
+    existing = (
+        db.query(PinnedPossessionItem)
+        .filter(PinnedPossessionItem.player_id == player.id, PinnedPossessionItem.item_id == item_id)
+        .first()
+    )
+    if not existing:
+        db.add(PinnedPossessionItem(player_id=player.id, item_id=item_id))
+        db.commit()
+    return {"pinnedItemIds": sorted(pinned_item_ids(db, player))}
+
+
+@app.delete("/api/possessions/pins/{item_id}")
+def unpin_possession_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Unpins one item -- same idempotent shape as pin_possession_item
+    above, a no-op rather than a 404 if it wasn't pinned to begin with."""
+    db.query(PinnedPossessionItem).filter(
+        PinnedPossessionItem.player_id == player.id, PinnedPossessionItem.item_id == item_id
+    ).delete()
+    db.commit()
+    return {"pinnedItemIds": sorted(pinned_item_ids(db, player))}
 
 
 @app.get("/api/gear-setups")

@@ -34,6 +34,7 @@ from app.models import (
     EquipmentItem,
     InventoryItem,
     LootingBagItem,
+    PinnedPossessionItem,
     Player,
     PossessionTracker,
     PotionStorageItem,
@@ -379,6 +380,21 @@ def build_trackers_state(db: Session, player: Player) -> dict:
     return {"minTrackers": min_trackers, "maxTrackers": max_trackers, "mappingError": mapping_error}
 
 
+def pinned_item_ids(db: Session, player: Player) -> set:
+    """Every item id this player currently has pinned (see
+    PinnedPossessionItem's own docstring in app/models.py) -- a plain
+    set, since every caller (build_possessions_summary below, and the
+    pin/unpin endpoints in app/main.py, which just hand this same set
+    straight back to the frontend) only ever needs membership or a
+    flat list, never the rows themselves."""
+    rows = (
+        db.query(PinnedPossessionItem.item_id)
+        .filter(PinnedPossessionItem.player_id == player.id)
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
 def build_possessions_summary(db: Session, player: Player) -> dict:
     """Section 3's payload -- every item currently owned in any
     storage, each with its live GE/high-alch value and a per-location
@@ -437,6 +453,14 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
         })
 
     items = _merge_dose_families(items, mapping)
+
+    # Marked after merging, not on each raw per-dose-variant item above
+    # -- a merged potion row's own itemId (see _merge_dose_families) is
+    # what the frontend actually has and what a pin was made against,
+    # never one of the pre-merge dose variants' ids.
+    pinned_ids = pinned_item_ids(db, player)
+    for item in items:
+        item["pinned"] = item["itemId"] in pinned_ids
 
     return {"items": items, "mappingError": mapping_error, "priceError": price_error}
 

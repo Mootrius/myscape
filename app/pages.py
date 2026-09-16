@@ -5597,6 +5597,18 @@ def render_possessions(player: Player) -> str:
     do. Every header shares the same size and color, active or not --
     an arrow is the only thing marking which one is currently active.
     GE VALUE sorted highest-to-lowest is the default on load.
+
+    Any row can be pinned -- a pushpin button, only visible on hover
+    (always visible, filled gold, once pinned -- see .pm-pin-btn/
+    .pinned in possessions.css), that floats it up into its own pinned
+    group above a thin divider, separated from the rest of the list
+    (see visibleRowGroups/setPinned in the script, and
+    PinnedPossessionItem in app/models.py for where it's stored --
+    server-side and per-player, so it's the same on every device, not
+    a per-browser preference). A pinned row still sorts by whichever
+    column is active and still respects search/location filtering,
+    same as any other row -- pinning only changes which of the two
+    groups it's sorted into, never whether it's shown at all.
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/possessions.css?v={_POSSESSIONS_CSS_VERSION}" />'
 
@@ -5694,6 +5706,14 @@ def render_possessions(player: Player) -> str:
         if (!src) return '<div class="pm-row-icon pm-icon-blank"></div>';
         return '<img class="pm-row-icon" src="' + src + '" alt="" loading="lazy" onerror="this.style.display=\\'none\\'" />';
       }
+
+      // A plain pushpin glyph (rendered via the browser's own emoji
+      // font, same as the sort arrows just below falling back off the
+      // page's custom pixel font for characters it doesn't have) --
+      // one glyph shared by both states, see .pm-pin-btn/.pinned in
+      // possessions.css for how pinned-vs-not is told apart instead
+      // (color/always-visible, not a different icon).
+      var PIN_GLYPH = '\\u{1F4CC}';
 
       // Same wiki-search-redirect link every item icon/name on this
       // page opens (see Loot Tracker's own wikiItemUrl in this file for
@@ -5832,6 +5852,22 @@ def render_possessions(player: Player) -> str:
         return out;
       }
 
+      // Splits the same sorted/filtered rows visibleRows() already
+      // produces into a pinned group and everything else, each still
+      // in the exact sort order the columns headers chose -- pinning
+      // only changes WHICH group a row lands in, never how a group's
+      // own rows are ordered relative to each other. See renderTable,
+      // which renders pinned first, then a divider, then the rest.
+      function visibleRowGroups() {
+        var rows = visibleRows();
+        var pinned = [];
+        var rest = [];
+        for (var i = 0; i < rows.length; i++) {
+          (rows[i].item.pinned ? pinned : rest).push(rows[i]);
+        }
+        return { pinned: pinned, rest: rest };
+      }
+
       // One value column's two lines -- the whole stack's worth ("N gp",
       // primary) and, only when there's more than one to distinguish it
       // from, one unit's worth ("N ea", dim) -- or an em dash when this
@@ -5883,22 +5919,34 @@ def render_possessions(player: Player) -> str:
         '</div>';
       }
 
-      // The whole row is now the link (an <a>, not a <div>) -- see
+      // The row itself is the link (an <a>, not a <div>) -- see
       // .pm-col-image and a.pm-row:hover in possessions.css -- rather
       // than just the icon/name, same "the whole box is one link" shape
-      // as Loot Tracker's own .loot-item-box in this file.
+      // as Loot Tracker's own .loot-item-box in this file. The pin
+      // button is a SIBLING of that <a>, both wrapped in one plain,
+      // non-interactive .pm-row-wrap, rather than nested inside the
+      // <a> itself -- a <button> nested inside an <a> isn't valid HTML
+      // (both are interactive content), and positioning it as a
+      // sibling instead (see .pm-pin-btn in possessions.css) means
+      // clicking it never touches the row's own link at all, no
+      // preventDefault/stopPropagation gymnastics needed.
       function rowHtml(v) {
         var item = v.item;
         var tradeableCls = item.tradeable ? 'pm-badge-yes' : 'pm-badge-no';
         var tradeableText = item.tradeable ? 'YES' : 'NO';
-        return '<a class="pm-row" href="' + wikiItemUrl(item.name) + '" target="_blank" rel="noopener" title="' + escapeHtml(item.name) + '">' +
-          '<div class="pm-col pm-col-image">' + iconImg(item.icon) +
-            '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></div>' +
-          '<div class="pm-col pm-col-qty">x' + fmtNum(v.qty) + '</div>' +
-          '<div class="pm-col pm-col-ge">' + valueCell(item.gePrice, v.qty, item.geDerived) + '</div>' +
-          '<div class="pm-col pm-col-ha">' + valueCell(item.highAlch, v.qty) + '</div>' +
-          '<div class="pm-col pm-col-tradeable"><span class="pm-badge ' + tradeableCls + '">' + tradeableText + '</span></div>' +
-        '</a>';
+        var pinCls = 'pm-pin-btn' + (item.pinned ? ' pinned' : '');
+        var pinLabel = item.pinned ? 'Unpin' : 'Pin to top';
+        return '<div class="pm-row-wrap">' +
+          '<button type="button" class="' + pinCls + '" data-item-id="' + item.itemId + '" data-pinned="' + (item.pinned ? '1' : '0') + '" title="' + pinLabel + '" aria-label="' + pinLabel + '">' + PIN_GLYPH + '</button>' +
+          '<a class="pm-row" href="' + wikiItemUrl(item.name) + '" target="_blank" rel="noopener" title="' + escapeHtml(item.name) + '">' +
+            '<div class="pm-col pm-col-image">' + iconImg(item.icon) +
+              '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></div>' +
+            '<div class="pm-col pm-col-qty">x' + fmtNum(v.qty) + '</div>' +
+            '<div class="pm-col pm-col-ge">' + valueCell(item.gePrice, v.qty, item.geDerived) + '</div>' +
+            '<div class="pm-col pm-col-ha">' + valueCell(item.highAlch, v.qty) + '</div>' +
+            '<div class="pm-col pm-col-tradeable"><span class="pm-badge ' + tradeableCls + '">' + tradeableText + '</span></div>' +
+          '</a>' +
+        '</div>';
       }
 
       // Rebuilding every row's HTML (and so its <img> icon) on every
@@ -5928,7 +5976,8 @@ def render_possessions(player: Player) -> str:
           return;
         }
 
-        var visible = visibleRows();
+        var groups = visibleRowGroups();
+        var visible = groups.pinned.concat(groups.rest);
         if (!visible.length) {
           table.style.display = 'none';
           empty.textContent = 'No items match your search/location filters.';
@@ -5942,11 +5991,21 @@ def render_possessions(player: Player) -> str:
         table.style.display = '';
 
         var activeLocations = Object.keys(state.locations).filter(function (k) { return state.locations[k]; }).sort().join(',');
-        var key = state.sortKey + '\\u0001' + state.sortDir + '\\u0001' + state.search + '\\u0001' + activeLocations + '\\u0001' +
+        // pinnedKey is redundant with the id sequence below in every
+        // case except a pin/unpin that happens not to change any row's
+        // position (only possible with a single visible item) -- cheap
+        // to include and guarantees a pin toggle always forces the
+        // rebuild branch below, never the patch-in-place one, since
+        // which group a row is in (and so whether the divider shows)
+        // can only change there.
+        var pinnedKey = groups.pinned.map(function (v) { return v.item.itemId; }).join(',');
+        var key = state.sortKey + '\\u0001' + state.sortDir + '\\u0001' + state.search + '\\u0001' + activeLocations + '\\u0001' + pinnedKey + '\\u0001' +
           visible.map(function (v) { return v.item.itemId; }).join('|');
 
         if (key !== lastPmKey) {
-          var html = visible.map(rowHtml).join('');
+          var html = groups.pinned.map(rowHtml).join('') +
+            (groups.pinned.length && groups.rest.length ? '<div class="pm-pinned-divider"></div>' : '') +
+            groups.rest.map(rowHtml).join('');
           var token = ++pmTableRenderToken;
           preloadIcons(visible.map(function (v) { return v.item.icon; })).then(function () {
             if (token !== pmTableRenderToken) return;
@@ -5956,17 +6015,21 @@ def render_possessions(player: Player) -> str:
           return;
         }
 
-        // Same item set/order as last render (key unchanged) -- reuse
-        // the existing rows (and their <img> icons) but still refresh
-        // the quantity/value/tradeable text in place, since a later
-        // poll can change those numbers for an item still sorted into
-        // the same slot.
-        var rows = rowsEl.children;
+        // Same item set/order/pin-state as last render (key unchanged)
+        // -- reuse the existing rows (and their <img> icons) but still
+        // refresh the quantity/value/tradeable text in place, since a
+        // later poll can change those numbers for an item still sorted
+        // into the same slot. Queried by .pm-row-wrap specifically
+        // (not rowsEl.children) so the divider between pinned and
+        // unpinned rows, when present, doesn't shift the index-to-item
+        // mapping below by one.
+        var rows = rowsEl.querySelectorAll('.pm-row-wrap');
         visible.forEach(function (v, i) {
           var row = rows[i];
           if (!row) return;
           var item = v.item;
-          row.title = item.name;
+          var link = row.querySelector('.pm-row');
+          if (link) link.title = item.name;
           var qtyEl = row.querySelector('.pm-col-qty');
           if (qtyEl) qtyEl.textContent = 'x' + fmtNum(v.qty);
           var geEl = row.querySelector('.pm-col-ge');
@@ -5987,6 +6050,39 @@ def render_possessions(player: Player) -> str:
         state.items = data.items || [];
         renderTable();
       }
+
+      // Pin/unpin -- POST or DELETE against the one item id, then
+      // reconcile state.items against the server's own returned
+      // pinnedItemIds (the source of truth) rather than just flipping
+      // the clicked item's flag locally, so a stale/failed request
+      // never leaves the UI showing something the server doesn't
+      // actually have. Re-renders immediately rather than waiting for
+      // the next 5-second poll, same reasoning as every other action
+      // on this page that shouldn't feel laggy.
+      async function setPinned(itemId, pinned) {
+        var data = await apiCall(
+          '/api/possessions/pins/' + itemId,
+          { method: pinned ? 'POST' : 'DELETE' }
+        );
+        if (!data) return;
+        var pinnedIds = {};
+        (data.pinnedItemIds || []).forEach(function (id) { pinnedIds[id] = true; });
+        state.items.forEach(function (item) { item.pinned = !!pinnedIds[item.itemId]; });
+        renderTable();
+      }
+
+      // One delegated listener on the rows container rather than
+      // binding a click handler to every pin button individually --
+      // rows get replaced wholesale on a rebuild (see renderTable
+      // above), so a per-button binding would just leak/vanish on
+      // every rebuild instead of needing this at all.
+      document.getElementById('pmRows').addEventListener('click', function (e) {
+        var btn = e.target.closest('.pm-pin-btn');
+        if (!btn) return;
+        var itemId = Number(btn.getAttribute('data-item-id'));
+        var currentlyPinned = btn.getAttribute('data-pinned') === '1';
+        setPinned(itemId, !currentlyPinned);
+      });
 
       updateSortHeaders();
       loadSummary();

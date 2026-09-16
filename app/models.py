@@ -132,6 +132,7 @@ class Player(Base):
     loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
     mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
     possession_trackers = relationship("PossessionTracker", back_populates="player", cascade="all, delete-orphan")
+    pinned_possession_items = relationship("PinnedPossessionItem", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -655,4 +656,42 @@ class PossessionTracker(Base):
 
     __table_args__ = (
         UniqueConstraint("player_id", "kind", "item_id", name="uq_possession_trackers_player_kind_item"),
+    )
+
+
+class PinnedPossessionItem(Base):
+    """One item a player has pinned to the top of Possessions
+    Monitoring's section 3 list (see build_possessions_summary/
+    pinned_item_ids in app/possessions.py, and the pin button on each
+    row in render_possessions, app/pages.py) -- purely a "float this to
+    the top, separated from the rest" marker, nothing to configure
+    about it beyond existing, unlike PossessionTracker above (no
+    kind/threshold, so no item_name fallback either: a pinned item is
+    only ever created from a row already on screen, which already has
+    a name/icon resolved, so there's nothing to look up from an id
+    alone the way an untradeable tracker target typed in by hand might
+    need).
+
+    item_id is the same OSRS real item id every other owned-quantity
+    source in this file is keyed by (see BankItem's docstring) -- with
+    one wrinkle inherited from the list it pins into, not introduced
+    here: a merged potion-dose row's itemId is normally the stable
+    "(1)-dose" item id regardless of which doses are actually owned
+    (see _resolve_dose1_display in app/possessions.py), so a pin on one
+    of those survives fine across syncs; only in the rare case that
+    lookup fails does that row's id drift with whichever dose happens
+    to be owned, which would just as quietly stop matching a pin here
+    as it would anything else keyed off that id."""
+
+    __tablename__ = "pinned_possession_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    item_id = Column(Integer, nullable=False)
+    pinned_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="pinned_possession_items")
+
+    __table_args__ = (
+        UniqueConstraint("player_id", "item_id", name="uq_pinned_possession_items_player_item"),
     )
