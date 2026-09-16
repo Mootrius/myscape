@@ -495,7 +495,9 @@ def render_signup() -> str:
           }),
         });
         if (res.ok) {
-          window.location.href = '/';
+          // Same reasoning as the login form's own redirect just below
+          // -- straight to the dashboard, not the landing page.
+          window.location.href = '/dashboard';
           return;
         }
         const data = await res.json().catch(() => ({}));
@@ -550,7 +552,12 @@ def render_login() -> str:
           }),
         });
         if (res.ok) {
-          window.location.href = '/';
+          // Straight to the dashboard rather than '/' (the landing
+          // page, which no longer bounces a logged-in visitor there
+          // itself -- see root() in main.py) -- someone who just typed
+          // their password in came here to use the app, not to see the
+          // marketing page they clicked "Log in" away from.
+          window.location.href = '/dashboard';
           return;
         }
         const data = await res.json().catch(() => ({}));
