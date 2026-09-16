@@ -5539,10 +5539,14 @@ def render_possessions(player: Player) -> str:
     bank, say -- shows up here on its own shortly after, not only once
     the page is manually refreshed.
 
-    One row per item: an icon + name under ITEM -- both wrapped in one
-    link (see wikiItemUrl/rowHtml in the script) out to that item's
-    OSRS Wiki page, opened in a new tab, same as Loot Tracker's own
-    item boxes already do -- then QUANTITY (the full, unabbreviated
+    One row per item: the ENTIRE row is one link (see wikiItemUrl/
+    rowHtml in the script) out to that item's OSRS Wiki page, opened in
+    a new tab -- hovering anywhere on the row highlights the whole
+    thing and clicking anywhere on it (not just the icon/name) follows
+    the link, same background-highlight-the-whole-clickable-box
+    convention as Loot Tracker's own NPC/item boxes (see .loot-item-box
+    in loot-tracker.css) rather than a link scoped to just the name --
+    then QUANTITY (the full, unabbreviated
     count, with a lowercase "x" in front), GE VALUE and HA VALUE (each
     showing both the whole stack's value and one unit's value -- a
     glance at either number alone answers a different question,
@@ -5879,18 +5883,22 @@ def render_possessions(player: Player) -> str:
         '</div>';
       }
 
+      // The whole row is now the link (an <a>, not a <div>) -- see
+      // .pm-col-image and a.pm-row:hover in possessions.css -- rather
+      // than just the icon/name, same "the whole box is one link" shape
+      // as Loot Tracker's own .loot-item-box in this file.
       function rowHtml(v) {
         var item = v.item;
         var tradeableCls = item.tradeable ? 'pm-badge-yes' : 'pm-badge-no';
         var tradeableText = item.tradeable ? 'YES' : 'NO';
-        return '<div class="pm-row" title="' + escapeHtml(item.name) + '">' +
-          '<a class="pm-col pm-col-image" href="' + wikiItemUrl(item.name) + '" target="_blank" rel="noopener">' + iconImg(item.icon) +
-            '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></a>' +
+        return '<a class="pm-row" href="' + wikiItemUrl(item.name) + '" target="_blank" rel="noopener" title="' + escapeHtml(item.name) + '">' +
+          '<div class="pm-col pm-col-image">' + iconImg(item.icon) +
+            '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></div>' +
           '<div class="pm-col pm-col-qty">x' + fmtNum(v.qty) + '</div>' +
           '<div class="pm-col pm-col-ge">' + valueCell(item.gePrice, v.qty, item.geDerived) + '</div>' +
           '<div class="pm-col pm-col-ha">' + valueCell(item.highAlch, v.qty) + '</div>' +
           '<div class="pm-col pm-col-tradeable"><span class="pm-badge ' + tradeableCls + '">' + tradeableText + '</span></div>' +
-        '</div>';
+        '</a>';
       }
 
       // Rebuilding every row's HTML (and so its <img> icon) on every

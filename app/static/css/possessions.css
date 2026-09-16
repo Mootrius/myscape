@@ -70,6 +70,27 @@
   padding: 8px 6px;
 }
 .pm-row + .pm-row { border-top: 1px solid var(--border); }
+/* Each data row is itself the link out to that item's OSRS Wiki page
+   now (an <a class="pm-row">, built by rowHtml in the page's own
+   script) -- .pm-row-header stays a plain, non-clickable <div>, which
+   is why these resets and the hover rule below are scoped to the `a`
+   tag rather than the bare .pm-row class. color/text-decoration reset
+   the browser's default link styling (and myscape.css's global
+   a { color: var(--gold-dim); } rule) back to how this row always
+   looked -- every bit of text inside (name, values, badge) already
+   sets its own explicit color regardless, same reasoning as Loot
+   Tracker's .loot-item-box. */
+a.pm-row { color: inherit; text-decoration: none; cursor: pointer; }
+/* Same whole-box background highlight as Loot Tracker's own
+   .loot-npc-box/.loot-item-box :hover (see loot-tracker.css) instead
+   of anything scoped to just the icon/name -- hovering anywhere on
+   the row lights up the whole thing. text-decoration: none has to be
+   reasserted here too, not just on the base rule above -- myscape.css's
+   global a:hover { text-decoration: underline; } has higher
+   specificity than a bare element selector but not higher than this
+   `a.pm-row:hover` (class + hover beats element + hover), so without
+   this line hovering would draw an underline through the row's text. */
+a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 
 .pm-row-header {
   padding: 0 6px 8px;
@@ -95,20 +116,12 @@
 .pm-sort-header.active { color: var(--gold); }
 .pm-sort-arrow { display: inline-block; }
 
-/* Shared by both the ITEM header button (.pm-col-image.pm-sort-header)
-   and each data row's own link out to that item's OSRS Wiki page
-   (.pm-col-image alone, an <a> -- see wikiItemUrl/rowHtml in the
-   script) -- color/text-decoration/cursor here are redundant no-ops
-   on the header button (already handled by .pm-sort-header above) but
-   exactly what resets the anchor's default link styling back to how
-   this cell always looked. */
-.pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; color: inherit; text-decoration: none; cursor: pointer; }
-/* Only the row link's own underline (via .pm-row-name below) reads as
-   the hover affordance -- suppressing it here first stops the
-   anchor's global a:hover rule (myscape.css) from also drawing its
-   line across the icon. */
-.pm-col-image:hover { text-decoration: none; }
-.pm-col-image:hover .pm-row-name { text-decoration: underline; }
+/* Shared by the ITEM header button (.pm-col-image.pm-sort-header) and
+   each data row's own icon+name cell -- a plain <div> now, not its own
+   link (see a.pm-row above: the whole row is the link, so this cell
+   doesn't need or get its own hover affordance -- no underline, no
+   separate highlight, just the row's shared background lighting up). */
+.pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .pm-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }
 .pm-icon-blank { width: 26px; height: 26px; }
 .pm-row-name {
