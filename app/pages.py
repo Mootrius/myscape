@@ -2072,7 +2072,14 @@ def render_loot_tracker(player: Player) -> str:
     script = """
     (function () {
       var state = {
-        selectedNpc: null, npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '',
+        // An ordered list, not a Set -- selection order is what the
+        // chart title below joins in (see renderBarChart), so a
+        // shift-click that grows the group needs to append, not just
+        // record membership. A plain click always collapses this back
+        // to a single entry (or empties it, clicking the one already-
+        // selected NPC); shift-click toggles one name in/out without
+        // touching the rest -- see the NPC row's click handler below.
+        selectedNpcs: [], npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '',
         rangeKey: '24h', customStart: null, customEnd: null,
         // Purely local UI state, never persisted -- each panel's own
         // "show hidden" eye toggle (see .loot-hide-toggle in
@@ -2176,14 +2183,64 @@ def render_loot_tracker(player: Player) -> str:
         }
       }
 
+      // Sums per-bucket gp across every selected NPC's own npcBucketValues
+      // array (see build_loot_state in app/loot.py) into one array the
+      // same length as buckets -- null once nothing (or only one, which
+      // already has its own array) is selected, since renderBarChart
+      // only needs this for 2+.
+      function mergedNpcBucketValues(npcBucketValues, selectedNpcs, numBuckets) {
+        var merged = new Array(numBuckets).fill(0);
+        selectedNpcs.forEach(function (name) {
+          var values = npcBucketValues[name];
+          if (!values) return;
+          for (var i = 0; i < numBuckets; i++) merged[i] += values[i] || 0;
+        });
+        return merged;
+      }
+
+      // Sums quantity/value for the same item (same key as
+      // _add_item_totals server-side -- itemId, falling back to
+      // itemName) across every selected NPC's own npcItems list,
+      // keeping whichever copy's lastDroppedAt is most recent and its
+      // icon/hidden flag (identical for every occurrence of the same
+      // item -- hidden comes from the player's own hidden-item set,
+      // not anything NPC-specific -- so the first one seen is as good
+      // as any).
+      function mergedNpcItems(npcItems, selectedNpcs) {
+        var byKey = {};
+        var order = [];
+        selectedNpcs.forEach(function (name) {
+          var items = npcItems[name] || [];
+          items.forEach(function (it) {
+            var key = it.itemId != null ? it.itemId : it.itemName;
+            var totals = byKey[key];
+            if (!totals) {
+              totals = { itemId: it.itemId, itemName: it.itemName, icon: it.icon, quantity: 0, value: 0, lastDroppedAt: it.lastDroppedAt, hidden: it.hidden };
+              byKey[key] = totals;
+              order.push(key);
+            }
+            totals.quantity += it.quantity;
+            totals.value += it.value;
+            if (new Date(it.lastDroppedAt) > new Date(totals.lastDroppedAt)) totals.lastDroppedAt = it.lastDroppedAt;
+          });
+        });
+        return order.map(function (key) { return byKey[key]; });
+      }
+
       // The item panel shows every NPC's items combined when nothing's
-      // selected, or just the selected NPC's own items once one is
-      // clicked in the NPC panel -- see build_loot_state's windowItems/
-      // npcItems in app/loot.py for how those two lists are computed.
+      // selected, just the one selected NPC's own items when exactly
+      // one is, or all selected NPCs' items summed together (see
+      // mergedNpcItems above) once 2+ are -- see build_loot_state's
+      // windowItems/npcItems in app/loot.py for how those two lists
+      // are computed.
       function currentItems() {
         if (!lastData) return [];
-        if (state.selectedNpc && lastData.npcItems && lastData.npcItems[state.selectedNpc]) {
-          return lastData.npcItems[state.selectedNpc];
+        var npcItems = lastData.npcItems || {};
+        if (state.selectedNpcs.length === 1) {
+          return npcItems[state.selectedNpcs[0]] || [];
+        }
+        if (state.selectedNpcs.length > 1) {
+          return mergedNpcItems(npcItems, state.selectedNpcs);
         }
         return lastData.windowItems || [];
       }
@@ -2361,43 +2418,57 @@ def render_loot_tracker(player: Player) -> str:
       // the original 24-hour-only chart, coarser for a longer one),
       // oldest on the left -- ported from the original single-user
       // tool's Loot Tracker chart (renderVorkathBarChart), summed
-      // across every source by default. When an NPC is selected
-      // (state.selectedNpc, set by renderNpcRow's click handler below)
-      // each bar instead shows two layers: a full-height outline at the
-      // bucket's own total value (so the scale/shape of the whole chart
-      // never changes), with a solid fill at the bottom sized to just
-      // that NPC's share of the same bucket. maxValue is always derived
-      // from the total buckets, never the selected NPC's own values, so
-      // the axis stays put when switching NPCs. Reuses the existing
-      // bar-col elements when the bucket count hasn't changed (the same
-      // range keeps the same bucket count on every 10s poll) so the CSS
-      // height transition actually animates between polls instead of
-      // snapping -- a range change does change the bucket count, which
-      // is exactly when a full rebuild (and a fresh grow-in) is right.
-      function renderBarChart(buckets, windowValue, windowKills, npcBucketValues, selectedNpc, windowNpcs, granularity, rangeEnd) {
+      // across every source by default. When one or more NPCs are
+      // selected (state.selectedNpcs, set by renderNpcRow's click
+      // handler below) each bar instead shows two layers: a full-height
+      // outline at the bucket's own total value (so the scale/shape of
+      // the whole chart never changes), with a solid fill at the bottom
+      // sized to just the selected NPCs' combined share of the same
+      // bucket (see mergedNpcBucketValues above for 2+). maxValue is
+      // always derived from the total buckets, never the selection's
+      // own values, so the axis stays put when switching NPCs. Reuses
+      // the existing bar-col elements when the bucket count hasn't
+      // changed (the same range keeps the same bucket count on every
+      // 10s poll) so the CSS height transition actually animates
+      // between polls instead of snapping -- a range change does
+      // change the bucket count, which is exactly when a full rebuild
+      // (and a fresh grow-in) is right.
+      function renderBarChart(buckets, windowValue, windowKills, npcBucketValues, selectedNpcs, windowNpcs, granularity, rangeEnd) {
         buckets = buckets || [];
         npcBucketValues = npcBucketValues || {};
+        selectedNpcs = selectedNpcs || [];
         granularity = granularity || 'hourly';
-        // With an NPC selected, the header's gp/kc numbers switch to
-        // just that NPC's own totals (already sitting right on its
+        // With one or more NPCs selected, the header's gp/kc numbers
+        // switch to just their own totals (summed from each one's
         // windowNpcs entry -- value/killCount, the same numbers its own
         // NPC box shows) instead of the whole range's -- otherwise
         // selecting Guard would still show every other NPC's loot
         // summed in up top while the chart itself only fills in Guard's
         // share, which reads as a mismatch.
-        var selectedEntry = selectedNpc && windowNpcs
-          ? windowNpcs.filter(function (n) { return n.sourceName === selectedNpc; })[0]
-          : null;
-        var headerValue = selectedEntry ? selectedEntry.value : windowValue;
-        var headerKills = selectedEntry ? selectedEntry.killCount : windowKills;
+        var selectedEntries = selectedNpcs.length && windowNpcs
+          ? windowNpcs.filter(function (n) { return selectedNpcs.indexOf(n.sourceName) !== -1; })
+          : [];
+        var headerValue = selectedEntries.length ? selectedEntries.reduce(function (sum, n) { return sum + n.value; }, 0) : windowValue;
+        var headerKills = selectedEntries.length ? selectedEntries.reduce(function (sum, n) { return sum + n.killCount; }, 0) : windowKills;
         document.getElementById('lootChartTotal').textContent = fmtGp(headerValue) + ' gp';
         document.getElementById('lootChartKills').textContent = (headerKills || 0).toLocaleString('en-US') + ' kc';
         // A selected NPC's own name is shown in ALL CAPS (e.g.
         // "ZULRAH") -- uppercased here in JS rather than via a CSS
         // text-transform on .loot-chart-title, since that would also
         // force the "ALL NPCs" fallback into "ALL NPCS", capitalizing
-        // the "s" it's deliberately meant to keep lowercase.
-        document.getElementById('lootChartTitle').textContent = selectedNpc ? selectedNpc.toUpperCase() : 'ALL NPCs';
+        // the "s" it's deliberately meant to keep lowercase. With 2+
+        // selected, each name gets the same uppercasing and the whole
+        // row joins them with the same small-dot separator (·)
+        // already used in this file's own tooltips (see titleFor
+        // below) -- in selection order, so the title reads in the
+        // order NPCs were added to the group rather than re-sorting.
+        var titleText = 'ALL NPCs';
+        if (selectedNpcs.length === 1) {
+          titleText = selectedNpcs[0].toUpperCase();
+        } else if (selectedNpcs.length > 1) {
+          titleText = selectedNpcs.map(function (n) { return n.toUpperCase(); }).join(' \\u00b7 ');
+        }
+        document.getElementById('lootChartTitle').textContent = titleText;
 
         // 0.8 target so the tallest bucket's bar consistently lands
         // around 4/5 up the axis instead of anywhere from half height
@@ -2414,7 +2485,9 @@ def render_loot_tracker(player: Player) -> str:
         }
         gridlinesEl.innerHTML = stepsHtml;
 
-        var selectedValues = selectedNpc ? (npcBucketValues[selectedNpc] || buckets.map(function () { return 0; })) : null;
+        var selectedValues = selectedNpcs.length === 1
+          ? (npcBucketValues[selectedNpcs[0]] || buckets.map(function () { return 0; }))
+          : (selectedNpcs.length > 1 ? mergedNpcBucketValues(npcBucketValues, selectedNpcs, buckets.length) : null);
 
         // The outline always sits at the bucket's *total* height and
         // never itself animates or changes with selection -- only the
@@ -2446,15 +2519,15 @@ def render_loot_tracker(player: Player) -> str:
           return b.value > 0;
         }
         function fillValue(b, i) {
-          return selectedNpc ? (selectedValues[i] || 0) : b.value;
+          return selectedNpcs.length ? (selectedValues[i] || 0) : b.value;
         }
         function fillPct(b, i) {
           var v = fillValue(b, i);
           return maxValue > 0 ? Math.max(0, Math.min(100, (v / maxValue) * 100)) : 0;
         }
         function titleFor(b, i) {
-          if (selectedNpc) {
-            return selectedNpc + ': ' + fmtGp(fillValue(b, i)) + ' gp \\u00b7 total ' + fmtGp(b.value) + ' gp';
+          if (selectedNpcs.length) {
+            return selectedNpcs.join(' \\u00b7 ') + ': ' + fmtGp(fillValue(b, i)) + ' gp \\u00b7 total ' + fmtGp(b.value) + ' gp';
           }
           return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount.toLocaleString('en-US') + ' kc' : '');
         }
@@ -2501,10 +2574,17 @@ def render_loot_tracker(player: Player) -> str:
       }
 
       // The clickable "By NPC" row -- one box per NPC killed in the
-      // selected range, each toggling state.selectedNpc (clicking the
-      // already-active one clears it back to "all sources") and
-      // re-rendering the chart/row from the last-polled data, with no
-      // extra fetch needed.
+      // selected range. A plain click replaces state.selectedNpcs with
+      // just that one NPC (clicking the already-sole-selected one
+      // clears it back to "all sources"); a shift-click instead toggles
+      // that NPC in/out of the existing selection, folding in whatever
+      // single NPC was already plain-selected on its first use rather
+      // than discarding it -- see the click handler below. Either way
+      // re-renders the chart/row from the last-polled data, with no
+      // extra fetch needed. A single selected NPC gets the classic gold
+      // .active border; 2+ get the blue .multi-selected outline instead
+      // (same treatment as Purchase Goals' own shift-click socket
+      // group -- see .gear-slot.multi-selected in purchase-goals.css).
       //
       // Only rebuilds the row's HTML (and so its <img> icons) when the
       // actual set/order of NPCs has changed -- otherwise just toggles
@@ -2584,7 +2664,14 @@ def render_loot_tracker(player: Player) -> str:
           hiddenFlags + '\\u0001' + sorted.map(function (n) { return n.sourceName; }).join('|');
         if (key !== lastNpcKey) {
           var html = sorted.map(function (n) {
-            var active = state.selectedNpc === n.sourceName;
+            // Solo selection (plain click, or a shift-click group that's
+            // shrunk back to one) keeps the classic gold .active border;
+            // 2+ selected get the blue .multi-selected outline instead
+            // -- see the click handler below and .loot-npc-box.active/
+            // .multi-selected in loot-tracker.css.
+            var isSelected = state.selectedNpcs.indexOf(n.sourceName) !== -1;
+            var active = isSelected && state.selectedNpcs.length === 1;
+            var multiSelected = isSelected && state.selectedNpcs.length > 1;
             var hidden = npcEffectiveHidden(n);
             var explicitHidden = !!n.hidden;
             var eyeTitle = (explicitHidden ? 'Unhide ' : 'Hide ') + n.sourceName;
@@ -2597,7 +2684,7 @@ def render_loot_tracker(player: Player) -> str:
             // also selecting the NPC underneath -- same reasoning as
             // Storages Viewer's own pin button.
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
-              '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
+              '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
                 iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
@@ -2636,7 +2723,9 @@ def render_loot_tracker(player: Player) -> str:
           var wrap = wraps[i];
           if (!wrap) return;
           var box = wrap.querySelector('.loot-npc-box');
-          box.classList.toggle('active', state.selectedNpc === n.sourceName);
+          var isSelected = state.selectedNpcs.indexOf(n.sourceName) !== -1;
+          box.classList.toggle('active', isSelected && state.selectedNpcs.length === 1);
+          box.classList.toggle('multi-selected', isSelected && state.selectedNpcs.length > 1);
           box.title = npcTitle(n);
           var kcEl = box.querySelector('.loot-npc-box-kc');
           if (kcEl) kcEl.textContent = n.killCount + ' kc';
@@ -2693,7 +2782,7 @@ def render_loot_tracker(player: Player) -> str:
         // Same hiddenFlags addition, same reason, as renderNpcRow's key
         // above.
         var hiddenFlags = sorted.map(function (it) { return it.hidden ? '1' : '0'; }).join('');
-        var key = (state.selectedNpc || '') + '\\u0001' + state.itemSearch + '\\u0001' + state.itemSort + '\\u0001' +
+        var key = state.selectedNpcs.join('\\u0002') + '\\u0001' + state.itemSearch + '\\u0001' + state.itemSort + '\\u0001' +
           (state.itemShowHidden ? '1' : '0') + '\\u0001' + hiddenFlags + '\\u0001' +
           sorted.map(function (it) { return it.itemId != null ? it.itemId : it.itemName; }).join('|');
         if (key !== lastItemKey) {
@@ -2715,10 +2804,10 @@ def render_loot_tracker(player: Player) -> str:
             '</div>';
           }).join('');
           // Same preload-before-swap as renderNpcRow above -- this is
-          // the branch that runs every time a different NPC gets
-          // selected (its own key includes state.selectedNpc), which
-          // is exactly when this list's icons are most likely to be
-          // brand new and otherwise pop in a beat after the boxes.
+          // the branch that runs every time the NPC selection changes
+          // (its own key includes state.selectedNpcs), which is
+          // exactly when this list's icons are most likely to be brand
+          // new and otherwise pop in a beat after the boxes.
           var token = ++itemListRenderToken;
           preloadIcons(sorted.map(function (it) { return it.icon; })).then(function () {
             if (token !== itemListRenderToken) return;
@@ -2784,7 +2873,7 @@ def render_loot_tracker(player: Player) -> str:
       function rerenderChart(data) {
         renderBarChart(
           data.buckets || [], data.windowValue || 0, data.windowKills || 0,
-          data.npcBucketValues || {}, state.selectedNpc, data.windowNpcs || [],
+          data.npcBucketValues || {}, state.selectedNpcs, data.windowNpcs || [],
           data.granularity, data.rangeEnd
         );
       }
@@ -2805,7 +2894,23 @@ def render_loot_tracker(player: Player) -> str:
         var btn = e.target.closest('.loot-npc-box');
         if (!btn || !lastData) return;
         var name = btn.getAttribute('data-npc');
-        state.selectedNpc = (state.selectedNpc === name) ? null : name;
+        if (e.shiftKey) {
+          // Shift-click toggles this NPC in/out of the selection
+          // without touching the rest of it -- works whether nothing,
+          // one, or several NPCs were already selected, so a single
+          // plain-selected NPC folds straight into a new multi-select
+          // group on the very first shift-click rather than being
+          // discarded (state.selectedNpcs already holds it either way).
+          var idx = state.selectedNpcs.indexOf(name);
+          if (idx !== -1) state.selectedNpcs.splice(idx, 1);
+          else state.selectedNpcs.push(name);
+        } else {
+          // A plain click always replaces the whole selection with just
+          // this one NPC -- clicking the already-sole-selected one
+          // clears it back to "all sources", same as before.
+          var wasSoleSelection = state.selectedNpcs.length === 1 && state.selectedNpcs[0] === name;
+          state.selectedNpcs = wasSoleSelection ? [] : [name];
+        }
         rerenderChart(lastData);
         renderNpcRow(lastData.windowNpcs || []);
         renderItemList(currentItems());
@@ -2973,7 +3078,7 @@ def render_loot_tracker(player: Player) -> str:
           return;
         }
         state.rangeKey = key;
-        state.selectedNpc = null;
+        state.selectedNpcs = [];
         closeRangeMenu();
         updateRangeMenuActive();
         loadState();
@@ -2991,7 +3096,7 @@ def render_loot_tracker(player: Player) -> str:
         state.rangeKey = 'custom';
         state.customStart = startVal;
         state.customEnd = endVal;
-        state.selectedNpc = null;
+        state.selectedNpcs = [];
         closeRangeMenu();
         updateRangeMenuActive();
         loadState();
@@ -3033,22 +3138,22 @@ def render_loot_tracker(player: Player) -> str:
           var data = await res.json();
           lastData = data;
 
-          // The selected NPC may have aged out of the range on a later
+          // Any selected NPC may have aged out of the range on a later
           // poll (its last kill in range just fell off the back of a
-          // rolling preset like 24 HOURS) -- fall back to "all sources"
-          // rather than silently showing a flat/empty fill for it
-          // forever. Same fallback when it's now hidden (explicitly or
-          // via all its own items -- see npcEffectiveHidden above) with
-          // the NPC panel's own toggle off: its tile just vanished from
-          // the row, same as aging out, so there's no way left to click
-          // back to it either.
+          // rolling preset like 24 HOURS) -- drop just that one from
+          // the selection (falling all the way back to "all sources"
+          // only if every selected NPC did) rather than silently
+          // showing a flat/empty fill for it forever. Same fallback
+          // when it's now hidden (explicitly or via all its own items
+          // -- see npcEffectiveHidden above) with the NPC panel's own
+          // toggle off: its tile just vanished from the row, same as
+          // aging out, so there's no way left to click back to it
+          // either.
           var npcs = data.windowNpcs || [];
-          if (state.selectedNpc) {
-            var stillPresent = npcs.filter(function (n) { return n.sourceName === state.selectedNpc; })[0];
-            if (!stillPresent || (!state.npcShowHidden && npcEffectiveHidden(stillPresent))) {
-              state.selectedNpc = null;
-            }
-          }
+          state.selectedNpcs = state.selectedNpcs.filter(function (name) {
+            var stillPresent = npcs.filter(function (n) { return n.sourceName === name; })[0];
+            return stillPresent && (state.npcShowHidden || !npcEffectiveHidden(stillPresent));
+          });
 
           document.getElementById('lootEmptyMsg').style.display = 'none';
           document.getElementById('lootBody').style.display = '';

@@ -246,6 +246,17 @@
 .loot-npc-box.active .loot-npc-box-kc { color: var(--text); }
 .loot-npc-box-value { font-size: 10.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
 .loot-npc-box.active .loot-npc-box-value { color: var(--gold); }
+/* Shift-click multi-select (see the NPC row's click handler in the
+   script below) -- 2+ NPCs selected at once get this blue outline
+   instead of .active's gold border; a solo selection (plain click, or
+   a shift-click group shrunk back down to one) still gets .active,
+   never both at the same time. An outline rather than a border-color
+   change, same reasoning as Purchase Goals' own .gear-slot.multi-
+   selected in purchase-goals.css (which this is deliberately styled
+   to match): it sits over .loot-npc-box's own existing border instead
+   of replacing it, and --blue keeps it visually distinct from .active's
+   gold. */
+.loot-npc-box.multi-selected { outline: 2px solid var(--blue); outline-offset: -2px; }
 
 /* ---------- two-column layout below the chart: the NPC panel (search
    + sort + boxes, above) on the left, an item panel of the same shape
