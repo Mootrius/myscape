@@ -477,9 +477,12 @@ class TackleBoxOut(BaseModel):
     items: List[TackleBoxItemOut]
     updated_at: Optional[datetime] = None
 
-# -- Magic Wardrobe: identical shape to Looting Bag/Seed Vault above, just a separate container -- see MagicWardrobeItem's docstring in app/models.py. -------------------------------------------------------
+# -- Costume Room: identical shape to Looting Bag/Seed Vault above, just
+# a separate container -- see CostumeRoomItem's docstring in
+# app/models.py for why this is one unified schema now rather than six
+# per-piece ones. ------------------------------------------------------
 
-class MagicWardrobeItemIn(BaseModel):
+class CostumeRoomItemIn(BaseModel):
     item_id: int
     item_name: Optional[str] = None
     quantity: int
@@ -499,15 +502,15 @@ class MagicWardrobeItemIn(BaseModel):
         return value
 
 
-class MagicWardrobeSyncRequest(BaseModel):
-    items: List[MagicWardrobeItemIn]
+class CostumeRoomSyncRequest(BaseModel):
+    items: List[CostumeRoomItemIn]
 
 
-class MagicWardrobeSyncResponse(BaseModel):
+class CostumeRoomSyncResponse(BaseModel):
     item_count: int
 
 
-class MagicWardrobeItemOut(BaseModel):
+class CostumeRoomItemOut(BaseModel):
     item_id: int
     item_name: Optional[str] = None
     quantity: int
@@ -516,223 +519,8 @@ class MagicWardrobeItemOut(BaseModel):
         from_attributes = True
 
 
-class MagicWardrobeOut(BaseModel):
-    items: List[MagicWardrobeItemOut]
-    updated_at: Optional[datetime] = None
-
-# -- Armour Case: identical shape to Looting Bag/Seed Vault above, just a separate container -- see ArmourCaseItem's docstring in app/models.py. -------------------------------------------------------
-
-class ArmourCaseItemIn(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    @field_validator("item_id")
-    @classmethod
-    def check_item_id(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("item_id must be a positive integer.")
-        return value
-
-    @field_validator("quantity")
-    @classmethod
-    def check_quantity(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("quantity must be a positive integer.")
-        return value
-
-
-class ArmourCaseSyncRequest(BaseModel):
-    items: List[ArmourCaseItemIn]
-
-
-class ArmourCaseSyncResponse(BaseModel):
-    item_count: int
-
-
-class ArmourCaseItemOut(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    class Config:
-        from_attributes = True
-
-
-class ArmourCaseOut(BaseModel):
-    items: List[ArmourCaseItemOut]
-    updated_at: Optional[datetime] = None
-
-# -- Fancy Dress Box: identical shape to Looting Bag/Seed Vault above, just a separate container -- see FancyDressBoxItem's docstring in app/models.py. -------------------------------------------------------
-
-class FancyDressBoxItemIn(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    @field_validator("item_id")
-    @classmethod
-    def check_item_id(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("item_id must be a positive integer.")
-        return value
-
-    @field_validator("quantity")
-    @classmethod
-    def check_quantity(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("quantity must be a positive integer.")
-        return value
-
-
-class FancyDressBoxSyncRequest(BaseModel):
-    items: List[FancyDressBoxItemIn]
-
-
-class FancyDressBoxSyncResponse(BaseModel):
-    item_count: int
-
-
-class FancyDressBoxItemOut(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    class Config:
-        from_attributes = True
-
-
-class FancyDressBoxOut(BaseModel):
-    items: List[FancyDressBoxItemOut]
-    updated_at: Optional[datetime] = None
-
-# -- Toy Box: identical shape to Looting Bag/Seed Vault above, just a separate container -- see ToyBoxItem's docstring in app/models.py. -------------------------------------------------------
-
-class ToyBoxItemIn(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    @field_validator("item_id")
-    @classmethod
-    def check_item_id(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("item_id must be a positive integer.")
-        return value
-
-    @field_validator("quantity")
-    @classmethod
-    def check_quantity(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("quantity must be a positive integer.")
-        return value
-
-
-class ToyBoxSyncRequest(BaseModel):
-    items: List[ToyBoxItemIn]
-
-
-class ToyBoxSyncResponse(BaseModel):
-    item_count: int
-
-
-class ToyBoxItemOut(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    class Config:
-        from_attributes = True
-
-
-class ToyBoxOut(BaseModel):
-    items: List[ToyBoxItemOut]
-    updated_at: Optional[datetime] = None
-
-# -- Treasure Chest: identical shape to Looting Bag/Seed Vault above, just a separate container -- see TreasureChestItem's docstring in app/models.py. -------------------------------------------------------
-
-class TreasureChestItemIn(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    @field_validator("item_id")
-    @classmethod
-    def check_item_id(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("item_id must be a positive integer.")
-        return value
-
-    @field_validator("quantity")
-    @classmethod
-    def check_quantity(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("quantity must be a positive integer.")
-        return value
-
-
-class TreasureChestSyncRequest(BaseModel):
-    items: List[TreasureChestItemIn]
-
-
-class TreasureChestSyncResponse(BaseModel):
-    item_count: int
-
-
-class TreasureChestItemOut(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    class Config:
-        from_attributes = True
-
-
-class TreasureChestOut(BaseModel):
-    items: List[TreasureChestItemOut]
-    updated_at: Optional[datetime] = None
-
-# -- Magic Cape Rack: identical shape to Looting Bag/Seed Vault above, just a separate container -- see MagicCapeRackItem's docstring in app/models.py. -------------------------------------------------------
-
-class MagicCapeRackItemIn(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    @field_validator("item_id")
-    @classmethod
-    def check_item_id(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("item_id must be a positive integer.")
-        return value
-
-    @field_validator("quantity")
-    @classmethod
-    def check_quantity(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("quantity must be a positive integer.")
-        return value
-
-
-class MagicCapeRackSyncRequest(BaseModel):
-    items: List[MagicCapeRackItemIn]
-
-
-class MagicCapeRackSyncResponse(BaseModel):
-    item_count: int
-
-
-class MagicCapeRackItemOut(BaseModel):
-    item_id: int
-    item_name: Optional[str] = None
-    quantity: int
-
-    class Config:
-        from_attributes = True
-
-
-class MagicCapeRackOut(BaseModel):
-    items: List[MagicCapeRackItemOut]
+class CostumeRoomOut(BaseModel):
+    items: List[CostumeRoomItemOut]
     updated_at: Optional[datetime] = None
 
 
@@ -748,8 +536,7 @@ class MagicCapeRackOut(BaseModel):
 POSSESSION_STORAGE_KEYS = [
     "bank", "equipment", "inventory", "potion_storage",
     "rune_pouch", "seed_vault", "looting_bag", "tackle_box",
-    "magic_wardrobe", "armour_case", "fancy_dress_box", "toy_box",
-    "treasure_chest", "magic_cape_rack",
+    "costume_room",
 ]
 
 

@@ -101,11 +101,10 @@ class Player(Base):
     diary_tiers = Column(JSONB, nullable=False, default=dict)
 
     # storage_synced_at: {<storage key>: <ISO 8601 timestamp>} for every
-    # one of the fourteen sources Possessions Monitoring's side-panel
+    # one of the nine sources Possessions Monitoring's side-panel
     # Status section reports on -- "bank", "equipment", "inventory",
     # "potion_storage", "rune_pouch", "seed_vault", "looting_bag",
-    # "tackle_box", "magic_wardrobe", "armour_case", "fancy_dress_box",
-    # "toy_box", "treasure_chest", "magic_cape_rack" -- stamped every
+    # "tackle_box", "costume_room" -- stamped every
     # time that source's own sync endpoint is hit (see
     # each POST /api/players/me/<source> handler in app/main.py), full
     # replace of just that one key rather than the whole dict.
@@ -131,12 +130,7 @@ class Player(Base):
     seed_vault_items = relationship("SeedVaultItem", back_populates="player", cascade="all, delete-orphan")
     looting_bag_items = relationship("LootingBagItem", back_populates="player", cascade="all, delete-orphan")
     tackle_box_items = relationship("TackleBoxItem", back_populates="player", cascade="all, delete-orphan")
-    magic_wardrobe_items = relationship("MagicWardrobeItem", back_populates="player", cascade="all, delete-orphan")
-    armour_case_items = relationship("ArmourCaseItem", back_populates="player", cascade="all, delete-orphan")
-    fancy_dress_box_items = relationship("FancyDressBoxItem", back_populates="player", cascade="all, delete-orphan")
-    toy_box_items = relationship("ToyBoxItem", back_populates="player", cascade="all, delete-orphan")
-    treasure_chest_items = relationship("TreasureChestItem", back_populates="player", cascade="all, delete-orphan")
-    magic_cape_rack_items = relationship("MagicCapeRackItem", back_populates="player", cascade="all, delete-orphan")
+    costume_room_items = relationship("CostumeRoomItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
     loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
     mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
@@ -483,26 +477,35 @@ class TackleBoxItem(Base):
     __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_tackle_box_items_player_item"),)
 
 
-class MagicWardrobeItem(Base):
-    """The player's current Player-Owned-House Costume Room Magic
-    Wardrobe contents -- same full-snapshot, delete-and-replace model
-    as every other item-source table above. Synced by POST
-    /api/players/me/magic-wardrobe (see
-    MyscapeClient#syncMagicWardrobe in the Mootrius/myscape-plugin
+class CostumeRoomItem(Base):
+    """The player's current Player-Owned-House Costume Room contents --
+    same full-snapshot, delete-and-replace model as every other
+    item-source table above. Synced by POST /api/players/me/costume-room
+    (see MyscapeClient#syncCostumeRoom in the Mootrius/myscape-plugin
     repo).
 
-    Like Looting Bag/Seed Vault/Tackle Box above, this is a genuine
-    ItemContainer RuneLite exposes directly
-    (InventoryID.POH_COSTUME_ROOM_MAGIC_WARDROBE_INV), read the same
-    straightforward way Bank/Looting Bag are -- and, same caveat as
-    those, it only reports real contents once the player has actually
-    opened the Magic Wardrobe at least once in the current session
-    (see MyscapePlugin#readMagicWardrobeItems there).
+    Originally modeled as six separate tables, one per piece of
+    furniture (Magic Wardrobe, Armour Case, Fancy Dress Box, Toy Box,
+    Treasure Chest, Magic Cape Rack) -- matching how RuneLite names the
+    six InventoryID.POH_COSTUME_ROOM_* constants. Live testing (logging
+    which ItemContainer actually fires when each piece is opened) showed
+    that assumption no longer holds: every piece fires
+    ItemContainerChanged on the exact same container id (33405 -- not
+    any of those six named constants, and not InventoryID.POH_COSTUMES
+    either; it looks like a runtime/script-assigned id rather than a
+    fixed gameval one), with identical contents regardless of which
+    piece was opened. Jagex's newer, consolidated Costume Room interface
+    (InterfaceID.POH_COSTUMES) reads from one unified store, not six --
+    this table reflects that (see MyscapePlugin#readCostumeRoomItems
+    there), same caveat as every single-container source above: it only
+    reports real contents once the player has opened the Costume Room
+    interface at least once in the current session.
 
     item_name plays the same untradeable-item-matching role documented
-    on BankItem above."""
+    on BankItem above -- relevant here specifically since many clue and
+    holiday-event rewards are untradeable."""
 
-    __tablename__ = "magic_wardrobe_items"
+    __tablename__ = "costume_room_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
@@ -511,181 +514,9 @@ class MagicWardrobeItem(Base):
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="magic_wardrobe_items")
+    player = relationship("Player", back_populates="costume_room_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_magic_wardrobe_items_player_item"),)
-
-
-class ArmourCaseItem(Base):
-    """The player's current Player-Owned-House Costume Room Armour Case
-    contents -- same full-snapshot, delete-and-replace model as every
-    other item-source table above. Synced by POST
-    /api/players/me/armour-case (see MyscapeClient#syncArmourCase in
-    the Mootrius/myscape-plugin repo).
-
-    Like Magic Wardrobe above, this is a genuine ItemContainer RuneLite
-    exposes directly (InventoryID.POH_COSTUME_ROOM_ARMOUR_INV), read
-    the same straightforward way -- and, same caveat, it only reports
-    real contents once the player has actually opened the Armour Case
-    at least once in the current session (see
-    MyscapePlugin#readArmourCaseItems there).
-
-    item_name plays the same untradeable-item-matching role documented
-    on BankItem above."""
-
-    __tablename__ = "armour_case_items"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
-    item_id = Column(Integer, nullable=False)
-    item_name = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=_utcnow)
-
-    player = relationship("Player", back_populates="armour_case_items")
-
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_armour_case_items_player_item"),)
-
-
-class FancyDressBoxItem(Base):
-    """The player's current Player-Owned-House Costume Room Fancy Dress
-    Box contents -- same full-snapshot, delete-and-replace model as
-    every other item-source table above. Synced by POST
-    /api/players/me/fancy-dress-box (see
-    MyscapeClient#syncFancyDressBox in the Mootrius/myscape-plugin
-    repo).
-
-    Like Magic Wardrobe/Armour Case above, this is a genuine
-    ItemContainer RuneLite exposes directly
-    (InventoryID.POH_COSTUME_ROOM_AME_INV -- Jagex's own internal name
-    for this container; the furniture piece it belongs to in-game is
-    the Fancy Dress Box), read the same straightforward way -- and,
-    same caveat, it only reports real contents once the player has
-    actually opened the Fancy Dress Box at least once in the current
-    session (see MyscapePlugin#readFancyDressBoxItems there).
-
-    item_name plays the same untradeable-item-matching role documented
-    on BankItem above."""
-
-    __tablename__ = "fancy_dress_box_items"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
-    item_id = Column(Integer, nullable=False)
-    item_name = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=_utcnow)
-
-    player = relationship("Player", back_populates="fancy_dress_box_items")
-
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_fancy_dress_box_items_player_item"),)
-
-
-class ToyBoxItem(Base):
-    """The player's current Player-Owned-House Costume Room Toy Box
-    contents -- same full-snapshot, delete-and-replace model as every
-    other item-source table above. Synced by POST
-    /api/players/me/toy-box (see MyscapeClient#syncToyBox in the
-    Mootrius/myscape-plugin repo).
-
-    Like Magic Wardrobe/Armour Case above, this is a genuine
-    ItemContainer RuneLite exposes directly
-    (InventoryID.POH_COSTUME_ROOM_HOLIDAY_ITEMS_INV -- the Toy Box
-    furniture piece stores what RuneLite itself calls "holiday items":
-    the non-tradeable rewards from past holiday events), read the same
-    straightforward way -- and, same caveat, it only reports real
-    contents once the player has actually opened the Toy Box at least
-    once in the current session (see MyscapePlugin#readToyBoxItems
-    there).
-
-    item_name plays the same untradeable-item-matching role documented
-    on BankItem above -- relevant here specifically since holiday items
-    are never tradeable and so never have a GE listing."""
-
-    __tablename__ = "toy_box_items"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
-    item_id = Column(Integer, nullable=False)
-    item_name = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=_utcnow)
-
-    player = relationship("Player", back_populates="toy_box_items")
-
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_toy_box_items_player_item"),)
-
-
-class TreasureChestItem(Base):
-    """The player's current Player-Owned-House Costume Room Treasure
-    Chest contents -- same full-snapshot, delete-and-replace model as
-    every other item-source table above. Synced by POST
-    /api/players/me/treasure-chest (see
-    MyscapeClient#syncTreasureChest in the Mootrius/myscape-plugin
-    repo).
-
-    Unlike every other source above, the Treasure Chest isn't backed by
-    a single ItemContainer -- it's Jagex's UI over six separate ones,
-    one per Treasure Trail difficulty tier, split across two widget
-    pages (InventoryID.POH_COSTUME_ROOM_TREASURE_TRAIL_1_INV through
-    _3_INV for page one, _1A_INV through _3A_INV for page two). The
-    plugin reads and merges all six itself (see
-    MyscapePlugin#readTreasureChestItems there) before syncing, so this
-    table only ever sees the combined result -- same caveat as the
-    single-container sources still applies per tier, though: a tier's
-    items aren't included here until that specific tier's tab has been
-    opened at least once in the current session.
-
-    item_name plays the same untradeable-item-matching role documented
-    on BankItem above -- relevant here specifically since many clue
-    rewards are untradeable."""
-
-    __tablename__ = "treasure_chest_items"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
-    item_id = Column(Integer, nullable=False)
-    item_name = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=_utcnow)
-
-    player = relationship("Player", back_populates="treasure_chest_items")
-
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_treasure_chest_items_player_item"),)
-
-
-class MagicCapeRackItem(Base):
-    """The player's current Player-Owned-House Costume Room Cape Rack
-    contents -- same full-snapshot, delete-and-replace model as every
-    other item-source table above. Synced by POST
-    /api/players/me/magic-cape-rack (see
-    MyscapeClient#syncMagicCapeRack in the Mootrius/myscape-plugin
-    repo).
-
-    Like the Treasure Chest above, this isn't backed by a single
-    ItemContainer -- the Cape Rack's storage spans two widget pages
-    (InventoryID.POH_COSTUME_ROOM_CAPES_INV and
-    POH_COSTUME_ROOM_CAPES_INV_PAGE2), which the plugin reads and
-    merges itself (see MyscapePlugin#readMagicCapeRackItems there)
-    before syncing. Named "Magic Cape Rack" here for the piece of
-    furniture's top (Mahogany plank + Magic stone) construction tier,
-    though it stores every tier's capes once built.
-
-    item_name plays the same untradeable-item-matching role documented
-    on BankItem above."""
-
-    __tablename__ = "magic_cape_rack_items"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
-    item_id = Column(Integer, nullable=False)
-    item_name = Column(String, nullable=True)
-    quantity = Column(Integer, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=_utcnow)
-
-    player = relationship("Player", back_populates="magic_cape_rack_items")
-
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_magic_cape_rack_items_player_item"),)
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_costume_room_items_player_item"),)
 
 
 class GearSetup(Base):
