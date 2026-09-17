@@ -3442,7 +3442,7 @@ def render_mindmaps(player: Player) -> str:
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
         zoom: 1,
-        lastLayout: null, // set by renderCanvas, read by recenterOnNode/zoomToFit
+        lastLayout: null, // set by renderCanvas, read by zoomToFit
         // Per-mindmap edit history -- each entry is a full past
         // activeMindmap().nodes snapshot (this same mindmap's own
         // prior server-returned state), not a diff. See
@@ -3732,9 +3732,10 @@ def render_mindmaps(player: Player) -> str:
       // ---- Pan/zoom ---------------------------------------------------
 
       // .mm-world carries a CSS transition on `transform` (see
-      // mindmaps.css) so every zoom change -- the +/-/fit/reset
-      // buttons, the wheel, all of which end up calling applyTransform
-      // through setZoom/zoomToFit/recenterOnNode -- animates smoothly
+      // mindmaps.css) so every zoom change -- the +/-/fit buttons, the
+      // wheel, and every "just loaded/switched into a mindmap" moment
+      // (see zoomToFit's own comment), all of which end up calling
+      // applyTransform through setZoom/zoomToFit -- animates smoothly
       // instead of snapping. Pan-dragging below calls applyTransform
       // too (every pointermove while dragging), and MUST stay instant
       // -- a smoothed drag would visibly lag behind the cursor -- so
@@ -3780,22 +3781,6 @@ def render_mindmaps(player: Player) -> str:
         applyTransform();
       }
 
-      // Pans the canvas so the given node sits centered in the current
-      // viewport, at the current zoom -- uses MM.lastLayout (set by the
-      // most recent renderCanvas), so this only makes sense to call
-      // right after a render.
-      function recenterOnNode(nodeId) {
-        var layout = MM.lastLayout;
-        var pos = layout && layout.positions[nodeId];
-        if (!pos) return;
-        var canvas = document.getElementById('mmCanvas');
-        var viewW = canvas.clientWidth, viewH = canvas.clientHeight;
-        var centerX = pos.x + NODE_WIDTH / 2, centerY = pos.y + NODE_HEIGHT / 2;
-        MM.pan.x = viewW / 2 - centerX * MM.zoom;
-        MM.pan.y = viewH / 2 - centerY * MM.zoom;
-        applyTransform();
-      }
-
       // Nudges the pan (never the zoom) just enough that a freshly-
       // opened popover's bottom edge clears .mm-canvas's own bottom
       // edge, when the node it belongs to sits near the bottom of the
@@ -3836,25 +3821,26 @@ def render_mindmaps(player: Player) -> str:
         }
       }
 
-      function resetView() {
-        var mm = activeMindmap();
-        MM.zoom = 1;
-        if (mm && mm.nodes.length) recenterOnNode(mm.nodes.find(function (n) { return n.parentId === null; }).id);
-        else applyTransform();
-      }
-
       // Fits the WHOLE tree's bounding box inside the current viewport
-      // (as opposed to resetView, which always centers on just the
-      // root at a fixed zoom of 1) -- picks whichever of width/height
-      // is the tighter constraint, clamped to the same 0.4-2 zoom
-      // range as everything else, then centers the fitted box in the
-      // viewport. Uses the actual tight bounding box of the node
-      // positions themselves (not layout.worldWidth/worldHeight) --
-      // those two are sized for computeLayout's own arithmetic
-      // convenience and end up with more empty margin past the last
-      // column/row than before the first one, so centering THAT box
-      // visibly drags the real content off-center (left/up) instead
-      // of centering what's actually on screen.
+      // -- picks whichever of width/height is the tighter constraint,
+      // clamped to the same 0.4-2 zoom range as everything else, then
+      // centers the fitted box in the viewport. Uses the actual tight
+      // bounding box of the node positions themselves (not
+      // layout.worldWidth/worldHeight) -- those two are sized for
+      // computeLayout's own arithmetic convenience and end up with
+      // more empty margin past the last column/row than before the
+      // first one, so centering THAT box visibly drags the real
+      // content off-center (left/up) instead of centering what's
+      // actually on screen.
+      //
+      // Also what every "just loaded/switched into a mindmap" moment
+      // frames the view with -- the initial page load, switching
+      // mindmaps from the menu, creating a new one, and deleting the
+      // active one (see each one's own call below) -- so the very
+      // first thing a player sees of a mindmap is the whole tree, not
+      // whatever zoom/pan happened to be left over (or a fixed 1x
+      // centered on just the root, which is what this used to do
+      // before it was folded into zoomToFit here).
       function zoomToFit() {
         var layout = MM.lastLayout;
         if (!layout) return;
@@ -5716,7 +5702,7 @@ def render_mindmaps(player: Player) -> str:
             setActiveMindmapId(id);
             MM.selectedNodeId = null;
             render();
-            resetView();
+            zoomToFit();
           }
           return;
         }
@@ -5740,7 +5726,7 @@ def render_mindmaps(player: Player) -> str:
           MM.selectedNodeId = null;
           setActiveMindmapId(data.mindmaps.length ? data.mindmaps[0].id : null);
           render();
-          resetView();
+          zoomToFit();
         }
       }
 
@@ -5777,7 +5763,7 @@ def render_mindmaps(player: Player) -> str:
               setActiveMindmapId(created.id);
               MM.selectedNodeId = null;
               render();
-              resetView();
+              zoomToFit();
             }
           }
         } else if (mode === 'rename') {
@@ -6191,7 +6177,7 @@ def render_mindmaps(player: Player) -> str:
           setActiveMindmapId(resolved);
         }
         render();
-        resetView();
+        zoomToFit();
       }
 
       loadState();
