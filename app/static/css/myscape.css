@@ -134,19 +134,6 @@ body {
   line-height: 1.5;
 }
 
-/* !!! TEMPORARY -- greenscreen recording override, requested 2026-09-17.
-   REMOVE THIS BLOCK once Chandler's done recording. Overrides just
-   body's own background (the rule right above) with a flat chroma-key
-   green so the site's actual background can be keyed out in video
-   editing. Deliberately a separate rule rather than changing --bg
-   itself: --bg gets reused elsewhere for more than just the page
-   background (see .mm-node-white.completed in mindmaps.css, which
-   reads it as a TEXT color), so redefining the variable would also
-   turn that text neon green as an unrelated side effect. To revert:
-   delete this whole block and body goes back to background: var(--bg)
-   above, untouched. */
-body { background: #39ff14; }
-
 button, input { font-family: inherit; }
 
 a { color: var(--gold-dim); text-decoration: none; }
