@@ -191,7 +191,7 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
       if (btn.dataset.code) {
         try {
           await navigator.clipboard.writeText(btn.dataset.code);
-          btn.textContent = 'Copied to clipboard';
+          btn.textContent = 'COPIED TO CLIPBOARD';
           btn.removeAttribute('title');
           btn.disabled = true;
         } catch (err) {
