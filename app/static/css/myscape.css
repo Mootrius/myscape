@@ -615,3 +615,55 @@ footer {
   max-width: 880px;
   margin: 10px auto 0;
 }
+
+/* Homepage hero: the Loot Tracker demo video (right, ~2/3 width) next
+   to the pitch line (left, ~1/3 width) -- see render_landing() in
+   app/pages.py. .wrap caps body content at 880px (see .wrap/.page
+   above), so this breaks out to the full viewport width the same way
+   header/.link-banner do it -- via calc(50% - 50vw) on left/right
+   margin, which relies on .wrap being horizontally centered inside
+   .page's symmetric padding, which it is. */
+.landing-hero {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  align-items: center;
+  gap: 40px;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding: 8px clamp(20px, 5vw, 64px) 24px;
+}
+
+.landing-hero-text h1 {
+  margin: 0;
+  font-weight: normal;
+  line-height: 1.3;
+  /* Scales with viewport width (between a readable floor and a
+     comfortably large ceiling) rather than a single fixed size, since
+     this column can be anywhere from ~200px to ~350px wide depending
+     on the viewport. */
+  font-size: clamp(26px, 3vw, 42px);
+  color: #fff;
+}
+
+.landing-hero-gold { color: var(--gold); }
+
+.landing-hero-video video {
+  display: block;
+  width: 100%;
+  /* The source clips are 16:9 -- locking the box to that ratio (rather
+     than just letting the video's own intrinsic size drive height)
+     keeps the layout stable immediately on load, before the video's
+     metadata has actually arrived. */
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+/* Below this, the 1:2 column split gets too narrow for the pitch text
+   to sit comfortably beside the video -- stack them instead, text on
+   top since that's the same order they're already in in the markup. */
+@media (max-width: 720px) {
+  .landing-hero {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+}

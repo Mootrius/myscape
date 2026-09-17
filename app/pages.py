@@ -371,9 +371,27 @@ def render_landing(player: Optional[Player]) -> str:
     # note (both from _shell/player below) already handle either case
     # correctly on their own, so this needs nothing extra here to
     # support it.
-    # No body copy for now -- just the header/nav over the background
-    # video, until there's a real landing pitch to put here.
-    body = ""
+    # Hero: a silent, autoplaying/looping screen-recording of Loot
+    # Tracker (right, ~2/3 width) next to the pitch line (left, ~1/3
+    # width). muted+playsinline are both required for autoplay to be
+    # allowed at all on mobile Safari/Chrome; loop just repeats the
+    # clip since there's no natural "end" state to land on. webm is
+    # listed first since it's the much smaller of the two encodes and
+    # every current evergreen browser supports it -- the mp4 <source>
+    # is purely a fallback for anything that doesn't.
+    body = """
+    <section class="landing-hero">
+      <div class="landing-hero-text">
+        <h1><span class="landing-hero-gold">LOOT TRACKING</span> like you've never experienced it.</h1>
+      </div>
+      <div class="landing-hero-video">
+        <video autoplay loop muted playsinline>
+          <source src="/static/video/loot-tracker-hero.webm" type="video/webm">
+          <source src="/static/video/loot-tracker-hero.mp4" type="video/mp4">
+        </video>
+      </div>
+    </section>
+    """
     return _shell(title="myscape", player=player, body=body)
 
 
