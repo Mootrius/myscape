@@ -929,17 +929,34 @@ def build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict
 
 
 def _player_coins(db: Session, player: Player) -> int:
-    """GP in possession, same as Maintrius: bank-only (not inventory or
-    equipped), specifically so withdrawing coins to go shopping doesn't
-    make the total look like it dropped -- see load_character_snapshot's
-    docstring in the original osrs_tracker.py for the full reasoning,
-    which applies just as much here."""
-    row = (
-        db.query(BankItem)
-        .filter(BankItem.player_id == player.id, BankItem.item_id == COINS_ITEM_ID)
-        .first()
-    )
-    return row.quantity if row else 0
+    """GP in possession, summed across every storage build_owned_pools
+    sweeps (bank+inventory+equipment+potion storage+rune pouch+seed
+    vault+tackle box+PoH Costume Room+Forestry Kit+Master Scroll Book+
+    Seed Box) rather than bank-only, so coins carried in the inventory
+    or tucked away in any of those other storages count toward the
+    Purchase Goals GP total the same as coins already banked."""
+    total = 0
+    for model in (
+        BankItem,
+        InventoryItem,
+        EquipmentItem,
+        PotionStorageItem,
+        RunePouchItem,
+        SeedVaultItem,
+        TackleBoxItem,
+        PohItem,
+        ForestryKitItem,
+        MasterScrollBookItem,
+        SeedBoxItem,
+    ):
+        row = (
+            db.query(model)
+            .filter(model.player_id == player.id, model.item_id == COINS_ITEM_ID)
+            .first()
+        )
+        if row:
+            total += row.quantity
+    return total
 
 
 def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, coins: int) -> List[dict]:
