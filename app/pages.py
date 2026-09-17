@@ -173,7 +173,7 @@ def _footer(player: Optional[Player]) -> str:
     """
 
 
-def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "", extra_head: str = "") -> str:
+def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "", extra_head: str = "", body_class: str = "") -> str:
     nav_left, nav_right = _nav_sides(player)
     shared_script = """
     // See myscape.css's own `user-select: none` for the text-selection
@@ -342,7 +342,7 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
   <link rel="stylesheet" href="/static/css/myscape.css?v={_CSS_VERSION}" />
   {extra_head}
 </head>
-<body>
+<body{f' class="{body_class}"' if body_class else ""}>
   {_link_banner(player)}
   <header>
     <nav class="wrap header-inner">
@@ -371,10 +371,39 @@ def render_landing(player: Optional[Player]) -> str:
     # note (both from _shell/player below) already handle either case
     # correctly on their own, so this needs nothing extra here to
     # support it.
-    # No body copy for now -- just the header/nav over the background
-    # video, until there's a real landing pitch to put here.
-    body = ""
-    return _shell(title="myscape", player=player, body=body)
+    # Three full-viewport "anchor" panels -- pre-composited marketing
+    # art (logo/tagline, then one per showcased feature), not live
+    # markup, since each one is a fixed graphic that already has its
+    # own baked-in layout/copy. .landing-anchor's scroll-snap (see
+    # myscape.css) is what makes scrolling settle on each one in turn
+    # instead of drifting past. webp first (much smaller) with a png
+    # fallback for anything that doesn't support it.
+    body = """
+    <div class="landing-anchors">
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/anchor-myscape.webp" type="image/webp">
+          <img src="/static/img/anchor-myscape.png" alt="myscape -- a place for gains.">
+        </picture>
+      </section>
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/anchor-loot-tracking.webp" type="image/webp">
+          <img src="/static/img/anchor-loot-tracking.png" alt="Loot tracking like you've never seen it before.">
+        </picture>
+      </section>
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/anchor-mindmaps.webp" type="image/webp">
+          <img src="/static/img/anchor-mindmaps.png" alt="Mindmaps -- to plan every step of your grind.">
+        </picture>
+      </section>
+    </div>
+    """
+    # body_class="landing" scopes the scroll-snap behavior (see
+    # myscape.css's `html:has(body.landing)`) to just this page --
+    # every other page keeps its ordinary, un-snapped scrolling.
+    return _shell(title="myscape", player=player, body=body, body_class="landing")
 
 
 # Small inline SVGs for the dashboard cards below -- drawn from scratch in

@@ -87,6 +87,35 @@
 
 * { box-sizing: border-box; }
 
+/* Scroll-snap for the landing page's anchor panels (see
+   render_landing() in app/pages.py and .landing-anchor below) --
+   scoped to just that page via body.landing (set through _shell()'s
+   body_class) rather than applied site-wide, so every other page's
+   scrolling is untouched. scroll-snap-type has to live on the actual
+   scrolling box, which in standards mode is <html> (not <body>) --
+   :has() is what lets that live rule react to a class on its child
+   instead of needing a class on <html> itself. */
+html:has(body.landing) {
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+/* Without a snap point at the very top of the page, "mandatory" snap
+   has nothing valid to rest on at scroll position 0 and jumps
+   straight down to the first .landing-anchor on load, skipping the
+   header entirely. Making header itself a snap target fixes that --
+   the page now loads showing the header like normal, and only starts
+   "sticking" once the visitor scrolls past it. The same problem
+   happens in reverse at the bottom: with the last .landing-anchor as
+   the final snap point, "mandatory" refuses to rest anywhere past it
+   -- there's nothing to align a further scroll to -- which traps the
+   page and makes the footer completely unreachable. Giving footer a
+   snap point too fixes that the same way. */
+body.landing header,
+body.landing footer {
+  scroll-snap-align: start;
+}
+
 /* Site-wide: nothing on the page should be text-highlightable or
    image-draggable. A lot of the UI here is drag/click-heavy (gear
    setup slots and their drag-and-drop reordering, sort tabs, NPC/item
@@ -614,4 +643,44 @@ footer {
 .link-banner-error {
   max-width: 880px;
   margin: 10px auto 0;
+}
+
+/* Landing page anchor panels -- see render_landing() in app/pages.py.
+   Each <section> is one full-viewport "slide" (pre-composited
+   marketing art, not live content) that scroll-snap (see
+   html:has(body.landing) above) settles the page on as it's
+   scrolled past. .landing-anchors itself just breaks the group out
+   of .wrap's 880px cap (same calc(50% - 50vw) trick as header/
+   .link-banner), the same way the site already escapes that column
+   elsewhere. */
+.landing-anchors {
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+.landing-anchor {
+  min-height: 100vh;
+  /* svh accounts for mobile browsers' collapsing address bar --
+     100vh there is the *tallest* the viewport ever gets, which
+     leaves a gap under the panel until the bar happens to hide.
+     Layered after the plain vh so it only takes over in browsers
+     that understand it. */
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  scroll-snap-align: start;
+  /* Without this, a fast fling can skip a panel entirely and land on
+     the next one -- "always" forces every panel to actually stop the
+     scroll, not just the one it happens to settle near. */
+  scroll-snap-stop: always;
+}
+
+.landing-anchor img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100svh - 80px);
 }
