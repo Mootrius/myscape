@@ -77,7 +77,7 @@ RAW_BASE = "https://raw.githubusercontent.com/runelite/runelite/master"
 ITEM_MAPPING_URL = f"{RAW_BASE}/runelite-client/src/main/java/net/runelite/client/game/ItemMapping.java"
 ITEM_VARIATIONS_URL = f"{RAW_BASE}/runelite-client/src/main/resources/item_variations.json"
 ITEM_ID_URL = f"{RAW_BASE}/runelite-api/src/main/java/net/runelite/api/gameval/ItemID.java"
-USER_AGENT = "myscape.io/1.0 (Purchase Goals / Possessions Monitoring; contact: chandler@myscape.io)"
+USER_AGENT = "myscape.io/1.0 (Purchase Goals / Storages Viewer; contact: chandler@myscape.io)"
 
 OUTPUT_PATH = pathlib.Path(__file__).resolve().parent.parent / "app" / "data" / "untradeable_mapping.json"
 

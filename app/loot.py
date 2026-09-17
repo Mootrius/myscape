@@ -294,7 +294,7 @@ def hidden_item_keys(db: Session, player: Player) -> set:
 def set_npc_hidden(db: Session, player: Player, name: str, hidden: bool) -> None:
     """Hides or unhides one NPC by name (see the eye button on each NPC
     tile in render_loot_tracker, app/pages.py) -- idempotent either
-    way, same as Possessions Monitoring's pin/unpin endpoints: hiding
+    way, same as Storages Viewer's pin/unpin endpoints: hiding
     an already-hidden NPC, or unhiding one that isn't, is a no-op
     rather than an error."""
     key = npc_hide_key(name)

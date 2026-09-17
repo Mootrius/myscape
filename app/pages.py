@@ -56,7 +56,7 @@ try:
 except OSError:
     _MINDMAPS_CSS_VERSION = 0
 
-# Same cache-busting trick again, for the Possessions Monitoring page's
+# Same cache-busting trick again, for the Storages Viewer page's
 # own stylesheet.
 _POSSESSIONS_CSS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "static", "css", "possessions.css"
@@ -438,7 +438,7 @@ def render_dashboard(player: Player) -> str:
         + _dash_card(
             _ICON_HEAVY_CASKET,
             "Heavy casket",
-            "Possessions Monitoring",
+            "Storages Viewer",
             "Keep an eye on what you own across every storage in the game. "
             "Search it all, sort by anything, and filter to your heart's "
             "content — all in one place!",
@@ -1314,7 +1314,7 @@ def render_purchase_goals(player: Player) -> str:
       // arrow showing which direction that sorts -- up for ascending
       // (cheapest first), down for descending (priciest first) -- the
       // standard up-means-ascending/down-means-descending convention
-      // (same one Possessions Monitoring's own sortable column headers
+      // (same one Storages Viewer's own sortable column headers
       // use, and the same shorthand the Loot Tracker's own sort tabs
       // use now, see _sort_tabs in app/pages.py). The old single
       // "Alphabetical" button is likewise now two direction-specific
@@ -1948,7 +1948,7 @@ def render_loot_tracker(player: Player) -> str:
         # metric name plus an arrow -- up for ascending (low-to-high, or
         # A-to-Z), down for descending (high-to-low, or Z-to-A), the
         # same up-means-ascending/down-means-descending convention
-        # Possessions Monitoring's own sortable column headers use (see
+        # Storages Viewer's own sortable column headers use (see
         # the sortDir-driven arrow.textContent in the script further
         # down) and that spreadsheets/sortable tables use everywhere --
         # same shorthand Purchase Goals' own sort buttons use now too,
@@ -2535,7 +2535,7 @@ def render_loot_tracker(player: Player) -> str:
         // changing the sorted set's membership or order at all (an
         // already-hidden-and-shown NPC just getting explicitly hidden
         // too, say), which the rest of the key wouldn't otherwise catch
-        // -- same fix Possessions Monitoring's own pinnedKey made to
+        // -- same fix Storages Viewer's own pinnedKey made to
         // renderTable's key for the identical reason (see possessions.css/
         // app/pages.py's render_possessions).
         var hiddenFlags = sorted.map(function (n) { return npcEffectiveHidden(n) ? '1' : '0'; }).join('');
@@ -2554,7 +2554,7 @@ def render_loot_tracker(player: Player) -> str:
             // relationship also means clicking the eye button never
             // needs preventDefault/stopPropagation to keep it from
             // also selecting the NPC underneath -- same reasoning as
-            // Possessions Monitoring's own pin button.
+            // Storages Viewer's own pin button.
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
@@ -5896,7 +5896,7 @@ def render_mindmaps(player: Player) -> str:
     )
 
 
-# Possessions Monitoring's location-filter row groups the raw
+# Storages Viewer's location-filter row groups the raw
 # per-source storage keys (same key spelling as POSSESSION_STORAGE_KEYS
 # in app/schemas.py/STORAGE_SOURCES in app/possessions.py) into five
 # buttons rather than one per source -- with twelve sources now, one
@@ -5945,7 +5945,7 @@ _POSSESSION_STORAGE_LABELS = {
 
 
 def render_possessions(player: Player) -> str:
-    """The Possessions Monitoring page -- a single line-by-line table of
+    """The Storages Viewer page -- a single line-by-line table of
     everything the player currently owns across every synced storage
     (see get_owned_breakdown in app/possessions.py), fetched from GET
     /api/possessions/summary on load and re-polled every 5 seconds
@@ -6063,7 +6063,7 @@ def render_possessions(player: Player) -> str:
     )
 
     body = f"""
-    <h2 class="page-title">Possessions Monitoring</h2>
+    <h2 class="page-title">Storages Viewer</h2>
     <div class="auth-error" id="pmError"></div>
 
     <section class="pm-section">
@@ -6646,7 +6646,7 @@ def render_possessions(player: Player) -> str:
     })();
     """
     return _shell(
-        title="Possessions Monitoring — myscape",
+        title="Storages Viewer — myscape",
         player=player,
         body=body,
         extra_script=script,

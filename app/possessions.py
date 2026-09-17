@@ -1,4 +1,4 @@
-"""Backend logic for Possessions Monitoring -- three ways of looking at
+"""Backend logic for Storages Viewer -- three ways of looking at
 the same synced storage data Purchase Goals already reads (see
 build_owned_pools in app/purchase_goals.py, which this deliberately
 does NOT reuse -- that function collapses everything into one combined
@@ -433,7 +433,7 @@ def pinned_item_ids(db: Session, player: Player) -> set:
 
 def hidden_storage_keys(db: Session, player: Player) -> set:
     """Every storage source key this player has switched off in
-    Possessions Monitoring's settings menu (see
+    Storages Viewer's settings menu (see
     HiddenPossessionStorage's own docstring in app/models.py) -- same
     plain-set shape as pinned_item_ids above, for the same reason:
     build_possessions_summary below and the hide/unhide endpoints in
@@ -449,7 +449,7 @@ def hidden_storage_keys(db: Session, player: Player) -> set:
 
 def set_storage_hidden(db: Session, player: Player, storage_key: str, hidden: bool) -> None:
     """Flips one storage source on/off for this player -- the gear-icon
-    settings menu next to Possessions Monitoring's location filter
+    settings menu next to Storages Viewer's location filter
     buttons (see render_possessions in app/pages.py). Idempotent both
     ways, same reasoning as pin/unpin_possession_item in app/main.py:
     hiding an already-hidden storage (or showing an already-shown one)

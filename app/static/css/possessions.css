@@ -1,4 +1,4 @@
-/* Possessions Monitoring -- a single line-by-line table of everything
+/* Storages Viewer -- a single line-by-line table of everything
    currently owned across every synced storage (see render_possessions
    in app/pages.py for the full breakdown of what each column shows).
    Self-contained per this project's established per-page-CSS

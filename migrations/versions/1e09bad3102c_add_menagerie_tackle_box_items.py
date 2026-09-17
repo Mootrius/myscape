@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Two more owned-item sources for Possessions Monitoring, same
+    """Two more owned-item sources for Storages Viewer, same
     last-reported full-replace snapshot shape as every other item table
     (see MenagerieItem/TackleBoxItem's own docstrings in app/models.py):
 

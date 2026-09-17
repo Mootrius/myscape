@@ -1188,7 +1188,7 @@ def possessions_page(player: Optional[Player] = Depends(get_optional_current_pla
 @app.get("/api/possessions/search-items", response_model=ItemSearchResponse)
 def possessions_item_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
     """Backs the min/max tracker "add an item" search field on the
-    Possessions Monitoring page -- session-authenticated like
+    Storages Viewer page -- session-authenticated like
     item_search above, since only the website UI calls this. Unlike
     that endpoint, every result here always carries a real item id
     (see search_trackable_items in app/possessions.py for why -- a
@@ -1348,7 +1348,7 @@ def hide_possession_storage(
     db: Session = Depends(get_db),
     player: Player = Depends(get_current_player_from_session),
 ):
-    """Switches one storage source off in Possessions Monitoring's
+    """Switches one storage source off in Storages Viewer's
     settings menu (see HiddenPossessionStorage's own docstring in
     app/models.py, and the gear-icon menu next to the location filter
     buttons in render_possessions) -- its items stop counting toward

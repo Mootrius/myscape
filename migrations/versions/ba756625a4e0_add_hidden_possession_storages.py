@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """hidden_possession_storages -- Possessions Monitoring's per-storage
+    """hidden_possession_storages -- Storages Viewer's per-storage
     on/off setting (see HiddenPossessionStorage's own docstring in
     app/models.py). One row per (player, storage_key) currently
     switched off; deleting the row switches it back on. No row for a

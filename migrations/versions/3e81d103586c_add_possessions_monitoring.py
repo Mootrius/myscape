@@ -1,4 +1,4 @@
-"""add possessions monitoring (looting bag items, storage sync status, trackers)
+"""add storages viewer (looting bag items, storage sync status, trackers)
 
 Revision ID: 3e81d103586c
 Revises: f09e733c7c88
@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Everything the new Possessions Monitoring app needs (see
+    """Everything the new Storages Viewer app needs (see
     app/possessions.py and render_possessions in app/pages.py):
 
     - looting_bag_items: the same last-reported, full-replace snapshot
@@ -33,7 +33,7 @@ def upgrade() -> None:
       reads, since an item table's own updated_at can't tell "synced
       empty" apart from "never synced".
     - possession_trackers: the minimum/maximum item trackers behind
-      Possessions Monitoring's first two sections (see
+      Storages Viewer's first two sections (see
       PossessionTracker's own docstring in app/models.py)."""
     op.create_table(
         "looting_bag_items",

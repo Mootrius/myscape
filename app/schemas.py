@@ -663,12 +663,12 @@ class SeedBoxOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-# -- Possessions Monitoring: the min/max item trackers (sections 1/2)
+# -- Storages Viewer: the min/max item trackers (sections 1/2)
 # and the storage sync-status map the plugin side panel's Status
 # section reads -- see PossessionTracker/Player.storage_synced_at's
 # own docstrings in app/models.py. ---------------------------------
 
-#: Every storage source Possessions Monitoring (and the plugin panel's
+#: Every storage source Storages Viewer (and the plugin panel's
 #: Status section) knows about, in the fixed order they're always shown.
 #: Kept here, not just in app/possessions.py, since main.py's sync
 #: endpoints need the same key spelling to stamp storage_synced_at with.

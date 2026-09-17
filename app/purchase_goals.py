@@ -114,7 +114,7 @@ def get_mapping(force: bool = False) -> Tuple[Dict[str, dict], Optional[str]]:
         raw = _fetch_json(f"{API_BASE}/mapping")
         # highalch/members ride along unused by every existing caller
         # here (gear setups only ever needed name/icon), but cost
-        # nothing extra to keep -- see Possessions Monitoring's
+        # nothing extra to keep -- see Storages Viewer's
         # app/possessions.py, which reuses this same mapping for its
         # High Alch value / Tradeable toggles rather than re-fetching
         # the ~860KB payload a second time under a different cache.
@@ -175,7 +175,7 @@ def item_icon_url(icon_filename: Optional[str]) -> Optional[str]:
     # that module's own top-of-file comment for why handing the browser
     # a direct wiki fallback here, even just for a brand new icon's
     # first render, was itself enough to trip the wiki's rate limiting
-    # on a page -- Possessions Monitoring especially -- showing enough
+    # on a page -- Storages Viewer especially -- showing enough
     # never-before-seen icons at once.
     return "/icon-cache/" + urllib.parse.quote(icon_filename)
 

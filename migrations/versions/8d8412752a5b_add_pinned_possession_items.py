@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """pinned_possession_items -- Possessions Monitoring section 3's
+    """pinned_possession_items -- Storages Viewer section 3's
     "pin to the top" marker (see PinnedPossessionItem's own docstring
     in app/models.py). One row per (player, item_id) pinned; deleting
     the row unpins it."""

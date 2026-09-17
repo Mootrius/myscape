@@ -101,7 +101,7 @@ class Player(Base):
     diary_tiers = Column(JSONB, nullable=False, default=dict)
 
     # storage_synced_at: {<storage key>: <ISO 8601 timestamp>} for every
-    # one of the twelve sources Possessions Monitoring's side-panel
+    # one of the twelve sources Storages Viewer's side-panel
     # Status section reports on -- "bank", "equipment", "inventory",
     # "potion_storage", "rune_pouch", "seed_vault", "looting_bag",
     # "tackle_box", "poh", "forestry_kit", "master_scroll_book",
@@ -488,7 +488,7 @@ class PohItem(Base):
     other item-source table above. Synced by POST /api/players/me/poh
     (see MyscapeClient#syncPoh in the Mootrius/myscape-plugin repo).
     Named "PoH" rather than "Costume Room" since that's the display
-    label Possessions Monitoring's location filter groups this storage
+    label Storages Viewer's location filter groups this storage
     under -- there's only the Costume Room in it today, but "PoH" is
     the general house-storage bucket, not specifically about costumes.
 
@@ -566,7 +566,7 @@ class MasterScrollBookItem(Base):
     /api/players/me/master-scroll-book (see
     MyscapeClient#syncMasterScrollBook in the Mootrius/myscape-plugin
     repo). Like the Forestry Kit above, this is a portable carried item
-    (Possessions Monitoring's "PORTABLE" location group), not PoH
+    (Storages Viewer's "PORTABLE" location group), not PoH
     furniture.
 
     Unlike every other source in this file, there's no confirmed
@@ -604,7 +604,7 @@ class SeedBoxItem(Base):
     Synced by POST /api/players/me/seed-box (see
     MyscapeClient#syncSeedBox in the Mootrius/myscape-plugin repo).
     Like the Forestry Kit above, this is a portable carried item
-    (Possessions Monitoring's "PORTABLE" location group), not PoH
+    (Storages Viewer's "PORTABLE" location group), not PoH
     furniture -- distinct from SeedVaultItem above, which is the PoH
     Seed Vault, a separate storage the Seed Box doesn't replace.
 

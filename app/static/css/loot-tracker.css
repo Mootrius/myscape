@@ -199,7 +199,7 @@
    nest inside another <button>, so now that a per-tile hide/unhide
    control exists, it has to be a DOM SIBLING of .loot-npc-box instead
    of living inside it, both wrapped in this div (same reasoning, same
-   pattern as Possessions Monitoring's .pm-row-wrap/.pm-pin-btn -- see
+   pattern as Storages Viewer's .pm-row-wrap/.pm-pin-btn -- see
    possessions.css). All the sizing that used to live on .loot-npc-box
    itself (flex-basis/height/aspect-ratio -- see that rule's own long
    comment above for why each piece is there) moves here instead, since
@@ -407,7 +407,7 @@
    a crossed-out one when clicking would UNhide it -- see EYE_GLYPH/
    EYE_OFF_GLYPH in the script below), gray at rest and gold on hover --
    same convention, and deliberately the same plain color-swap with no
-   background highlight box behind it, as Possessions Monitoring's own
+   background highlight box behind it, as Storages Viewer's own
    .pm-pin-btn (possessions.css). Hidden until its own wrap is hovered,
    for BOTH an already-visible tile (hover to reveal "hide this") and
    an already-hidden one shown dimmed via the panel's own "show

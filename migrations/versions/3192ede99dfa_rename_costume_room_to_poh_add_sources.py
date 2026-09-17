@@ -23,7 +23,7 @@ def upgrade() -> None:
     request:
 
     1. Rename costume_room_items -> poh_items (and its unique
-       constraint) to match the "PoH" label Possessions Monitoring's
+       constraint) to match the "PoH" label Storages Viewer's
        location filter now groups this storage under -- see PohItem's
        docstring in app/models.py. A rename, not a drop/recreate, so
        any already-synced rows survive.
