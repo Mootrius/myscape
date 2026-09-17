@@ -29,16 +29,29 @@ changed in that update, rather than an arbitrary "7 days since last
 fetched" that could just as easily land mid-week.
 
 Lazy and request-driven, not cron-driven, on purpose: this is a single
-free Render web service with no separate worker/cron process and an
-ephemeral disk (wiped on every redeploy, same as purchase_goals.py's
-own in-memory get_mapping/get_latest_prices caches) -- a scheduled job
-could simply never fire if nothing hits the site around the moment it's
-due, and Render's free tier spins the service down after inactivity
-anyway. So instead, the /icon-cache/{filename} route (app/main.py) does
-a cheap local freshness check (a stat(), no network) on every request
-and, if the file is missing or past this week's Thursday cutoff, hands
-the work to a small bounded background thread pool to populate/refresh
-it -- self-healing on whatever the next real request happens to be.
+Render web service with no separate worker/cron process, so a scheduled
+job could simply never fire if nothing hits the site around the moment
+it's due (and on the free tier specifically, the service also spins
+down after inactivity, making that worse). So instead, the
+/icon-cache/{filename} route (app/main.py) does a cheap local freshness
+check (a stat(), no network) on every request and, if the file is
+missing or past this week's Thursday cutoff, hands the work to a small
+bounded background thread pool to populate/refresh it -- self-healing
+on whatever the next real request happens to be, regardless of whether
+that file was ever cached before or just went stale.
+
+CACHE_DIR defaults to a folder next to this file (app/static/item-
+icons/), which is fine for local dev but ephemeral on Render -- wiped
+on every redeploy, same as purchase_goals.py's own in-memory
+get_mapping/get_latest_prices caches. In production, ICON_CACHE_DIR
+(set in render.yaml) instead points this at a mounted persistent disk,
+so the whole point of this module -- not re-fetching an icon we
+already have -- actually holds across deploys too, not just within one
+running instance's lifetime. Either way, a first-ever view of some
+never-before-cached icon (or, without the disk, the first view of
+*anything* after a redeploy) still has to actually fetch it once --
+this module's job is making sure that only ever happens once per icon,
+throttled, rather than every page load.
 
 THIS is also the piece that used to fall back to a direct wiki hotlink
 for that one request rather than wait on the fetch -- item_icon_url
@@ -52,9 +65,10 @@ direct, un-throttled browser-to-wiki request instead. On Possessions
 Monitoring especially -- by far the widest, most varied set of icons
 any page here shows, since it's a player's whole bank/inventory rather
 than a short, repeat-heavy list like Loot Tracker's recent drops or one
-gear setup's own slots -- a first view (or the first view after a
-Render redeploy wipes the disk) could easily have dozens of icons never
-fetched before, all at once, all completely bypassing this module's own
+gear setup's own slots -- a first view (or, without ICON_CACHE_DIR
+pointed at a persistent disk, the first view after any redeploy) could
+easily have dozens of icons never fetched before, all at once, all
+completely bypassing this module's own
 4-at-a-time throttling and racing the browser straight at the wiki in
 parallel: exactly the rate-limit-tripping request burst this cache
 exists to prevent, just moved from "us re-fetching" to "the browser
@@ -65,7 +79,8 @@ URL, never the wiki's, and ensure_cached_icon_path (called from that
 route) is the one place responsible for deciding whether to serve what
 we already have, wait briefly for an in-flight fetch, or 404 -- but
 ONLY waits when there's truly nothing on disk yet for that icon (a
-first-ever view, or a cold cache post-redeploy). Once a file exists,
+first-ever view, or -- lacking a persistent ICON_CACHE_DIR -- a cold
+cache post-redeploy). Once a file exists,
 a stale-past-Thursday icon is still served immediately, with its
 refresh happening in the background exactly as before -- there's no
 reason to make a request wait on a brand new fetch just because the
@@ -90,7 +105,14 @@ from zoneinfo import ZoneInfo
 USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 ICON_PATH_BASE = "https://oldschool.runescape.wiki/w/Special:FilePath"
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "item-icons")
+# ICON_CACHE_DIR overrides where this lives -- set in render.yaml to a
+# mounted persistent disk's path in production; unset (the normal case
+# for local dev) falls back to a folder next to this file, same as
+# before. See this module's own top-of-file comment for why the
+# override matters.
+CACHE_DIR = os.environ.get("ICON_CACHE_DIR") or os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "item-icons"
+)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 _EASTERN = ZoneInfo("America/New_York")

@@ -10,11 +10,27 @@ services:
     plan: free
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    # Disks only attach to a paid service (see the disk docs) -- pointless
+    # on the free plan, which has no persistent disk to mount at all.
+    # Update `plan` above to whatever paid tier this account is actually
+    # on before this takes effect; left as `free` here since that's not
+    # something to guess at in a billing-affecting file.
+    disk:
+      name: icon-cache
+      mountPath: /var/data/item-icons
+      sizeGB: 1
     envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: myscape-db
           property: connectionString
+      - key: ICON_CACHE_DIR
+        # Points app/icon_cache.py's disk cache at the mount above --
+        # see that module's own top-of-file comment. Without this (e.g.
+        # in local dev), it falls back to a folder next to that file
+        # instead, which is fine there but would be wiped on every
+        # redeploy here.
+        value: /var/data/item-icons
       - key: PYTHON_VERSION
         # Pinned explicitly rather than trusting Render's default -- that
         # default has already jumped to a Python version (3.14) newer than
