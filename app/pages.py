@@ -416,6 +416,12 @@ def render_landing(player: Optional[Player]) -> str:
           <img src="/static/img/anchor-storages.png" alt="Storage viewing -- see everything you own, in one place.">
         </picture>
       </section>
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/anchor-purchase-planner.webp" type="image/webp">
+          <img src="/static/img/anchor-purchase-planner.png" alt="Purchase planner -- plan and track your next big buys.">
+        </picture>
+      </section>
     </div>
     """
     # CSS scroll-snap (myscape.css) is the baseline -- it's what
