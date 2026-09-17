@@ -889,23 +889,21 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-field-error.show { display: block; }
 
 /* ---- KC goal's optional sinceDate field (renderGoalFieldsHtml) -------
-   The exact same masked "type digits, watch them auto-dash into
-   YYYY-MM-DD" field the Loot Tracker's own custom-range date fields
-   use (see .loot-range-custom-field in loot-tracker.css and
-   DATE_MASK/applyDateMask/isValidIsoDate in this page's own script)
-   -- its own copy of that label-above-input layout and .invalid
-   red-border state rather than reusing those classes directly, since
-   this field sits in a much narrower popover and needs
-   .mm-goal-input's own sizing/theming to match its sibling fields
-   here, not that other page's. color-scheme: dark asks the browser to
-   draw the input's own text-selection/caret UI in its dark variant,
-   same reason .loot-range-custom-field's own input rule sets it. */
-.mm-goal-date-wrap {
-  display: flex; flex-direction: column; gap: 3px; width: 100%;
-  font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
-}
+   The same masked "type digits, watch them auto-dash into YYYY-MM-DD"
+   field the Loot Tracker's own custom-range date fields use (see
+   .loot-range-custom-field in loot-tracker.css and DATE_MASK/
+   applyDateMask/isValidIsoDate in this page's own script), paired
+   with a hint line underneath instead of that page's above-input
+   label -- this field is optional and needs to say so, which a bare
+   "Start"/"End"-style label can't. color-scheme: dark asks the
+   browser to draw the input's own text-selection/caret UI in its dark
+   variant, same reason .loot-range-custom-field's own input rule sets
+   it; .invalid is the same red-border flag that page's fields get on
+   an unparseable date. */
+.mm-goal-date-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; }
 .mm-goal-date-wrap input.mm-goal-input { color-scheme: dark; }
 .mm-goal-date-wrap input.mm-goal-input.invalid { border-color: var(--red); }
+.mm-goal-hint { font-size: 10.5px; color: var(--text-faint); line-height: 1.3; }
 
 /* ---- Note field (renderNoteFieldHtml) --------------------------------
    The one optional field every node type gets (manual included), a

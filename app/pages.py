@@ -5375,17 +5375,19 @@ def render_mindmaps(player: Player) -> str:
             // save-click delegation's own invalid-date guard just
             // above it) -- rather than a native <input type="date">'s
             // own calendar popup, so the two date pickers on this site
-            // now look and behave identically. The label text standing
-            // in for a placeholder (typed digits fill the box, so a
-            // placeholder alone would just disappear the moment the
-            // player starts) mirrors the Loot Tracker's own
-            // "Start"/"End" labels the same way. Reads/writes/pre-fills
-            // through the exact same generic [data-goal-field]
-            // mechanism as every field above -- no other JS change
-            // needed for it beyond the masking/validation wiring.
-            '<label class="mm-goal-date-wrap">Since (optional)' +
+            // now look and behave identically. The placeholder alone
+            // only says the FORMAT (and disappears once typed), so this
+            // field still gets its own hint line underneath -- same
+            // reasoning as before switching to the masked input, just
+            // no longer standing in for a missing placeholder, since
+            // this one has a real one. Reads/writes/pre-fills through
+            // the exact same generic [data-goal-field] mechanism as
+            // every field above -- no other JS change needed for it
+            // beyond the masking/validation wiring.
+            '<div class="mm-goal-date-wrap">' +
               '<input class="mm-goal-input" type="text" data-goal-field="sinceDate" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="YYYY-MM-DD" value="' + esc(goal.sinceDate || '') + '">' +
-            '</label>';
+              '<div class="mm-goal-hint">Only count kc from this date on (optional)</div>' +
+            '</div>';
         } else if (type === 'item') {
           fields =
             renderSearchFieldHtml('itemName', 'item', 'Search for an item', goal.itemName) +
