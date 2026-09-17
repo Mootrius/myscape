@@ -755,7 +755,11 @@ footer {
   height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  border-top: 7px solid currentColor;
+  /* Gold instead of currentColor -- the arrows read as the call to
+     action, so they get the site's accent color, while the
+     "EXPLORE FEATURES" text next to them stays the more muted tone
+     the rest of the cue's text uses. */
+  border-top: 7px solid var(--gold);
   animation: landing-scroll-cue-bounce 1.6s ease-in-out infinite;
 }
 
