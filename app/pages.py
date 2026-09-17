@@ -4220,6 +4220,28 @@ def render_mindmaps(player: Player) -> str:
             }
             return;
           }
+          // The kc goal's own sinceDate (see renderGoalFieldsHtml's kc
+          // branch) is the only masked-text date field in this form --
+          // same "typed digits, not a native picker" field the Loot
+          // Tracker's custom range uses (see DATE_MASK et al above),
+          // so it gets the same block-and-flag treatment
+          // applyCustomRange gives THOSE fields on Apply: a value with
+          // at least one digit typed that still isn't a real calendar
+          // date refuses the save and turns the field's border red,
+          // rather than letting a half-typed "2026-02-3_" reach the
+          // server as-is. A still-blank field (nothing typed, or every
+          // digit backspaced back out -- see applyDateMask's own
+          // comment) isn't an error here, same as every other optional
+          // field in this form -- it's just left out of `goal` by the
+          // generic collection loop below like any other blank field.
+          var sinceDateInput = fieldsWrap.querySelector('[data-goal-field="sinceDate"]');
+          if (sinceDateInput) {
+            var sinceDateVal = sinceDateInput.value.trim();
+            if (sinceDateVal && !isValidIsoDate(sinceDateVal)) {
+              sinceDateInput.classList.add('invalid');
+              return;
+            }
+          }
           var goal = {};
           // The skill goal's own target only accepts the K/M/B
           // shorthand while XP is the selected metric (see
@@ -4310,6 +4332,8 @@ def render_mindmaps(player: Player) -> str:
         }
         var targetInput = e.target.closest('[data-goal-field="target"]');
         if (targetInput && targetInput.closest('.mm-goal-fields')) validateSkillTarget(targetInput);
+        var sinceDateInput = e.target.closest('[data-goal-field="sinceDate"]');
+        if (sinceDateInput) applyDateMask(sinceDateInput);
         var nodeTextInput = e.target.closest('[data-role="node-text-input"]');
         if (nodeTextInput) validateNodeText(nodeTextInput);
         var noteInput = e.target.closest('[data-role="node-note-input"]');
@@ -4360,6 +4384,66 @@ def render_mindmaps(player: Player) -> str:
         if (!m) return s;
         var mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2].toLowerCase()];
         return String(Math.round(parseFloat(m[1]) * mult));
+      }
+
+      // The kc goal's optional sinceDate field masks itself exactly
+      // the way the Loot Tracker page's own "custom" range fields do
+      // (see DATE_MASK/digitsOnly/applyDateMask/isValidIsoDate in
+      // render_loot_tracker's own script -- ported here rather than
+      // shared, since each page's script is its own self-contained
+      // block with no shared module between them) -- a plain text
+      // field the player types digits into, auto-dashed into
+      // 'YYYY-MM-DD' as they go, rather than a native <input
+      // type="date">'s own calendar popup. Kept as its own copy
+      // instead of factored out because the two pages already don't
+      // share any code today, and a real shared module is a bigger
+      // change than this one field needs.
+      var DATE_MASK = 'dddd-dd-dd';
+
+      function digitsOnly(s) {
+        return (s || '').replace(/\D/g, '').slice(0, 8);
+      }
+
+      function maskValueFromDigits(digits) {
+        var out = '', di = 0;
+        for (var i = 0; i < DATE_MASK.length; i++) {
+          if (DATE_MASK[i] === 'd') {
+            out += di < digits.length ? digits[di] : '_';
+            di++;
+          } else {
+            out += DATE_MASK[i];
+          }
+        }
+        return out;
+      }
+
+      // Unlike the Loot Tracker's own version of this field (always
+      // showing a "____-__-__" skeleton, since its start/end fields
+      // are never optional), this one starts and can return to a
+      // genuinely empty value whenever no digits are typed -- so a
+      // player who never touches it, or clears it back out, ends up
+      // with a plain blank field the shared [data-goal-field]
+      // save-collection loop already treats as "nothing to save" like
+      // any other empty field, no field-specific carve-out needed
+      // there for it.
+      function applyDateMask(input) {
+        var digits = digitsOnly(input.value);
+        input.value = digits.length ? maskValueFromDigits(digits) : '';
+        var pos = 0, di = 0;
+        for (var i = 0; i < DATE_MASK.length; i++) {
+          if (DATE_MASK[i] === 'd' && di < digits.length) { pos = i + 1; di++; }
+        }
+        input.setSelectionRange(pos, pos);
+        input.classList.remove('invalid');
+      }
+
+      function isValidIsoDate(s) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+        if (!m) return false;
+        var year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
+        if (month < 1 || month > 12) return false;
+        var daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+        return day >= 1 && day <= daysInMonth;
       }
 
       // ---- Floating goal-search suggestions dropdown --------------------
@@ -5284,19 +5368,24 @@ def render_mindmaps(player: Player) -> str:
             // Optional -- narrows targetCount to only count kc from this
             // date on, without ever showing on the node face itself (see
             // the kc summary text below and clean_goal's own comment in
-            // app/mindmaps.py for why). A bare native date input has no
-            // visible caption of its own the way every other field here
-            // gets from its placeholder text (Chrome doesn't render
-            // placeholder on type="date"), so this is the one field in
-            // this form that needs an explicit hint line under it rather
-            // than relying on the input alone to say what it's for.
-            // Reads/writes/pre-fills through the exact same generic
-            // [data-goal-field] mechanism as every field above -- no
-            // other JS change needed for it.
-            '<div class="mm-goal-date-wrap">' +
-              '<input class="mm-goal-input" type="date" data-goal-field="sinceDate" value="' + esc(goal.sinceDate || '') + '">' +
-              '<div class="mm-goal-hint">Only count kc from this date on (optional)</div>' +
-            '</div>';
+            // app/mindmaps.py for why). Typed digits, auto-dashed into
+            // 'YYYY-MM-DD' -- the exact same masked text field the Loot
+            // Tracker's own "custom" range picker uses (see
+            // DATE_MASK/applyDateMask/isValidIsoDate above, and the
+            // save-click delegation's own invalid-date guard just
+            // above it) -- rather than a native <input type="date">'s
+            // own calendar popup, so the two date pickers on this site
+            // now look and behave identically. The label text standing
+            // in for a placeholder (typed digits fill the box, so a
+            // placeholder alone would just disappear the moment the
+            // player starts) mirrors the Loot Tracker's own
+            // "Start"/"End" labels the same way. Reads/writes/pre-fills
+            // through the exact same generic [data-goal-field]
+            // mechanism as every field above -- no other JS change
+            // needed for it beyond the masking/validation wiring.
+            '<label class="mm-goal-date-wrap">Since (optional)' +
+              '<input class="mm-goal-input" type="text" data-goal-field="sinceDate" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="YYYY-MM-DD" value="' + esc(goal.sinceDate || '') + '">' +
+            '</label>';
         } else if (type === 'item') {
           fields =
             renderSearchFieldHtml('itemName', 'item', 'Search for an item', goal.itemName) +
