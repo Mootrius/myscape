@@ -128,19 +128,21 @@ def _footer(player: Optional[Player]) -> str:
     instead of down, so it unmistakably reads as a floor under the
     page rather than a second, weaker header.
 
-    Holds three things, none of which is really page content: the
-    "Linked to <name>" status (moved down here from the dashboard body
-    -- it's chrome about the player's account, not something specific
-    to that one page, so every page showing it is more consistent than
-    just the one) with its "Unlink" button, the same GitHub/Discord/
-    Patreon icon row the RuneLite plugin's own sidebar shows (see
-    buildSocialLinksRow in MyscapePanel.java in the myscape-plugin
-    repo -- everything there except its own myscape.io icon, since a
-    link back to the site the player is already standing on would be
-    pointless here), and the OSRS trademark attribution -- the last
-    two belong on every page regardless of login state, same as each
-    other, which is why the social row sits below the (login-gated)
-    linked note rather than being gated on it too. See _shell()'s
+    Holds three things, none of which is really page content: the same
+    GitHub/Discord/Patreon icon row the RuneLite plugin's own sidebar
+    shows (see buildSocialLinksRow in MyscapePanel.java in the
+    myscape-plugin repo -- everything there except its own myscape.io
+    icon, since a link back to the site the player is already standing
+    on would be pointless here), the "Linked to <name>" status (moved
+    down here from the dashboard body -- it's chrome about the
+    player's account, not something specific to that one page, so
+    every page showing it is more consistent than just the one) with
+    its "Unlink" button, and the OSRS trademark attribution. The social
+    row and trademark belong on every page regardless of login state,
+    same as each other -- the social row sits above the (login-gated)
+    linked note rather than being gated on it too, so on a page where
+    the player isn't linked it just ends up sitting directly above the
+    trademark instead, with nothing in between. See _shell()'s
     shared_script for the Unlink button's click handler and its own
     unlink-poller (the mirror of _link_banner()'s poller below, for
     the opposite direction)."""
@@ -155,12 +157,12 @@ def _footer(player: Optional[Player]) -> str:
     return f"""
     <footer>
       <div class="footer-inner wrap">
-        {linked_line}
         <div class="footer-social">
           <a class="footer-social-link footer-social-github" href="https://github.com/Mootrius/myscape-plugin" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub"></a>
           <a class="footer-social-link footer-social-discord" href="https://discord.gg/myscape" target="_blank" rel="noopener" title="Discord" aria-label="Discord"></a>
           <a class="footer-social-link footer-social-patreon" href="https://patreon.com/myscape" target="_blank" rel="noopener" title="Patreon" aria-label="Patreon"></a>
         </div>
+        {linked_line}
         <p class="footer-trademark">
           <a href="https://oldschool.runescape.com/" target="_blank" rel="noopener">Old School RuneScape</a>
           is a trademark of
