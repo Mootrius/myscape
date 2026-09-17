@@ -3115,6 +3115,9 @@ def render_mindmaps(player: Player) -> str:
           <button type="button" id="mmZoomFit" title="Zoom to fit">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><line x1="20" y1="20" x2="15.5" y2="15.5"></line></svg>
           </button>
+          <button type="button" id="mmFullscreenBtn" title="Fill browser window">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+          </button>
           <div class="mm-zoom-divider"></div>
           <button type="button" id="mmEditModeBtn" title="Toggle Edit Mode">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="M15 5l4 4"></path></svg>
@@ -3337,6 +3340,14 @@ def render_mindmaps(player: Player) -> str:
         // fine even though its own definition sits further down next
         // to the other per-browser storage helpers).
         editMode: false,
+        // Whether the canvas currently fills the browser window (see
+        // setFullscreen below) -- unlike editMode/activeMindmapId just
+        // above, deliberately NOT persisted across a reload: it's a
+        // transient "focus on the map for a bit" view state, not a
+        // standing preference, so a fresh visit always starts normal-
+        // sized the way a video player doesn't remember you left it
+        // fullscreen last time either.
+        fullscreen: false,
       };
       MM.editMode = loadStoredEditMode();
 
@@ -3763,6 +3774,43 @@ def render_mindmaps(player: Player) -> str:
         if (el && el.isContentEditable && el.getAttribute && el.getAttribute('data-role') === 'label') el.blur();
       }
 
+      // Swapped into #mmFullscreenBtn's own innerHTML by setFullscreen
+      // below -- Feather's maximize-2/minimize-2 glyphs, the same
+      // Feather icon set the Undo/Redo/Zoom-fit buttons' own <svg>
+      // markup (see the body HTML above) already draws its path data
+      // from, kept as plain string constants here rather than two more
+      // static <svg> tags in the HTML since only one of the two is
+      // ever showing at a time.
+      var MM_FULLSCREEN_ENTER_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
+      var MM_FULLSCREEN_EXIT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>';
+
+      // Fills the browser window rather than the real Fullscreen API
+      // (see .mm-canvas.mm-fullscreen in mindmaps.css for why) -- a
+      // plain CSS class toggle on the canvas itself, so there's no
+      // permission prompt and Escape backs out of it the same way it
+      // would close a menu or popover (see the keydown listener below).
+      // documentElement's own scroll is locked for the duration -- the
+      // canvas's normal 620px slot in the page collapses to nothing
+      // the instant it goes position: fixed, which would otherwise
+      // leave just enough page height behind it for a stray keyboard/
+      // touch scroll to reveal a sliver of the header/footer this is
+      // now covering. zoomToFit() re-frames the tree to the new
+      // viewport size either direction, same as clicking Zoom To Fit
+      // by hand -- the pan/zoom transform has no way to know the
+      // canvas just changed size out from under it otherwise.
+      function setFullscreen(on) {
+        if (on === MM.fullscreen) return;
+        commitActiveLabelIfEditing();
+        MM.fullscreen = on;
+        document.getElementById('mmCanvas').classList.toggle('mm-fullscreen', on);
+        document.documentElement.style.overflow = on ? 'hidden' : '';
+        var btn = document.getElementById('mmFullscreenBtn');
+        btn.classList.toggle('active', on);
+        btn.title = on ? 'Exit full-browser view' : 'Fill browser window';
+        btn.innerHTML = on ? MM_FULLSCREEN_EXIT_ICON : MM_FULLSCREEN_ENTER_ICON;
+        zoomToFit();
+      }
+
       // Blurring a still-editing label (see commitActiveLabelIfEditing
       // above) fires the label's own text-commit PATCH in the
       // background (see commitNodeTextFromLabel below) -- if a click
@@ -3927,7 +3975,16 @@ def render_mindmaps(player: Player) -> str:
       document.getElementById('mmZoomFit').addEventListener('click', zoomToFit);
       document.getElementById('mmUndoBtn').addEventListener('click', undo);
       document.getElementById('mmRedoBtn').addEventListener('click', redo);
+      document.getElementById('mmFullscreenBtn').addEventListener('click', function () { setFullscreen(!MM.fullscreen); });
       document.getElementById('mmEditModeBtn').addEventListener('click', function () { setEditMode(!MM.editMode); });
+      // Global rather than scoped to the canvas/nodes-layer the way
+      // the label-editing Escape handler further down is -- backing
+      // out of filling the browser window should work no matter what
+      // (if anything) happens to be focused at the time, the same way
+      // Escape closing any other full-viewport overlay would.
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && MM.fullscreen) setFullscreen(false);
+      });
 
       // ---- Node selection + click delegation ---------------------------
 

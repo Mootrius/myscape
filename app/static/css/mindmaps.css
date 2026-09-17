@@ -100,6 +100,27 @@ button.primary#mmNameSave, .mm-name-form-save {
 }
 .mm-canvas.panning { cursor: grabbing; }
 
+/* The "fill the browser window" toggle (mmFullscreenBtn/setFullscreen
+   in the script) -- NOT the real Fullscreen API (no browser chrome or
+   OS taskbar goes away, no permission prompt, Escape still just backs
+   out of this the same way it would close anything else) -- just this
+   canvas escaping .wrap's 880px cap and .page's padding to pin itself
+   to the viewport instead, the same "ignore every ancestor, cover the
+   screen" trick a plain modal overlay uses. inset: 0 alone determines
+   the new width (position: fixed with both left/right set computes it
+   from the viewport, same as .mm-canvas's own un-fullscreened width
+   was always auto to begin with) -- height still needs its own
+   override here since the un-fullscreened height above is a fixed
+   620px, not auto. Swaps to a fully opaque background too: the
+   translucent one above only ever needed to read against .page's own
+   background sitting right behind it, never against a header/footer
+   this now covers completely edge to edge. */
+.mm-canvas.mm-fullscreen {
+  position: fixed; inset: 0; z-index: 100;
+  height: auto; border: none;
+  background: var(--bg);
+}
+
 /* transform-origin: 0 0 so panX/panY (translate) and zoom (scale) in
    the script compose the way they're computed there -- top-left as
    the fixed point, not the element's own center. The transition makes
@@ -164,7 +185,7 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-zoom-controls button:disabled {
   opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-dim);
 }
-#mmZoomFit svg, #mmEditModeBtn svg, #mmUndoBtn svg, #mmRedoBtn svg { display: block; }
+#mmZoomFit svg, #mmEditModeBtn svg, #mmUndoBtn svg, #mmRedoBtn svg, #mmFullscreenBtn svg { display: block; }
 
 /* The Edit Mode pencil toggle -- its own row below the zoom cluster,
    separated by the same .mm-zoom-divider seam the undo/redo pair
@@ -179,6 +200,16 @@ button.primary#mmNameSave, .mm-name-form-save {
   border-color: var(--gold); color: var(--gold);
 }
 #mmEditModeBtn.active:hover { border-color: var(--gold); color: var(--gold); }
+
+/* Same persistent-mode-indicator treatment as Edit Mode's own .active
+   above, for the same reason -- while filling the browser window this
+   is the one button in the cluster that stays gold rather than just
+   hover-brightening, since it's a mode you're currently in, not a
+   one-shot action. */
+#mmFullscreenBtn.active {
+  border-color: var(--gold); color: var(--gold);
+}
+#mmFullscreenBtn.active:hover { border-color: var(--gold); color: var(--gold); }
 
 /* Hint pulse: fires when the player clicks a node's body while Edit
    Mode is off (see glowEditModeButton in the script) -- a node isn't
