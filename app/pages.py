@@ -5280,7 +5280,23 @@ def render_mindmaps(player: Player) -> str:
           fields =
             renderSearchFieldHtml('sourceName', 'npc', 'Search for an NPC', goal.sourceName) +
             '<input type="hidden" data-goal-field="activityType" value="npc">' +
-            '<input class="mm-goal-input" type="number" data-goal-field="targetCount" placeholder="Target kc" min="1" value="' + esc(goal.targetCount != null ? goal.targetCount : '') + '">';
+            '<input class="mm-goal-input" type="number" data-goal-field="targetCount" placeholder="Target kc" min="1" value="' + esc(goal.targetCount != null ? goal.targetCount : '') + '">' +
+            // Optional -- narrows targetCount to only count kc from this
+            // date on, without ever showing on the node face itself (see
+            // the kc summary text below and clean_goal's own comment in
+            // app/mindmaps.py for why). A bare native date input has no
+            // visible caption of its own the way every other field here
+            // gets from its placeholder text (Chrome doesn't render
+            // placeholder on type="date"), so this is the one field in
+            // this form that needs an explicit hint line under it rather
+            // than relying on the input alone to say what it's for.
+            // Reads/writes/pre-fills through the exact same generic
+            // [data-goal-field] mechanism as every field above -- no
+            // other JS change needed for it.
+            '<div class="mm-goal-date-wrap">' +
+              '<input class="mm-goal-input" type="date" data-goal-field="sinceDate" value="' + esc(goal.sinceDate || '') + '">' +
+              '<div class="mm-goal-hint">Only count kc from this date on (optional)</div>' +
+            '</div>';
         } else if (type === 'item') {
           fields =
             renderSearchFieldHtml('itemName', 'item', 'Search for an item', goal.itemName) +

@@ -66,7 +66,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.models import HiddenLootEntry, LootEvent, Player
@@ -637,28 +637,36 @@ def sync_loot_events(db: Session, player: Player, events: list) -> int:
     return added
 
 
-def kc_counts_by_player(db: Session, player: Player) -> Dict[Tuple[str, str], int]:
-    """{(source_type, <lowercased source_name>): count} across this
-    player's ENTIRE LootEvent history (not windowed by a range, unlike
-    build_loot_state above) -- one count per NPC killed, per NPC
-    pickpocketed, per clue-casket-or-minigame-reward source. What a
-    Mindmaps "kc" goal node's activityType+sourceName+targetCount is
-    checked against (see evaluate_completion in app/mindmaps.py).
+def kc_counts_by_player(db: Session, player: Player) -> Dict[Tuple[str, str], List[datetime]]:
+    """{(source_type, <lowercased source_name>): [occurred_at, ...]}
+    across this player's ENTIRE LootEvent history (not windowed by a
+    range, unlike build_loot_state above) -- every occurrence's own
+    timestamp, per NPC killed, per NPC pickpocketed, per clue-casket-
+    or-minigame-reward source. What a Mindmaps "kc" goal node's
+    activityType+sourceName+targetCount (and optional sinceDate) is
+    checked against (see evaluate_completion in app/mindmaps.py) --
+    len(...) of a key's list is the same all-time count this used to
+    return directly (as a pre-aggregated int) before a goal could ask
+    "since when", and a goal with a sinceDate just counts how many of
+    these timestamps fall on or after it instead, so this returns the
+    raw per-occurrence timestamps rather than a SQL-side count now that
+    a caller might need to filter them by date.
 
-    A count here is simply "how many LootEvent rows share this
-    (source_type, source_name)", i.e. how many times that event fired
-    -- an NPC kill or a pickpocket is one row per occurrence, so this is
-    a real kill/pickpocket count; a clue casket or minigame reward is
-    also one row per occurrence, so this is a real open/reward count
-    too, just without a way to split a clue casket count by tier (see
-    LootEvent's docstring in app/models.py for why)."""
+    One entry in a key's list is simply "one LootEvent row with this
+    (source_type, source_name)", i.e. one occurrence of that event --
+    an NPC kill or a pickpocket is one row per occurrence, so a key's
+    list length is a real kill/pickpocket count; a clue casket or
+    minigame reward is also one row per occurrence, so it's a real
+    open/reward count too, just without a way to split a clue casket
+    count by tier (see LootEvent's docstring in app/models.py for
+    why)."""
     rows = (
-        db.query(LootEvent.source_type, LootEvent.source_name, func.count(LootEvent.id))
+        db.query(LootEvent.source_type, LootEvent.source_name, LootEvent.occurred_at)
         .filter(LootEvent.player_id == player.id)
-        .group_by(LootEvent.source_type, LootEvent.source_name)
         .all()
     )
-    return {
-        (source_type, (source_name or "").strip().lower()): count
-        for source_type, source_name, count in rows
-    }
+    counts: Dict[Tuple[str, str], List[datetime]] = {}
+    for source_type, source_name, occurred_at in rows:
+        key = (source_type, (source_name or "").strip().lower())
+        counts.setdefault(key, []).append(occurred_at)
+    return counts

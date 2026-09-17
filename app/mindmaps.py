@@ -21,6 +21,7 @@ app/purchase_goals.py.
 """
 import math
 import uuid
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -251,6 +252,24 @@ def _clean_int_in_range(value, field_name: str, minimum: int, maximum: int) -> i
     return n
 
 
+def _clean_goal_date(value, field_name: str) -> str:
+    """Validates a "YYYY-MM-DD" date string -- same format a native
+    <input type="date"> submits and the same parsing convention
+    app/main.py's read_loot already uses for its own start/end range
+    dates. Stored (and returned) as that plain string, not a datetime
+    -- evaluate_completion below is the only thing that ever parses it
+    further, at read time, the same "store what was submitted, parse
+    it where it's used" split every other goal field already follows
+    (targetCount stays a plain int here too, not pre-validated against
+    live kc_counts)."""
+    text = (str(value) if value is not None else "").strip()
+    try:
+        datetime.strptime(text, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"{field_name} must be a YYYY-MM-DD date.")
+    return text
+
+
 def default_goal(color: str) -> Optional[Dict]:
     """The blank goal a node gets the instant its color changes to
     `color` (see update_node) -- a goal shaped for one color's criteria
@@ -314,6 +333,20 @@ def clean_goal(color: str, goal, require_complete: bool = True) -> Optional[Dict
         field("activityType", _activity, "Pick what kind of activity this goal tracks.")
         field("sourceName", lambda v: _clean_goal_text(v, "sourceName"), "Pick an NPC.")
         field("targetCount", lambda v: _clean_int_in_range(v, "targetCount", 1, MAX_KC_TARGET), "Set a target kc.")
+        # sinceDate is genuinely optional -- unlike the fields above
+        # (via `field()`, which rejects a MISSING value whenever
+        # require_complete is True), a kc goal with no sinceDate is
+        # already a complete, valid goal on its own (it just means
+        # "count kc all-time", the only behavior this field type had
+        # before sinceDate existed), so a blank/missing value is always
+        # just left out here, never rejected either way. It also
+        # deliberately never shows on the node face (see the kc goal's
+        # summary text in the page script) -- it only narrows what
+        # counts toward the same targetCount, so there's nothing about
+        # it that needs surfacing anywhere require_complete cares about.
+        since_date = goal.get("sinceDate")
+        if since_date:
+            cleaned["sinceDate"] = _clean_goal_date(since_date, "sinceDate")
         return cleaned
 
     if goal_type == "item":
@@ -823,10 +856,13 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
       - diary_tiers: {<area>: <highest tier>} -- what a "diary" goal's
         area+tier is checked against (see DIARY_TIERS -- a higher
         completed tier also satisfies a lower-tier goal).
-      - kc_counts: {(activityType, <lowercased source name>): count} --
-        what a "kc" goal's activityType+sourceName+targetCount is
-        checked against, built from this player's synced LootEvent rows
-        (see app/loot.py).
+      - kc_counts: {(activityType, <lowercased source name>): [occurred_at,
+        ...]} -- every matching occurrence's own timestamp, built from
+        this player's synced LootEvent rows (see app/loot.py). What a
+        "kc" goal's activityType+sourceName+targetCount is checked
+        against -- len(...) of a key's list is the all-time count; a
+        goal that also sets sinceDate only counts the timestamps on or
+        after that date instead of the full list.
 
     A goal that isn't fully filled in yet (a trackable node the player
     added but hasn't finished configuring -- see default_goal) is
@@ -861,7 +897,23 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
             activity_type, source_name, target = goal.get("activityType"), goal.get("sourceName"), goal.get("targetCount")
             if activity_type and source_name and target:
                 key = (activity_type, _normalize_lookup_name(source_name))
-                done = kc_counts.get(key, 0) >= target
+                occurrences = kc_counts.get(key, [])
+                since_date = goal.get("sinceDate")
+                if since_date:
+                    # Already validated as a real "YYYY-MM-DD" string by
+                    # clean_goal's _clean_goal_date at save time -- same
+                    # "trust what was already cleaned" convention every
+                    # other field here follows -- so only occurrences on
+                    # or after midnight UTC of that date count toward
+                    # targetCount; sinceDate never touches targetCount
+                    # itself or anything shown on the node face (see the
+                    # kc summary text in the page script), it only
+                    # narrows which of this key's timestamps get counted.
+                    since_dt = datetime.strptime(since_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    count = sum(1 for ts in occurrences if ts and ts >= since_dt)
+                else:
+                    count = len(occurrences)
+                done = count >= target
         elif goal_type == "item":
             item_name, target = goal.get("itemName"), goal.get("targetQty")
             if item_name and target:
