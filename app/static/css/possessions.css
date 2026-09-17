@@ -86,6 +86,13 @@
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   min-width: 190px; max-height: 320px; overflow-y: auto;
   flex-direction: column; padding: 6px 0;
+  /* Same fix as Mindmaps' own .mm-suggestions (mindmaps.css) --
+     without this, scrolling this list past its own top/bottom
+     bound doesn't just stop, it chains into the next scrollable
+     ancestor, which here is the whole page. See .mm-suggestions'
+     own comment for the fuller history of why this (not a JS
+     wheel-event handler) is the fix. */
+  overscroll-behavior: contain;
 }
 /* Same small/gray/all-caps text treatment as .pm-filter-btn/
    .tracker-menu-item -- one row per raw storage key, alphabetically

@@ -6017,7 +6017,7 @@ def render_possessions(player: Player) -> str:
         </div>
         <div class="pm-control-group pm-settings-wrap">
           <button type="button" class="pm-settings-btn" id="pmSettingsBtn" title="Choose which storages to show">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2.5v3.4"></path><path d="M12 18.1v3.4"></path><path d="M21.5 12h-3.4"></path><path d="M5.9 12H2.5"></path><path d="M18.6 5.4l-2.4 2.4"></path><path d="M7.8 16.2l-2.4 2.4"></path><path d="M18.6 18.6l-2.4-2.4"></path><path d="M7.8 7.8L5.4 5.4"></path></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.65 6.20 L9.54 2.82 L14.46 2.82 L15.35 6.20 L18.72 5.28 L21.18 9.54 L18.70 12.00 L21.18 14.46 L18.72 18.72 L15.35 17.80 L14.46 21.18 L9.54 21.18 L8.65 17.80 L5.28 18.72 L2.82 14.46 L5.30 12.00 L2.82 9.54 L5.28 5.28 Z"></path><circle cx="12" cy="12" r="3.1"></circle></svg>
           </button>
           <div class="pm-settings-menu" id="pmSettingsMenu" style="display:none;">
             {settings_checkboxes}
