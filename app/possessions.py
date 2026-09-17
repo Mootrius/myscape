@@ -33,6 +33,7 @@ from app.models import (
     BankItem,
     EquipmentItem,
     ForestryKitItem,
+    HiddenPossessionStorage,
     InventoryItem,
     LootingBagItem,
     MasterScrollBookItem,
@@ -430,6 +431,44 @@ def pinned_item_ids(db: Session, player: Player) -> set:
     return {row[0] for row in rows}
 
 
+def hidden_storage_keys(db: Session, player: Player) -> set:
+    """Every storage source key this player has switched off in
+    Possessions Monitoring's settings menu (see
+    HiddenPossessionStorage's own docstring in app/models.py) -- same
+    plain-set shape as pinned_item_ids above, for the same reason:
+    build_possessions_summary below and the hide/unhide endpoints in
+    app/main.py only ever need membership or a flat list back, never
+    the rows themselves."""
+    rows = (
+        db.query(HiddenPossessionStorage.storage_key)
+        .filter(HiddenPossessionStorage.player_id == player.id)
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+def set_storage_hidden(db: Session, player: Player, storage_key: str, hidden: bool) -> None:
+    """Flips one storage source on/off for this player -- the gear-icon
+    settings menu next to Possessions Monitoring's location filter
+    buttons (see render_possessions in app/pages.py). Idempotent both
+    ways, same reasoning as pin/unpin_possession_item in app/main.py:
+    hiding an already-hidden storage (or showing an already-shown one)
+    is a no-op rather than an error, so a checkbox flipped twice in a
+    row -- e.g. a slow request landing after a faster second click --
+    never surfaces an error banner over it."""
+    existing = (
+        db.query(HiddenPossessionStorage)
+        .filter(HiddenPossessionStorage.player_id == player.id, HiddenPossessionStorage.storage_key == storage_key)
+        .first()
+    )
+    if hidden and not existing:
+        db.add(HiddenPossessionStorage(player_id=player.id, storage_key=storage_key))
+        db.commit()
+    elif not hidden and existing:
+        db.delete(existing)
+        db.commit()
+
+
 def build_possessions_summary(db: Session, player: Player) -> dict:
     """Section 3's payload -- every item currently owned in any
     storage, each with its live GE/high-alch value and a per-location
@@ -521,7 +560,12 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
     for item in items:
         item["pinned"] = item["itemId"] in pinned_ids
 
-    return {"items": items, "mappingError": mapping_error, "priceError": price_error}
+    return {
+        "items": items,
+        "mappingError": mapping_error,
+        "priceError": price_error,
+        "hiddenStorageKeys": sorted(hidden_storage_keys(db, player)),
+    }
 
 
 def next_sort_order(db: Session, player: Player, kind: str) -> float:

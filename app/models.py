@@ -141,6 +141,7 @@ class Player(Base):
     possession_trackers = relationship("PossessionTracker", back_populates="player", cascade="all, delete-orphan")
     pinned_possession_items = relationship("PinnedPossessionItem", back_populates="player", cascade="all, delete-orphan")
     hidden_loot_entries = relationship("HiddenLootEntry", back_populates="player", cascade="all, delete-orphan")
+    hidden_possession_storages = relationship("HiddenPossessionStorage", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -922,4 +923,40 @@ class HiddenLootEntry(Base):
 
     __table_args__ = (
         UniqueConstraint("player_id", "kind", "key", name="uq_hidden_loot_entries_player_kind_key"),
+    )
+
+
+class HiddenPossessionStorage(Base):
+    """One storage source a player has switched off in Possessions
+    Monitoring's settings menu (see hidden_storage_keys/
+    set_storage_hidden in app/possessions.py, and the gear-icon menu
+    next to the location filter buttons in render_possessions,
+    app/pages.py) -- purely an on/off marker, same "presence of the
+    row is the whole state" shape as HiddenLootEntry above: a row
+    existing means that storage's items are hidden from section 3's
+    list (and from every min/max tracker's owned-quantity count,
+    since both read the same get_owned_breakdown); no row for a given
+    (player, storage_key) means shown, which is why nothing needs to
+    be created for a brand new player before every storage reads as
+    "on" by default.
+
+    storage_key is one of POSSESSION_STORAGE_KEYS (app/schemas.py) --
+    the same raw per-source key spelling as STORAGE_SOURCES in
+    app/possessions.py, BankItem and friends' own player_id-scoped
+    tables, and the plugin panel's own Status section list -- never
+    one of render_possessions' five grouped filter-button labels
+    (BANK, CHARACTER, ...), which stay a purely client-side grouping
+    of these same raw keys and know nothing about this table."""
+
+    __tablename__ = "hidden_possession_storages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    storage_key = Column(String, nullable=False)
+    hidden_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="hidden_possession_storages")
+
+    __table_args__ = (
+        UniqueConstraint("player_id", "storage_key", name="uq_hidden_possession_storages_player_key"),
     )

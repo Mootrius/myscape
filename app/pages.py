@@ -5857,9 +5857,31 @@ _POSSESSION_LOCATION_GROUPS = [
     ("BANK", ["bank", "potion_storage"]),
     ("SEED VAULT", ["seed_vault"]),
     ("PoH", ["poh"]),
-    ("CHARACTER", ["equipment", "inventory"]),
     ("PORTABLE", ["looting_bag", "rune_pouch", "tackle_box", "forestry_kit", "master_scroll_book", "seed_box"]),
+    ("CHARACTER", ["equipment", "inventory"]),
 ]
+
+#: Display label for every POSSESSION_STORAGE_KEYS entry -- backs the
+#: settings-cog menu's checkboxes (see render_possessions below),
+#: which list them alphabetically by this label rather than in
+#: POSSESSION_STORAGE_KEYS' own fixed sync-status order. Same English
+#: names the plugin's own side panel Status section shows (see
+#: buildStatusStorageLabels in MyscapePanel.java) -- kept in sync by
+#: hand since the two live in separate repos.
+_POSSESSION_STORAGE_LABELS = {
+    "bank": "Bank",
+    "equipment": "Equipment",
+    "inventory": "Inventory",
+    "potion_storage": "Potion Storage",
+    "rune_pouch": "Rune Pouch",
+    "seed_vault": "Seed Vault",
+    "looting_bag": "Looting Bag",
+    "tackle_box": "Tackle Box",
+    "poh": "PoH",
+    "forestry_kit": "Forestry Kit",
+    "master_scroll_book": "Master Scroll Book",
+    "seed_box": "Seed Box",
+}
 
 
 def render_possessions(player: Player) -> str:
@@ -5922,6 +5944,19 @@ def render_possessions(player: Player) -> str:
     already-fetched summary payload's own per-location breakdown
     rather than re-polling the server on every toggle).
 
+    The gear-icon button beside the location filters opens a menu of
+    one checkbox per raw storage source, alphabetically labeled, all
+    checked on by default -- unlike the location filter buttons
+    (which just reshape a poll already in hand), unchecking one here
+    is a real per-player setting (HiddenPossessionStorage, see
+    app/models.py) that survives reloads and relogs, the same as a
+    pin. A location filter button whose every underlying storage has
+    been switched off this way disappears entirely (nothing left for
+    it to filter) -- and the search box, already flex: 1 1 220px in
+    possessions.css, grows into the space that frees up on its own,
+    shrinking back the same way the moment a button reappears (see
+    updateFilterButtonVisibility in the script).
+
     There's no separate sort control any more -- every header (ITEM,
     QUANTITY, GE VALUE, HA VALUE, TRADEABLE?) is a clickable
     .pm-sort-header button (see updateSortHeaders/visibleRows in the
@@ -5954,6 +5989,19 @@ def render_possessions(player: Player) -> str:
         for label, keys in _POSSESSION_LOCATION_GROUPS
     )
 
+    # Alphabetical by label (not POSSESSION_STORAGE_KEYS' own fixed
+    # order) -- same pm-filter-btn-cased-style exception for PoH's
+    # mixed-case label against .pm-settings-item's own uppercase
+    # transform (see .pm-settings-item-cased in possessions.css). All
+    # checked by default; JS reconciles each one against the
+    # player's actual persisted setting once /api/possessions/summary
+    # answers (see applyHiddenStorageKeys in the script below).
+    settings_checkboxes = "".join(
+        f'<label class="pm-settings-item{" pm-settings-item-cased" if key == "poh" else ""}">'
+        f'<input type="checkbox" data-storage-key="{key}" checked /> {escape(label)}</label>'
+        for key, label in sorted(_POSSESSION_STORAGE_LABELS.items(), key=lambda kv: kv[1].lower())
+    )
+
     body = f"""
     <h2 class="page-title">Possessions Monitoring</h2>
     <div class="auth-error" id="pmError"></div>
@@ -5966,6 +6014,14 @@ def render_possessions(player: Player) -> str:
         </div>
         <div class="pm-control-group pm-location-group">
           {location_buttons}
+        </div>
+        <div class="pm-control-group pm-settings-wrap">
+          <button type="button" class="pm-settings-btn" id="pmSettingsBtn" title="Choose which storages to show">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2.5v3.4"></path><path d="M12 18.1v3.4"></path><path d="M21.5 12h-3.4"></path><path d="M5.9 12H2.5"></path><path d="M18.6 5.4l-2.4 2.4"></path><path d="M7.8 16.2l-2.4 2.4"></path><path d="M18.6 18.6l-2.4-2.4"></path><path d="M7.8 7.8L5.4 5.4"></path></svg>
+          </button>
+          <div class="pm-settings-menu" id="pmSettingsMenu" style="display:none;">
+            {settings_checkboxes}
+          </div>
         </div>
       </div>
 
@@ -6000,6 +6056,15 @@ def render_possessions(player: Player) -> str:
         sortKey: 'ge',
         sortDir: 'desc',
         locations: { bank: true, potion_storage: true, seed_vault: true, poh: true, equipment: true, inventory: true, looting_bag: true, rune_pouch: true, tackle_box: true, forestry_kit: true, master_scroll_book: true, seed_box: true },
+        // Persisted server-side (HiddenPossessionStorage, app/models.py)
+        // -- separate from `locations` above, which is a purely
+        // transient, resets-on-reload show/hide filter. This one
+        // survives reloads/relogs, and is what actually zeroes an
+        // item's contribution to shownQuantity regardless of the
+        // filter buttons' own state -- see applyHiddenStorageKeys,
+        // which syncs it (and every settings-menu checkbox) from
+        // whatever loadSummary's own poll last saw.
+        enabledStorages: { bank: true, potion_storage: true, seed_vault: true, poh: true, equipment: true, inventory: true, looting_bag: true, rune_pouch: true, tackle_box: true, forestry_kit: true, master_scroll_book: true, seed_box: true },
       };
 
       function showError(msg) {
@@ -6142,6 +6207,67 @@ def render_possessions(player: Player) -> str:
         });
       });
 
+      // ---- Settings (per-storage on/off, persisted server-side) --------
+      // The gear-icon menu next to the location filter buttons -- one
+      // checkbox per raw storage key, alphabetically labeled (see
+      // _POSSESSION_STORAGE_LABELS in app/pages.py), all checked by
+      // default. Unlike the location filter buttons above, this is a
+      // real per-player setting (HiddenPossessionStorage, app/models.py)
+      // that survives reloads and relogs -- state.enabledStorages is
+      // reconciled against the server's own hiddenStorageKeys on every
+      // loadSummary poll (see applyHiddenStorageKeys), and every
+      // checkbox toggle posts/deletes immediately rather than waiting
+      // for the next poll, same "don't feel laggy" reasoning as
+      // setPinned further down.
+
+      var pmSettingsBtn = document.getElementById('pmSettingsBtn');
+      var pmSettingsMenu = document.getElementById('pmSettingsMenu');
+
+      pmSettingsBtn.addEventListener('click', function () {
+        pmSettingsMenu.style.display = pmSettingsMenu.style.display === 'none' ? 'flex' : 'none';
+      });
+      document.addEventListener('click', function (e) {
+        var wrap = document.querySelector('.pm-settings-wrap');
+        if (wrap && !wrap.contains(e.target)) pmSettingsMenu.style.display = 'none';
+      });
+
+      // A location filter button disappears entirely once every raw
+      // key it covers has been switched off here -- there's nothing
+      // left for it to filter -- and the search box (flex: 1 1 220px
+      // in possessions.css) grows to fill the space that frees up on
+      // its own, no extra layout code needed; it shrinks back the same
+      // way the moment a button reappears.
+      function updateFilterButtonVisibility() {
+        document.querySelectorAll('.pm-filter-btn').forEach(function (btn) {
+          var keys = btn.getAttribute('data-locations').split(',');
+          var anyEnabled = keys.some(function (k) { return state.enabledStorages[k]; });
+          btn.style.display = anyEnabled ? '' : 'none';
+        });
+      }
+
+      function applyHiddenStorageKeys(hiddenKeys) {
+        var hidden = {};
+        (hiddenKeys || []).forEach(function (k) { hidden[k] = true; });
+        Object.keys(state.enabledStorages).forEach(function (k) {
+          state.enabledStorages[k] = !hidden[k];
+        });
+        document.querySelectorAll('.pm-settings-item input[type="checkbox"]').forEach(function (cb) {
+          cb.checked = !!state.enabledStorages[cb.getAttribute('data-storage-key')];
+        });
+        updateFilterButtonVisibility();
+      }
+
+      document.querySelectorAll('.pm-settings-item input[type="checkbox"]').forEach(function (cb) {
+        cb.addEventListener('change', async function () {
+          var key = cb.getAttribute('data-storage-key');
+          var enable = cb.checked;
+          var data = await apiCall('/api/possessions/hidden-storages/' + key, { method: enable ? 'DELETE' : 'POST' });
+          if (!data) { cb.checked = !enable; return; }
+          applyHiddenStorageKeys(data.hiddenStorageKeys);
+          renderTable();
+        });
+      });
+
       // ---- Search + its CLEAR button (shown only once there's text to
       // clear, hidden again the moment the field goes back to empty --
       // whether that's from typing, deleting, or clicking CLEAR itself) --
@@ -6172,7 +6298,7 @@ def render_possessions(player: Player) -> str:
       function shownQuantity(item) {
         var total = 0;
         for (var key in item.byLocation) {
-          if (state.locations[key]) total += item.byLocation[key];
+          if (state.locations[key] && state.enabledStorages[key]) total += item.byLocation[key];
         }
         return total;
       }
@@ -6401,6 +6527,7 @@ def render_possessions(player: Player) -> str:
         var data = await apiCall('/api/possessions/summary');
         if (!data) return;
         state.items = data.items || [];
+        applyHiddenStorageKeys(data.hiddenStorageKeys);
         renderTable();
       }
 

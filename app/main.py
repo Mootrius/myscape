@@ -63,10 +63,12 @@ from app.pages import render_dashboard, render_landing, render_login, render_loo
 from app.possessions import (
     build_possessions_summary,
     build_trackers_state,
+    hidden_storage_keys,
     next_sort_order,
     pinned_item_ids,
     resolve_item_display,
     search_trackable_items,
+    set_storage_hidden,
 )
 from app.purchase_goals import (
     COINS_ITEM_ID,
@@ -1338,6 +1340,38 @@ def unpin_possession_item(
     ).delete()
     db.commit()
     return {"pinnedItemIds": sorted(pinned_item_ids(db, player))}
+
+
+@app.post("/api/possessions/hidden-storages/{storage_key}")
+def hide_possession_storage(
+    storage_key: str,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Switches one storage source off in Possessions Monitoring's
+    settings menu (see HiddenPossessionStorage's own docstring in
+    app/models.py, and the gear-icon menu next to the location filter
+    buttons in render_possessions) -- its items stop counting toward
+    section 3's list and every tracker's owned quantity until it's
+    switched back on."""
+    if storage_key not in POSSESSION_STORAGE_KEYS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown storage.")
+    set_storage_hidden(db, player, storage_key, True)
+    return {"hiddenStorageKeys": sorted(hidden_storage_keys(db, player))}
+
+
+@app.delete("/api/possessions/hidden-storages/{storage_key}")
+def unhide_possession_storage(
+    storage_key: str,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Reverses hide_possession_storage above -- same idempotent shape
+    as unpin_possession_item."""
+    if storage_key not in POSSESSION_STORAGE_KEYS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown storage.")
+    set_storage_hidden(db, player, storage_key, False)
+    return {"hiddenStorageKeys": sorted(hidden_storage_keys(db, player))}
 
 
 @app.get("/api/gear-setups")

@@ -67,6 +67,41 @@
    written in app/pages.py's _POSSESSION_LOCATION_GROUPS. */
 .pm-filter-btn-cased { text-transform: none; }
 
+/* The settings-cog button + its checkbox dropdown -- same trigger/
+   menu relationship as Purchase Goals' own .tracker-menu-wrap/
+   #setupMenu (purchase-goals.css), sized to this page's own 32px
+   control-row height instead of that one's 36px, and right- rather
+   than center-anchored under its trigger since this sits at the far
+   right edge of the row instead of centered above a icon strip. */
+.pm-settings-wrap { position: relative; }
+.pm-settings-btn {
+  width: 32px; height: 32px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-dim); cursor: pointer;
+}
+.pm-settings-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pm-settings-menu {
+  position: absolute; top: 38px; right: 0; z-index: 5;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  min-width: 190px; max-height: 320px; overflow-y: auto;
+  flex-direction: column; padding: 6px 0;
+}
+/* Same small/gray/all-caps text treatment as .pm-filter-btn/
+   .tracker-menu-item -- one row per raw storage key, alphabetically
+   labeled (see render_possessions in app/pages.py), all checked on
+   by default. PoH gets the same text-transform opt-out
+   .pm-filter-btn-cased gives its own filter button above, for the
+   same reason (its mixed-case label). */
+.pm-settings-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; cursor: pointer;
+  color: var(--text-dim); font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+}
+.pm-settings-item:hover { background: var(--panel-2); color: var(--text); }
+.pm-settings-item input[type="checkbox"] { flex-shrink: 0; }
+.pm-settings-item-cased { text-transform: none; }
+
 /* ---- The table itself ---------------------------------------------- */
 
 .pm-row {
