@@ -158,7 +158,7 @@ def _footer(player: Optional[Player]) -> str:
     <footer>
       <div class="footer-inner wrap">
         <div class="footer-social">
-          <a class="footer-social-link footer-social-github" href="https://github.com/Mootrius/myscape-plugin" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub"></a>
+          <a class="footer-social-link footer-social-github" href="https://github.com/Mootrius" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub"></a>
           <a class="footer-social-link footer-social-discord" href="https://discord.gg/myscape" target="_blank" rel="noopener" title="Discord" aria-label="Discord"></a>
           <a class="footer-social-link footer-social-patreon" href="https://patreon.com/myscape" target="_blank" rel="noopener" title="Patreon" aria-label="Patreon"></a>
         </div>
