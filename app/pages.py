@@ -675,6 +675,17 @@ def render_purchase_goals(player: Player) -> str:
         multiSelect: [],    // [{ slotType, slot }, ...]
         pollTimer: null,
         dragSuppressClick: false, // true for one click right after a completed drag-and-drop (see wireSlotClicks)
+        // True from the moment a "Still to Purchase" row picks up
+        // until it's dropped or the drag is cancelled (see
+        // wireSummaryDrag below) -- the background poll at the bottom
+        // of this script skips itself while this is set, since
+        // loadState() -> render() rebuilds #pgSummaryList's rows from
+        // scratch, which would yank the actively-dragged DOM node out
+        // of the document mid-gesture and silently end the browser's
+        // native drag session -- this (a poll landing mid-drag) is
+        // what made the live-preview reorder intermittently just stop
+        // responding.
+        dragging: false,
         // Bumped every time a direct, explicit action (a click, a drag-drop,
         // a form submit -- anything that isn't the background poll) applies
         // a fresh server response to PG.data. loadState() -- the poll's
@@ -1499,11 +1510,13 @@ def render_purchase_goals(player: Player) -> str:
             }));
             draggedEl = el;
             dropped = false;
+            PG.dragging = true;
             el.classList.add('dragging');
           });
           el.addEventListener('dragend', function () {
             el.classList.remove('dragging');
             draggedEl = null;
+            PG.dragging = false;
             // A drag that ends without a drop (dropped outside the
             // list, or cancelled with Escape) leaves the live-preview
             // DOM order sitting there with nothing saved server-side to
@@ -1874,7 +1887,7 @@ def render_purchase_goals(player: Player) -> str:
         // Skip a background refresh while the player has an editor open --
         // an in-flight rename/slot-pick shouldn't get yanked out from
         // under them by a poll landing mid-edit.
-        if (PG.picker || PG.iconPicker || PG.nameFormMode) return;
+        if (PG.picker || PG.iconPicker || PG.nameFormMode || PG.dragging) return;
         loadState();
       }, 5000);
     })();
