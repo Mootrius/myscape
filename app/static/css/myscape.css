@@ -230,7 +230,11 @@ header {
   text-align: center; text-transform: uppercase;
 }
 
-.nav-side { display: flex; align-items: center; font-size: 15px; }
+/* A few px lower than dead center -- the all-caps nav labels have no
+   descenders, so lining their box up with .logo's (which does, via
+   the "y"/"p" in "myscape") reads as visibly higher than the
+   wordmark even though the boxes themselves are centered evenly. */
+.nav-side { display: flex; align-items: center; font-size: 15px; position: relative; top: 3px; }
 
 /* White nav text (distinct from the rest of the site's gold/dim-text
    link styling) so it reads clearly flanking the centered logo over
