@@ -513,6 +513,43 @@ footer {
 
 .footer-unlink-error { max-width: 420px; margin: 0 auto 14px; }
 
+/* The GitHub/Discord/Patreon row (see _footer() in app/pages.py) --
+   the same three icons (minus its own myscape.io one, which would
+   just link back to the page the player's already on) the RuneLite
+   plugin's own sidebar shows above its cards (see buildSocialLinksRow
+   in MyscapePanel.java, myscape-plugin repo). The source PNGs are
+   plain white silhouettes with a transparent background (that's what
+   a flat, borderless Swing icon button needs), so they're used here
+   as mask-image shapes rather than shown as-is -- background-color is
+   what actually paints them, which is what lets them pick up the same
+   gold-dim/gold link language as .footer-trademark a below (and every
+   other link on the site) instead of sitting there a flat white that
+   nothing else on the page uses. */
+.footer-social {
+  display: flex; justify-content: center; align-items: center; gap: 18px;
+  margin: 0 0 16px;
+}
+.footer-social-link {
+  display: inline-block; width: 20px; height: 20px;
+  background-color: var(--gold-dim);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain; mask-size: contain;
+}
+.footer-social-link:hover { background-color: var(--gold); }
+.footer-social-github {
+  -webkit-mask-image: url(/static/img/icon-social-github.png);
+  mask-image: url(/static/img/icon-social-github.png);
+}
+.footer-social-discord {
+  -webkit-mask-image: url(/static/img/icon-social-discord.png);
+  mask-image: url(/static/img/icon-social-discord.png);
+}
+.footer-social-patreon {
+  -webkit-mask-image: url(/static/img/icon-social-patreon.png);
+  mask-image: url(/static/img/icon-social-patreon.png);
+}
+
 .footer-trademark {
   color: var(--text-muted);
   font-size: 13px;

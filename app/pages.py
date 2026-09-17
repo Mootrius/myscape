@@ -128,15 +128,22 @@ def _footer(player: Optional[Player]) -> str:
     instead of down, so it unmistakably reads as a floor under the
     page rather than a second, weaker header.
 
-    Holds two things, neither of which is really page content: the
+    Holds three things, none of which is really page content: the
     "Linked to <name>" status (moved down here from the dashboard body
     -- it's chrome about the player's account, not something specific
     to that one page, so every page showing it is more consistent than
-    just the one) with its "Unlink" button, and the OSRS trademark
-    attribution, which belongs on every page regardless of login
-    state. See _shell()'s shared_script for the Unlink button's click
-    handler and its own unlink-poller (the mirror of _link_banner()'s
-    poller below, for the opposite direction)."""
+    just the one) with its "Unlink" button, the same GitHub/Discord/
+    Patreon icon row the RuneLite plugin's own sidebar shows (see
+    buildSocialLinksRow in MyscapePanel.java in the myscape-plugin
+    repo -- everything there except its own myscape.io icon, since a
+    link back to the site the player is already standing on would be
+    pointless here), and the OSRS trademark attribution -- the last
+    two belong on every page regardless of login state, same as each
+    other, which is why the social row sits below the (login-gated)
+    linked note rather than being gated on it too. See _shell()'s
+    shared_script for the Unlink button's click handler and its own
+    unlink-poller (the mirror of _link_banner()'s poller below, for
+    the opposite direction)."""
     linked_line = ""
     if player and player.account_hash:
         linked_line = f"""
@@ -149,6 +156,11 @@ def _footer(player: Optional[Player]) -> str:
     <footer>
       <div class="footer-inner wrap">
         {linked_line}
+        <div class="footer-social">
+          <a class="footer-social-link footer-social-github" href="https://github.com/Mootrius/myscape-plugin" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub"></a>
+          <a class="footer-social-link footer-social-discord" href="https://discord.gg/myscape" target="_blank" rel="noopener" title="Discord" aria-label="Discord"></a>
+          <a class="footer-social-link footer-social-patreon" href="https://patreon.com/myscape" target="_blank" rel="noopener" title="Patreon" aria-label="Patreon"></a>
+        </div>
         <p class="footer-trademark">
           <a href="https://oldschool.runescape.com/" target="_blank" rel="noopener">Old School RuneScape</a>
           is a trademark of
