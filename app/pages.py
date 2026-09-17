@@ -112,8 +112,8 @@ def _link_banner(player: Optional[Player]) -> str:
     return """
     <div class="link-banner" id="linkBanner">
       <div class="link-banner-inner">
-        <span class="link-banner-message">Click to generate a code to enter into your RuneLite settings for the plugin to begin.</span>
-        <button class="link-banner-btn" id="generateLinkBtn" type="button">Generate code</button>
+        <span class="link-banner-message">Click to generate a code to enter into your RuneLite client.</span>
+        <button class="link-banner-btn" id="generateLinkBtn" type="button">GENERATE CODE</button>
       </div>
       <div class="auth-error link-banner-error" id="linkError"></div>
     </div>
@@ -139,7 +139,7 @@ def _footer(player: Optional[Player]) -> str:
     linked_line = ""
     if player and player.account_hash:
         linked_line = f"""
-        <p class="footer-linked-note" id="footerLinkedNote">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>.
+        <p class="footer-linked-note" id="footerLinkedNote">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>
           <button class="link" id="footerUnlinkBtn" type="button">Unlink</button>
         </p>
         <div class="auth-error footer-unlink-error" id="footerUnlinkError"></div>
