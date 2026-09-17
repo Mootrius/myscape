@@ -87,6 +87,18 @@
 
 * { box-sizing: border-box; }
 
+/* A handful of elements (header, .link-banner, .landing-anchors)
+   deliberately break out of .wrap's column with the calc(50% - 50vw)
+   trick to go full-bleed edge-to-edge. That trick measures the true
+   viewport width with 100vw, but 100vw includes the vertical
+   scrollbar's own width while the visible content box doesn't --
+   so on any browser/platform where the scrollbar isn't an overlay,
+   those elements end up a few pixels wider than the actual visible
+   area and add a second, horizontal scrollbar to reveal that sliver.
+   Hiding x-overflow at the root is the standard fix -- nothing on
+   this site is meant to scroll sideways in the first place. */
+html { overflow-x: hidden; }
+
 /* Scroll-snap for the landing page's anchor panels (see
    render_landing() in app/pages.py and .landing-anchor below) --
    scoped to just that page via body.landing (set through _shell()'s
@@ -710,7 +722,11 @@ footer {
 /* Fills whatever space the cue below doesn't need, so the logo sits
    vertically centered in the room actually left for it rather than
    centered across the whole panel (which would push it low, behind
-   where the cue's own height eats into that space). */
+   where the cue's own height eats into that space). The bottom-only
+   padding nudges that centered position up a bit -- padding only on
+   one side shrinks the box the image is centered within from that
+   side alone, without needing a fixed offset that would fight the
+   height calc above. */
 .landing-anchor-intro-media {
   flex: 1 1 auto;
   min-height: 0;
@@ -718,6 +734,7 @@ footer {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-bottom: 6vh;
 }
 
 .landing-scroll-cue {
@@ -766,4 +783,13 @@ footer {
   max-height: calc(100vh - 80px);
   max-height: calc(100svh - 80px);
   height: auto;
+}
+
+/* The intro logo reads fine smaller than the two feature screenshots
+   -- it's a wordmark, not a UI panel that needs room to be legible --
+   so it gets its own, slightly smaller width instead of matching
+   .landing-anchor img above. Same specificity (one class + img), so
+   source order is what makes this win over the shared rule. */
+.landing-anchor--intro img {
+  width: min(560px, 66vw);
 }
