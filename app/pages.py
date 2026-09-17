@@ -6223,12 +6223,23 @@ def render_possessions(player: Player) -> str:
       var pmSettingsBtn = document.getElementById('pmSettingsBtn');
       var pmSettingsMenu = document.getElementById('pmSettingsMenu');
 
+      // Gold border/icon while open -- same .active treatment as a
+      // location filter button (.pm-filter-btn.active), applied here
+      // to the trigger button itself rather than the menu, and kept in
+      // sync on every path that can close the menu (the button's own
+      // click, and the outside-click handler below), not just the one
+      // that opened it.
+      function setSettingsMenuOpen(open) {
+        pmSettingsMenu.style.display = open ? 'flex' : 'none';
+        pmSettingsBtn.classList.toggle('active', open);
+      }
+
       pmSettingsBtn.addEventListener('click', function () {
-        pmSettingsMenu.style.display = pmSettingsMenu.style.display === 'none' ? 'flex' : 'none';
+        setSettingsMenuOpen(pmSettingsMenu.style.display === 'none');
       });
       document.addEventListener('click', function (e) {
         var wrap = document.querySelector('.pm-settings-wrap');
-        if (wrap && !wrap.contains(e.target)) pmSettingsMenu.style.display = 'none';
+        if (wrap && !wrap.contains(e.target)) setSettingsMenuOpen(false);
       });
 
       // A location filter button disappears entirely once every raw

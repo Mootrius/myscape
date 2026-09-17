@@ -81,6 +81,11 @@
   color: var(--text-dim); cursor: pointer;
 }
 .pm-settings-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+/* Same active treatment as .pm-filter-btn.active -- gold border and
+   icon while the menu is open (see setSettingsMenuOpen in the
+   script, which keeps this in sync on every path that closes the
+   menu, not just the button's own click). */
+.pm-settings-btn.active { border-color: var(--gold); color: var(--gold); }
 .pm-settings-menu {
   position: absolute; top: 38px; right: 0; z-index: 5;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
