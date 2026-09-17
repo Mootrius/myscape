@@ -111,14 +111,18 @@ button.primary#mmNameSave, .mm-name-form-save {
    from the viewport, same as .mm-canvas's own un-fullscreened width
    was always auto to begin with) -- height still needs its own
    override here since the un-fullscreened height above is a fixed
-   620px, not auto. Swaps to a fully opaque background too: the
-   translucent one above only ever needed to read against .page's own
-   background sitting right behind it, never against a header/footer
-   this now covers completely edge to edge. */
+   620px, not auto. --panel (opaque) rather than --panel-translucent
+   (the un-fullscreened background just above) or --bg (the page's
+   own base tone, tried here first and reverted -- it read as the
+   canvas itself changing color rather than just filling the screen)
+   -- same panel color the canvas already normally is, just without
+   the alpha, since --panel-translucent's own 18% see-through would
+   otherwise let the header/footer this now covers edge to edge bleed
+   faintly through it. */
 .mm-canvas.mm-fullscreen {
   position: fixed; inset: 0; z-index: 100;
   height: auto; border: none;
-  background: var(--bg);
+  background: var(--panel);
 }
 
 /* transform-origin: 0 0 so panX/panY (translate) and zoom (scale) in
