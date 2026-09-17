@@ -2322,6 +2322,25 @@ def render_loot_tracker(player: Player) -> str:
         return div.innerHTML;
       }
 
+      // renderNpcRow/renderItemList below both tear down and rebuild
+      // their whole list -- not just patch it in place -- every time a
+      // hide/unhide changes which entries are in it (see each one's own
+      // key comment for why). Hiding or restoring the last few items of
+      // a wrapped-flex list like these often changes that list's total
+      // height, which -- with no min-height reserved to hold its place
+      // -- shifts everything below it and can visibly yank the whole
+      // page up or down the instant the swap lands, even though nothing
+      // ever called scrollTo. Re-pinning the scroll position right
+      // around the swap (synchronously, so the browser never paints the
+      // in-between frame) keeps the page from moving under the player's
+      // cursor just because a list they're looking at got shorter or
+      // taller.
+      function swapListHtml(el, html) {
+        var scrollY = window.scrollY;
+        el.innerHTML = html;
+        if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+      }
+
       // Bar chart over the currently-selected range, bucketed at
       // whatever granularity that range's span calls for (see
       // _bucket_plan in app/loot.py -- hourly for a short range like
@@ -2423,7 +2442,7 @@ def render_loot_tracker(player: Player) -> str:
           if (selectedNpc) {
             return selectedNpc + ': ' + fmtGp(fillValue(b, i)) + ' gp \\u00b7 total ' + fmtGp(b.value) + ' gp';
           }
-          return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount + ' kill' + (b.killCount === 1 ? '' : 's') : '');
+          return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount.toLocaleString('en-US') + ' kc' : '');
         }
 
         var barsEl = document.getElementById('lootBarBars');
@@ -2584,7 +2603,7 @@ def render_loot_tracker(player: Player) -> str:
           preloadIcons(sorted.map(function (n) { return n.icon; })).then(function () {
             if (token !== npcRowRenderToken) return;
             lastNpcKey = key;
-            rowEl.innerHTML = html;
+            swapListHtml(rowEl, html);
           });
           return;
         }
@@ -2690,7 +2709,7 @@ def render_loot_tracker(player: Player) -> str:
           preloadIcons(sorted.map(function (it) { return it.icon; })).then(function () {
             if (token !== itemListRenderToken) return;
             lastItemKey = key;
-            listEl.innerHTML = html;
+            swapListHtml(listEl, html);
           });
           return;
         }
