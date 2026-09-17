@@ -5836,23 +5836,29 @@ def render_mindmaps(player: Player) -> str:
     )
 
 
-# Every storage source Possessions Monitoring reads from, in the fixed
-# order the location-filter row and every per-item breakdown always
-# lists them -- same key spelling as POSSESSION_STORAGE_KEYS in
-# app/schemas.py (kept as a separate, display-labeled copy here rather
-# than importing that list directly, since this pairs each key with
-# the human label its own filter button shows, which schemas.py has no
-# reason to know about).
-_POSSESSION_LOCATIONS = [
-    ("bank", "Bank"),
-    ("potion_storage", "Potion Storage"),
-    ("seed_vault", "Seed Vault"),
-    ("looting_bag", "Looting Bag"),
-    ("rune_pouch", "Rune Pouch"),
-    ("tackle_box", "Tackle Box"),
-    ("costume_room", "Costume Room"),
-    ("equipment", "Equipment"),
-    ("inventory", "Inventory"),
+# Possessions Monitoring's location-filter row groups the raw
+# per-source storage keys (same key spelling as POSSESSION_STORAGE_KEYS
+# in app/schemas.py/STORAGE_SOURCES in app/possessions.py) into five
+# buttons rather than one per source -- with twelve sources now, one
+# button each stopped fitting on the same row as the search box.
+# BANK folds Potion Storage in (both are things you visit a bank-like
+# interface for); CHARACTER is what's actively worn/carried in the
+# main inventory; PORTABLE is every other carried container item
+# (Looting Bag, Rune Pouch, Tackle Box, Forestry Kit, Master Scroll
+# Book, Seed Box); PoH is Player-Owned-House storage (today, just the
+# Costume Room -- see PohItem's docstring in app/models.py); SEED
+# VAULT stays its own button since it's neither carried nor a bank.
+# Each group is (label, [storage keys]) -- clicking a button toggles
+# every key in its group together (see the click handler in the script
+# below), so filtering is still exactly as granular as before under
+# the hood: shownQuantity there still sums item.byLocation by the raw
+# per-source key, untouched by this grouping.
+_POSSESSION_LOCATION_GROUPS = [
+    ("BANK", ["bank", "potion_storage"]),
+    ("SEED VAULT", ["seed_vault"]),
+    ("PoH", ["poh"]),
+    ("CHARACTER", ["equipment", "inventory"]),
+    ("PORTABLE", ["looting_bag", "rune_pouch", "tackle_box", "forestry_kit", "master_scroll_book", "seed_box"]),
 ]
 
 
@@ -5940,8 +5946,12 @@ def render_possessions(player: Player) -> str:
     extra_head = f'<link rel="stylesheet" href="/static/css/possessions.css?v={_POSSESSIONS_CSS_VERSION}" />'
 
     location_buttons = "".join(
-        f'<button type="button" class="pm-filter-btn active" data-location="{key}">{escape(label)}</button>'
-        for key, label in _POSSESSION_LOCATIONS
+        # PoH needs its literal mixed-case label preserved against
+        # .pm-filter-btn's own text-transform: uppercase -- see the
+        # pm-filter-btn-cased rule in possessions.css.
+        f'<button type="button" class="pm-filter-btn{" pm-filter-btn-cased" if label == "PoH" else ""} active" '
+        f'data-locations="{",".join(keys)}">{escape(label)}</button>'
+        for label, keys in _POSSESSION_LOCATION_GROUPS
     )
 
     body = f"""
@@ -5989,7 +5999,7 @@ def render_possessions(player: Player) -> str:
         search: '',
         sortKey: 'ge',
         sortDir: 'desc',
-        locations: { bank: true, equipment: true, inventory: true, potion_storage: true, rune_pouch: true, seed_vault: true, looting_bag: true, tackle_box: true, costume_room: true },
+        locations: { bank: true, potion_storage: true, seed_vault: true, poh: true, equipment: true, inventory: true, looting_bag: true, rune_pouch: true, tackle_box: true, forestry_kit: true, master_scroll_book: true, seed_box: true },
       };
 
       function showError(msg) {
@@ -6112,13 +6122,22 @@ def render_possessions(player: Player) -> str:
         });
       });
 
-      // ---- Locations (multi-select, all on by default) ----------------
+      // ---- Locations (multi-select groups, all on by default) ----------
+      // Each button covers a GROUP of raw storage keys (data-locations is
+      // comma-separated -- e.g. BANK is "bank,potion_storage"). A click is
+      // a single master toggle for the whole group: if every key in the
+      // group is currently on, the click turns them all off; otherwise it
+      // turns them all on. state.locations itself stays keyed by the raw
+      // per-source keys throughout, same as shownQuantity()/activeLocations
+      // below expect.
 
       document.querySelectorAll('.pm-filter-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          var key = btn.getAttribute('data-location');
-          state.locations[key] = !state.locations[key];
-          btn.classList.toggle('active', state.locations[key]);
+          var keys = btn.getAttribute('data-locations').split(',');
+          var allActive = keys.every(function (k) { return state.locations[k]; });
+          var next = !allActive;
+          keys.forEach(function (k) { state.locations[k] = next; });
+          btn.classList.toggle('active', next);
           renderTable();
         });
       });

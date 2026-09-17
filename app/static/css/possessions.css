@@ -59,6 +59,13 @@
 }
 .pm-filter-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .pm-filter-btn.active { border-color: var(--gold); color: var(--gold); }
+/* Every other group label (BANK, SEED VAULT, CHARACTER, PORTABLE) was
+   already typed in caps, so .pm-filter-btn's own uppercase transform
+   above is invisible on them -- but "PoH" has a deliberate mixed case
+   (capital P and H, lowercase o) that the same transform would erase.
+   This one button opts out of it so the label renders exactly as
+   written in app/pages.py's _POSSESSION_LOCATION_GROUPS. */
+.pm-filter-btn-cased { text-transform: none; }
 
 /* ---- The table itself ---------------------------------------------- */
 

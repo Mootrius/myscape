@@ -101,13 +101,14 @@ class Player(Base):
     diary_tiers = Column(JSONB, nullable=False, default=dict)
 
     # storage_synced_at: {<storage key>: <ISO 8601 timestamp>} for every
-    # one of the nine sources Possessions Monitoring's side-panel
+    # one of the twelve sources Possessions Monitoring's side-panel
     # Status section reports on -- "bank", "equipment", "inventory",
     # "potion_storage", "rune_pouch", "seed_vault", "looting_bag",
-    # "tackle_box", "costume_room" -- stamped every
-    # time that source's own sync endpoint is hit (see
-    # each POST /api/players/me/<source> handler in app/main.py), full
-    # replace of just that one key rather than the whole dict.
+    # "tackle_box", "poh", "forestry_kit", "master_scroll_book",
+    # "seed_box" -- stamped every time that source's own sync endpoint
+    # is hit (see each POST /api/players/me/<source> handler in
+    # app/main.py), full replace of just that one key rather than the
+    # whole dict.
     #
     # Deliberately its own column rather than inferred from the item
     # tables' own updated_at columns: a storage that syncs as
@@ -130,7 +131,10 @@ class Player(Base):
     seed_vault_items = relationship("SeedVaultItem", back_populates="player", cascade="all, delete-orphan")
     looting_bag_items = relationship("LootingBagItem", back_populates="player", cascade="all, delete-orphan")
     tackle_box_items = relationship("TackleBoxItem", back_populates="player", cascade="all, delete-orphan")
-    costume_room_items = relationship("CostumeRoomItem", back_populates="player", cascade="all, delete-orphan")
+    poh_items = relationship("PohItem", back_populates="player", cascade="all, delete-orphan")
+    forestry_kit_items = relationship("ForestryKitItem", back_populates="player", cascade="all, delete-orphan")
+    master_scroll_book_items = relationship("MasterScrollBookItem", back_populates="player", cascade="all, delete-orphan")
+    seed_box_items = relationship("SeedBoxItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
     loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
     mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
@@ -477,12 +481,15 @@ class TackleBoxItem(Base):
     __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_tackle_box_items_player_item"),)
 
 
-class CostumeRoomItem(Base):
-    """The player's current Player-Owned-House Costume Room contents --
-    same full-snapshot, delete-and-replace model as every other
-    item-source table above. Synced by POST /api/players/me/costume-room
-    (see MyscapeClient#syncCostumeRoom in the Mootrius/myscape-plugin
-    repo).
+class PohItem(Base):
+    """The player's current Player-Owned-House (PoH) Costume Room
+    contents -- same full-snapshot, delete-and-replace model as every
+    other item-source table above. Synced by POST /api/players/me/poh
+    (see MyscapeClient#syncPoh in the Mootrius/myscape-plugin repo).
+    Named "PoH" rather than "Costume Room" since that's the display
+    label Possessions Monitoring's location filter groups this storage
+    under -- there's only the Costume Room in it today, but "PoH" is
+    the general house-storage bucket, not specifically about costumes.
 
     Originally modeled as six separate tables, one per piece of
     furniture (Magic Wardrobe, Armour Case, Fancy Dress Box, Toy Box,
@@ -496,16 +503,16 @@ class CostumeRoomItem(Base):
     fixed gameval one), with identical contents regardless of which
     piece was opened. Jagex's newer, consolidated Costume Room interface
     (InterfaceID.POH_COSTUMES) reads from one unified store, not six --
-    this table reflects that (see MyscapePlugin#readCostumeRoomItems
-    there), same caveat as every single-container source above: it only
-    reports real contents once the player has opened the Costume Room
-    interface at least once in the current session.
+    this table reflects that (see MyscapePlugin#readPohItems there),
+    same caveat as every single-container source above: it only reports
+    real contents once the player has opened the Costume Room interface
+    at least once in the current session.
 
     item_name plays the same untradeable-item-matching role documented
     on BankItem above -- relevant here specifically since many clue and
     holiday-event rewards are untradeable."""
 
-    __tablename__ = "costume_room_items"
+    __tablename__ = "poh_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
@@ -514,9 +521,113 @@ class CostumeRoomItem(Base):
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="costume_room_items")
+    player = relationship("Player", back_populates="poh_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_costume_room_items_player_item"),)
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_poh_items_player_item"),)
+
+
+class ForestryKitItem(Base):
+    """The player's current Forestry Kit contents -- same
+    full-snapshot, delete-and-replace model as every other item-source
+    table above. Synced by POST /api/players/me/forestry-kit (see
+    MyscapeClient#syncForestryKit in the Mootrius/myscape-plugin repo).
+
+    Unlike the PoH storages above, the Forestry Kit is a portable item
+    the player carries (in the "PORTABLE" location group on Possessions
+    Monitoring, not "PoH") rather than furniture -- but it's still a
+    genuine ItemContainer RuneLite exposes directly (InventoryID.
+    FORESTRY_KIT), read the same straightforward way Tackle Box is, and
+    with the same caveat: it only reports real contents once the player
+    has actually opened it at least once in the current session (see
+    MyscapePlugin#readForestryKitItems there).
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above."""
+
+    __tablename__ = "forestry_kit_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="forestry_kit_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_forestry_kit_items_player_item"),)
+
+
+class MasterScrollBookItem(Base):
+    """The player's current Master Scroll Book contents (the teleport
+    scrolls stored inside it) -- same full-snapshot, delete-and-replace
+    model as every other item-source table above. Synced by POST
+    /api/players/me/master-scroll-book (see
+    MyscapeClient#syncMasterScrollBook in the Mootrius/myscape-plugin
+    repo). Like the Forestry Kit above, this is a portable carried item
+    (Possessions Monitoring's "PORTABLE" location group), not PoH
+    furniture.
+
+    Unlike every other source in this file, there's no confirmed
+    RuneLite InventoryID or InterfaceID for the Master Scroll Book's
+    contents as of this table's creation -- research (the OSRS Wiki,
+    RuneLite's gameval source) turned up nothing, and the Costume Room
+    saga above (six assumed containers that turned out to be one
+    dynamically-assigned id never even in RuneLite's gameval) is a
+    fresh reminder not to guess one. This table and its sync endpoint
+    exist so the plugin side has somewhere to send data to once
+    MyscapePlugin#readMasterScrollBookItems' own temporary diagnostic
+    (see its doc comment there) confirms the real container/interface
+    id -- until then, this simply never receives a real sync.
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above."""
+
+    __tablename__ = "master_scroll_book_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="master_scroll_book_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_master_scroll_book_items_player_item"),)
+
+
+class SeedBoxItem(Base):
+    """The player's current Seed Box contents -- same full-snapshot,
+    delete-and-replace model as every other item-source table above.
+    Synced by POST /api/players/me/seed-box (see
+    MyscapeClient#syncSeedBox in the Mootrius/myscape-plugin repo).
+    Like the Forestry Kit above, this is a portable carried item
+    (Possessions Monitoring's "PORTABLE" location group), not PoH
+    furniture -- distinct from SeedVaultItem above, which is the PoH
+    Seed Vault, a separate storage the Seed Box doesn't replace.
+
+    A genuine ItemContainer RuneLite exposes directly (InventoryID.
+    SEED_BOX), read the same straightforward way Tackle Box is, and
+    with the same caveat: it only reports real contents once the player
+    has actually opened it at least once in the current session (see
+    MyscapePlugin#readSeedBoxItems there).
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above."""
+
+    __tablename__ = "seed_box_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="seed_box_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_seed_box_items_player_item"),)
 
 
 class GearSetup(Base):

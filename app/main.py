@@ -42,17 +42,20 @@ from app.mindmaps import (
 )
 from app.models import (
     BankItem,
-    CostumeRoomItem,
     EquipmentItem,
+    ForestryKitItem,
     GearSetup,
     InventoryItem,
     LootingBagItem,
+    MasterScrollBookItem,
     MindMap,
     PinnedPossessionItem,
     Player,
+    PohItem,
     PossessionTracker,
     PotionStorageItem,
     RunePouchItem,
+    SeedBoxItem,
     SeedVaultItem,
     TackleBoxItem,
 )
@@ -82,10 +85,6 @@ from app.schemas import (
     BankItemOut,
     BankSyncRequest,
     BankSyncResponse,
-    CostumeRoomOut,
-    CostumeRoomItemOut,
-    CostumeRoomSyncRequest,
-    CostumeRoomSyncResponse,
     CreateGearSetupRequest,
     CreateMindMapRequest,
     DiariesSyncRequest,
@@ -95,6 +94,10 @@ from app.schemas import (
     EquipmentSyncRequest,
     EquipmentSyncResponse,
     EQUIPMENT_SLOTS,
+    ForestryKitOut,
+    ForestryKitItemOut,
+    ForestryKitSyncRequest,
+    ForestryKitSyncResponse,
     GEAR_SETUP_EQUIPMENT_SLOTS,
     HideLootItemRequest,
     HideLootNpcRequest,
@@ -110,9 +113,17 @@ from app.schemas import (
     LootingBagSyncResponse,
     LootSyncRequest,
     LootSyncResponse,
+    MasterScrollBookOut,
+    MasterScrollBookItemOut,
+    MasterScrollBookSyncRequest,
+    MasterScrollBookSyncResponse,
     MoveGearSlotItemRequest,
     NpcSearchResponse,
     PlayerOut,
+    PohOut,
+    PohItemOut,
+    PohSyncRequest,
+    PohSyncResponse,
     POSSESSION_STORAGE_KEYS,
     PossessionTrackerIn,
     PossessionTrackerUpdate,
@@ -130,6 +141,10 @@ from app.schemas import (
     RunePouchItemOut,
     RunePouchSyncRequest,
     RunePouchSyncResponse,
+    SeedBoxOut,
+    SeedBoxItemOut,
+    SeedBoxSyncRequest,
+    SeedBoxSyncResponse,
     SeedVaultOut,
     SeedVaultItemOut,
     SeedVaultSyncRequest,
@@ -185,17 +200,30 @@ MAX_LOOTING_BAG_ITEMS = INVENTORY_SIZE
 # documented ceiling, not a guess) -- a little headroom past that in
 # case a future update raises it, same spirit as MAX_RUNE_POUCH_ITEMS.
 MAX_TACKLE_BOX_ITEMS = 50
-# The whole Costume Room -- every piece of furniture combined into one
-# sync (see CostumeRoomItem's docstring in app/models.py for why it's
-# one unified sync rather than six). Sized generously for the sum of
-# what those six used to allow separately: a few dozen set pieces each
-# for Magic Wardrobe/Armour Case/Fancy Dress Box, every non-tradeable
+# The whole PoH Costume Room -- every piece of furniture combined into
+# one sync (see PohItem's docstring in app/models.py for why it's one
+# unified sync rather than six). Sized generously for the sum of what
+# those six used to allow separately: a few dozen set pieces each for
+# Magic Wardrobe/Armour Case/Fancy Dress Box, every non-tradeable
 # holiday reward for the Toy Box (more accumulate every year), the
 # hundreds of distinct clue rewards across all six Treasure Trail tiers
 # for the Treasure Chest, and every cape the game has for the Cape
 # Rack -- generous headroom past that combined real total, not a
 # round-number guess.
-MAX_COSTUME_ROOM_ITEMS = 1500
+MAX_POH_ITEMS = 1500
+# The Forestry Kit holds a handful of Forestry event consumables at
+# most -- generous headroom past that, same spirit as
+# MAX_RUNE_POUCH_ITEMS, not a tight fit.
+MAX_FORESTRY_KIT_ITEMS = 50
+# The Master Scroll Book holds "every type of teleport scroll" (OSRS
+# Wiki) -- dozens of distinct scroll types across every minigame and
+# Treasure Trail reward, not hundreds -- generous headroom past that,
+# same spirit as MAX_SEED_VAULT_ITEMS.
+MAX_MASTER_SCROLL_BOOK_ITEMS = 150
+# The Seed Box holds seeds of six different types (OSRS Wiki) --
+# generous headroom past that fixed ceiling, same spirit as
+# MAX_RUNE_POUCH_ITEMS, in case a future update raises it.
+MAX_SEED_BOX_ITEMS = 20
 # There are exactly 24 real OSRS skills (see SKILL_NAMES in
 # app/mindmaps.py) -- a real ceiling, not a guess.
 MAX_SKILLS_PER_SYNC = 24
@@ -354,7 +382,7 @@ def unlink_player(db: Session = Depends(get_db), player: Player = Depends(get_cu
 
 def _stamp_storage_synced(player: Player, storage_key: str, now: datetime) -> None:
     """Records that `storage_key` (one of POSSESSION_STORAGE_KEYS) was
-    just synced -- called from the bottom of every one of the nine
+    just synced -- called from the bottom of every one of the twelve
     per-storage POST handlers below, right before their own db.commit()
     (storage_synced_at is a plain column on the same Player row already
     being flushed, so this never needs a commit of its own). See
@@ -725,50 +753,182 @@ def read_tackle_box(db: Session = Depends(get_db), player: Player = Depends(get_
     return TackleBoxOut(items=[TackleBoxItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
-@app.post("/api/players/me/costume-room", response_model=CostumeRoomSyncResponse)
-def sync_costume_room(
-    payload: CostumeRoomSyncRequest,
+@app.post("/api/players/me/poh", response_model=PohSyncResponse)
+def sync_poh(
+    payload: PohSyncRequest,
     db: Session = Depends(get_db),
     player: Player = Depends(get_current_player_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for the whole
-    Player-Owned-House Costume Room instead -- see
-    MyscapeClient#syncCostumeRoom in the Mootrius/myscape-plugin repo
-    and CostumeRoomItem's docstring in app/models.py for why this is
-    one endpoint covering all six pieces of furniture rather than six
-    separate ones. Full replace, never a merge."""
-    if len(payload.items) > MAX_COSTUME_ROOM_ITEMS:
+    Player-Owned-House Costume Room instead -- see MyscapeClient#syncPoh
+    in the Mootrius/myscape-plugin repo and PohItem's docstring in
+    app/models.py for why this is one endpoint covering all six pieces
+    of furniture rather than six separate ones, and why it's named
+    "poh" rather than "costume-room". Full replace, never a merge."""
+    if len(payload.items) > MAX_POH_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Too many items in one sync (max {MAX_COSTUME_ROOM_ITEMS}).",
+            detail=f"Too many items in one sync (max {MAX_POH_ITEMS}).",
         )
 
-    db.query(CostumeRoomItem).filter(CostumeRoomItem.player_id == player.id).delete()
+    db.query(PohItem).filter(PohItem.player_id == player.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
-        db.add(CostumeRoomItem(
+        db.add(PohItem(
             player_id=player.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "costume_room", now)
+    _stamp_storage_synced(player, "poh", now)
     db.commit()
 
-    return CostumeRoomSyncResponse(item_count=len(payload.items))
+    return PohSyncResponse(item_count=len(payload.items))
 
 
-@app.get("/api/players/me/costume-room", response_model=CostumeRoomOut)
-def read_costume_room(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+@app.get("/api/players/me/poh", response_model=PohOut)
+def read_poh(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the whole
-    Costume Room instead."""
+    PoH Costume Room instead."""
     items = (
-        db.query(CostumeRoomItem)
-        .filter(CostumeRoomItem.player_id == player.id)
-        .order_by(CostumeRoomItem.item_id)
+        db.query(PohItem)
+        .filter(PohItem.player_id == player.id)
+        .order_by(PohItem.item_id)
         .all()
     )
     updated_at = items[0].updated_at if items else None
-    return CostumeRoomOut(items=[CostumeRoomItemOut.model_validate(item) for item in items], updated_at=updated_at)
+    return PohOut(items=[PohItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
+
+@app.post("/api/players/me/forestry-kit", response_model=ForestryKitSyncResponse)
+def sync_forestry_kit(
+    payload: ForestryKitSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Forestry Kit's contents instead -- see
+    MyscapeClient#syncForestryKit in the Mootrius/myscape-plugin repo
+    and ForestryKitItem's docstring in app/models.py. Full replace,
+    never a merge."""
+    if len(payload.items) > MAX_FORESTRY_KIT_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_FORESTRY_KIT_ITEMS}).",
+        )
+
+    db.query(ForestryKitItem).filter(ForestryKitItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(ForestryKitItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "forestry_kit", now)
+    db.commit()
+
+    return ForestryKitSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/forestry-kit", response_model=ForestryKitOut)
+def read_forestry_kit(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Forestry Kit instead."""
+    items = (
+        db.query(ForestryKitItem)
+        .filter(ForestryKitItem.player_id == player.id)
+        .order_by(ForestryKitItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return ForestryKitOut(items=[ForestryKitItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/master-scroll-book", response_model=MasterScrollBookSyncResponse)
+def sync_master_scroll_book(
+    payload: MasterScrollBookSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the
+    Master Scroll Book's stored teleport scrolls instead -- see
+    MyscapeClient#syncMasterScrollBook in the Mootrius/myscape-plugin
+    repo and MasterScrollBookItem's docstring in app/models.py (no
+    confirmed container id yet, so this may not receive real syncs
+    until the plugin's own temporary diagnostic finds one). Full
+    replace, never a merge."""
+    if len(payload.items) > MAX_MASTER_SCROLL_BOOK_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_MASTER_SCROLL_BOOK_ITEMS}).",
+        )
+
+    db.query(MasterScrollBookItem).filter(MasterScrollBookItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(MasterScrollBookItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "master_scroll_book", now)
+    db.commit()
+
+    return MasterScrollBookSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/master-scroll-book", response_model=MasterScrollBookOut)
+def read_master_scroll_book(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Master Scroll Book instead."""
+    items = (
+        db.query(MasterScrollBookItem)
+        .filter(MasterScrollBookItem.player_id == player.id)
+        .order_by(MasterScrollBookItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return MasterScrollBookOut(items=[MasterScrollBookItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/seed-box", response_model=SeedBoxSyncResponse)
+def sync_seed_box(
+    payload: SeedBoxSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for the Seed
+    Box's contents instead -- see MyscapeClient#syncSeedBox in the
+    Mootrius/myscape-plugin repo and SeedBoxItem's docstring in
+    app/models.py. Full replace, never a merge."""
+    if len(payload.items) > MAX_SEED_BOX_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_SEED_BOX_ITEMS}).",
+        )
+
+    db.query(SeedBoxItem).filter(SeedBoxItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(SeedBoxItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "seed_box", now)
+    db.commit()
+
+    return SeedBoxSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/seed-box", response_model=SeedBoxOut)
+def read_seed_box(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the Seed
+    Box instead."""
+    items = (
+        db.query(SeedBoxItem)
+        .filter(SeedBoxItem.player_id == player.id)
+        .order_by(SeedBoxItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return SeedBoxOut(items=[SeedBoxItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
 @app.get("/api/players/me/sync-status", response_model=SyncStatusOut)

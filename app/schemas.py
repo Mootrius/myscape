@@ -477,12 +477,12 @@ class TackleBoxOut(BaseModel):
     items: List[TackleBoxItemOut]
     updated_at: Optional[datetime] = None
 
-# -- Costume Room: identical shape to Looting Bag/Seed Vault above, just
-# a separate container -- see CostumeRoomItem's docstring in
-# app/models.py for why this is one unified schema now rather than six
-# per-piece ones. ------------------------------------------------------
+# -- PoH: identical shape to Looting Bag/Seed Vault above, just a
+# separate container -- see PohItem's docstring in app/models.py for
+# why this is one unified schema (and named "PoH" rather than "Costume
+# Room") rather than six per-piece ones. --------------------------------
 
-class CostumeRoomItemIn(BaseModel):
+class PohItemIn(BaseModel):
     item_id: int
     item_name: Optional[str] = None
     quantity: int
@@ -502,15 +502,15 @@ class CostumeRoomItemIn(BaseModel):
         return value
 
 
-class CostumeRoomSyncRequest(BaseModel):
-    items: List[CostumeRoomItemIn]
+class PohSyncRequest(BaseModel):
+    items: List[PohItemIn]
 
 
-class CostumeRoomSyncResponse(BaseModel):
+class PohSyncResponse(BaseModel):
     item_count: int
 
 
-class CostumeRoomItemOut(BaseModel):
+class PohItemOut(BaseModel):
     item_id: int
     item_name: Optional[str] = None
     quantity: int
@@ -519,8 +519,147 @@ class CostumeRoomItemOut(BaseModel):
         from_attributes = True
 
 
-class CostumeRoomOut(BaseModel):
-    items: List[CostumeRoomItemOut]
+class PohOut(BaseModel):
+    items: List[PohItemOut]
+    updated_at: Optional[datetime] = None
+
+
+# -- Forestry Kit: identical shape to Looting Bag/Seed Vault above,
+# just a separate container -- see ForestryKitItem's docstring in
+# app/models.py. --------------------------------------------------------
+
+class ForestryKitItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class ForestryKitSyncRequest(BaseModel):
+    items: List[ForestryKitItemIn]
+
+
+class ForestryKitSyncResponse(BaseModel):
+    item_count: int
+
+
+class ForestryKitItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class ForestryKitOut(BaseModel):
+    items: List[ForestryKitItemOut]
+    updated_at: Optional[datetime] = None
+
+
+# -- Master Scroll Book: identical shape to Looting Bag/Seed Vault
+# above, just a separate container -- see MasterScrollBookItem's
+# docstring in app/models.py for why this may not actually receive
+# real syncs yet. --------------------------------------------------------
+
+class MasterScrollBookItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class MasterScrollBookSyncRequest(BaseModel):
+    items: List[MasterScrollBookItemIn]
+
+
+class MasterScrollBookSyncResponse(BaseModel):
+    item_count: int
+
+
+class MasterScrollBookItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class MasterScrollBookOut(BaseModel):
+    items: List[MasterScrollBookItemOut]
+    updated_at: Optional[datetime] = None
+
+
+# -- Seed Box: identical shape to Looting Bag/Seed Vault above, just a
+# separate container -- see SeedBoxItem's docstring in app/models.py.
+# Distinct from SeedVaultOut above (the PoH Seed Vault). -----------------
+
+class SeedBoxItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class SeedBoxSyncRequest(BaseModel):
+    items: List[SeedBoxItemIn]
+
+
+class SeedBoxSyncResponse(BaseModel):
+    item_count: int
+
+
+class SeedBoxItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class SeedBoxOut(BaseModel):
+    items: List[SeedBoxItemOut]
     updated_at: Optional[datetime] = None
 
 
@@ -536,7 +675,7 @@ class CostumeRoomOut(BaseModel):
 POSSESSION_STORAGE_KEYS = [
     "bank", "equipment", "inventory", "potion_storage",
     "rune_pouch", "seed_vault", "looting_bag", "tackle_box",
-    "costume_room",
+    "poh", "forestry_kit", "master_scroll_book", "seed_box",
 ]
 
 
