@@ -9,6 +9,7 @@ from html import escape
 from typing import Optional
 
 from app.models import Player
+from app.purchase_goals import item_icon_url
 
 # Cache-busting query string for the stylesheet link in _shell() below.
 # Without this, a browser that already has myscape.css cached (Starlette's
@@ -368,13 +369,20 @@ def render_landing(player: Optional[Player]) -> str:
 _ICON_COINS = "/static/img/icon-coins.png"
 _ICON_BONES = "/static/img/icon-dragon-bones.png"
 _ICON_CLUELESS_SCROLL = "/static/img/icon-clueless-scroll.png"
-# Hotlinked from the wiki (same as every in-page item icon -- see
-# item_icon_url in app/purchase_goals.py) rather than a bundled static
-# file like the three above, since a Heavy casket is a real OSRS item
-# with its own wiki icon already -- a container stuffed full of loot is
-# a fitting stand-in for "everything you own", the same reasoning
-# behind Purchase Goals' coins and Loot Tracker's dragon bones above.
-_ICON_HEAVY_CASKET = "https://oldschool.runescape.wiki/w/Special:FilePath/Heavy%20casket.png"
+# Routed through item_icon_url (app/purchase_goals.py) -- i.e. our own
+# /icon-cache/<filename> route, backed by app/icon_cache.py's disk cache
+# -- rather than a bundled static file like the three above, since a
+# Heavy casket is a real OSRS item with its own wiki icon already -- a
+# container stuffed full of loot is a fitting stand-in for "everything
+# you own", the same reasoning behind Purchase Goals' coins and Loot
+# Tracker's dragon bones above. This used to be a direct wiki hotlink,
+# which was the whole flicker-on-refresh bug: the wiki marks its
+# Special:FilePath redirect chain uncacheable (see icon_cache.py's own
+# top-of-file comment), so the browser re-fetched it from scratch on
+# every single page load while the other three icons -- same-origin,
+# cached indefinitely -- didn't budge. Going through the icon cache
+# makes this one same-origin too.
+_ICON_HEAVY_CASKET = item_icon_url("Heavy casket.png")
 
 
 def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
