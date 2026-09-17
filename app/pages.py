@@ -1421,12 +1421,75 @@ def render_purchase_goals(player: Player) -> str:
       }
 
       // Drag-and-drop reordering for the "custom" sort mode -- same
-      // dragstart/dragover/drop shape as wireSlotClicks' gear-slot
-      // dragging, just vertical-list reordering instead of move-or-swap
-      // between two fixed slots. A drop always lands the dragged row
-      // immediately before whichever row it was dropped on.
+      // dragstart/dragend shape as wireSlotClicks' gear-slot dragging,
+      // but rows now live-reorder as you drag over them (animateReorder
+      // below) instead of just outlining a drop target and only moving
+      // things once you let go, so it's obvious where a row is about to
+      // land before you commit to it. draggedEl/dropped are scoped to
+      // this one call, which is fine since renderSummaryList rebuilds
+      // every row's markup (and rewires this) from scratch every render.
       function wireSummaryDrag(customMode) {
         if (!customMode) return;
+        var listEl = document.getElementById('pgSummaryList');
+        var draggedEl = null;
+        var dropped = false;
+
+        function rowKey(row) {
+          return row.getAttribute('data-slot-type') + '::' + row.getAttribute('data-slot');
+        }
+
+        // FLIP-animates every OTHER row from its position just before
+        // `mutate` runs to its position just after, so a live-preview
+        // reorder reads as a slide instead of an instant snap. The
+        // dragged row itself is skipped -- it's already being carried
+        // by the browser's own native drag image, so sliding it too
+        // would just fight that.
+        function animateReorder(mutate) {
+          var rows = Array.prototype.slice.call(listEl.querySelectorAll('.gear-summary-row'));
+          var firstRects = {};
+          rows.forEach(function (row) { firstRects[rowKey(row)] = row.getBoundingClientRect(); });
+
+          mutate();
+
+          rows.forEach(function (row) {
+            if (row === draggedEl) return;
+            var first = firstRects[rowKey(row)];
+            var last = row.getBoundingClientRect();
+            var dy = first.top - last.top;
+            if (!dy) return;
+            row.style.transition = 'none';
+            row.style.transform = 'translateY(' + dy + 'px)';
+            // Forces layout so the translateY above actually paints
+            // before the transition is switched back on below --
+            // without this the browser coalesces both style writes into
+            // one frame and the row just snaps straight to 0, with no
+            // visible slide at all.
+            row.getBoundingClientRect();
+            row.style.transition = 'transform 150ms ease';
+            row.style.transform = '';
+            row.addEventListener('transitionend', function handler() {
+              row.style.transition = '';
+              row.removeEventListener('transitionend', handler);
+            });
+          });
+        }
+
+        // The live preview above already leaves the DOM in exactly the
+        // order a drop should save -- no separate source/target diffing
+        // needed, just read the rows back out in their current order.
+        async function commitDomOrder() {
+          var order = Array.prototype.slice.call(listEl.querySelectorAll('.gear-summary-row')).map(function (row) {
+            var slotType = row.getAttribute('data-slot-type');
+            var slot = row.getAttribute('data-slot');
+            return { slot_type: slotType, slot: slotType === 'inventory' ? parseInt(slot, 10) : slot };
+          });
+          const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/still-to-purchase-order', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: order }),
+          });
+          if (data) { PG.stateVersion++; PG.data = data; render(); }
+        }
+
         document.querySelectorAll('#pgSummaryList .gear-summary-row').forEach(function (el) {
           el.addEventListener('dragstart', function (e) {
             e.dataTransfer.effectAllowed = 'move';
@@ -1434,59 +1497,43 @@ def render_purchase_goals(player: Player) -> str:
               slotType: el.getAttribute('data-slot-type'),
               slot: el.getAttribute('data-slot'),
             }));
+            draggedEl = el;
+            dropped = false;
             el.classList.add('dragging');
           });
           el.addEventListener('dragend', function () {
             el.classList.remove('dragging');
-            document.querySelectorAll('#pgSummaryList .gear-summary-row.drag-over').forEach(function (t) {
-              t.classList.remove('drag-over');
-            });
+            draggedEl = null;
+            // A drag that ends without a drop (dropped outside the
+            // list, or cancelled with Escape) leaves the live-preview
+            // DOM order sitting there with nothing saved server-side to
+            // back it up -- a plain re-render from the untouched
+            // setup.stillToPurchase state snaps it straight back to the
+            // last real order.
+            if (!dropped) {
+              var setup = activeSetup();
+              if (setup) renderSummaryList(setup);
+            }
           });
           el.addEventListener('dragover', function (e) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
-            el.classList.add('drag-over');
-          });
-          el.addEventListener('dragleave', function () {
-            el.classList.remove('drag-over');
+            if (!draggedEl || draggedEl === el) return;
+            var rect = el.getBoundingClientRect();
+            var before = e.clientY < rect.top + rect.height / 2;
+            var alreadyBefore = el.previousElementSibling === draggedEl;
+            var alreadyAfter = el.nextElementSibling === draggedEl;
+            if (before ? alreadyBefore : alreadyAfter) return;
+            animateReorder(function () {
+              listEl.insertBefore(draggedEl, before ? el : el.nextSibling);
+            });
           });
           el.addEventListener('drop', function (e) {
             e.preventDefault();
-            el.classList.remove('drag-over');
-            var raw = e.dataTransfer.getData('text/plain');
-            if (!raw) return;
-            var source;
-            try { source = JSON.parse(raw); } catch (err) { return; }
-            var target = { slotType: el.getAttribute('data-slot-type'), slot: el.getAttribute('data-slot') };
-            if (source.slotType === target.slotType && String(source.slot) === String(target.slot)) return;
-            reorderStillToPurchase(source, target);
+            dropped = true;
+            commitDomOrder();
           });
         });
-      }
-
-      async function reorderStillToPurchase(source, target) {
-        var setup = activeSetup();
-        if (!setup) return;
-        function sameSlot(a, b) { return a.slotType === b.slotType && String(a.slot) === String(b.slot); }
-        var order = setup.stillToPurchase.map(function (item) { return { slotType: item.slotType, slot: item.slot }; });
-        var fromIdx = order.findIndex(function (entry) { return sameSlot(entry, source); });
-        if (fromIdx === -1) return;
-        var moved = order.splice(fromIdx, 1)[0];
-        // Removing the dragged row can shift the target's own index down
-        // by one, so its position is looked up again fresh rather than
-        // reusing an index captured before the splice above.
-        var toIdx = order.findIndex(function (entry) { return sameSlot(entry, target); });
-        if (toIdx === -1) { order.splice(fromIdx, 0, moved); } else { order.splice(toIdx, 0, moved); }
-
-        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/still-to-purchase-order', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            order: order.map(function (entry) {
-              return { slot_type: entry.slotType, slot: entry.slotType === 'inventory' ? parseInt(entry.slot, 10) : entry.slot };
-            }),
-          }),
-        });
-        if (data) { PG.stateVersion++; PG.data = data; render(); }
       }
 
       // ---- Setup icon picker ----------------------------------------------

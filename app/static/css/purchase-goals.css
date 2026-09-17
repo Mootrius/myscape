@@ -401,11 +401,13 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-summary-row-cost.na { color: var(--text-faint); }
 
 /* Drag-to-reorder, "custom" sort mode only (see wireSummaryDrag in
-   app/pages.py) -- the same .dragging/.drag-over treatment as the gear
-   slots above (opacity for the row being picked up, a dashed outline
-   for the current drop target), plus user-select: none so grabbing and
-   dragging a row's text doesn't just select it instead the way plain
-   text in a draggable box normally would. */
+   app/pages.py) -- .dragging fades the row being picked up, same as
+   the gear slots above. No .drag-over ring here though: rows
+   physically slide out of the way to preview where a drop would land
+   (wireSummaryDrag's animateReorder) instead of just outlining
+   whichever one the cursor happens to be over. Plus user-select: none
+   so grabbing and dragging a row's text doesn't just select it instead
+   the way plain text in a draggable box normally would. */
 .gear-summary-row.draggable { cursor: grab; user-select: none; }
 /* Same background-color hover feedback as .gear-slot on the gear grid
    (see the comment above it -- background-color, not filter, so the
@@ -417,7 +419,6 @@ button.primary#pgNameSave, .pg-setup-form-save {
    only the one rule. */
 .gear-summary-row.draggable:hover { background-color: rgb(51, 51, 54); }
 .gear-summary-row.draggable.dragging { opacity: 0.4; cursor: grabbing; }
-.gear-summary-row.draggable.drag-over { outline: 2px dashed var(--gold); outline-offset: -2px; }
 
 .gear-icon-picker, .gear-slot-picker {
   background: var(--panel-translucent); border: 1px solid var(--border); border-radius: var(--radius);
