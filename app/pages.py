@@ -371,16 +371,18 @@ def render_landing(player: Optional[Player]) -> str:
     # note (both from _shell/player below) already handle either case
     # correctly on their own, so this needs nothing extra here to
     # support it.
-    # Three full-viewport "anchor" panels -- pre-composited marketing
-    # art (logo/tagline, then one per showcased feature), not live
-    # markup, since each one is a fixed graphic that already has its
-    # own baked-in layout/copy. .landing-anchor's scroll-snap (see
-    # myscape.css) is what makes scrolling settle on each one in turn
-    # instead of drifting past. webp first (much smaller) with a png
-    # fallback for anything that doesn't support it.
+    # Three "anchor" panels -- pre-composited marketing art (logo/
+    # tagline, then one per showcased feature), not live markup, since
+    # each one is a fixed graphic that already has its own baked-in
+    # layout/copy. The first one (landing-anchor--intro) is sized to
+    # its own content rather than a full 100vh -- it shares a single
+    # stop with the header above it (see myscape.css) instead of being
+    # its own separate one, so scrolling doesn't stop twice just to
+    # reveal the logo. webp first (much smaller) with a png fallback
+    # for anything that doesn't support it.
     body = """
     <div class="landing-anchors">
-      <section class="landing-anchor">
+      <section class="landing-anchor landing-anchor--intro">
         <picture>
           <source srcset="/static/img/anchor-myscape.webp" type="image/webp">
           <img src="/static/img/anchor-myscape.png" alt="myscape -- a place for gains.">
@@ -400,10 +402,95 @@ def render_landing(player: Optional[Player]) -> str:
       </section>
     </div>
     """
-    # body_class="landing" scopes the scroll-snap behavior (see
+    # CSS scroll-snap (myscape.css) is the baseline -- it's what
+    # handles touch-drag and keyboard scrolling. This script is on top
+    # of that, just for wheel/trackpad input, and is what makes the
+    # stop on each panel actually *hold*: it steps exactly one stop
+    # per wheel gesture and locks out further input until that scroll
+    # has genuinely finished (via the 'scrollend' event, not just a
+    # guessed timeout), so a fast flick can't blow through two panels
+    # at once the way plain CSS snap sometimes allows.
+    script = """
+    (function () {
+      var header = document.querySelector('header');
+      var anchors = Array.prototype.slice.call(
+        document.querySelectorAll('.landing-anchor:not(.landing-anchor--intro)')
+      );
+      var footer = document.querySelector('footer');
+      var stops = [header].concat(anchors, [footer]).filter(Boolean);
+      if (stops.length < 2) return;
+
+      var current = 0;
+      var locked = false;
+      // Bumped on every goTo() call and captured by that call's own
+      // fallback timeout below -- so a stale timeout from an older,
+      // already-finished lock can't clear a newer one it has nothing
+      // to do with.
+      var lockGen = 0;
+
+      // One persistent listener rather than adding/removing a fresh
+      // one per goTo() call -- that churn is what caused the actual
+      // bug here: with scrollend seemingly firing more than once for
+      // a single logical scroll in some cases, add/remove pairs could
+      // leave a stale listener behind, and it would then fire again
+      // (logging twice, three times, ...) on a later, unrelated
+      // scroll. A single listener has nothing to leak.
+      window.addEventListener('scrollend', function () {
+        locked = false;
+      });
+
+      // The footer (last stop) can't actually be scrolled to its own
+      // offsetTop if the page isn't tall enough past it -- there's no
+      // more content below to make room. Scrolling clamps that to the
+      // real max scroll position instead, so comparing against a
+      // stop's raw offsetTop would under-count how far it can go and
+      // make this mistake the footer for the mindmaps panel above it.
+      // Clamping every stop's expected position the same way the
+      // browser clamps the real scroll keeps the comparison honest.
+      function stopY(el) {
+        var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        return Math.min(el.offsetTop, Math.max(0, maxScroll));
+      }
+
+      function nearestStop() {
+        var y = window.scrollY;
+        var idx = 0;
+        for (var i = 0; i < stops.length; i++) {
+          if (stopY(stops[i]) <= y + 2) idx = i;
+        }
+        return idx;
+      }
+
+      function goTo(index) {
+        index = Math.max(0, Math.min(stops.length - 1, index));
+        current = index;
+        locked = true;
+        var myGen = ++lockGen;
+        // scrollend doesn't fire at all for a few real cases here --
+        // notably a no-op scrollIntoView when already at that stop
+        // (e.g. pushing "down" again while already on the last panel)
+        // -- so this backstop is what clears the lock then, guarded
+        // by lockGen so it can't clear a *later* goTo()'s lock if
+        // scrollend was just slow rather than missing.
+        window.setTimeout(function () {
+          if (lockGen === myGen) locked = false;
+        }, 900);
+        stops[current].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      window.addEventListener('wheel', function (e) {
+        // ctrl+wheel is pinch-zoom on a trackpad -- leave that alone.
+        if (e.ctrlKey || Math.abs(e.deltaY) < 4) return;
+        e.preventDefault();
+        if (locked) return;
+        goTo(nearestStop() + (e.deltaY > 0 ? 1 : -1));
+      }, { passive: false });
+    })();
+    """
+    # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
     # every other page keeps its ordinary, un-snapped scrolling.
-    return _shell(title="myscape", player=player, body=body, body_class="landing")
+    return _shell(title="myscape", player=player, body=body, extra_script=script, body_class="landing")
 
 
 # Small inline SVGs for the dashboard cards below -- drawn from scratch in

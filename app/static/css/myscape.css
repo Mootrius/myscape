@@ -114,6 +114,11 @@ html:has(body.landing) {
 body.landing header,
 body.landing footer {
   scroll-snap-align: start;
+  /* Same "don't let a fast scroll skip past this one" guarantee the
+     anchors themselves get (see .landing-anchor below) -- otherwise a
+     hard flick from further down the page could blow straight past
+     the header/intro stop (or the footer) without ever resting there. */
+  scroll-snap-stop: always;
 }
 
 /* Site-wide: nothing on the page should be text-highlightable or
@@ -648,11 +653,12 @@ footer {
 /* Landing page anchor panels -- see render_landing() in app/pages.py.
    Each <section> is one full-viewport "slide" (pre-composited
    marketing art, not live content) that scroll-snap (see
-   html:has(body.landing) above) settles the page on as it's
-   scrolled past. .landing-anchors itself just breaks the group out
-   of .wrap's 880px cap (same calc(50% - 50vw) trick as header/
-   .link-banner), the same way the site already escapes that column
-   elsewhere. */
+   html:has(body.landing) above) settles the page on as it's scrolled
+   past -- reinforced by that page's own wheel-locking script for a
+   firmer stop than CSS snap alone gives. .landing-anchors itself just
+   breaks the group out of .wrap's 880px cap (same calc(50% - 50vw)
+   trick as header/.link-banner), the same way the site already
+   escapes that column elsewhere. */
 .landing-anchors {
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
@@ -677,10 +683,29 @@ footer {
   scroll-snap-stop: always;
 }
 
+/* The logo/tagline panel shares a single stop with the header above
+   it (see body.landing header in the scroll-snap rules up top)
+   instead of being its own separate one -- sized to its own content,
+   not forced to a full 100vh, so header + logo both fit in that one
+   screen together with nothing left over below the fold to require a
+   second stop just for this panel. */
+.landing-anchor--intro {
+  min-height: 0;
+  scroll-snap-align: none;
+  scroll-snap-stop: normal;
+  padding: 0 20px 48px;
+}
+
 .landing-anchor img {
   display: block;
-  max-width: 100%;
-  height: auto;
+  /* A fixed width (not max-width) is what makes all three panels the
+     same size regardless of their own image's aspect ratio -- height
+     just follows from that, auto-preserving each image's shape. The
+     max-height is a backstop for unusually short/wide viewports
+     (a landscape phone, say) where this width would otherwise make a
+     tall image spill past the top and bottom of the screen. */
+  width: min(700px, 82vw);
   max-height: calc(100vh - 80px);
   max-height: calc(100svh - 80px);
+  height: auto;
 }
