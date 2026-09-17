@@ -102,16 +102,19 @@ html:has(body.landing) {
 
 /* Without a snap point at the very top of the page, "mandatory" snap
    has nothing valid to rest on at scroll position 0 and jumps
-   straight down to the first .landing-anchor on load, skipping the
-   header entirely. Making header itself a snap target fixes that --
-   the page now loads showing the header like normal, and only starts
-   "sticking" once the visitor scrolls past it. The same problem
-   happens in reverse at the bottom: with the last .landing-anchor as
-   the final snap point, "mandatory" refuses to rest anywhere past it
-   -- there's nothing to align a further scroll to -- which traps the
-   page and makes the footer completely unreachable. Giving footer a
-   snap point too fixes that the same way. */
-body.landing header,
+   straight down to the first .landing-anchor on load, skipping
+   whatever's actually first -- normally header, but the "link your
+   account" banner (see _link_banner() in app/pages.py) renders ahead
+   of it for a logged-in, not-yet-linked player, and would be the one
+   silently scrolled out of view instead if this named header
+   specifically. body.landing > *:first-child targets whichever of
+   the two is actually there. The same problem happens in reverse at
+   the bottom: with the last .landing-anchor as the final snap point,
+   "mandatory" refuses to rest anywhere past it -- there's nothing to
+   align a further scroll to -- which traps the page and makes the
+   footer completely unreachable. Giving footer a snap point too
+   fixes that the same way. */
+body.landing > *:first-child,
 body.landing footer {
   scroll-snap-align: start;
   /* Same "don't let a fast scroll skip past this one" guarantee the
@@ -685,15 +688,70 @@ footer {
 
 /* The logo/tagline panel shares a single stop with the header above
    it (see body.landing header in the scroll-snap rules up top)
-   instead of being its own separate one -- sized to its own content,
-   not forced to a full 100vh, so header + logo both fit in that one
-   screen together with nothing left over below the fold to require a
-   second stop just for this panel. */
+   instead of being its own separate one, but it's still pinned to
+   exactly one full screen -- header, logo, and the "explore
+   features" cue below, nothing else in view. --landing-intro-above
+   is set by that page's own script to the real measured height of
+   everything above this panel (header, plus the "link your account"
+   banner when it's showing, plus .page's own top padding) -- a fixed
+   guess wouldn't hold up once any of that varies. The literal px
+   fallback only matters for the instant before that script runs. */
 .landing-anchor--intro {
+  height: calc(100vh - var(--landing-intro-above, 130px));
+  height: calc(100svh - var(--landing-intro-above, 130px));
   min-height: 0;
+  flex-direction: column;
+  justify-content: flex-start;
   scroll-snap-align: none;
   scroll-snap-stop: normal;
-  padding: 0 20px 48px;
+  padding: 0 20px;
+}
+
+/* Fills whatever space the cue below doesn't need, so the logo sits
+   vertically centered in the room actually left for it rather than
+   centered across the whole panel (which would push it low, behind
+   where the cue's own height eats into that space). */
+.landing-anchor-intro-media {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-scroll-cue {
+  flex: 0 0 auto;
+  margin: 0;
+  padding-bottom: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+.landing-scroll-cue-arrow {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid currentColor;
+  animation: landing-scroll-cue-bounce 1.6s ease-in-out infinite;
+}
+
+/* Slightly offset from the left arrow so the two don't bounce in
+   lockstep -- reads more like a little wave pointing down than a
+   single flat pulse. */
+.landing-scroll-cue-arrow:last-child {
+  animation-delay: 0.25s;
+}
+
+@keyframes landing-scroll-cue-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.45; }
+  50% { transform: translateY(5px); opacity: 1; }
 }
 
 .landing-anchor img {

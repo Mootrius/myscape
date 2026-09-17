@@ -374,19 +374,29 @@ def render_landing(player: Optional[Player]) -> str:
     # Three "anchor" panels -- pre-composited marketing art (logo/
     # tagline, then one per showcased feature), not live markup, since
     # each one is a fixed graphic that already has its own baked-in
-    # layout/copy. The first one (landing-anchor--intro) is sized to
-    # its own content rather than a full 100vh -- it shares a single
-    # stop with the header above it (see myscape.css) instead of being
-    # its own separate one, so scrolling doesn't stop twice just to
-    # reveal the logo. webp first (much smaller) with a png fallback
-    # for anything that doesn't support it.
+    # layout/copy. The first one (landing-anchor--intro) shares a
+    # single stop with the header above it (see myscape.css) instead
+    # of being its own separate one, so scrolling doesn't stop twice
+    # just to reveal the logo -- but it's still pinned to exactly one
+    # full screen (header + logo + the "explore features" cue at the
+    # bottom, nothing else) via that same CSS, with the script below
+    # measuring the header's actual rendered height to make that work.
+    # webp first (much smaller) with a png fallback for anything that
+    # doesn't support it.
     body = """
     <div class="landing-anchors">
       <section class="landing-anchor landing-anchor--intro">
-        <picture>
-          <source srcset="/static/img/anchor-myscape.webp" type="image/webp">
-          <img src="/static/img/anchor-myscape.png" alt="myscape -- a place for gains.">
-        </picture>
+        <div class="landing-anchor-intro-media">
+          <picture>
+            <source srcset="/static/img/anchor-myscape.webp" type="image/webp">
+            <img src="/static/img/anchor-myscape.png" alt="myscape -- a place for gains.">
+          </picture>
+        </div>
+        <p class="landing-scroll-cue">
+          <span class="landing-scroll-cue-arrow"></span>
+          EXPLORE FEATURES
+          <span class="landing-scroll-cue-arrow"></span>
+        </p>
       </section>
       <section class="landing-anchor">
         <picture>
@@ -412,12 +422,17 @@ def render_landing(player: Optional[Player]) -> str:
     # at once the way plain CSS snap sometimes allows.
     script = """
     (function () {
-      var header = document.querySelector('header');
+      // body's first element child -- normally <header>, but the
+      // "link your account" banner renders ahead of it for a
+      // logged-in, not-yet-linked player (see myscape.css's matching
+      // body.landing > *:first-child), so this has to match whichever
+      // one is actually first rather than assuming header.
+      var firstStop = document.body.firstElementChild;
       var anchors = Array.prototype.slice.call(
         document.querySelectorAll('.landing-anchor:not(.landing-anchor--intro)')
       );
       var footer = document.querySelector('footer');
-      var stops = [header].concat(anchors, [footer]).filter(Boolean);
+      var stops = [firstStop].concat(anchors, [footer]).filter(Boolean);
       if (stops.length < 2) return;
 
       var current = 0;
@@ -485,6 +500,31 @@ def render_landing(player: Optional[Player]) -> str:
         if (locked) return;
         goTo(nearestStop() + (e.deltaY > 0 ? 1 : -1));
       }, { passive: false });
+    })();
+
+    // The intro panel (logo + "explore features" cue) needs to be
+    // exactly one screen tall *combined with* the header above it --
+    // header height isn't a fixed number (it grows if the "link your
+    // account" banner is showing, and can wrap on a narrow viewport),
+    // so this measures the real gap above the intro panel and feeds
+    // it to a custom property that myscape.css's height calc uses.
+    (function () {
+      var intro = document.querySelector('.landing-anchor--intro');
+      if (!intro) return;
+
+      function sync() {
+        var above = intro.getBoundingClientRect().top + window.scrollY;
+        document.documentElement.style.setProperty('--landing-intro-above', above + 'px');
+      }
+
+      sync();
+      window.addEventListener('resize', sync);
+      // A late font swap (see @font-face's font-display: optional in
+      // myscape.css) can change the header's rendered height after
+      // this script's first pass -- re-measure once fonts settle.
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(sync);
+      }
     })();
     """
     # body_class="landing" scopes the scroll-snap CSS (see
