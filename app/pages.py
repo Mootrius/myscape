@@ -3626,10 +3626,6 @@ def render_mindmaps(player: Player) -> str:
         // pan.y back there once nothing needs that nudge any more --
         // see ensurePopoverVisible's own comment.
         popoverPanBaselineY: null,
-        // Same idea, one level up: the page's own window.scrollY
-        // scrollCanvasPopoverIntoView last nudged FROM -- see that
-        // function's own comment.
-        popoverScrollBaselineY: null,
         zoom: 1,
         lastLayout: null, // set by renderCanvas, read by zoomToFit
         // Per-mindmap edit history -- each entry is a full past
@@ -4040,74 +4036,29 @@ def render_mindmaps(player: Player) -> str:
         }
       }
 
-      // Same idea as scrollPickerIntoView (Purchase Goals, elsewhere in
-      // this file) but for the embedded (non-fullscreen) mindmap canvas.
-      // ensurePopoverVisible above only keeps a popover within
-      // .mm-canvas's OWN clipped box by panning the world -- it has no
-      // way to know whether .mm-canvas itself is currently scrolled
-      // below the *page's* fold. A popover can be perfectly placed
-      // inside the canvas and still be invisible to the player if the
-      // 620px-tall canvas box itself sits partly or wholly below where
-      // the outer page happens to be scrolled to. In full-browser view
-      // this never applies -- .mm-canvas is position: fixed covering
-      // the whole viewport there (see setFullscreen), and the page's
-      // own scroll is locked for the duration, so there's nothing for
-      // this to do.
-      //
-      // Deliberately measures .mm-canvas's OWN rect, not the popover's.
-      // The popover lives inside #mmWorld, which carries a 0.18s CSS
-      // transition on `transform` (see mindmaps.css) -- ensurePopoverVisible
-      // just above kicks that transition off via applyTransform(), and
-      // this runs in the very same tick, right after. Reading the
-      // popover's getBoundingClientRect() here would catch it mid
-      // flight, not where it's settling, and scrolling the page against
-      // that constantly-stale target is what produced the torn-looking
-      // popover: part of it snapped to size before the rest caught up.
-      // .mm-canvas itself never participates in that transform (only
-      // its #mmWorld child does), so its rect is stable to read at any
-      // instant -- and since ensurePopoverVisible already guarantees
-      // the popover settles somewhere inside .mm-canvas's own box,
-      // bringing that whole box on-page is a strictly safer target that
-      // sidesteps the race entirely.
-      //
-      // Mirrors ensurePopoverVisible's own popoverPanBaselineY handling
-      // one level up, for the PAGE's scroll position instead of the
-      // canvas's internal pan: MM.popoverScrollBaselineY is the
-      // window.scrollY this nudged FROM, set the first time a popover
-      // shows up after there wasn't one, and restored verbatim once a
-      // render finds no popover at all. Closing a popup that needed a
-      // page-scroll nudge used to just leave the page wherever this
-      // last scrolled it, because nothing ever put it back -- same
-      // "left panned/scrolled away with nothing to undo it" bug
-      // ensurePopoverVisible's own baseline already fixed for the
-      // internal pan, just one level up the chain and missed the first
-      // time around. Re-measuring against that baseline (rather than
-      // whatever scrollY already happens to be) also keeps clicking
-      // straight from one node to another from compounding, same
-      // reasoning as ensurePopoverVisible's own comment.
+      // Used to scroll the outer PAGE (as opposed to ensurePopoverVisible
+      // above, which only pans the canvas's own internal .mm-world) to
+      // bring an off-the-page-fold popover into view in the embedded
+      // (non-fullscreen) mindmap canvas -- deliberately a no-op now,
+      // by request: interacting with anything inside the canvas (open a
+      // popover, close it, switch from one node's to another's) must
+      // never move the page's own scroll position while not in
+      // full-browser view, even if that leaves a popover that opens
+      // near the bottom of a long page partly below the fold. The
+      // restore-on-close half of the old behavior (scrolling the page
+      // back to wherever it was before a popover nudged it) was landing
+      // wrong often enough to read as the canvas randomly jerking the
+      // whole page up and down on ordinary clicks -- simplest correct
+      // fix is to stop ever touching window.scrollY from here at all,
+      // not to chase that restore logic further. Kept as a real
+      // function (rather than deleted, with both call sites below
+      // removed) purely so those call sites don't need touching --
+      // still called in the same two places, still fullscreen-guarded
+      // below for anyone tracing this by log/breakpoint, it just no
+      // longer does anything.
       function scrollCanvasPopoverIntoView() {
         if (MM.fullscreen) return;
-        var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
-        if (!popover) {
-          if (MM.popoverScrollBaselineY != null) {
-            window.scrollTo({ top: MM.popoverScrollBaselineY, left: window.scrollX, behavior: 'smooth' });
-            MM.popoverScrollBaselineY = null;
-          }
-          return;
-        }
-        if (MM.popoverScrollBaselineY == null) MM.popoverScrollBaselineY = window.scrollY;
-        var canvas = document.getElementById('mmCanvas');
-        var MARGIN_BELOW = 40;
-        if (window.scrollY !== MM.popoverScrollBaselineY) {
-          window.scrollTo({ top: MM.popoverScrollBaselineY, left: window.scrollX, behavior: 'auto' });
-        }
-        var rect = canvas.getBoundingClientRect();
-        var overflowBelow = rect.bottom + MARGIN_BELOW - window.innerHeight;
-        if (overflowBelow > 0) {
-          window.scrollBy({ top: overflowBelow, left: 0, behavior: 'smooth' });
-        } else if (rect.top < 0) {
-          window.scrollBy({ top: rect.top - 24, left: 0, behavior: 'smooth' });
-        }
+        // Deliberately empty -- see the comment above.
       }
 
       // Fits the WHOLE tree's bounding box inside the current viewport
@@ -4219,27 +4170,29 @@ def render_mindmaps(player: Player) -> str:
         // "closing out" of fullscreen with a popup still open was
         // leaving cut off).
         //
-        // Both functions' own baselines are for the pan/scroll THIS
+        // ensurePopoverVisible's own baseline is for the pan THIS
         // popover session last nudged away from -- zoomToFit just
         // established a brand new resting pan/zoom for the canvas's new
         // size, so the OLD baseline (captured under the other canvas
-        // size entirely) is meaningless here. Clear both first so each
-        // function treats this as a fresh "no popover has nudged
-        // anything yet" starting point, same as when a popover first
-        // opens, rather than trying to restore toward a pan/scroll value
+        // size entirely) is meaningless here. Clear it first so
+        // ensurePopoverVisible treats this as a fresh "no popover has
+        // nudged anything yet" starting point, same as when a popover
+        // first opens, rather than trying to restore toward a pan value
         // that belonged to the canvas size this is leaving.
+        // (scrollCanvasPopoverIntoView had the same kind of baseline
+        // here once too, for the outer page's own scroll position --
+        // removed along with the rest of that function's body, see its
+        // own comment, so there's nothing left to reset for it.)
         if (MM.selectedNodeId) {
           MM.popoverPanBaselineY = null;
-          MM.popoverScrollBaselineY = null;
           // zoomToFit's own applyTransform() just kicked off .mm-world's
           // 0.18s CSS transition (see its own "carries a CSS transition"
           // comment) -- ensurePopoverVisible reading the popover's
           // getBoundingClientRect() right now would catch it mid flight,
-          // not where zoomToFit is actually sending it, the exact same
-          // stale-read trap scrollCanvasPopoverIntoView's own comment
-          // describes (this is just one call further up the chain: it
-          // measures .mm-canvas, which never bugs, but ensurePopoverVisible
-          // still measures the popover itself). Confirmed live in an
+          // not where zoomToFit is actually sending it. scrollCanvasPopoverIntoView
+          // is still called right after, same as every other render, but
+          // is a deliberate no-op now (see its own comment) -- nothing
+          // left downstream of it to race against. Confirmed live in an
           // isolated harness against these exact functions: without
           // this, the popover still ended up cut off after exiting
           // fullscreen, just less than before -- the internal pan nudge
