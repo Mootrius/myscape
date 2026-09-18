@@ -3622,9 +3622,12 @@ def render_mindmaps(player: Player) -> str:
         flippedNodeIds: new Set(),
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
-        // The pan.y ensurePopoverVisible last nudged FROM, so it can put
-        // pan.y back there once nothing needs that nudge any more --
-        // see ensurePopoverVisible's own comment.
+        // The pan.x/pan.y ensurePopoverVisible last nudged FROM, kept
+        // so repeated renders of the same still-open popover always
+        // re-measure overflow from the same starting point rather than
+        // compounding on top of the last render's own nudge -- see
+        // ensurePopoverVisible's own comment.
+        popoverPanBaselineX: null,
         popoverPanBaselineY: null,
         zoom: 1,
         lastLayout: null, // set by renderCanvas, read by zoomToFit
@@ -3967,11 +3970,13 @@ def render_mindmaps(player: Player) -> str:
       }
 
       // Nudges the pan (never the zoom) just enough that a freshly-
-      // opened popover's bottom edge clears .mm-canvas's own bottom
-      // edge, when the node it belongs to sits near the bottom of the
+      // opened popover's edges clear .mm-canvas's own edges, when the
+      // node it belongs to sits near the bottom (most common -- see
+      // POPOVER_HEIGHT_PAD's own comment on why a popover routinely
+      // reaches well past its node) OR off to either side of the
       // current view -- called after every render (see renderCanvas's
       // own post-render effect), since which node's selected and how
-      // tall its popover is (a bare swatch row vs. a full goal-
+      // tall/wide its popover is (a bare swatch row vs. a full goal-
       // criteria form) both change render to render. Deliberately
       // goes through MM.pan/applyTransform rather than leaving it to
       // the browser's own native "scroll the focused element into
@@ -3989,39 +3994,48 @@ def render_mindmaps(player: Player) -> str:
       // this canvas's own pan instead of the page's scroll, and never
       // shrinking/zooming the popover to force it to fit.
       //
-      // MM.popoverPanBaselineY is the pan.y this function is nudging
-      // FROM: set the first time a popover shows up after there wasn't
-      // one (or after the selection moved to a different node), and
-      // re-applied every render a popover stays open, so re-measuring
-      // overflow always starts from that same unnudged point rather
-      // than whatever pan.y the LAST render's own nudge left behind --
-      // that's what keeps clicking straight from one node to another,
-      // or typing into a field that re-renders the same popover, from
-      // compounding a fresh nudge on top of an already-nudged position.
+      // MM.popoverPanBaselineX/Y are the pan.x/pan.y this function is
+      // nudging FROM: set the first time a popover shows up after
+      // there wasn't one (or after the selection moved to a different
+      // node), and re-applied every render a popover stays open, so
+      // re-measuring overflow always starts from that same unnudged
+      // point rather than whatever pan the LAST render's own nudge
+      // left behind -- that's what keeps clicking straight from one
+      // node to another, or typing into a field that re-renders the
+      // same popover, from compounding a fresh nudge on top of an
+      // already-nudged position.
       //
       // Deliberately NOT restored on close any more (clicking out, or
       // Save/Delete deselecting the node) -- that used to snap pan.y
       // straight back to the baseline the instant the popover
       // disappeared, which read as its own awkward, unrequested jump
-      // right as the player closed out, and was removed by request.
-      // The baseline is still CLEARED on close, though, just never
-      // applied: leaving it set would make the very next popover to
-      // open immediately snap pan.y back to this now-stale value (the
-      // "if (MM.pan.y !== ...)" check a few lines down exists for
-      // exactly that re-baselining, and can't tell a stale leftover
-      // baseline apart from a live one it should actually be
-      // enforcing) -- clearing it here instead makes wherever pan.y
-      // happens to be resting, once nothing has it open, the fresh
-      // starting point for whichever node opens next.
+      // right as the player closed out, and was removed by request
+      // (never applied to pan.x either, for the same reason, from the
+      // start). Both baselines are still CLEARED on close, though,
+      // just never applied: leaving one set would make the very next
+      // popover to open immediately snap that axis's pan back to this
+      // now-stale value (the "if (MM.pan.y/x !== ...)" checks a few
+      // lines down exist for exactly that re-baselining, and can't
+      // tell a stale leftover baseline apart from a live one they
+      // should actually be enforcing) -- clearing them here instead
+      // makes wherever pan happens to be resting, once nothing has a
+      // popover open, the fresh starting point for whichever node
+      // opens next.
       function ensurePopoverVisible() {
         var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
         if (!popover) {
+          MM.popoverPanBaselineX = null;
           MM.popoverPanBaselineY = null;
           return;
         }
+        if (MM.popoverPanBaselineX == null) MM.popoverPanBaselineX = MM.pan.x;
         if (MM.popoverPanBaselineY == null) MM.popoverPanBaselineY = MM.pan.y;
         var canvas = document.getElementById('mmCanvas');
         var canvasRect = canvas.getBoundingClientRect();
+        if (MM.pan.x !== MM.popoverPanBaselineX) {
+          MM.pan.x = MM.popoverPanBaselineX;
+          applyTransform();
+        }
         if (MM.pan.y !== MM.popoverPanBaselineY) {
           MM.pan.y = MM.popoverPanBaselineY;
           applyTransform();
@@ -4035,6 +4049,21 @@ def render_mindmaps(player: Player) -> str:
           applyTransform();
         } else if (overflowAbove > 0) {
           MM.pan.y += overflowAbove;
+          applyTransform();
+        }
+        // Same idea, sideways -- a node isn't always near the vertical
+        // center of the tree, and the popover is centered under its
+        // node (see .mm-node-popover in mindmaps.css), so a node close
+        // to either edge of the current view can have its popover run
+        // past .mm-canvas's own left/right edge exactly the same way
+        // one near the bottom runs past the bottom edge above.
+        var overflowRight = popRect.right - (canvasRect.right - MARGIN);
+        var overflowLeft = (canvasRect.left + MARGIN) - popRect.left;
+        if (overflowRight > 0) {
+          MM.pan.x -= overflowRight;
+          applyTransform();
+        } else if (overflowLeft > 0) {
+          MM.pan.x += overflowLeft;
           applyTransform();
         }
       }
@@ -4173,11 +4202,11 @@ def render_mindmaps(player: Player) -> str:
         // "closing out" of fullscreen with a popup still open was
         // leaving cut off).
         //
-        // ensurePopoverVisible's own baseline is for the pan THIS
+        // ensurePopoverVisible's own baselines are for the pan THIS
         // popover session last nudged away from -- zoomToFit just
         // established a brand new resting pan/zoom for the canvas's new
-        // size, so the OLD baseline (captured under the other canvas
-        // size entirely) is meaningless here. Clear it first so
+        // size, so the OLD baselines (captured under the other canvas
+        // size entirely) are meaningless here. Clear both first so
         // ensurePopoverVisible treats this as a fresh "no popover has
         // nudged anything yet" starting point, same as when a popover
         // first opens, rather than trying to restore toward a pan value
@@ -4187,6 +4216,7 @@ def render_mindmaps(player: Player) -> str:
         // removed along with the rest of that function's body, see its
         // own comment, so there's nothing left to reset for it.)
         if (MM.selectedNodeId) {
+          MM.popoverPanBaselineX = null;
           MM.popoverPanBaselineY = null;
           // zoomToFit's own applyTransform() just kicked off .mm-world's
           // 0.18s CSS transition (see its own "carries a CSS transition"
