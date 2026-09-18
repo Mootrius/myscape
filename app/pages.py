@@ -3989,31 +3989,34 @@ def render_mindmaps(player: Player) -> str:
       // this canvas's own pan instead of the page's scroll, and never
       // shrinking/zooming the popover to force it to fit.
       //
-      // The nudge itself was never the bug -- leaving it in place once
-      // nothing justifies it any more was. Closing a popover that HAD
-      // needed one (clicking out, or Save/Delete deselecting the node)
-      // used to just leave pan.y wherever this last dragged it, because
-      // nothing ever put it back -- on a short-enough viewport that
-      // could permanently shove other nodes (even the root) off the
-      // top edge, with no further popover ever coming along to nudge
-      // it back into view. MM.popoverPanBaselineY is the pan.y this
-      // function is nudging FROM: set the first time a popover shows
-      // up after there wasn't one (or after the selection moved to a
-      // different node), and restored verbatim once a render finds no
-      // popover at all. Re-measuring against that baseline (rather
-      // than whatever pan.y already happens to be) is also what keeps
-      // clicking straight from one node to another from compounding --
-      // each popover's overflow is always measured from the same
-      // unnudged starting point, never from the last one's leftover
-      // nudge.
+      // MM.popoverPanBaselineY is the pan.y this function is nudging
+      // FROM: set the first time a popover shows up after there wasn't
+      // one (or after the selection moved to a different node), and
+      // re-applied every render a popover stays open, so re-measuring
+      // overflow always starts from that same unnudged point rather
+      // than whatever pan.y the LAST render's own nudge left behind --
+      // that's what keeps clicking straight from one node to another,
+      // or typing into a field that re-renders the same popover, from
+      // compounding a fresh nudge on top of an already-nudged position.
+      //
+      // Deliberately NOT restored on close any more (clicking out, or
+      // Save/Delete deselecting the node) -- that used to snap pan.y
+      // straight back to the baseline the instant the popover
+      // disappeared, which read as its own awkward, unrequested jump
+      // right as the player closed out, and was removed by request.
+      // The baseline is still CLEARED on close, though, just never
+      // applied: leaving it set would make the very next popover to
+      // open immediately snap pan.y back to this now-stale value (the
+      // "if (MM.pan.y !== ...)" check a few lines down exists for
+      // exactly that re-baselining, and can't tell a stale leftover
+      // baseline apart from a live one it should actually be
+      // enforcing) -- clearing it here instead makes wherever pan.y
+      // happens to be resting, once nothing has it open, the fresh
+      // starting point for whichever node opens next.
       function ensurePopoverVisible() {
         var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
         if (!popover) {
-          if (MM.popoverPanBaselineY != null) {
-            MM.pan.y = MM.popoverPanBaselineY;
-            MM.popoverPanBaselineY = null;
-            applyTransform();
-          }
+          MM.popoverPanBaselineY = null;
           return;
         }
         if (MM.popoverPanBaselineY == null) MM.popoverPanBaselineY = MM.pan.y;
