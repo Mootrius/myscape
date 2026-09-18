@@ -1103,7 +1103,7 @@ def render_purchase_goals(player: Player) -> str:
           overlayEl.style.display = 'none';
           bodyEl.style.display = 'none';
           emptyEl.style.display = '';
-          emptyEl.textContent = 'No gear setups yet -- use the menu above to create your first one.';
+          emptyEl.textContent = 'No gear setups yet \\u2014 click the button above to create one.';
           return;
         }
 
@@ -1621,6 +1621,26 @@ def render_purchase_goals(player: Player) -> str:
         wireSummaryDrag(customMode);
       }
 
+      // Nudges the CUSTOM sort button, the same way Mindmaps'
+      // glowEditModeButton nudges its own Edit Mode button when a node
+      // is clicked outside Edit Mode -- a "still to purchase" row only
+      // accepts a click/drag attempt at all in Custom sort mode (see
+      // wireSummaryDrag below); in any other mode that gesture
+      // currently does nothing on its own, so this points at the
+      // control that would actually let it do something instead of
+      // just silently going nowhere. Same remove-class/reflow/add-
+      // class dance as glowEditModeButton, for the same reason: it
+      // lets a second attempt mid-glow restart the pulse from the
+      // beginning instead of being ignored because the class was
+      // already present.
+      function glowCustomSortButton() {
+        var btn = document.querySelector('#pgSortButtons .sort-btn[data-sort-mode="custom"]');
+        if (!btn) return;
+        btn.classList.remove('glow');
+        void btn.offsetWidth;
+        btn.classList.add('glow');
+      }
+
       // Drag-and-drop reordering for the "custom" sort mode -- same
       // dragstart/dragend shape as wireSlotClicks' gear-slot dragging,
       // but rows now live-reorder as you drag over them (animateReorder
@@ -1630,8 +1650,20 @@ def render_purchase_goals(player: Player) -> str:
       // this one call, which is fine since renderSummaryList rebuilds
       // every row's markup (and rewires this) from scratch every render.
       function wireSummaryDrag(customMode) {
-        if (!customMode) return;
         var listEl = document.getElementById('pgSummaryList');
+        if (!customMode) {
+          // Rows outside Custom mode carry no draggable attribute at
+          // all (see renderSummaryList), so a native HTML5 drag can
+          // never actually start on one -- the only gesture that can
+          // ever reach a row here is a plain press. pointerdown (not
+          // click) to match glowEditModeButton's own trigger, and so
+          // this fires the instant a drag is attempted too, not only
+          // on a completed click.
+          listEl.querySelectorAll('.gear-summary-row').forEach(function (el) {
+            el.addEventListener('pointerdown', function () { glowCustomSortButton(); });
+          });
+          return;
+        }
         var draggedEl = null;
         var dropped = false;
 
@@ -2728,14 +2760,16 @@ def render_loot_tracker(player: Player) -> str:
         // ~1/7th of the chart's width (24 hourly buckets: every 4th,
         // same spacing the original 24-hour-only chart always used;
         // scales the same way for whatever bucket count the selected
-        // range's granularity produced). The last bucket gets "NOW"
-        // only when the range's own end is actually close to now (see
-        // isNowish) -- true for every preset, but not necessarily for
-        // a CUSTOM range picked in the past.
+        // range's granularity produced). The last bucket, when the
+        // range's own end is close to now (see isNowish), used to show
+        // a literal "NOW" instead of its own time/date -- now shows
+        // that real label like every other bucket does, just still
+        // marked with the "now" class in case that bucket ever needs
+        // its own distinct styling again.
         var labelStep = Math.max(1, Math.ceil(buckets.length / 7));
         var endIsNow = isNowish(rangeEnd);
         document.getElementById('lootBarXLabels').innerHTML = buckets.map(function (b, i) {
-          if (i === buckets.length - 1 && endIsNow) return '<div class="loot-bar-x-label now">NOW</div>';
+          if (i === buckets.length - 1 && endIsNow) return '<div class="loot-bar-x-label now">' + fmtBucketLabel(granularity, b.start) + '</div>';
           var label = (i % labelStep === 0) ? fmtBucketLabel(granularity, b.start) : '';
           return '<div class="loot-bar-x-label">' + label + '</div>';
         }).join('');
@@ -2815,7 +2849,7 @@ def render_loot_tracker(player: Player) -> str:
         emptyEl.style.display = 'none';
 
         function npcTitle(n) {
-          return n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kill' + (n.killCount === 1 ? '' : 's');
+          return n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kc';
         }
 
         // hiddenFlags folds into the key alongside everything else that
