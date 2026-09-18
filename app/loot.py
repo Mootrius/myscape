@@ -221,8 +221,13 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
     to item_icon_url (imported above from app/purchase_goals.py), which
     has an id-keyed mapping API to look item icons up in; NPCs have no
     equivalent, so this is a guess. Some bosses (multiple combat forms,
-    no single infobox image) will 404 -- the frontend quietly hides the
-    image when that happens, same as item icons already do.
+    e.g. the Alchemical Hydra's four elemental phases) have no single
+    portrait under that guessed name -- app/icon_cache.py's fetch step
+    falls back to whatever the wiki's own infobox lists as that NPC's
+    first version rather than just 404ing outright (see
+    _first_infobox_image there), so this only actually 404s, and the
+    frontend quietly hides the image the same way item icons already
+    do, for a genuinely missing/renamed icon.
 
     Routed through our own /icon-cache/<filename> route exactly like
     item_icon_url, rather than a direct wiki hotlink -- see

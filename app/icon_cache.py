@@ -85,10 +85,28 @@ a stale-past-Thursday icon is still served immediately, with its
 refresh happening in the background exactly as before -- there's no
 reason to make a request wait on a brand new fetch just because the
 cutoff passed, when what's on disk is still a perfectly good icon.
+
+A guessed "<Name>.png" can also 404 for a reason no amount of
+retrying/backoff fixes: some NPCs -- bosses with multiple combat forms
+especially, like the Alchemical Hydra's four elemental phases -- have
+no single canonical portrait under that name at all, only per-version
+ones the wiki's own infobox lists as image1/image2/etc. See
+_first_infobox_image below: rather than 404ing outright on one of
+these, _fetch_and_save now falls back to asking the wiki's own
+infobox wikitext which image it lists first, and caches THAT under
+the originally-guessed filename -- so this lookup only ever happens
+once per NPC (whatever fetch actually succeeds gets written to the
+same cache path future requests already check first), and it's a
+general fallback rather than a hydra-specific patch, so any other NPC
+hitting the same multi-version-portrait issue self-heals the same way
+without needing its own fix.
 """
+import json
 import os
+import re
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -104,6 +122,8 @@ from zoneinfo import ZoneInfo
 # change.
 USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 ICON_PATH_BASE = "https://oldschool.runescape.wiki/w/Special:FilePath"
+# Only reached when a guessed filename 404s -- see _first_infobox_image.
+WIKI_API_BASE = "https://oldschool.runescape.wiki/api.php"
 
 # ICON_CACHE_DIR overrides where this lives -- set in render.yaml to a
 # mounted persistent disk's path in production; unset (the normal case
@@ -187,15 +207,77 @@ def _is_fresh(filename: str) -> bool:
     return datetime.fromtimestamp(mtime, tz=_EASTERN) >= _thursday_cutoff()
 
 
+def _fetch_wiki_bytes(url: str) -> bytes:
+    """The actual GET, shared by the direct guess and the infobox
+    fallback below -- same content-type check either way, since a
+    dead-end redirect chain can still come back 200 with an HTML error
+    page rather than a real 404."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS) as resp:
+        content_type = resp.headers.get("Content-Type", "")
+        data = resp.read()
+    if not content_type.startswith("image/") or not data:
+        raise ValueError(f"unexpected icon response ({content_type!r}, {len(data)} bytes)")
+    return data
+
+
+# Matches an infobox's `image`/`image1`/`image2`/... parameter line and
+# captures the filename inside its [[File:...]] link -- e.g.
+# "|image1 = [[File:Alchemical Hydra (serpentine).png|x300px]]" captures
+# "Alchemical Hydra (serpentine).png". `search` (not `findall`) so this
+# naturally stops at the first one it finds, which for a multi-version
+# infobox is always image1 -- these templates list their versions in
+# order, image1 first -- and for a single-version one is just `image`.
+_INFOBOX_IMAGE_RE = re.compile(
+    r"\|\s*image\d*\s*=\s*\[\[\s*File\s*:\s*([^|\]]+?)\s*(?:\|[^\]]*)?\]\]",
+    re.IGNORECASE,
+)
+
+
+def _first_infobox_image(page_title: str) -> Optional[str]:
+    """Only called once a guessed "<page_title>.png" has already 404d.
+    Looks up that wiki page's own infobox wikitext and returns
+    whichever image it lists first -- i.e. whatever the wiki itself
+    treats as that NPC's primary/first version, the same one a visitor
+    landing on the page would see first. None if the page has no
+    infobox image at all (a genuinely missing/renamed icon, not the
+    multiple-combat-forms case this exists for) or can't be reached."""
+    url = (
+        WIKI_API_BASE
+        + "?action=parse&prop=wikitext&format=json&page="
+        + urllib.parse.quote(page_title)
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS) as resp:
+        payload = json.loads(resp.read())
+    wikitext = (payload.get("parse") or {}).get("wikitext", {}).get("*")
+    if not wikitext:
+        return None
+    match = _INFOBOX_IMAGE_RE.search(wikitext)
+    return match.group(1).strip() if match else None
+
+
 def _fetch_and_save(filename: str) -> None:
     url = ICON_PATH_BASE + "/" + urllib.parse.quote(filename)
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS) as resp:
-            content_type = resp.headers.get("Content-Type", "")
-            data = resp.read()
-        if not content_type.startswith("image/") or not data:
-            raise ValueError(f"unexpected icon response ({content_type!r}, {len(data)} bytes)")
+        try:
+            data = _fetch_wiki_bytes(url)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:
+                raise
+            # See _first_infobox_image's own docstring. Cache whatever
+            # this resolves to under the ORIGINALLY-requested filename
+            # (not the resolved one) -- every other piece of this
+            # module, and the /icon-cache/<filename> route calling it,
+            # only ever knows the guessed name, so this is what makes
+            # future requests for this same NPC keep resolving straight
+            # from disk without ever repeating this lookup.
+            base_title = re.sub(r"\.(png|gif|jpe?g)$", "", filename, flags=re.IGNORECASE)
+            fallback_name = _first_infobox_image(base_title)
+            if not fallback_name:
+                raise
+            fallback_url = ICON_PATH_BASE + "/" + urllib.parse.quote(fallback_name)
+            data = _fetch_wiki_bytes(fallback_url)
         # Write-then-rename rather than writing straight to the real
         # path -- os.replace is atomic on POSIX, so a request racing this
         # fetch always sees either the complete old file or the complete
