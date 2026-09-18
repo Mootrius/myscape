@@ -2760,16 +2760,14 @@ def render_loot_tracker(player: Player) -> str:
         // ~1/7th of the chart's width (24 hourly buckets: every 4th,
         // same spacing the original 24-hour-only chart always used;
         // scales the same way for whatever bucket count the selected
-        // range's granularity produced). The last bucket, when the
-        // range's own end is close to now (see isNowish), used to show
-        // a literal "NOW" instead of its own time/date -- now shows
-        // that real label like every other bucket does, just still
-        // marked with the "now" class in case that bucket ever needs
-        // its own distinct styling again.
+        // range's granularity produced). The last bucket gets "NOW"
+        // only when the range's own end is actually close to now (see
+        // isNowish) -- true for every preset, but not necessarily for
+        // a CUSTOM range picked in the past.
         var labelStep = Math.max(1, Math.ceil(buckets.length / 7));
         var endIsNow = isNowish(rangeEnd);
         document.getElementById('lootBarXLabels').innerHTML = buckets.map(function (b, i) {
-          if (i === buckets.length - 1 && endIsNow) return '<div class="loot-bar-x-label now">' + fmtBucketLabel(granularity, b.start) + '</div>';
+          if (i === buckets.length - 1 && endIsNow) return '<div class="loot-bar-x-label now">NOW</div>';
           var label = (i % labelStep === 0) ? fmtBucketLabel(granularity, b.start) : '';
           return '<div class="loot-bar-x-label">' + label + '</div>';
         }).join('');
