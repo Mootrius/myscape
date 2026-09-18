@@ -3428,6 +3428,19 @@ def render_mindmaps(player: Player) -> str:
       var COL_WIDTH = 190;   // horizontal spacing between sibling leaf columns
       var ROW_HEIGHT = 110;  // vertical spacing between depth levels
       var MARGIN = 60;       // breathing room around the whole tree inside the world
+      // A popover (.mm-node-popover, mindmaps.css) hangs below whichever
+      // node opened it, well outside that node's own NODE_HEIGHT box --
+      // for a node in the tree's LAST row, that routinely extends past
+      // #mmWorld's own height (see POPOVER_HEIGHT_PAD's use in
+      // renderCanvas for the full reasoning), since MARGIN above is only
+      // 60px of breathing room past the deepest row, nowhere near a
+      // popover's real height. The tallest popover content actually
+      // renders around 250-260px (a KC/ITEM goal's icon search + note
+      // field, or a SKILL goal's select+toggle row + target-validation
+      // line, each plus the Save/Delete row) -- 420 leaves comfortable
+      // headroom past that without needing to special-case which goal
+      // type is open.
+      var POPOVER_HEIGHT_PAD = 420;
 
       // Mirrors NODE_COLORS in app/mindmaps.py -- the fixed palette a
       // node's color can be (white is root-only, see that file's own
@@ -5229,8 +5242,23 @@ def render_mindmaps(player: Player) -> str:
         MM.lastLayout = layout;
 
         var world = document.getElementById('mmWorld');
+        // Width gets no extra padding -- a popover is only ever 250px
+        // wide (.mm-node-popover-wide) against a 160px node, centered,
+        // so it overhangs each side by 45px, comfortably inside
+        // MARGIN's existing 60px already baked into worldWidth. Height
+        // is the real problem: see POPOVER_HEIGHT_PAD's own comment.
+        // This padding applies unconditionally, on every render, not
+        // just while a popover happens to be open -- the moment that
+        // actually needs it most is the CLOSING one, where the popover
+        // has already been dropped from mm.nodes' own render pass by
+        // the time this runs (MM.selectedNodeId is already null), so
+        // there's no "a popover is open right now" flag left to key
+        // off here. Keeping #mmWorld's own box permanently tall enough
+        // sidesteps needing to track that at all: it just never gets
+        // small enough for a popover, on ANY node, to paint outside it
+        // in the first place, open OR just-closed.
         world.style.width = layout.worldWidth + 'px';
-        world.style.height = layout.worldHeight + 'px';
+        world.style.height = (layout.worldHeight + POPOVER_HEIGHT_PAD) + 'px';
 
         var nodesLayer = document.getElementById('mmNodesLayer');
         // Nodes aren't clickable at all outside Edit Mode (see the
