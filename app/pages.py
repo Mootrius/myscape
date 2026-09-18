@@ -4190,6 +4190,58 @@ def render_mindmaps(player: Player) -> str:
         btn.title = on ? 'Exit full-browser view' : 'Fill browser window';
         btn.innerHTML = on ? MM_FULLSCREEN_EXIT_ICON : MM_FULLSCREEN_ENTER_ICON;
         zoomToFit();
+        // zoomToFit just re-framed the WHOLE tree for the canvas's new
+        // size, with no idea a popover might be open -- ensurePopoverVisible
+        // and scrollCanvasPopoverIntoView normally handle keeping an open
+        // popover on screen, but both only ever run from the render()
+        // pipeline's own post-render effect, which entering/exiting
+        // fullscreen never goes through. Left alone, a popover that was
+        // open going into this call stays open coming out of it, parked
+        // wherever zoomToFit's brand new pan happens to land -- which,
+        // jumping between the fullscreen canvas and the much smaller
+        // embedded one, is essentially never still in view (confirmed
+        // live: exiting fullscreen with a popover open left it fully
+        // rendered but positioned entirely below the viewport, nothing
+        // ever having scrolled or panned to reveal it -- this is what
+        // "closing out" of fullscreen with a popup still open was
+        // leaving cut off).
+        //
+        // Both functions' own baselines are for the pan/scroll THIS
+        // popover session last nudged away from -- zoomToFit just
+        // established a brand new resting pan/zoom for the canvas's new
+        // size, so the OLD baseline (captured under the other canvas
+        // size entirely) is meaningless here. Clear both first so each
+        // function treats this as a fresh "no popover has nudged
+        // anything yet" starting point, same as when a popover first
+        // opens, rather than trying to restore toward a pan/scroll value
+        // that belonged to the canvas size this is leaving.
+        if (MM.selectedNodeId) {
+          MM.popoverPanBaselineY = null;
+          MM.popoverScrollBaselineY = null;
+          // zoomToFit's own applyTransform() just kicked off .mm-world's
+          // 0.18s CSS transition (see its own "carries a CSS transition"
+          // comment) -- ensurePopoverVisible reading the popover's
+          // getBoundingClientRect() right now would catch it mid flight,
+          // not where zoomToFit is actually sending it, the exact same
+          // stale-read trap scrollCanvasPopoverIntoView's own comment
+          // describes (this is just one call further up the chain: it
+          // measures .mm-canvas, which never bugs, but ensurePopoverVisible
+          // still measures the popover itself). Confirmed live in an
+          // isolated harness against these exact functions: without
+          // this, the popover still ended up cut off after exiting
+          // fullscreen, just less than before -- the internal pan nudge
+          // was landing on a wrong value computed from the pre-zoomToFit
+          // popover position. Force this whole "canvas just changed
+          // size, put the popover back in view" dance to land instantly
+          // -- there's no reason to glide through it anyway, since the
+          // canvas itself already jumps between fixed and absolute
+          // positioning with no transition of its own the instant
+          // fullscreen toggles.
+          mmWorldEl.style.transitionDuration = '0s';
+          ensurePopoverVisible();
+          scrollCanvasPopoverIntoView();
+          mmWorldEl.style.transitionDuration = '';
+        }
       }
 
       // Blurring a still-editing label (see commitActiveLabelIfEditing
