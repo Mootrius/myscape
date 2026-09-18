@@ -4023,6 +4023,33 @@ def render_mindmaps(player: Player) -> str:
         }
       }
 
+      // Same idea as scrollPickerIntoView (Purchase Goals, elsewhere in
+      // this file) but for the embedded (non-fullscreen) mindmap canvas.
+      // ensurePopoverVisible above only keeps a popover within
+      // .mm-canvas's OWN clipped box by panning the world -- it has no
+      // way to know whether .mm-canvas itself is currently scrolled
+      // below the *page's* fold. A popover can be perfectly placed
+      // inside the canvas and still be invisible to the player if the
+      // 620px-tall canvas box itself sits partly or wholly below where
+      // the outer page happens to be scrolled to. In full-browser view
+      // this never applies -- .mm-canvas is position: fixed covering
+      // the whole viewport there (see setFullscreen), and the page's
+      // own scroll is locked for the duration, so there's nothing for
+      // this to do.
+      function scrollCanvasPopoverIntoView() {
+        if (MM.fullscreen) return;
+        var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
+        if (!popover) return;
+        var MARGIN_BELOW = 40;
+        var rect = popover.getBoundingClientRect();
+        var overflowBelow = rect.bottom + MARGIN_BELOW - window.innerHeight;
+        if (overflowBelow > 0) {
+          window.scrollBy({ top: overflowBelow, left: 0, behavior: 'smooth' });
+        } else if (rect.top < 0) {
+          window.scrollBy({ top: rect.top - 24, left: 0, behavior: 'smooth' });
+        }
+      }
+
       // Fits the WHOLE tree's bounding box inside the current viewport
       // -- picks whichever of width/height is the tighter constraint,
       // clamped to the same 0.4-2 zoom range as everything else, then
@@ -5339,6 +5366,13 @@ def render_mindmaps(player: Player) -> str:
             }
           }
           ensurePopoverVisible();
+          // Run after ensurePopoverVisible, not before -- it needs the
+          // popover's FINAL post-pan position, and this scroll is a
+          // separate, later concern from the preventScroll above (that
+          // one is about not fighting the internal canvas pan; this one
+          // is about the outer page never getting scrolled at all, since
+          // preventScroll suppresses the browser's own native attempt).
+          scrollCanvasPopoverIntoView();
         }, 0);
 
         var svg = document.getElementById('mmLines');
