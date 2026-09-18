@@ -4036,12 +4036,29 @@ def render_mindmaps(player: Player) -> str:
       // the whole viewport there (see setFullscreen), and the page's
       // own scroll is locked for the duration, so there's nothing for
       // this to do.
+      //
+      // Deliberately measures .mm-canvas's OWN rect, not the popover's.
+      // The popover lives inside #mmWorld, which carries a 0.18s CSS
+      // transition on `transform` (see mindmaps.css) -- ensurePopoverVisible
+      // just above kicks that transition off via applyTransform(), and
+      // this runs in the very same tick, right after. Reading the
+      // popover's getBoundingClientRect() here would catch it mid
+      // flight, not where it's settling, and scrolling the page against
+      // that constantly-stale target is what produced the torn-looking
+      // popover: part of it snapped to size before the rest caught up.
+      // .mm-canvas itself never participates in that transform (only
+      // its #mmWorld child does), so its rect is stable to read at any
+      // instant -- and since ensurePopoverVisible already guarantees
+      // the popover settles somewhere inside .mm-canvas's own box,
+      // bringing that whole box on-page is a strictly safer target that
+      // sidesteps the race entirely.
       function scrollCanvasPopoverIntoView() {
         if (MM.fullscreen) return;
         var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
         if (!popover) return;
+        var canvas = document.getElementById('mmCanvas');
         var MARGIN_BELOW = 40;
-        var rect = popover.getBoundingClientRect();
+        var rect = canvas.getBoundingClientRect();
         var overflowBelow = rect.bottom + MARGIN_BELOW - window.innerHeight;
         if (overflowBelow > 0) {
           window.scrollBy({ top: overflowBelow, left: 0, behavior: 'smooth' });
