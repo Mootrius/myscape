@@ -3609,6 +3609,10 @@ def render_mindmaps(player: Player) -> str:
         flippedNodeIds: new Set(),
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
+        // The pan.y ensurePopoverVisible last nudged FROM, so it can put
+        // pan.y back there once nothing needs that nudge any more --
+        // see ensurePopoverVisible's own comment.
+        popoverPanBaselineY: null,
         zoom: 1,
         lastLayout: null, // set by renderCanvas, read by zoomToFit
         // Per-mindmap edit history -- each entry is a full past
@@ -3971,11 +3975,41 @@ def render_mindmaps(player: Player) -> str:
       // elsewhere on the site (see its own comment) -- just through
       // this canvas's own pan instead of the page's scroll, and never
       // shrinking/zooming the popover to force it to fit.
+      //
+      // The nudge itself was never the bug -- leaving it in place once
+      // nothing justifies it any more was. Closing a popover that HAD
+      // needed one (clicking out, or Save/Delete deselecting the node)
+      // used to just leave pan.y wherever this last dragged it, because
+      // nothing ever put it back -- on a short-enough viewport that
+      // could permanently shove other nodes (even the root) off the
+      // top edge, with no further popover ever coming along to nudge
+      // it back into view. MM.popoverPanBaselineY is the pan.y this
+      // function is nudging FROM: set the first time a popover shows
+      // up after there wasn't one (or after the selection moved to a
+      // different node), and restored verbatim once a render finds no
+      // popover at all. Re-measuring against that baseline (rather
+      // than whatever pan.y already happens to be) is also what keeps
+      // clicking straight from one node to another from compounding --
+      // each popover's overflow is always measured from the same
+      // unnudged starting point, never from the last one's leftover
+      // nudge.
       function ensurePopoverVisible() {
         var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
-        if (!popover) return;
+        if (!popover) {
+          if (MM.popoverPanBaselineY != null) {
+            MM.pan.y = MM.popoverPanBaselineY;
+            MM.popoverPanBaselineY = null;
+            applyTransform();
+          }
+          return;
+        }
+        if (MM.popoverPanBaselineY == null) MM.popoverPanBaselineY = MM.pan.y;
         var canvas = document.getElementById('mmCanvas');
         var canvasRect = canvas.getBoundingClientRect();
+        if (MM.pan.y !== MM.popoverPanBaselineY) {
+          MM.pan.y = MM.popoverPanBaselineY;
+          applyTransform();
+        }
         var popRect = popover.getBoundingClientRect();
         var MARGIN = 16;
         var overflowBelow = popRect.bottom - (canvasRect.bottom - MARGIN);
