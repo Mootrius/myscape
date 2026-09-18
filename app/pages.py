@@ -3613,6 +3613,10 @@ def render_mindmaps(player: Player) -> str:
         // pan.y back there once nothing needs that nudge any more --
         // see ensurePopoverVisible's own comment.
         popoverPanBaselineY: null,
+        // Same idea, one level up: the page's own window.scrollY
+        // scrollCanvasPopoverIntoView last nudged FROM -- see that
+        // function's own comment.
+        popoverScrollBaselineY: null,
         zoom: 1,
         lastLayout: null, // set by renderCanvas, read by zoomToFit
         // Per-mindmap edit history -- each entry is a full past
@@ -4052,12 +4056,38 @@ def render_mindmaps(player: Player) -> str:
       // the popover settles somewhere inside .mm-canvas's own box,
       // bringing that whole box on-page is a strictly safer target that
       // sidesteps the race entirely.
+      //
+      // Mirrors ensurePopoverVisible's own popoverPanBaselineY handling
+      // one level up, for the PAGE's scroll position instead of the
+      // canvas's internal pan: MM.popoverScrollBaselineY is the
+      // window.scrollY this nudged FROM, set the first time a popover
+      // shows up after there wasn't one, and restored verbatim once a
+      // render finds no popover at all. Closing a popup that needed a
+      // page-scroll nudge used to just leave the page wherever this
+      // last scrolled it, because nothing ever put it back -- same
+      // "left panned/scrolled away with nothing to undo it" bug
+      // ensurePopoverVisible's own baseline already fixed for the
+      // internal pan, just one level up the chain and missed the first
+      // time around. Re-measuring against that baseline (rather than
+      // whatever scrollY already happens to be) also keeps clicking
+      // straight from one node to another from compounding, same
+      // reasoning as ensurePopoverVisible's own comment.
       function scrollCanvasPopoverIntoView() {
         if (MM.fullscreen) return;
         var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
-        if (!popover) return;
+        if (!popover) {
+          if (MM.popoverScrollBaselineY != null) {
+            window.scrollTo({ top: MM.popoverScrollBaselineY, left: window.scrollX, behavior: 'smooth' });
+            MM.popoverScrollBaselineY = null;
+          }
+          return;
+        }
+        if (MM.popoverScrollBaselineY == null) MM.popoverScrollBaselineY = window.scrollY;
         var canvas = document.getElementById('mmCanvas');
         var MARGIN_BELOW = 40;
+        if (window.scrollY !== MM.popoverScrollBaselineY) {
+          window.scrollTo({ top: MM.popoverScrollBaselineY, left: window.scrollX, behavior: 'auto' });
+        }
         var rect = canvas.getBoundingClientRect();
         var overflowBelow = rect.bottom + MARGIN_BELOW - window.innerHeight;
         if (overflowBelow > 0) {
