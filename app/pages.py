@@ -7089,12 +7089,25 @@ def render_possessions(player: Player) -> str:
       var SORT_DEFAULT_DIR = { alpha: 'asc', qty: 'desc', ge: 'desc', ha: 'desc', tradeable: 'desc' };
 
       // GE VALUE, highest stack first, is the default sort on load.
+      //
+      // locations/enabledStorages below MUST list every one of
+      // POSSESSION_STORAGE_KEYS in app/schemas.py -- a key missing from
+      // either object reads as `undefined` (falsy) forever, which looks
+      // exactly like the storage being off: shownQuantity zeroes it out,
+      // updateFilterButtonVisibility hides its whole filter button (if
+      // every key in its group is missing/off), and every loadSummary
+      // poll's applyHiddenStorageKeys call re-unchecks its settings
+      // checkbox even after the player checks it back on (Object.keys
+      // only walks the keys that exist here, but the checkbox-sync loop
+      // right below still visits every checkbox in the DOM). Huntsman's
+      // Kit and Boat Cargo shipped without being added here and hit
+      // exactly this -- selecting them appeared to instantly revert.
       var state = {
         items: [],
         search: '',
         sortKey: 'ge',
         sortDir: 'desc',
-        locations: { bank: true, potion_storage: true, seed_vault: true, poh: true, equipment: true, inventory: true, looting_bag: true, rune_pouch: true, tackle_box: true, forestry_kit: true, master_scroll_book: true, seed_box: true },
+        locations: { bank: true, potion_storage: true, seed_vault: true, poh: true, boat_cargo: true, equipment: true, inventory: true, looting_bag: true, rune_pouch: true, tackle_box: true, forestry_kit: true, master_scroll_book: true, seed_box: true, huntsmans_kit: true },
         // Persisted server-side (HiddenPossessionStorage, app/models.py)
         // -- separate from `locations` above, which is a purely
         // transient, resets-on-reload show/hide filter. This one
@@ -7103,7 +7116,7 @@ def render_possessions(player: Player) -> str:
         // filter buttons' own state -- see applyHiddenStorageKeys,
         // which syncs it (and every settings-menu checkbox) from
         // whatever loadSummary's own poll last saw.
-        enabledStorages: { bank: true, potion_storage: true, seed_vault: true, poh: true, equipment: true, inventory: true, looting_bag: true, rune_pouch: true, tackle_box: true, forestry_kit: true, master_scroll_book: true, seed_box: true },
+        enabledStorages: { bank: true, potion_storage: true, seed_vault: true, poh: true, boat_cargo: true, equipment: true, inventory: true, looting_bag: true, rune_pouch: true, tackle_box: true, forestry_kit: true, master_scroll_book: true, seed_box: true, huntsmans_kit: true },
       };
 
       function showError(msg) {
