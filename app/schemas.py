@@ -103,6 +103,10 @@ class ResetPasswordRequest(BaseModel):
         return value
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
 class LinkStartResponse(BaseModel):
     code: str
     expires_at: datetime

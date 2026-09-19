@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import (
     get_current_player_from_api_key,
-    get_current_player_from_session,
+    get_current_verified_player_from_session,
     get_optional_current_player_from_session,
 )
 from app.database import get_db
@@ -83,6 +83,8 @@ from app.pages import (
     render_purchase_goals,
     render_reset_password,
     render_signup,
+    render_verify_email,
+    render_verify_email_required,
 )
 from app.possessions import (
     build_possessions_summary,
@@ -419,7 +421,31 @@ def reset_password_page(player: Optional[Player] = Depends(get_optional_current_
 def dashboard_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
+    if not player.email_verified_at:
+        return RedirectResponse("/verify-email-required", status_code=302)
     return render_dashboard(player)
+
+
+@app.get("/verify-email-required", response_class=HTMLResponse)
+def verify_email_required_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    if player.email_verified_at:
+        # Nothing left to do here -- most likely they already verified
+        # in another tab, or followed a bookmarked/stale link.
+        return RedirectResponse("/dashboard", status_code=302)
+    return render_verify_email_required(player)
+
+
+@app.get("/verify-email", response_class=HTMLResponse)
+def verify_email_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    # No redirect-if-already-verified or redirect-if-logged-out here,
+    # same reasoning as reset_password_page's own comment -- the token
+    # itself is read client-side from the URL's query string (see
+    # render_verify_email's own script), and someone clicking a
+    # confirmation link from their email isn't necessarily still in the
+    # same browser session (or any session at all) that signed up.
+    return render_verify_email()
 
 
 @app.get("/api/health")
@@ -508,7 +534,7 @@ def sync_bank(
 
 
 @app.get("/api/players/me/bank", response_model=BankOut)
-def read_bank(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_bank(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """The website's own read of the last-synced bank snapshot --
     session-authenticated (unlike the POST above), since it's the
     website reading this back, not the plugin writing it. Nothing in
@@ -549,7 +575,7 @@ def sync_inventory(
 
 
 @app.get("/api/players/me/inventory", response_model=InventoryOut)
-def read_inventory(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_inventory(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the
     inventory instead."""
     items = db.query(InventoryItem).filter(InventoryItem.player_id == player.id).order_by(InventoryItem.item_id).all()
@@ -589,7 +615,7 @@ def sync_equipment(
 
 
 @app.get("/api/players/me/equipment", response_model=EquipmentOut)
-def read_equipment(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_equipment(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for worn
     equipment instead."""
     items = db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).order_by(EquipmentItem.slot).all()
@@ -634,7 +660,7 @@ def sync_potion_storage(
 
 
 @app.get("/api/players/me/potion-storage", response_model=PotionStorageOut)
-def read_potion_storage(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_potion_storage(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for potion
     storage instead."""
     items = (
@@ -685,7 +711,7 @@ def sync_rune_pouch(
 
 
 @app.get("/api/players/me/rune-pouch", response_model=RunePouchOut)
-def read_rune_pouch(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_rune_pouch(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the rune
     pouch instead."""
     items = (
@@ -729,7 +755,7 @@ def sync_seed_vault(
 
 
 @app.get("/api/players/me/seed-vault", response_model=SeedVaultOut)
-def read_seed_vault(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_seed_vault(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the seed
     vault instead."""
     items = (
@@ -772,7 +798,7 @@ def sync_looting_bag(
 
 
 @app.get("/api/players/me/looting-bag", response_model=LootingBagOut)
-def read_looting_bag(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_looting_bag(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the looting
     bag instead."""
     items = (
@@ -815,7 +841,7 @@ def sync_tackle_box(
 
 
 @app.get("/api/players/me/tackle-box", response_model=TackleBoxOut)
-def read_tackle_box(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_tackle_box(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the Tackle
     Box instead."""
     items = (
@@ -860,7 +886,7 @@ def sync_poh(
 
 
 @app.get("/api/players/me/poh", response_model=PohOut)
-def read_poh(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_poh(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the whole
     PoH Costume Room instead."""
     items = (
@@ -904,7 +930,7 @@ def sync_forestry_kit(
 
 
 @app.get("/api/players/me/forestry-kit", response_model=ForestryKitOut)
-def read_forestry_kit(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_forestry_kit(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the
     Forestry Kit instead."""
     items = (
@@ -950,7 +976,7 @@ def sync_master_scroll_book(
 
 
 @app.get("/api/players/me/master-scroll-book", response_model=MasterScrollBookOut)
-def read_master_scroll_book(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_master_scroll_book(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the
     Master Scroll Book instead."""
     items = (
@@ -993,7 +1019,7 @@ def sync_seed_box(
 
 
 @app.get("/api/players/me/seed-box", response_model=SeedBoxOut)
-def read_seed_box(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_seed_box(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the Seed
     Box instead."""
     items = (
@@ -1037,7 +1063,7 @@ def sync_huntsmans_kit(
 
 
 @app.get("/api/players/me/huntsmans-kit", response_model=HuntsmansKitOut)
-def read_huntsmans_kit(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_huntsmans_kit(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for the
     Huntsman's Kit instead."""
     items = (
@@ -1091,7 +1117,7 @@ def sync_boat_cargo(
 
 
 @app.get("/api/players/me/boat-cargo", response_model=BoatCargoOut)
-def read_boat_cargo(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def read_boat_cargo(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Same contract as GET /api/players/me/bank above, for every one of
     the player's boats' cargo combined -- unlike every other single-
     container GET here, this one has no per-slot equivalent of its own
@@ -1148,7 +1174,7 @@ def sync_skills(
 
 
 @app.get("/api/players/me/skills")
-def read_skills(player: Player = Depends(get_current_player_from_session)):
+def read_skills(player: Player = Depends(get_current_verified_player_from_session)):
     """The website's own read of the last-synced skills snapshot --
     session-authenticated like every other GET here."""
     return {"skills": player.skills or {}}
@@ -1174,7 +1200,7 @@ def sync_quests(
 
 
 @app.get("/api/players/me/quests")
-def read_quests(player: Player = Depends(get_current_player_from_session)):
+def read_quests(player: Player = Depends(get_current_verified_player_from_session)):
     """The website's own read of the last-synced completed-quests
     snapshot -- session-authenticated like every other GET here."""
     return {"completedQuests": player.completed_quests or []}
@@ -1203,7 +1229,7 @@ def sync_diaries(
 
 
 @app.get("/api/players/me/diaries")
-def read_diaries(player: Player = Depends(get_current_player_from_session)):
+def read_diaries(player: Player = Depends(get_current_verified_player_from_session)):
     """The website's own read of the last-synced diary-tiers snapshot
     -- session-authenticated like every other GET here."""
     return {"diaryTiers": player.diary_tiers or {}}
@@ -1238,7 +1264,7 @@ def read_loot(
     start: Optional[str] = None,
     end: Optional[str] = None,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """The combined state the Loot Tracker page polls -- the bar
     chart's buckets and a per-NPC breakdown of the same range,
@@ -1272,7 +1298,7 @@ def read_loot(
 
 
 @app.post("/api/players/me/loot/hidden-npcs")
-def hide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def hide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Hides one NPC from Loot Tracker -- the eye button on an NPC
     tile's hover corner in render_loot_tracker, app/pages.py. See
     set_npc_hidden in app/loot.py for what this actually removes from
@@ -1282,7 +1308,7 @@ def hide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), pl
 
 
 @app.delete("/api/players/me/loot/hidden-npcs")
-def unhide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def unhide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Reverses hide_loot_npc above -- the same eye button, now shown on
     a dimmed (already-hidden) tile once the panel's own "show hidden"
     toggle has revealed it."""
@@ -1291,7 +1317,7 @@ def unhide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), 
 
 
 @app.post("/api/players/me/loot/hidden-items")
-def hide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def hide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Hides one item from Loot Tracker -- same eye-button affordance as
     hide_loot_npc above, one level down (see set_item_hidden in
     app/loot.py)."""
@@ -1300,7 +1326,7 @@ def hide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), 
 
 
 @app.delete("/api/players/me/loot/hidden-items")
-def unhide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def unhide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Reverses hide_loot_item above -- same relationship as
     unhide_loot_npc has to hide_loot_npc."""
     set_item_hidden(db, player, payload.item_id, payload.item_name, False)
@@ -1308,7 +1334,7 @@ def unhide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db)
 
 
 @app.get("/api/items/search", response_model=ItemSearchResponse)
-def item_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
+def item_search(q: str = "", player: Player = Depends(get_current_verified_player_from_session)):
     """Backs the gear-setup slot picker's search box (see
     app/purchase_goals.py's search_items -- ported from Maintrius's own
     search_items in osrs_tracker.py) -- session-authenticated like every
@@ -1318,7 +1344,7 @@ def item_search(q: str = "", player: Player = Depends(get_current_player_from_se
 
 
 @app.get("/api/npcs/search", response_model=NpcSearchResponse)
-def npc_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
+def npc_search(q: str = "", player: Player = Depends(get_current_verified_player_from_session)):
     """Backs the Mindmaps KC goal's NPC search field (see
     app/npc_names.py) -- session-authenticated like item_search above,
     since only the website UI calls this."""
@@ -1326,7 +1352,7 @@ def npc_search(q: str = "", player: Player = Depends(get_current_player_from_ses
 
 
 @app.get("/api/quests/search", response_model=QuestSearchResponse)
-def quest_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
+def quest_search(q: str = "", player: Player = Depends(get_current_verified_player_from_session)):
     """Backs the Mindmaps QUEST goal's quest/miniquest search field
     (see app/quest_names.py) -- session-authenticated like
     item_search above, since only the website UI calls this."""
@@ -1337,6 +1363,8 @@ def quest_search(q: str = "", player: Player = Depends(get_current_player_from_s
 def purchase_goals_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
+    if not player.email_verified_at:
+        return RedirectResponse("/verify-email-required", status_code=302)
     return render_purchase_goals(player)
 
 
@@ -1344,6 +1372,8 @@ def purchase_goals_page(player: Optional[Player] = Depends(get_optional_current_
 def loot_tracker_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
+    if not player.email_verified_at:
+        return RedirectResponse("/verify-email-required", status_code=302)
     return render_loot_tracker(player)
 
 
@@ -1351,6 +1381,8 @@ def loot_tracker_page(player: Optional[Player] = Depends(get_optional_current_pl
 def mindmaps_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
+    if not player.email_verified_at:
+        return RedirectResponse("/verify-email-required", status_code=302)
     return render_mindmaps(player)
 
 
@@ -1358,11 +1390,13 @@ def mindmaps_page(player: Optional[Player] = Depends(get_optional_current_player
 def possessions_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
+    if not player.email_verified_at:
+        return RedirectResponse("/verify-email-required", status_code=302)
     return render_possessions(player)
 
 
 @app.get("/api/possessions/search-items", response_model=ItemSearchResponse)
-def possessions_item_search(q: str = "", player: Player = Depends(get_current_player_from_session)):
+def possessions_item_search(q: str = "", player: Player = Depends(get_current_verified_player_from_session)):
     """Backs the min/max tracker "add an item" search field on the
     Storages Viewer page -- session-authenticated like
     item_search above, since only the website UI calls this. Unlike
@@ -1373,7 +1407,7 @@ def possessions_item_search(q: str = "", player: Player = Depends(get_current_pl
 
 
 @app.get("/api/possessions/summary")
-def possessions_summary(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def possessions_summary(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Section 3's payload -- every item currently owned in any synced
     storage, priced and broken down by location (see
     build_possessions_summary in app/possessions.py). Not pinned to a
@@ -1384,7 +1418,7 @@ def possessions_summary(db: Session = Depends(get_db), player: Player = Depends(
 
 
 @app.get("/api/possessions/trackers")
-def possessions_trackers(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def possessions_trackers(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Sections 1/2's combined payload -- both the minimum and maximum
     trackers the player has set up, each already resolved against a
     live owned-quantity count (see build_trackers_state in
@@ -1396,7 +1430,7 @@ def possessions_trackers(db: Session = Depends(get_db), player: Player = Depends
 def create_possession_tracker(
     payload: PossessionTrackerIn,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Adds one new min or max tracker. item_name is whatever the
     search result the player picked carried (see
@@ -1440,7 +1474,7 @@ def update_possession_tracker(
     tracker_id: uuid.UUID,
     payload: PossessionTrackerUpdate,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Edits an existing tracker's target quantity in place -- the only
     thing the page's own UI ever lets a player change about one after
@@ -1462,7 +1496,7 @@ def update_possession_tracker(
 def delete_possession_tracker(
     tracker_id: uuid.UUID,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     tracker = (
         db.query(PossessionTracker)
@@ -1479,7 +1513,7 @@ def delete_possession_tracker(
 def pin_possession_item(
     item_id: int,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Pins one item to the top of section 3's list (see
     PinnedPossessionItem's own docstring in app/models.py, and the pin
@@ -1507,7 +1541,7 @@ def pin_possession_item(
 def unpin_possession_item(
     item_id: int,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Unpins one item -- same idempotent shape as pin_possession_item
     above, a no-op rather than a 404 if it wasn't pinned to begin with."""
@@ -1522,7 +1556,7 @@ def unpin_possession_item(
 def hide_possession_storage(
     storage_key: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Switches one storage source off in Storages Viewer's
     settings menu (see HiddenPossessionStorage's own docstring in
@@ -1540,7 +1574,7 @@ def hide_possession_storage(
 def unhide_possession_storage(
     storage_key: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Reverses hide_possession_storage above -- same idempotent shape
     as unpin_possession_item."""
@@ -1551,7 +1585,7 @@ def unhide_possession_storage(
 
 
 @app.get("/api/gear-setups")
-def list_gear_setups(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def list_gear_setups(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """The combined state the Purchase Goals page polls (see
     app/purchase_goals.py's build_purchase_goals_state, ported from
     Maintrius's own build_state in osrs_tracker.py) -- every one of the
@@ -1569,7 +1603,7 @@ def list_gear_setups(db: Session = Depends(get_db), player: Player = Depends(get
 def create_gear_setup(
     payload: CreateGearSetupRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     name = (payload.name or "").strip() or "New Setup"
     setup = GearSetup(player_id=player.id, name=name, equipment={}, inventory=[None] * INVENTORY_SIZE)
@@ -1582,7 +1616,7 @@ def create_gear_setup(
 def set_gear_setup_order(
     payload: SetGearSetupOrderRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Saves a drag-and-drop reorder of the player's gear setup LIST
     itself (the icon row above the gear frame -- contrast
@@ -1629,7 +1663,7 @@ def rename_gear_setup(
     setup_id: str,
     payload: RenameGearSetupRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     setup = _get_owned_gear_setup(db, player, setup_id)
     setup.name = payload.name
@@ -1641,7 +1675,7 @@ def rename_gear_setup(
 def delete_gear_setup(
     setup_id: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     setup = _get_owned_gear_setup(db, player, setup_id)
     db.delete(setup)
@@ -1654,7 +1688,7 @@ def set_gear_setup_icon(
     setup_id: str,
     payload: SetGearSetupIconRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Sets (or, with icon omitted/null, clears) the display-only icon
     shown next to a setup's total cost -- purely cosmetic, never affects
@@ -1674,7 +1708,7 @@ def set_gear_slot(
     setup_id: str,
     payload: SetGearSlotRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Fills (or, with item omitted/null, clears) one equipment or
     inventory slot of a gear setup -- see SetGearSlotRequest/
@@ -1793,7 +1827,7 @@ def move_gear_slot_item(
     setup_id: str,
     payload: MoveGearSlotItemRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Drag-and-drop: moves whatever's stored in (from_slot_type,
     from_slot) into (to_slot_type, to_slot), across equipment and
@@ -1840,7 +1874,7 @@ def set_still_to_purchase_sort(
     setup_id: str,
     payload: SetStillToPurchaseSortRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Switches which of the buttons above a setup's "Still to
     Purchase" list is active -- see STILL_TO_PURCHASE_SORT_MODES in
@@ -1861,7 +1895,7 @@ def set_still_to_purchase_order(
     setup_id: str,
     payload: SetStillToPurchaseOrderRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Saves a drag-and-drop reorder of a setup's "Still to Purchase"
     list -- payload.order is the complete list as currently displayed
@@ -1915,7 +1949,7 @@ def _build_goal_context(db: Session, player: Player) -> dict:
 
 
 @app.get("/api/mindmaps")
-def list_mindmaps(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+def list_mindmaps(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
     """Every one of the player's mindmaps, each with its full node list
     -- see build_mindmaps_state in app/mindmaps.py. Not pinned to a
     Pydantic response_model, same reasoning as GET /api/gear-setups
@@ -1927,7 +1961,7 @@ def list_mindmaps(db: Session = Depends(get_db), player: Player = Depends(get_cu
 def create_mindmap(
     payload: CreateMindMapRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     name = (payload.name or "").strip() or "New Mindmap"
     mindmap = MindMap(player_id=player.id, name=name, nodes=[new_root_node(name)])
@@ -1956,7 +1990,7 @@ def rename_mindmap(
     mindmap_id: str,
     payload: RenameMindMapRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     mindmap.name = payload.name
@@ -1968,7 +2002,7 @@ def rename_mindmap(
 def delete_mindmap(
     mindmap_id: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     db.delete(mindmap)
@@ -1981,7 +2015,7 @@ def add_mindmap_node(
     mindmap_id: str,
     payload: AddMindMapNodeRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     try:
@@ -2005,7 +2039,7 @@ def add_mindmap_shared_child(
     mindmap_id: str,
     payload: AddMindMapSharedChildRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """The node canvas's shift-click multi-select: adds one new node as
     a shared child connected below two or more existing ones -- see
@@ -2027,7 +2061,7 @@ def replace_mindmap_nodes(
     mindmap_id: str,
     payload: ReplaceMindMapNodesRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Restores a mindmap's whole node tree to a previously-seen
     snapshot -- what the node canvas's undo/redo buttons use (see
@@ -2048,7 +2082,7 @@ def update_mindmap_node(
     node_id: str,
     payload: UpdateMindMapNodeRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     try:
@@ -2065,7 +2099,7 @@ def set_mindmap_node_goal(
     node_id: str,
     payload: SetMindMapNodeGoalRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Saves a node's goal fields -- the per-color forms described in
     app/mindmaps.py's clean_goal docstring (kc target + activity for
@@ -2099,7 +2133,7 @@ def delete_mindmap_node(
     mindmap_id: str,
     node_id: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     mindmap = _get_owned_mindmap(db, player, mindmap_id)
     try:

@@ -107,8 +107,15 @@ def _link_banner(player: Optional[Player]) -> str:
     shared script uses its presence to decide whether to poll for the
     link completing (see that function) and reload once it has, since
     the actual linking click happens over in the RuneLite plugin, which
-    has no way to tell this browser tab about it directly."""
-    if not player or player.account_hash:
+    has no way to tell this browser tab about it directly. Also hidden
+    for a not-yet-verified player -- GENERATE CODE calls
+    POST /api/link/start, which (like the rest of the real app) is
+    gated on having a confirmed email (see
+    get_current_verified_player_from_session in app/auth.py), so
+    showing this banner before that would just be a button that fails
+    with a generic error instead of the specific "verify your email
+    first" one render_verify_email_required actually gives them."""
+    if not player or not player.email_verified_at or player.account_hash:
         return ""
     return """
     <div class="link-banner" id="linkBanner">
@@ -923,6 +930,104 @@ def render_reset_password() -> str:
     })();
     """
     return _shell(title="Reset password — myscape", player=None, body=body, extra_script=script)
+
+
+def render_verify_email_required(player: Player) -> str:
+    body = f"""
+    <div class="auth-shell">
+      <div class="auth-card">
+        <h2>VERIFY YOUR EMAIL</h2>
+        <div class="auth-error" id="formError"></div>
+        <div class="auth-success" id="formSuccess"></div>
+        <p class="verify-email-message">We sent a confirmation link to <strong>{escape(player.email or "your email address")}</strong>. Click it to finish setting up your account.</p>
+        <button class="primary" id="resendBtn" type="button">RESEND EMAIL</button>
+      </div>
+    </div>
+    """
+    script = """
+    document.getElementById('resendBtn').addEventListener('click', async (e) => {
+      const btn = e.target;
+      const errorEl = document.getElementById('formError');
+      const successEl = document.getElementById('formSuccess');
+      errorEl.classList.remove('show');
+      successEl.classList.remove('show');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/auth/resend-verification-email', { method: 'POST' });
+        if (res.ok) {
+          successEl.textContent = "A new confirmation link is on its way.";
+          successEl.classList.add('show');
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        errorEl.textContent = describeError(data, 'Could not resend the email. Please try again.');
+        errorEl.classList.add('show');
+      } catch (err) {
+        errorEl.textContent = 'Something went wrong. Please try again.';
+        errorEl.classList.add('show');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    """
+    return _shell(title="Verify your email — myscape", player=player, body=body, extra_script=script)
+
+
+def render_verify_email() -> str:
+    body = """
+    <div class="auth-shell">
+      <div class="auth-card">
+        <h2>VERIFY EMAIL</h2>
+        <div class="auth-error" id="formError"></div>
+        <div class="auth-error" id="noTokenError">
+          This verification link is missing or invalid.
+        </div>
+        <p class="verify-email-message" id="verifyingMessage">Confirming your email&hellip;</p>
+        <div class="auth-switch"><a href="/login">LOG IN</a></div>
+      </div>
+    </div>
+    """
+    script = """
+    (function () {
+      const token = new URLSearchParams(window.location.search).get('token');
+      const noTokenError = document.getElementById('noTokenError');
+      const verifyingMessage = document.getElementById('verifyingMessage');
+      const errorEl = document.getElementById('formError');
+      if (!token) {
+        // Someone navigated here directly rather than following a real
+        // verification link -- same reasoning as render_reset_password's
+        // own no-token case.
+        verifyingMessage.style.display = 'none';
+        noTokenError.classList.add('show');
+        return;
+      }
+      (async () => {
+        try {
+          const res = await fetch('/api/auth/verify-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token }),
+          });
+          if (res.ok) {
+            // Same reasoning as reset_password's own redirect -- verify-email
+            // logs the player in immediately on success (see verify_email in
+            // app/routers/auth.py), so send them straight into the app.
+            window.location.href = '/dashboard';
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          verifyingMessage.style.display = 'none';
+          errorEl.textContent = describeError(data, 'Could not verify your email. The link may have expired.');
+          errorEl.classList.add('show');
+        } catch (err) {
+          verifyingMessage.style.display = 'none';
+          errorEl.textContent = 'Something went wrong. Please try again.';
+          errorEl.classList.add('show');
+        }
+      })();
+    })();
+    """
+    return _shell(title="Verify email — myscape", player=None, body=body, extra_script=script)
 
 
 def render_purchase_goals(player: Player) -> str:

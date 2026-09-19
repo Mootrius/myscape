@@ -44,6 +44,13 @@ LINK_CODE_LIFETIME = timedelta(minutes=10)
 # days.
 PASSWORD_RESET_TOKEN_LIFETIME = timedelta(hours=1)
 
+# Deliberately longer than PASSWORD_RESET_TOKEN_LIFETIME above -- a
+# password reset is meant to be acted on right away (it exists because
+# someone's locked out *right now*), but confirming a freshly signed-up
+# email is lower-stakes and easy to put off for a day, so this gives
+# more slack before a player has to ask for a fresh link.
+EMAIL_VERIFICATION_TOKEN_LIFETIME = timedelta(hours=24)
+
 
 def _utcnow():
     return datetime.now(timezone.utc)
@@ -83,6 +90,17 @@ class Player(Base):
     # so this counter is the only lever available for "log everyone
     # else out."
     token_version = Column(Integer, nullable=False, default=0)
+    # NULL until the player clicks the link from their confirmation
+    # email (see POST /api/auth/verify-email in app/routers/auth.py),
+    # then set to when that happened. get_current_verified_player_from_session
+    # in app/auth.py requires this to be set for most of the site --
+    # see that function's own docstring for exactly what stays
+    # reachable before verification. Every row that existed before this
+    # column did gets backfilled to "verified" by its own migration
+    # (9b1f4c7e2a6d's successor) rather than suddenly locking out every
+    # existing account -- only accounts created from that point on
+    # start out unverified.
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
     # RuneLite's stable per-account identifier. Nullable until the first
     # successful link-code exchange, unique once set so one game account
     # can't be linked to two myscape players.
@@ -143,6 +161,7 @@ class Player(Base):
     link_codes = relationship("LinkCode", back_populates="player", cascade="all, delete-orphan")
     api_keys = relationship("PlayerApiKey", back_populates="player", cascade="all, delete-orphan")
     password_reset_tokens = relationship("PasswordResetToken", back_populates="player", cascade="all, delete-orphan")
+    email_verification_tokens = relationship("EmailVerificationToken", back_populates="player", cascade="all, delete-orphan")
     bank_items = relationship("BankItem", back_populates="player", cascade="all, delete-orphan")
     inventory_items = relationship("InventoryItem", back_populates="player", cascade="all, delete-orphan")
     equipment_items = relationship("EquipmentItem", back_populates="player", cascade="all, delete-orphan")
@@ -230,6 +249,30 @@ class PasswordResetToken(Base):
     used_at = Column(DateTime(timezone=True), nullable=True)
 
     player = relationship("Player", back_populates="password_reset_tokens")
+
+    @property
+    def is_valid(self) -> bool:
+        return self.used_at is None and _utcnow() < _as_aware_utc(self.expires_at)
+
+
+class EmailVerificationToken(Base):
+    """A short-lived, single-use token emailed to a player to confirm
+    they actually control the address they signed up (or later changed
+    their email to -- though there's no "change email" feature yet).
+    Same shape and reasoning as PasswordResetToken above, right down to
+    only ever storing its hash -- see EMAIL_VERIFICATION_TOKEN_LIFETIME
+    for why its lifetime is longer."""
+
+    __tablename__ = "email_verification_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    token_hash = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+
+    player = relationship("Player", back_populates="email_verification_tokens")
 
     @property
     def is_valid(self) -> bool:

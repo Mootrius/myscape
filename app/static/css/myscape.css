@@ -470,6 +470,19 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 .auth-forgot a { font-size: 13px; color: var(--gold-dim); text-decoration: none; }
 .auth-forgot a:hover { color: var(--gold); }
 
+/* The "we sent a confirmation link to <email>" / "confirming your
+   email..." message on the verify-email pages (render_verify_email
+   and render_verify_email_required in app/pages.py) -- these cards
+   otherwise hold only left-aligned form fields, but there's no form
+   here, so centered reads better for a plain sentence of body text. */
+.verify-email-message {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14.5px;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_player_from_session
+from app.auth import get_current_player_from_session, get_current_verified_player_from_session
 from app.database import get_db
 from app.limiter import limiter
 from app.models import LINK_CODE_LIFETIME, LinkCode, Player, PlayerApiKey
@@ -56,7 +56,7 @@ def unlink_via_session(
 @router.post("/link/start", response_model=LinkStartResponse)
 def start_link(
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_session),
+    player: Player = Depends(get_current_verified_player_from_session),
 ):
     """Called by the website for the signed-in player (via their session
     cookie -- see app/routers/auth.py). Generates a link code, shows it

@@ -1,7 +1,8 @@
 """Website signup/login/logout -- the real thing, replacing the old
 developer-only "create a player by email" placeholder. Also forgot-
-password/reset-password (see PasswordResetToken's own docstring in
-app/models.py for why that's the same shape as account-linking's
+password/reset-password and signup email verification (see
+PasswordResetToken's and EmailVerificationToken's own docstrings in
+app/models.py for why both are the same shape as account-linking's
 LinkCode).
 """
 from datetime import datetime, timezone
@@ -13,8 +14,21 @@ from app.auth import get_current_player_from_session, log_in_player, log_out_pla
 from app.database import get_db
 from app.email_client import send_email
 from app.limiter import limiter
-from app.models import PASSWORD_RESET_TOKEN_LIFETIME, PasswordResetToken, Player
-from app.schemas import ForgotPasswordRequest, LoginRequest, PlayerOut, ResetPasswordRequest, SignupRequest
+from app.models import (
+    EMAIL_VERIFICATION_TOKEN_LIFETIME,
+    PASSWORD_RESET_TOKEN_LIFETIME,
+    EmailVerificationToken,
+    PasswordResetToken,
+    Player,
+)
+from app.schemas import (
+    ForgotPasswordRequest,
+    LoginRequest,
+    PlayerOut,
+    ResetPasswordRequest,
+    SignupRequest,
+    VerifyEmailRequest,
+)
 from app.security import generate_token, hash_password, hash_token, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["website-auth"])
@@ -22,6 +36,37 @@ router = APIRouter(prefix="/api/auth", tags=["website-auth"])
 # Deliberately vague and identical whether or not the email is actually
 # registered -- see forgot_password's own docstring below for why.
 _FORGOT_PASSWORD_RESPONSE = {"detail": "If that email has an account, we've sent a password reset link."}
+
+
+def _send_verification_email(request: Request, db: Session, player: Player) -> None:
+    """Shared by signup (a brand new, unverified player) and
+    resend_verification_email below (a signed-in player asking for a
+    fresh link because the first one expired or never arrived).
+    Cleans up any of this player's previous outstanding verification
+    tokens first, same reasoning as forgot_password's own cleanup, so
+    only the most recently sent link is ever valid."""
+    db.query(EmailVerificationToken).filter(EmailVerificationToken.player_id == player.id).delete()
+    raw_token = generate_token()
+    expires_at = datetime.now(timezone.utc) + EMAIL_VERIFICATION_TOKEN_LIFETIME
+    db.add(EmailVerificationToken(player_id=player.id, token_hash=hash_token(raw_token), expires_at=expires_at))
+    db.commit()
+
+    verify_url = f"{str(request.base_url).rstrip('/')}/verify-email?token={raw_token}"
+    send_email(
+        to=player.email,
+        subject="Confirm your myscape email address",
+        html=(
+            "<p>Welcome to myscape! Click the link below to confirm your email address "
+            "and finish setting up your account.</p>"
+            f'<p><a href="{verify_url}">Confirm my email address</a>. This link expires in 24 hours.</p>'
+        ),
+        text=(
+            "Welcome to myscape! Click the link below to confirm your email address and "
+            "finish setting up your account.\n\n"
+            f"Confirm here: {verify_url}\n\n"
+            "This link expires in 24 hours."
+        ),
+    )
 
 
 @router.post("/signup", response_model=PlayerOut, status_code=status.HTTP_201_CREATED)
@@ -38,6 +83,7 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
     db.commit()
     db.refresh(player)
 
+    _send_verification_email(request, db, player)
     log_in_player(request, player)
     return player
 
@@ -169,6 +215,56 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
 
     log_in_player(request, player)
     return player
+
+
+@router.post("/verify-email", response_model=PlayerOut)
+@limiter.limit("10/minute")
+def verify_email(request: Request, payload: VerifyEmailRequest, db: Session = Depends(get_db)):
+    """Consumes a signup/resend-verification token exactly once. Logs
+    the player in immediately on success -- same reasoning as
+    reset_password's own auto-login just above: clicking a link from an
+    email isn't necessarily happening in whatever browser/session
+    originally signed up (see render_verify_email's own comment in
+    app/pages.py), so proving control of the token is what grants a
+    session here, not an existing one."""
+    token_hash = hash_token(payload.token)
+    verification_token = (
+        db.query(EmailVerificationToken).filter(EmailVerificationToken.token_hash == token_hash).first()
+    )
+    if verification_token is None or not verification_token.is_valid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification link.")
+
+    player = verification_token.player
+    player.email_verified_at = datetime.now(timezone.utc)
+    db.delete(verification_token)
+    db.commit()
+
+    log_in_player(request, player)
+    return player
+
+
+@router.post("/resend-verification-email", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")
+def resend_verification_email(
+    request: Request,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """For a signed-in but not-yet-verified player who didn't get (or
+    lost) their original confirmation email -- the RESEND EMAIL button
+    on render_verify_email_required in app/pages.py. Requires being
+    logged in (the plain, unverified-allowed dependency -- see its own
+    docstring in app/auth.py) rather than being keyed off an email
+    address like forgot_password is, since the caller is necessarily
+    already this exact player. Rate-limited the same as forgot_password
+    (5/minute) for the same reason: a hit here costs a real outbound
+    email.
+
+    A silent no-op (but still a 204, not an error) if they're already
+    verified, e.g. a stale tab -- there's nothing useful left for this
+    button to do at that point."""
+    if not player.email_verified_at:
+        _send_verification_email(request, db, player)
 
 
 @router.get("/me", response_model=PlayerOut)

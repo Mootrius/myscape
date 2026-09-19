@@ -126,3 +126,25 @@ def get_optional_current_player_from_session(
     """For pages that render differently when logged in but don't
     require it (the landing page's nav, mainly) -- never raises."""
     return _load_player_from_session(request, db)
+
+
+def get_current_verified_player_from_session(player: Player = Depends(get_current_player_from_session)) -> Player:
+    """Same as get_current_player_from_session, plus 403s if the
+    player's email hasn't been confirmed yet (see
+    Player.email_verified_at's own docstring in app/models.py). This is
+    the dependency virtually every real feature endpoint in app/main.py
+    uses -- bank/inventory/etc. data, the dashboard pages, starting a
+    plugin link -- so a not-yet-verified player can log in and reach
+    account-management (this endpoint itself, logging out, resending
+    the verification email, unlinking) but nothing else, until they
+    click the link in their confirmation email. Account management
+    stays on the plain get_current_player_from_session above
+    specifically because verifying (and asking for a fresh link) has to
+    stay reachable *before* verification, or an unverified player would
+    have no way to ever get unstuck."""
+    if not player.email_verified_at:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address before continuing.",
+        )
+    return player
