@@ -23,6 +23,12 @@ from app.models import Player, PlayerApiKey
 from app.security import hash_token
 
 SESSION_PLAYER_ID_KEY = "player_id"
+# Snapshot of Player.token_version at the moment this session was
+# created (see that column's own docstring in app/models.py) -- lets
+# _load_player_from_session below detect a session that's been
+# invalidated by a password reset elsewhere, since there's no
+# server-side session store to delete rows from otherwise.
+SESSION_TOKEN_VERSION_KEY = "token_version"
 
 
 def get_current_player_from_api_key(
@@ -56,8 +62,15 @@ def get_current_player_from_api_key(
 
 
 def log_in_player(request: Request, player: Player) -> None:
-    """Call after a successful signup/login to start the browser session."""
+    """Call after a successful signup/login to start the browser
+    session. Also stamps the session with the player's *current*
+    token_version -- for a fresh signup/login that's just whatever it
+    already was, but for the login reset_password does on your behalf
+    right after changing a password, this is what makes the new
+    session valid under the just-bumped version while every other
+    session (still carrying the old version) stops working."""
     request.session[SESSION_PLAYER_ID_KEY] = str(player.id)
+    request.session[SESSION_TOKEN_VERSION_KEY] = player.token_version
 
 
 def log_out_player(request: Request) -> None:
@@ -78,6 +91,16 @@ def _load_player_from_session(request: Request, db: Session) -> Optional[Player]
     player = db.query(Player).filter(Player.id == player_id).first()
     if player is None:
         # The player row was deleted after the session cookie was issued.
+        log_out_player(request)
+        return None
+
+    if request.session.get(SESSION_TOKEN_VERSION_KEY) != player.token_version:
+        # Either this session predates token_version existing at all
+        # (missing key -- treated as stale rather than grandfathered
+        # in, so this only ever costs each browser one extra login),
+        # or the player reset their password since this cookie was
+        # issued and reset_password bumped token_version specifically
+        # to invalidate sessions like this one.
         log_out_player(request)
         return None
 

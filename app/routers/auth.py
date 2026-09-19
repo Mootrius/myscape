@@ -86,9 +86,27 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
     account already requires being logged in first (see
     app/routers/linking.py's start_link), but password_hash is
     nullable for admin-created rows (see Player's own docstring), so
-    this stays defensive rather than assuming that invariant forever."""
+    this stays defensive rather than assuming that invariant forever.
+
+    Also does a bit of opportunistic cleanup on its way through --
+    there's no scheduled job runner in this app to sweep
+    password_reset_tokens on a timer, so instead every call here
+    deletes any tokens (for anyone) that have already expired, plus any
+    other outstanding tokens for this specific player once one is
+    about to be issued -- so only ever the most recently requested link
+    is valid, and expired or superseded ones don't just pile up
+    forever. A used token doesn't need this: reset_password deletes it
+    directly the moment it's consumed."""
+    db.query(PasswordResetToken).filter(PasswordResetToken.expires_at < datetime.now(timezone.utc)).delete()
+    # Committed on its own since the branch below (no matching player,
+    # or one with no password set) doesn't otherwise commit anything --
+    # without this, that cleanup would just get silently rolled back
+    # when this request's DB session closes.
+    db.commit()
+
     player = db.query(Player).filter(Player.email == payload.email).first()
     if player is not None and player.password_hash:
+        db.query(PasswordResetToken).filter(PasswordResetToken.player_id == player.id).delete()
         raw_token = generate_token()
         expires_at = datetime.now(timezone.utc) + PASSWORD_RESET_TOKEN_LIFETIME
         db.add(PasswordResetToken(player_id=player.id, token_hash=hash_token(raw_token), expires_at=expires_at))
@@ -124,15 +142,29 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
     in immediately on success -- same reasoning as signup's own
     auto-login: someone who just proved they control the account's
     email and picked a new password came here to get back into their
-    account, not to separately log in again right after."""
+    account, not to separately log in again right after.
+
+    Also bumps the player's token_version, which invalidates every
+    *other* session already logged in as this player (see that
+    column's own docstring in app/models.py) -- if someone else had
+    access to the account before this reset (the actual scenario a
+    password reset exists to recover from), this is what actually logs
+    them back out rather than leaving their existing session valid.
+    log_in_player below runs after the bump, so it stamps *this*
+    request's new session with the fresh version instead of the one
+    that just got invalidated."""
     token_hash = hash_token(payload.token)
     reset_token = db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == token_hash).first()
     if reset_token is None or not reset_token.is_valid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link.")
 
-    reset_token.used_at = datetime.now(timezone.utc)
     player = reset_token.player
     player.password_hash = hash_password(payload.password)
+    player.token_version += 1
+    # The token's only purpose was getting the player here once -- no
+    # reason to keep a "used" row around forever (see forgot_password's
+    # own cleanup of expired-but-unused ones above).
+    db.delete(reset_token)
     db.commit()
 
     log_in_player(request, player)

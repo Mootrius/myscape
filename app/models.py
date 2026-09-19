@@ -72,6 +72,17 @@ class Player(Base):
     # created by admin tooling; every row created through the real
     # signup endpoint always has one.
     password_hash = Column(String, nullable=True)
+    # Bumped whenever the password changes via /api/auth/reset-password
+    # (see that endpoint in app/routers/auth.py). The session cookie
+    # set at login carries a snapshot of this value (see log_in_player
+    # in app/auth.py); a session whose snapshot no longer matches the
+    # player's current value is treated as stale and logged out. That's
+    # what actually invalidates every *other* already-logged-in session
+    # the moment a password gets reset -- sessions are just signed
+    # cookies here (no server-side session store to delete rows from),
+    # so this counter is the only lever available for "log everyone
+    # else out."
+    token_version = Column(Integer, nullable=False, default=0)
     # RuneLite's stable per-account identifier. Nullable until the first
     # successful link-code exchange, unique once set so one game account
     # can't be linked to two myscape players.
