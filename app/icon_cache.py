@@ -1,18 +1,41 @@
-"""Local, weekly-refreshed disk cache for item icon images.
+"""Local, weekly-refreshed disk cache for wiki-sourced icon images.
 
-item_icon_url (app/purchase_goals.py) used to hand the browser a direct
-hotlink straight to the wiki's Special:FilePath/<name>.png for every
-single icon on every single page load. That URL isn't the image itself
--- it's the first of two redirects (FilePath -> Special:Redirect/file/...
--> the actual /images/....png?<hash>), and the wiki marks BOTH of those
-redirect hops `cache-control: private, must-revalidate, max-age=0` --
-never cacheable, always re-fetched -- even though the final image is
-itself served with `cache-control: public, max-age=31536000, immutable`
-once you reach it. With dozens of icons on a single Possessions
-Monitoring or Loot Tracker page, every refresh was re-hitting the wiki
-TWICE per icon just to get redirected to the exact same place as last
-time -- almost certainly what was tripping Cloudflare's rate limiting
-and showing up as icons that stop loading.
+Every ITEM icon in this app moved off this module -- item_icon_url
+(app/purchase_goals.py) now hits RuneLite's own static icon CDN
+directly by real numeric item id, a real CDN with none of the problems
+described below, so there's nothing left for this module to
+fetch-and-cache for items any more (see that function's own comment
+for the switch and why). What's left, and the reason this module still
+exists at all:
+
+1. NPC/event portraits for Loot Tracker (npc_icon_url in app/loot.py)
+   -- there's no numeric NPC id anywhere in this app's data model (see
+   npc_hide_key's own comment there) for an id-keyed CDN to serve those
+   from at all, so a guessed wiki filename is still the only option.
+2. The rare combination-item name app/item_ids.json's snapshot doesn't
+   cover under its exact stored spelling (_untradeable_item_icon's own
+   last-resort fallback in app/purchase_goals.py, via _wiki_icon_url) --
+   about 190 of app/recipes.py's ~1200 known recipes at last count,
+   mostly cosmetic colour variants.
+
+Both still need exactly the machinery this module was built for in the
+first place: item_icon_url (app/purchase_goals.py) used to hand the
+browser a direct hotlink straight to the wiki's
+Special:FilePath/<name>.png for every single icon on every single page
+load. That URL isn't the image itself -- it's the first of two
+redirects (FilePath -> Special:Redirect/file/... -> the actual
+/images/....png?<hash>), and the wiki marks BOTH of those redirect hops
+`cache-control: private, must-revalidate, max-age=0` -- never
+cacheable, always re-fetched -- even though the final image is itself
+served with `cache-control: public, max-age=31536000, immutable` once
+you reach it. With dozens of icons on a single Possessions Monitoring
+or Loot Tracker page, every refresh was re-hitting the wiki TWICE per
+icon just to get redirected to the exact same place as last time --
+almost certainly what was tripping Cloudflare's rate limiting and
+showing up as icons that stop loading. NPC portraits (and that rare
+recipe fallback) still hit exactly that same redirect chain, so this
+module's whole reason to exist is just as real for them as it used to
+be for every item icon too.
 
 This module fetches the image bytes ourselves, server-side, following
 that same redirect chain once, and saves them under app/static/item-
@@ -54,25 +77,29 @@ this module's job is making sure that only ever happens once per icon,
 throttled, rather than every page load.
 
 THIS is also the piece that used to fall back to a direct wiki hotlink
-for that one request rather than wait on the fetch -- item_icon_url
-handed the browser the raw wiki URL for anything not already cached and
-fresh, on the theory that a request should never block on a network
-fetch. That's true for the *page* request, but every one of these is
-its own separate, already-async, already-lazy-loaded <img> request --
-blocking one of THOSE for a few seconds costs nothing a page visitor
-would notice, and not blocking it meant every icon miss became a
-direct, un-throttled browser-to-wiki request instead. On Possessions
-Monitoring especially -- by far the widest, most varied set of icons
-any page here shows, since it's a player's whole bank/inventory rather
-than a short, repeat-heavy list like Loot Tracker's recent drops or one
-gear setup's own slots -- a first view (or, without ICON_CACHE_DIR
+for that one request rather than wait on the fetch -- item_icon_url (as
+it worked back when everything, not just NPC portraits and the rare
+recipe fallback, went through this module) handed the browser the raw
+wiki URL for anything not already cached and fresh, on the theory that
+a request should never block on a network fetch. That's true for the
+*page* request, but every one of these is its own separate, already-
+async, already-lazy-loaded <img> request -- blocking one of THOSE for a
+few seconds costs nothing a page visitor would notice, and not blocking
+it meant every icon miss became a direct, un-throttled browser-to-wiki
+request instead. Possessions Monitoring used to be the extreme case
+here -- by far the widest, most varied set of icons any page ever
+showed, since it's a player's whole bank/inventory rather than a short,
+repeat-heavy list -- where a first view (or, without ICON_CACHE_DIR
 pointed at a persistent disk, the first view after any redeploy) could
-easily have dozens of icons never fetched before, all at once, all
-completely bypassing this module's own
-4-at-a-time throttling and racing the browser straight at the wiki in
-parallel: exactly the rate-limit-tripping request burst this cache
-exists to prevent, just moved from "us re-fetching" to "the browser
-fetching directly" instead.
+easily have had dozens of icons never fetched before, all at once, all
+completely bypassing this module's own 4-at-a-time throttling and
+racing the browser straight at the wiki in parallel: exactly the
+rate-limit-tripping request burst this cache exists to prevent, just
+moved from "us re-fetching" to "the browser fetching directly" instead.
+That's exactly the failure mode Possessions Monitoring's own icons no
+longer have any exposure to at all now that they're CDN-direct, but the
+same reasoning is still live for a Loot Tracker page spanning a long
+time range with dozens of distinct NPCs never portrayed before.
 
 So now: item_icon_url always hands out our own /icon-cache/<filename>
 URL, never the wiki's, and ensure_cached_icon_path (called from that

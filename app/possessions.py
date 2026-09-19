@@ -100,401 +100,40 @@ def get_owned_breakdown(db: Session, player: Player) -> Dict[int, dict]:
     return breakdown
 
 
-# Coins and Abyssal Pearls are actual in-game currency stacks whose own
-# artwork changes at set thresholds (see the OSRS Wiki's "Coins"
-# article for the full 1/2/3/4/5/25/100/250/1000/10000 sequence;
-# Abyssal Pearls tops out at 5) -- but neither is a GE-tradeable item
-# (no listing, so never in the live mapping), and the wiki's own
-# File:Coins.png / File:Abyssal pearls.png redirects (see the general
-# fallback in resolve_item_display below) don't reliably land on the
-# BIGGEST denomination either -- Coins.png redirects to the 100gp pile,
-# not 10,000gp. So these two stay pinned here to the exact file we
-# actually want, regardless of how many the player owns (a handful of
-# coins showing the 10,000gp pile image is a cosmetic choice for a
-# nicer-looking row, not a claim about the real stack size -- QUANTITY
-# is what actually tells the player how many they have). Add another
-# entry here only if some other item's own bare-name redirect turns out
-# not to land on the size we want either.
-_STACK_ICON_OVERRIDES = {
-    995: "Coins 10000.png",
-    26792: "Abyssal pearls 5.png",
-}
-
-# Crystal helm/body/legs can be recolored to match any of seven Iorwerth
-# Clan houses (Amlodd/Cadarn/Crwys/Hefin/Iorwerth/Ithell/Trahaearn --
-# there's no Meilyr recolor for the armour, unlike the crystal bow/
-# blade's own ornament kits, confirmed against the wiki's own Bucket
-# data below turning up zero Meilyr rows for these three items), on top
-# of the original un-recolored look -- eight total looks per piece, all
-# purely cosmetic. The game's own client calls every single one of them
-# by the exact same name ("Crystal helm", or "Crystal helm (inactive)"
-# once its charges run out -- recoloring never changes the name shown
-# in a tooltip), so the RuneLite plugin's own item_name for one is
-# never enough to tell them apart -- only the real item id is different
-# per colour. item_ids.json (built from the wiki's Bucket:Infobox_item
-# table by name -- see scripts/fetch_item_ids.py) merges every colour's
-# ids into that one "Crystal helm" entry for exactly that reason, and
-# keeps only ONE icon for the whole group -- so resolve_item_display's
-# usual name-based icon guess always lands on the same (effectively
-# arbitrary) colour's picture regardless of which one a player actually
-# owns.
-#
-# This table is what actually fixes that: every real crystal armour
-# item id mapped straight to ITS OWN colour's icon filename, queried
-# live off the wiki's Bucket:Infobox_item table one level below where
-# fetch_item_ids.py stops (per id, not merged by name) rather than
-# guessed -- so a player's own Ithell helm shows the Ithell icon, not
-# whichever colour happened to be first/marked default. Doesn't cover
-# the Deadman Mode/Last Man Standing-only variants (own separate ids,
-# but not obtainable in a normal game and so never actually reported by
-# the plugin) -- add them here too if that ever changes.
-_CRYSTAL_ARMOUR_ICON_OVERRIDES = {
-    # Crystal helm -- active
-    23971: "Crystal helm.png",  # original, un-recolored
-    27705: "Crystal helm (Hefin).png",
-    27717: "Crystal helm (Ithell).png",
-    27729: "Crystal helm (Iorwerth).png",
-    27741: "Crystal helm (Trahaearn).png",
-    27753: "Crystal helm (Cadarn).png",
-    27765: "Crystal helm (Crwys).png",
-    27777: "Crystal helm (Amlodd).png",
-    # Crystal helm -- inactive (0 charges left)
-    23973: "Crystal helm (inactive).png",
-    27707: "Crystal helm (inactive) (Hefin).png",
-    27719: "Crystal helm (inactive) (Ithell).png",
-    27731: "Crystal helm (inactive) (Iorwerth).png",
-    27743: "Crystal helm (inactive) (Trahaearn).png",
-    27755: "Crystal helm (inactive) (Cadarn).png",
-    27767: "Crystal helm (inactive) (Crwys).png",
-    27779: "Crystal helm (inactive) (Amlodd).png",
-    # Crystal body -- active
-    23975: "Crystal body.png",
-    27697: "Crystal body (Hefin).png",
-    27709: "Crystal body (Ithell).png",
-    27721: "Crystal body (Iorwerth).png",
-    27733: "Crystal body (Trahaearn).png",
-    27745: "Crystal body (Cadarn).png",
-    27757: "Crystal body (Crwys).png",
-    27769: "Crystal body (Amlodd).png",
-    # Crystal body -- inactive
-    23977: "Crystal body (inactive).png",
-    27699: "Crystal body (inactive) (Hefin).png",
-    27711: "Crystal body (inactive) (Ithell).png",
-    27723: "Crystal body (inactive) (Iorwerth).png",
-    27735: "Crystal body (inactive) (Trahaearn).png",
-    27747: "Crystal body (inactive) (Cadarn).png",
-    27759: "Crystal body (inactive) (Crwys).png",
-    27771: "Crystal body (inactive) (Amlodd).png",
-    # Crystal legs -- active
-    23979: "Crystal legs.png",
-    27701: "Crystal legs (Hefin).png",
-    27713: "Crystal legs (Ithell).png",
-    27725: "Crystal legs (Iorwerth).png",
-    27737: "Crystal legs (Trahaearn).png",
-    27749: "Crystal legs (Cadarn).png",
-    27761: "Crystal legs (Crwys).png",
-    27773: "Crystal legs (Amlodd).png",
-    # Crystal legs -- inactive
-    23981: "Crystal legs (inactive).png",
-    27703: "Crystal legs (inactive) (Hefin).png",
-    27715: "Crystal legs (inactive) (Ithell).png",
-    27727: "Crystal legs (inactive) (Iorwerth).png",
-    27739: "Crystal legs (inactive) (Trahaearn).png",
-    27751: "Crystal legs (inactive) (Cadarn).png",
-    27763: "Crystal legs (inactive) (Crwys).png",
-    27775: "Crystal legs (inactive) (Amlodd).png",
-}
-
-# Same underlying problem as crystal armour just above, on a completely
-# different item family: each Graceful piece (hood/cape/top/legs/
-# gloves/boots) can be recoloured to any of 11 looks -- the 5 Kourend
-# house colours plus the original Rogues' Den grey, Agility Arena,
-# Hallowed Sepulchre, Trailblazer League, Adventurer, and Varlamore
-# recolours -- and the game calls every one of them by the exact same
-# name ("Graceful hood", full stop, recolour or not), so item_ids.json's
-# name-merged entry for "Graceful hood" only ever carries ONE icon,
-# arbitrarily whichever version the wiki's own data happened to list
-# first. Confirmed live against the wiki's Bucket:Infobox_item table,
-# same one level down from fetch_item_ids.py's own by-name merge that
-# _CRYSTAL_ARMOUR_ICON_OVERRIDES above was built from.
-#
-# Each colour lists TWO real item ids on the wiki (its infobox's own
-# "version1 = Inventory" / "version2 = Worn" split) rather than one --
-# unlike crystal armour's active/inactive, which are two genuinely
-# different appearances, these two ids appear to be the same look under
-# two different technical states (carried vs. equipped), and it isn't
-# obvious from the wiki data alone which of the two a synced Bank/
-# Inventory/Equipment container would actually ever report. Both are
-# mapped here regardless, straight to that colour's one shared icon, so
-# either one showing up resolves correctly either way -- costs nothing
-# to include the id that turns out to never actually appear.
-_GRACEFUL_OUTFIT_ICON_OVERRIDES = {
-    # Graceful hood -- original
-    11850: "Graceful hood.png",
-    11851: "Graceful hood.png",
-    # Graceful hood -- Arceuus
-    13579: "Graceful hood (Arceuus).png",
-    13580: "Graceful hood (Arceuus).png",
-    # Graceful hood -- Piscarilius
-    13591: "Graceful hood (Piscarilius).png",
-    13592: "Graceful hood (Piscarilius).png",
-    # Graceful hood -- Lovakengj
-    13603: "Graceful hood (Lovakengj).png",
-    13604: "Graceful hood (Lovakengj).png",
-    # Graceful hood -- Shayzien
-    13615: "Graceful hood (Shayzien).png",
-    13616: "Graceful hood (Shayzien).png",
-    # Graceful hood -- Hosidius
-    13627: "Graceful hood (Hosidius).png",
-    13628: "Graceful hood (Hosidius).png",
-    # Graceful hood -- Kourend
-    13667: "Graceful hood (Kourend).png",
-    13668: "Graceful hood (Kourend).png",
-    # Graceful hood -- Agility Arena
-    21061: "Graceful hood (Agility Arena).png",
-    21063: "Graceful hood (Agility Arena).png",
-    # Graceful hood -- Varlamore
-    30045: "Graceful hood (Varlamore).png",
-    30047: "Graceful hood (Varlamore).png",
-    # Graceful hood -- Hallowed
-    24743: "Graceful hood (Hallowed).png",
-    24745: "Graceful hood (Hallowed).png",
-    # Graceful hood -- Trailblazer
-    25069: "Graceful hood (Trailblazer).png",
-    25071: "Graceful hood (Trailblazer).png",
-    # Graceful hood -- Adventurer
-    27444: "Graceful hood (Adventurer).png",
-    27446: "Graceful hood (Adventurer).png",
-    # Graceful cape -- original
-    11852: "Graceful cape.png",
-    11853: "Graceful cape.png",
-    # Graceful cape -- Arceuus
-    13581: "Graceful cape (Arceuus).png",
-    13582: "Graceful cape (Arceuus).png",
-    # Graceful cape -- Piscarilius
-    13593: "Graceful cape (Piscarilius).png",
-    13594: "Graceful cape (Piscarilius).png",
-    # Graceful cape -- Lovakengj
-    13605: "Graceful cape (Lovakengj).png",
-    13606: "Graceful cape (Lovakengj).png",
-    # Graceful cape -- Shayzien
-    13617: "Graceful cape (Shayzien).png",
-    13618: "Graceful cape (Shayzien).png",
-    # Graceful cape -- Hosidius
-    13629: "Graceful cape (Hosidius).png",
-    13630: "Graceful cape (Hosidius).png",
-    # Graceful cape -- Kourend
-    13669: "Graceful cape (Kourend).png",
-    13670: "Graceful cape (Kourend).png",
-    # Graceful cape -- Agility Arena
-    21064: "Graceful cape (Agility Arena).png",
-    21066: "Graceful cape (Agility Arena).png",
-    # Graceful cape -- Varlamore
-    30048: "Graceful cape (Varlamore).png",
-    30050: "Graceful cape (Varlamore).png",
-    # Graceful cape -- Hallowed
-    24746: "Graceful cape (Hallowed).png",
-    24748: "Graceful cape (Hallowed).png",
-    # Graceful cape -- Trailblazer
-    25072: "Graceful cape (Trailblazer).png",
-    25074: "Graceful cape (Trailblazer).png",
-    # Graceful cape -- Adventurer
-    27447: "Graceful cape (Adventurer).png",
-    27449: "Graceful cape (Adventurer).png",
-    # Graceful top -- original
-    11854: "Graceful top.png",
-    11855: "Graceful top.png",
-    # Graceful top -- Arceuus
-    13583: "Graceful top (Arceuus).png",
-    13584: "Graceful top (Arceuus).png",
-    # Graceful top -- Piscarilius
-    13595: "Graceful top (Piscarilius).png",
-    13596: "Graceful top (Piscarilius).png",
-    # Graceful top -- Lovakengj
-    13607: "Graceful top (Lovakengj).png",
-    13608: "Graceful top (Lovakengj).png",
-    # Graceful top -- Shayzien
-    13619: "Graceful top (Shayzien).png",
-    13620: "Graceful top (Shayzien).png",
-    # Graceful top -- Hosidius
-    13631: "Graceful top (Hosidius).png",
-    13632: "Graceful top (Hosidius).png",
-    # Graceful top -- Kourend
-    13671: "Graceful top (Kourend).png",
-    13672: "Graceful top (Kourend).png",
-    # Graceful top -- Agility Arena
-    21067: "Graceful top (Agility Arena).png",
-    21069: "Graceful top (Agility Arena).png",
-    # Graceful top -- Varlamore
-    30051: "Graceful top (Varlamore).png",
-    30053: "Graceful top (Varlamore).png",
-    # Graceful top -- Hallowed
-    24749: "Graceful top (Hallowed).png",
-    24751: "Graceful top (Hallowed).png",
-    # Graceful top -- Trailblazer
-    25075: "Graceful top (Trailblazer).png",
-    25077: "Graceful top (Trailblazer).png",
-    # Graceful top -- Adventurer
-    27450: "Graceful top (Adventurer).png",
-    27452: "Graceful top (Adventurer).png",
-    # Graceful legs -- original
-    11856: "Graceful legs.png",
-    11857: "Graceful legs.png",
-    # Graceful legs -- Arceuus
-    13585: "Graceful legs (Arceuus).png",
-    13586: "Graceful legs (Arceuus).png",
-    # Graceful legs -- Piscarilius
-    13597: "Graceful legs (Piscarilius).png",
-    13598: "Graceful legs (Piscarilius).png",
-    # Graceful legs -- Lovakengj
-    13609: "Graceful legs (Lovakengj).png",
-    13610: "Graceful legs (Lovakengj).png",
-    # Graceful legs -- Shayzien
-    13621: "Graceful legs (Shayzien).png",
-    13622: "Graceful legs (Shayzien).png",
-    # Graceful legs -- Hosidius
-    13633: "Graceful legs (Hosidius).png",
-    13634: "Graceful legs (Hosidius).png",
-    # Graceful legs -- Kourend
-    13673: "Graceful legs (Kourend).png",
-    13674: "Graceful legs (Kourend).png",
-    # Graceful legs -- Agility Arena
-    21070: "Graceful legs (Agility Arena).png",
-    21072: "Graceful legs (Agility Arena).png",
-    # Graceful legs -- Varlamore
-    30054: "Graceful legs (Varlamore).png",
-    30056: "Graceful legs (Varlamore).png",
-    # Graceful legs -- Hallowed
-    24752: "Graceful legs (Hallowed).png",
-    24754: "Graceful legs (Hallowed).png",
-    # Graceful legs -- Trailblazer
-    25078: "Graceful legs (Trailblazer).png",
-    25080: "Graceful legs (Trailblazer).png",
-    # Graceful legs -- Adventurer
-    27453: "Graceful legs (Adventurer).png",
-    27455: "Graceful legs (Adventurer).png",
-    # Graceful gloves -- original
-    11858: "Graceful gloves.png",
-    11859: "Graceful gloves.png",
-    # Graceful gloves -- Arceuus
-    13587: "Graceful gloves (Arceuus).png",
-    13588: "Graceful gloves (Arceuus).png",
-    # Graceful gloves -- Piscarilius
-    13599: "Graceful gloves (Piscarilius).png",
-    13600: "Graceful gloves (Piscarilius).png",
-    # Graceful gloves -- Lovakengj
-    13611: "Graceful gloves (Lovakengj).png",
-    13612: "Graceful gloves (Lovakengj).png",
-    # Graceful gloves -- Shayzien
-    13623: "Graceful gloves (Shayzien).png",
-    13624: "Graceful gloves (Shayzien).png",
-    # Graceful gloves -- Hosidius
-    13635: "Graceful gloves (Hosidius).png",
-    13636: "Graceful gloves (Hosidius).png",
-    # Graceful gloves -- Kourend
-    13675: "Graceful gloves (Kourend).png",
-    13676: "Graceful gloves (Kourend).png",
-    # Graceful gloves -- Agility Arena
-    21073: "Graceful gloves (Agility Arena).png",
-    21075: "Graceful gloves (Agility Arena).png",
-    # Graceful gloves -- Varlamore
-    30057: "Graceful gloves (Varlamore).png",
-    30059: "Graceful gloves (Varlamore).png",
-    # Graceful gloves -- Hallowed
-    24755: "Graceful gloves (Hallowed).png",
-    24757: "Graceful gloves (Hallowed).png",
-    # Graceful gloves -- Trailblazer
-    25081: "Graceful gloves (Trailblazer).png",
-    25083: "Graceful gloves (Trailblazer).png",
-    # Graceful gloves -- Adventurer
-    27456: "Graceful gloves (Adventurer).png",
-    27458: "Graceful gloves (Adventurer).png",
-    # Graceful boots -- original
-    11860: "Graceful boots.png",
-    11861: "Graceful boots.png",
-    # Graceful boots -- Arceuus
-    13589: "Graceful boots (Arceuus).png",
-    13590: "Graceful boots (Arceuus).png",
-    # Graceful boots -- Piscarilius
-    13601: "Graceful boots (Piscarilius).png",
-    13602: "Graceful boots (Piscarilius).png",
-    # Graceful boots -- Lovakengj
-    13613: "Graceful boots (Lovakengj).png",
-    13614: "Graceful boots (Lovakengj).png",
-    # Graceful boots -- Shayzien
-    13625: "Graceful boots (Shayzien).png",
-    13626: "Graceful boots (Shayzien).png",
-    # Graceful boots -- Hosidius
-    13637: "Graceful boots (Hosidius).png",
-    13638: "Graceful boots (Hosidius).png",
-    # Graceful boots -- Kourend
-    13677: "Graceful boots (Kourend).png",
-    13678: "Graceful boots (Kourend).png",
-    # Graceful boots -- Agility Arena
-    21076: "Graceful boots (Agility Arena).png",
-    21078: "Graceful boots (Agility Arena).png",
-    # Graceful boots -- Varlamore
-    30060: "Graceful boots (Varlamore).png",
-    30062: "Graceful boots (Varlamore).png",
-    # Graceful boots -- Hallowed
-    24758: "Graceful boots (Hallowed).png",
-    24760: "Graceful boots (Hallowed).png",
-    # Graceful boots -- Trailblazer
-    25084: "Graceful boots (Trailblazer).png",
-    25086: "Graceful boots (Trailblazer).png",
-    # Graceful boots -- Adventurer
-    27459: "Graceful boots (Adventurer).png",
-    27461: "Graceful boots (Adventurer).png",
-}
+# Coins/Abyssal Pearls (art scales with how many are held), Crystal
+# armour and Graceful (both recolorable to any of several cosmetic
+# looks, with every recolor sharing one in-game NAME -- only the real
+# item id actually differs per look) all used to need their own
+# hand-built id->wiki-filename override table here, because
+# item_ids.json's name-keyed snapshot only ever kept ONE icon per name
+# and the wiki's own bare-name redirect didn't reliably land on the
+# biggest/correct denomination either. None of that applies to
+# resolve_item_display's CDN-direct icon below (see item_icon_url in
+# app/purchase_goals.py) -- RuneLite's own per-id icon export already
+# has the exact right artwork for every one of these real, distinct
+# item ids on its own, confirmed live against a handful of them
+# (Coins already shows its biggest pile; every Crystal helm/Graceful
+# hood recolor's id returns its own distinct image) -- so there's
+# nothing left to override by hand any more.
 
 
 def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: dict) -> dict:
     """Returns {"name", "icon", "tradeable", "highAlch"} for one real
-    item id -- tries the live GE mapping first (real icon, high alch,
-    and the definitive tradeable=True), then falls back to the
+    item id -- tries the live GE mapping first (real name/high alch and
+    the definitive tradeable=True), then falls back to the
     item_ids.json snapshot by name (for an untradeable item, whose id
     never appears in the GE mapping at all) for a corrected/canonical
     name, then to the bare id/name a storage table itself already had
     on file.
 
-    The ICON filename for that untradeable branch deliberately does NOT
-    use item_ids.json's own stored "icon" field, even though that
-    lookup is sitting right there -- that field was captured from
-    whichever image the wiki's Infobox_item data marks as an item's
-    "default_version", which for every stackable/denominated item (the
-    exact items this bit us on -- Tokkul, Stardust, Platinum tokens,
-    and friends, none of which have a GE listing) is consistently the
-    SMALLEST ("1") variant, not the biggest. Same root cause the
-    _STACK_ICON_OVERRIDES table above exists for on Coins/Abyssal
-    Pearls, just silently wrong for every OTHER such item instead of
-    loudly wrong for two well-known ones.
-
-    Loot Tracker's own item icon resolution (see _resolve_loot_items in
-    app/loot.py) sidesteps this entirely by falling back to the bare
-    item NAME as the filename instead of a snapshot lookup, and that
-    turns out to already do exactly the right thing here: the OSRS
-    Wiki maintains File:<Name>.png (no denomination suffix) as a
-    REDIRECT to whichever version IT treats as that item's default/
-    biggest-looking icon -- confirmed directly against the wiki's own
-    API, e.g. File:Dragonfruit tree seed.png -> File:Dragonfruit tree
-    seed 5.png, File:Abyssal pearls.png -> File:Abyssal pearls 5.png
-    (matching the hardcoded override above on its own). So the bare
-    name is used here too, the same fallback Loot Tracker already
-    relies on, rather than reproducing its own separate one -- run
-    through _STACK_ICON_OVERRIDES afterward for the two items (Coins
-    being the motivating case) where that redirect still doesn't land
-    on the specific denomination we want -- and through
-    _CRYSTAL_ARMOUR_ICON_OVERRIDES for the same reason on a completely
-    different class of item: crystal helm/body/legs, where the bare
-    name is shared by all eight cosmetic recolors (that table's own
-    comment has the full story), and through
-    _GRACEFUL_OUTFIT_ICON_OVERRIDES for the same reason again on the
-    Graceful outfit's six pieces, each shared by all twelve of its
-    recolors, so the bare-name guess this branch otherwise relies on
-    can't tell any of them apart at all."""
+    The icon itself no longer goes through any of that -- item_id alone
+    is already exactly what item_icon_url (app/purchase_goals.py) needs
+    to build the right CDN URL, tradeable or not, denomination-scaled or
+    not, cosmetic recolor or not (see this file's own comment right
+    above this function for why nothing else has to be special-cased
+    here any more the way it used to be)."""
     meta = mapping.get(str(item_id))
     if meta:
-        icon_filename = meta.get("icon")
         name = meta.get("name") or fallback_name or f"Item #{item_id}"
         tradeable = True
         high_alch = meta.get("highalch")
@@ -507,17 +146,10 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
             if snap:
                 name = snap.get("name") or fallback_name
         name = name or f"Item #{item_id}"
-        icon_filename = name
 
-    icon_filename = (
-        _STACK_ICON_OVERRIDES.get(item_id)
-        or _CRYSTAL_ARMOUR_ICON_OVERRIDES.get(item_id)
-        or _GRACEFUL_OUTFIT_ICON_OVERRIDES.get(item_id)
-        or icon_filename
-    )
     return {
         "name": name,
-        "icon": item_icon_url(icon_filename),
+        "icon": item_icon_url(item_id),
         "tradeable": tradeable,
         "highAlch": high_alch,
     }

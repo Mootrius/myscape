@@ -298,16 +298,26 @@ app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 @app.get("/icon-cache/{filename}")
 def get_cached_icon(filename: str):
-    """Serves a (possibly not-yet-fetched) item icon -- a dedicated
-    route rather than folding this into the /static mount above so it
-    can set its own long-lived Cache-Control, and so it can do more
-    than a plain static-file lookup: item_icon_url (app/purchase_goals.py)
-    hands out this URL for every icon unconditionally now, never a
-    direct wiki hotlink, so ensure_cached_icon_path (app/icon_cache.py)
-    is what actually fetches-and-caches an icon this is the first
-    request for -- see that module's own top-of-file comment for why
-    that fetch happens here, briefly blocking this one request, rather
-    than falling back to letting the browser hit the wiki directly.
+    """Serves a (possibly not-yet-fetched) wiki-sourced icon -- a
+    dedicated route rather than folding this into the /static mount
+    above so it can set its own long-lived Cache-Control, and so it can
+    do more than a plain static-file lookup: ensure_cached_icon_path
+    (app/icon_cache.py) is what actually fetches-and-caches an icon
+    this is the first request for -- see that module's own top-of-file
+    comment for why that fetch happens here, briefly blocking this one
+    request, rather than falling back to letting the browser hit the
+    wiki directly.
+
+    Every ITEM icon in this app now bypasses this route entirely --
+    item_icon_url (app/purchase_goals.py) hands those out as a direct
+    RuneLite CDN URL instead (see that function's own comment). What's
+    left hitting this route: NPC/event portraits for Loot Tracker
+    (npc_icon_url in app/loot.py, no numeric NPC id for that CDN to
+    serve those from at all) and the rare combination-item name
+    app/item_ids.py's snapshot doesn't cover under its exact stored
+    spelling (_untradeable_item_icon's own last-resort fallback in
+    app/purchase_goals.py).
+
     Re-validates the filename itself (no path traversal out of the
     cache directory) rather than trusting the URL alone."""
     path = ensure_cached_icon_path(filename)

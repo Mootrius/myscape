@@ -38,7 +38,7 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.item_ids import find_item_by_exact_name, find_item_icon, find_item_ids, search_item_names
+from app.item_ids import find_item_by_exact_name, find_item_ids, search_item_names
 from app.models import (
     BankItem,
     EquipmentItem,
@@ -66,21 +66,37 @@ COINS_ITEM_ID = 995
 # identifying the tool and how to reach whoever runs it -- see
 # https://prices.runescape.wiki/osrs/faqs
 API_BASE = "https://prices.runescape.wiki/api/v2/osrs"
-# Icons used to be hotlinked straight to the wiki from the browser on
-# every page load, on the assumption that the wiki's image host sat
-# behind a Cloudflare bot challenge a plain server-side request could
-# never pass. In practice a plain server-side request goes through
-# fine -- and the wiki's own Special:FilePath link is actually two
-# uncacheable redirects in front of the real (long-cacheable) image, so
-# hotlinking it meant re-hitting the wiki twice per icon on every single
-# refresh, which is what was tripping rate limits. item_icon_url below
-# (and npc_icon_url in app/loot.py) now always points at our own
-# /icon-cache/<filename> route instead (see app/icon_cache.py) --
-# nothing in this file talks to the wiki's image host directly any
-# more, so there's no ICON_PATH_BASE constant here either; icon_cache.py
-# has its own copy of the wiki's Special:FilePath base for the one
-# place that still needs it.
 USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
+
+# Every ITEM icon in this app (Purchase Goals, Storages Viewer, Loot
+# Tracker) now comes from RuneLite's own static icon export instead of
+# the wiki -- a real CDN (GitHub Pages behind Cloudflare, open CORS,
+# genuinely cacheable), one flat PNG per real OSRS item id, refreshed
+# weekly off the live game cache. This replaced icons hotlinked
+# straight to the wiki's Special:FilePath -- which is actually two
+# uncacheable redirects in front of the real image, so every page
+# refresh re-hit the wiki twice per icon, which is what was tripping
+# rate limits (the same problem app/icon_cache.py's disk cache used to
+# paper over for items too) -- and it's simpler in a more basic way:
+# this is addressed by the item's own permanent numeric id, which every
+# call site below either already has (every tradeable item, every
+# plugin-synced possession/loot row) or can resolve via
+# app/item_ids.py's name->id snapshot (see _untradeable_item_id below),
+# rather than a wiki page's filename string, so there's no
+# fetch-and-cache-the-bytes-ourselves step left to do for it at all --
+# item_icon_url below just builds the CDN URL directly, no network
+# round trip, no local cache, nothing to ever go stale.
+#
+# icon_cache.py's own wiki-fetching machinery isn't gone, though -- it's
+# still what NPC portraits in app/loot.py's npc_icon_url use, since
+# there's no numeric NPC id anywhere in this app's data model for this
+# CDN (keyed by item id only) to serve those from at all, and it's also
+# still the last-resort fallback _untradeable_item_icon below falls
+# through to for the rare combination-item name that the item-id
+# snapshot doesn't happen to cover under its exact stored spelling. See
+# that module's own top-of-file comment for the full rationale, which
+# still applies unchanged to both of those.
+ITEM_ICON_CDN_BASE = "https://static.runelite.net/cache/item/icon/"
 
 # How long cached data is considered fresh before hitting the wiki API
 # again -- same values the original tool used.
@@ -163,20 +179,36 @@ def get_latest_prices(force: bool = False) -> Tuple[Dict[str, dict], Optional[st
 _ICON_EXT_RE = re.compile(r"\.(png|gif|jpg|jpeg)$", re.IGNORECASE)
 
 
-def item_icon_url(icon_filename: Optional[str]) -> Optional[str]:
+def item_icon_url(item_id: Optional[int]) -> Optional[str]:
+    """The one place every item icon in this app is built from now --
+    a direct hit at RuneLite's own static CDN, by real numeric OSRS
+    item id (see ITEM_ICON_CDN_BASE's own comment above). None in,
+    None out, same as every caller already expects for "no icon to
+    show" (the frontend's own onerror handler on every icon <img> tag
+    already hides a 404 gracefully too, for the rare id this CDN
+    doesn't have -- a brand new item before its weekly refresh catches
+    up, most likely)."""
+    if item_id is None:
+        return None
+    return ITEM_ICON_CDN_BASE + str(item_id) + ".png"
+
+
+def _wiki_icon_url(icon_filename: Optional[str]) -> Optional[str]:
+    """The OLD item_icon_url, kept private -- routes a wiki image
+    FILENAME (not a numeric id) through our own /icon-cache/<filename>
+    route (app/main.py), which fetches-and-caches it via
+    ensure_cached_icon_path in app/icon_cache.py rather than ever
+    hotlinking the wiki directly (see that module's own top-of-file
+    comment for why -- still just as true for whatever still uses
+    this). The only caller left in this file is
+    _untradeable_item_icon's own last-resort fallback, for the rare
+    combination-item name app/item_ids.py's snapshot doesn't cover
+    under its exact stored spelling -- everything else now goes
+    through the id-based item_icon_url above instead."""
     if not icon_filename:
         return None
     if not _ICON_EXT_RE.search(icon_filename):
         icon_filename = icon_filename + ".png"
-    # Always our own /icon-cache/<filename> route (app/main.py) now,
-    # never a direct wiki hotlink -- that route (via
-    # ensure_cached_icon_path in app/icon_cache.py) is what actually
-    # fetches-and-caches an icon this is the first request for. See
-    # that module's own top-of-file comment for why handing the browser
-    # a direct wiki fallback here, even just for a brand new icon's
-    # first render, was itself enough to trip the wiki's rate limiting
-    # on a page -- Storages Viewer especially -- showing enough
-    # never-before-seen icons at once.
     return "/icon-cache/" + urllib.parse.quote(icon_filename)
 
 
@@ -295,16 +327,16 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
     for item_id, meta in mapping.items():
         name = meta.get("name") or ""
         if name.lower() == q:
-            exact = {"id": int(item_id), "name": name, "icon": item_icon_url(meta.get("icon")), "tradeable": True}
+            exact = {"id": int(item_id), "name": name, "icon": item_icon_url(int(item_id)), "tradeable": True}
             break
     if exact is None:
         recipe = find_recipe(q)
         if recipe:
-            exact = {"id": None, "name": recipe["name"], "icon": item_icon_url(recipe.get("icon")), "tradeable": False}
+            exact = {"id": None, "name": recipe["name"], "icon": _untradeable_item_icon(recipe["name"]), "tradeable": False}
     if exact is None:
         entry = find_item_by_exact_name(q)
         if entry and entry.get("name"):
-            exact = {"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False}
+            exact = {"id": None, "name": entry["name"], "icon": _untradeable_item_icon(entry["name"]), "tradeable": False}
     exact_name_lower = exact["name"].lower() if exact else None
     # One slot of `limit` is reserved for `exact` (inserted at the very
     # end below) so the normal tiers below fill at most limit-1 more --
@@ -326,7 +358,7 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
     contains.sort(key=lambda kv: len(kv[1].get("name") or ""))
     combined = (starts + contains)[:fill_limit]
     results = [
-        {"id": int(item_id), "name": meta.get("name"), "icon": item_icon_url(meta.get("icon")), "tradeable": True}
+        {"id": int(item_id), "name": meta.get("name"), "icon": item_icon_url(int(item_id)), "tradeable": True}
         for item_id, meta in combined
     ]
 
@@ -342,7 +374,7 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
         if exact_name_lower is not None:
             seen_names.add(exact_name_lower)
         for entry in search_recipe_names(q, fill_limit - len(results), exclude=seen_names):
-            results.append({"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False})
+            results.append({"id": None, "name": entry["name"], "icon": _untradeable_item_icon(entry["name"]), "tradeable": False})
 
     # Still short? Fall back to the broader item-id snapshot (see
     # app/item_ids.py), which covers every item in the game -- tradeable
@@ -357,7 +389,7 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
             seen_names.add(exact_name_lower)
         for entry in search_item_names(q, fill_limit - len(results), exclude=seen_names):
             if entry.get("name"):
-                results.append({"id": None, "name": entry["name"], "icon": item_icon_url(entry.get("icon")), "tradeable": False})
+                results.append({"id": None, "name": entry["name"], "icon": _untradeable_item_icon(entry["name"]), "tradeable": False})
 
     if exact:
         results.insert(0, exact)
@@ -508,7 +540,7 @@ def _resolve_gear_component(raw_component: dict, mapping: dict, prices: dict, po
         }
     meta = mapping.get(str(comp_id), {})
     name = raw_component.get("itemName") or meta.get("name") or f"Item #{comp_id}"
-    icon = item_icon_url(meta.get("icon"))
+    icon = item_icon_url(comp_id)
     unit_price, _ = unit_price_for(comp_id, prices)
     price = unit_price if unit_price is not None else 0
     owned_qty = _take_owned(pool_by_id, pool_by_name, comp_id, name, qty, mapping)
@@ -535,7 +567,7 @@ def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, pri
         }
     meta = mapping.get(str(comp_id), {})
     name = raw_component.get("itemName") or meta.get("name") or f"Item #{comp_id}"
-    icon = item_icon_url(meta.get("icon"))
+    icon = item_icon_url(comp_id)
     unit_price, _ = unit_price_for(comp_id, prices)
     price = unit_price if unit_price is not None else 0
     return {
@@ -618,23 +650,45 @@ def derived_price_by_name(name: Optional[str], prices: dict) -> Tuple[Optional[i
     return None, None
 
 
+def _untradeable_item_id(name: str) -> Optional[int]:
+    """Best real OSRS item id for a name with no Grand Exchange listing
+    -- the first id app/item_ids.py's snapshot resolves for it. A name
+    can resolve to more than one real id (a colour/charge/quest-reward
+    variant), same as _derived_item_ids above -- owning any one of them
+    already counts as owning it elsewhere in this file (see
+    _take_owned's own docstring), and every variant shares one icon
+    anyway, so the first is as good as any. None if this exact name
+    isn't in the snapshot at all."""
+    ids = find_item_ids(name)
+    return ids[0] if ids else None
+
+
 def _untradeable_item_icon(name: str) -> Optional[str]:
     """An untradeable item obviously has no Grand Exchange icon of its
-    own, but we may still know its real wiki icon regardless -- either
-    because it's a known item-combination recipe's output (see
-    app/recipes.py, checked first since that's the more specific,
-    already-loaded lookup) or, more generally, because it's simply a
-    known OSRS item at all (see app/item_ids.py, which covers every
-    item in the game, tradeable or not). Without this, every
-    untradeable/combo slot would fall back to the frontend's plain
-    text-abbreviation placeholder even for an item we can picture
-    perfectly well, which is exactly the gap that made Avernic treads
-    (max) (and friends) look broken once actually placed into a slot
-    despite showing correctly in search."""
+    own, but it's still almost always a known real OSRS item with a
+    real numeric id (see app/item_ids.py, which covers every item in
+    the game, tradeable or not) -- resolve THAT and build its icon the
+    same CDN-direct way as every tradeable item above, rather than
+    falling back to the frontend's plain text-abbreviation placeholder,
+    which is exactly the gap that made Avernic treads (max) (and
+    friends) look broken once actually placed into a slot despite
+    showing correctly in search.
+
+    Only when the snapshot doesn't cover this exact name at all --
+    ~190 of app/recipes.py's ~1200 known combination items, mostly
+    cosmetic colour variants and disambiguation-suffixed wiki page
+    names item_ids.json's Bucket-extension dump never recorded under
+    this exact spelling -- does this fall through to the one remaining
+    wiki-filename path (_wiki_icon_url, routed through app/icon_cache.py
+    same as an NPC portrait), using whatever icon filename the recipe
+    itself has on file."""
+    item_id = _untradeable_item_id(name)
+    if item_id is not None:
+        return item_icon_url(item_id)
     recipe = find_recipe(name)
     if recipe and recipe.get("icon"):
-        return item_icon_url(recipe["icon"])
-    return item_icon_url(find_item_icon(name))
+        return _wiki_icon_url(recipe["icon"])
+    return None
 
 
 def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dict, pool_by_id: dict, pool_by_name: dict) -> Optional[dict]:
@@ -711,7 +765,7 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
         }
     meta = mapping.get(str(item_id), {})
     name = raw_item.get("itemName") or meta.get("name") or f"Item #{item_id}"
-    icon = item_icon_url(meta.get("icon"))
+    icon = item_icon_url(item_id)
     unit_price, price_source = unit_price_for(item_id, prices)
     price = unit_price if unit_price is not None else 0
     owned = _take_owned(pool_by_id, pool_by_name, item_id, name, 1, mapping) >= 1
@@ -738,7 +792,7 @@ def resolve_gear_setup_icon(raw_icon: Optional[dict], mapping: dict) -> Optional
     if item_id is not None:
         meta = mapping.get(str(item_id), {})
         name = raw_icon.get("itemName") or meta.get("name") or f"Item #{item_id}"
-        icon = item_icon_url(meta.get("icon"))
+        icon = item_icon_url(item_id)
         return {"itemId": item_id, "itemName": name, "icon": icon, "tradeable": True}
     name = raw_icon.get("itemName") or "Item"
     return {"itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False}

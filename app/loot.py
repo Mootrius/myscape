@@ -217,24 +217,25 @@ _ICON_EXT_RE = re.compile(r"\.(png|gif|jpg|jpeg)$", re.IGNORECASE)
 
 def npc_icon_url(name: Optional[str]) -> Optional[str]:
     """Best-effort NPC/event portrait, guessed off the wiki's usual
-    "<Name>.png" infobox-image convention -- the NPC-side counterpart
-    to item_icon_url (imported above from app/purchase_goals.py), which
-    has an id-keyed mapping API to look item icons up in; NPCs have no
-    equivalent, so this is a guess. Some bosses (multiple combat forms,
-    e.g. the Alchemical Hydra's four elemental phases) have no single
-    portrait under that guessed name -- app/icon_cache.py's fetch step
-    falls back to whatever the wiki's own infobox lists as that NPC's
-    first version rather than just 404ing outright (see
+    "<Name>.png" infobox-image convention -- still wiki-sourced, unlike
+    every item icon in this app now (see item_icon_url, imported above
+    from app/purchase_goals.py, which instead hits RuneLite's own CDN
+    directly by real numeric item id). There's no NPC-id equivalent of
+    that CDN this app's data model could key off of at all (see
+    npc_hide_key's own comment below), so a guessed wiki filename is
+    still the only thing to go on here. Some bosses (multiple combat
+    forms, e.g. the Alchemical Hydra's four elemental phases) have no
+    single portrait under that guessed name -- app/icon_cache.py's
+    fetch step falls back to whatever the wiki's own infobox lists as
+    that NPC's first version rather than just 404ing outright (see
     _first_infobox_image there), so this only actually 404s, and the
-    frontend quietly hides the image the same way item icons already
-    do, for a genuinely missing/renamed icon.
+    frontend quietly hides the image the same way a missing item icon
+    already does, for a genuinely missing/renamed portrait.
 
-    Routed through our own /icon-cache/<filename> route exactly like
-    item_icon_url, rather than a direct wiki hotlink -- see
-    app/icon_cache.py's own top-of-file comment for why a direct
-    fallback there was itself enough to trip the wiki's rate limiting;
-    the same is just as true of NPC portraits, which used to bypass the
-    cache entirely."""
+    Routed through our own /icon-cache/<filename> route -- see
+    app/icon_cache.py's own top-of-file comment for why a direct wiki
+    hotlink here was itself enough to trip the wiki's rate limiting;
+    this is now the module's main reason to still exist at all."""
     if not name:
         return None
     filename = name if _ICON_EXT_RE.search(name) else name + ".png"
@@ -366,7 +367,13 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict, hidden_ite
         # interchangeable everywhere.
         value = _item_value(item_id, quantity, prices, mapping)
         total_value += value
-        icon = item_icon_url(meta.get("icon")) if meta.get("icon") else item_icon_url(item_name)
+        # A real numeric item id was already on hand for every drop
+        # here (canonical_id, straight off the plugin's own sync) --
+        # item_icon_url (app/purchase_goals.py) builds RuneLite's CDN
+        # URL directly from it, tradeable or not, so unlike before there's
+        # no need to fall back to guessing a wiki filename off the bare
+        # item name for an untradeable drop any more.
+        icon = item_icon_url(canonical_id)
         resolved.append({
             "itemId": canonical_id,
             "itemName": item_name,
