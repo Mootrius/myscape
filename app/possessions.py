@@ -195,6 +195,248 @@ _CRYSTAL_ARMOUR_ICON_OVERRIDES = {
     27775: "Crystal legs (inactive) (Amlodd).png",
 }
 
+# Same underlying problem as crystal armour just above, on a completely
+# different item family: each Graceful piece (hood/cape/top/legs/
+# gloves/boots) can be recoloured to any of 11 looks -- the 5 Kourend
+# house colours plus the original Rogues' Den grey, Agility Arena,
+# Hallowed Sepulchre, Trailblazer League, Adventurer, and Varlamore
+# recolours -- and the game calls every one of them by the exact same
+# name ("Graceful hood", full stop, recolour or not), so item_ids.json's
+# name-merged entry for "Graceful hood" only ever carries ONE icon,
+# arbitrarily whichever version the wiki's own data happened to list
+# first. Confirmed live against the wiki's Bucket:Infobox_item table,
+# same one level down from fetch_item_ids.py's own by-name merge that
+# _CRYSTAL_ARMOUR_ICON_OVERRIDES above was built from.
+#
+# Each colour lists TWO real item ids on the wiki (its infobox's own
+# "version1 = Inventory" / "version2 = Worn" split) rather than one --
+# unlike crystal armour's active/inactive, which are two genuinely
+# different appearances, these two ids appear to be the same look under
+# two different technical states (carried vs. equipped), and it isn't
+# obvious from the wiki data alone which of the two a synced Bank/
+# Inventory/Equipment container would actually ever report. Both are
+# mapped here regardless, straight to that colour's one shared icon, so
+# either one showing up resolves correctly either way -- costs nothing
+# to include the id that turns out to never actually appear.
+_GRACEFUL_OUTFIT_ICON_OVERRIDES = {
+    # Graceful hood -- original
+    11850: "Graceful hood.png",
+    11851: "Graceful hood.png",
+    # Graceful hood -- Arceuus
+    13579: "Graceful hood (Arceuus).png",
+    13580: "Graceful hood (Arceuus).png",
+    # Graceful hood -- Piscarilius
+    13591: "Graceful hood (Piscarilius).png",
+    13592: "Graceful hood (Piscarilius).png",
+    # Graceful hood -- Lovakengj
+    13603: "Graceful hood (Lovakengj).png",
+    13604: "Graceful hood (Lovakengj).png",
+    # Graceful hood -- Shayzien
+    13615: "Graceful hood (Shayzien).png",
+    13616: "Graceful hood (Shayzien).png",
+    # Graceful hood -- Hosidius
+    13627: "Graceful hood (Hosidius).png",
+    13628: "Graceful hood (Hosidius).png",
+    # Graceful hood -- Kourend
+    13667: "Graceful hood (Kourend).png",
+    13668: "Graceful hood (Kourend).png",
+    # Graceful hood -- Agility Arena
+    21061: "Graceful hood (Agility Arena).png",
+    21063: "Graceful hood (Agility Arena).png",
+    # Graceful hood -- Varlamore
+    30045: "Graceful hood (Varlamore).png",
+    30047: "Graceful hood (Varlamore).png",
+    # Graceful hood -- Hallowed
+    24743: "Graceful hood (Hallowed).png",
+    24745: "Graceful hood (Hallowed).png",
+    # Graceful hood -- Trailblazer
+    25069: "Graceful hood (Trailblazer).png",
+    25071: "Graceful hood (Trailblazer).png",
+    # Graceful hood -- Adventurer
+    27444: "Graceful hood (Adventurer).png",
+    27446: "Graceful hood (Adventurer).png",
+    # Graceful cape -- original
+    11852: "Graceful cape.png",
+    11853: "Graceful cape.png",
+    # Graceful cape -- Arceuus
+    13581: "Graceful cape (Arceuus).png",
+    13582: "Graceful cape (Arceuus).png",
+    # Graceful cape -- Piscarilius
+    13593: "Graceful cape (Piscarilius).png",
+    13594: "Graceful cape (Piscarilius).png",
+    # Graceful cape -- Lovakengj
+    13605: "Graceful cape (Lovakengj).png",
+    13606: "Graceful cape (Lovakengj).png",
+    # Graceful cape -- Shayzien
+    13617: "Graceful cape (Shayzien).png",
+    13618: "Graceful cape (Shayzien).png",
+    # Graceful cape -- Hosidius
+    13629: "Graceful cape (Hosidius).png",
+    13630: "Graceful cape (Hosidius).png",
+    # Graceful cape -- Kourend
+    13669: "Graceful cape (Kourend).png",
+    13670: "Graceful cape (Kourend).png",
+    # Graceful cape -- Agility Arena
+    21064: "Graceful cape (Agility Arena).png",
+    21066: "Graceful cape (Agility Arena).png",
+    # Graceful cape -- Varlamore
+    30048: "Graceful cape (Varlamore).png",
+    30050: "Graceful cape (Varlamore).png",
+    # Graceful cape -- Hallowed
+    24746: "Graceful cape (Hallowed).png",
+    24748: "Graceful cape (Hallowed).png",
+    # Graceful cape -- Trailblazer
+    25072: "Graceful cape (Trailblazer).png",
+    25074: "Graceful cape (Trailblazer).png",
+    # Graceful cape -- Adventurer
+    27447: "Graceful cape (Adventurer).png",
+    27449: "Graceful cape (Adventurer).png",
+    # Graceful top -- original
+    11854: "Graceful top.png",
+    11855: "Graceful top.png",
+    # Graceful top -- Arceuus
+    13583: "Graceful top (Arceuus).png",
+    13584: "Graceful top (Arceuus).png",
+    # Graceful top -- Piscarilius
+    13595: "Graceful top (Piscarilius).png",
+    13596: "Graceful top (Piscarilius).png",
+    # Graceful top -- Lovakengj
+    13607: "Graceful top (Lovakengj).png",
+    13608: "Graceful top (Lovakengj).png",
+    # Graceful top -- Shayzien
+    13619: "Graceful top (Shayzien).png",
+    13620: "Graceful top (Shayzien).png",
+    # Graceful top -- Hosidius
+    13631: "Graceful top (Hosidius).png",
+    13632: "Graceful top (Hosidius).png",
+    # Graceful top -- Kourend
+    13671: "Graceful top (Kourend).png",
+    13672: "Graceful top (Kourend).png",
+    # Graceful top -- Agility Arena
+    21067: "Graceful top (Agility Arena).png",
+    21069: "Graceful top (Agility Arena).png",
+    # Graceful top -- Varlamore
+    30051: "Graceful top (Varlamore).png",
+    30053: "Graceful top (Varlamore).png",
+    # Graceful top -- Hallowed
+    24749: "Graceful top (Hallowed).png",
+    24751: "Graceful top (Hallowed).png",
+    # Graceful top -- Trailblazer
+    25075: "Graceful top (Trailblazer).png",
+    25077: "Graceful top (Trailblazer).png",
+    # Graceful top -- Adventurer
+    27450: "Graceful top (Adventurer).png",
+    27452: "Graceful top (Adventurer).png",
+    # Graceful legs -- original
+    11856: "Graceful legs.png",
+    11857: "Graceful legs.png",
+    # Graceful legs -- Arceuus
+    13585: "Graceful legs (Arceuus).png",
+    13586: "Graceful legs (Arceuus).png",
+    # Graceful legs -- Piscarilius
+    13597: "Graceful legs (Piscarilius).png",
+    13598: "Graceful legs (Piscarilius).png",
+    # Graceful legs -- Lovakengj
+    13609: "Graceful legs (Lovakengj).png",
+    13610: "Graceful legs (Lovakengj).png",
+    # Graceful legs -- Shayzien
+    13621: "Graceful legs (Shayzien).png",
+    13622: "Graceful legs (Shayzien).png",
+    # Graceful legs -- Hosidius
+    13633: "Graceful legs (Hosidius).png",
+    13634: "Graceful legs (Hosidius).png",
+    # Graceful legs -- Kourend
+    13673: "Graceful legs (Kourend).png",
+    13674: "Graceful legs (Kourend).png",
+    # Graceful legs -- Agility Arena
+    21070: "Graceful legs (Agility Arena).png",
+    21072: "Graceful legs (Agility Arena).png",
+    # Graceful legs -- Varlamore
+    30054: "Graceful legs (Varlamore).png",
+    30056: "Graceful legs (Varlamore).png",
+    # Graceful legs -- Hallowed
+    24752: "Graceful legs (Hallowed).png",
+    24754: "Graceful legs (Hallowed).png",
+    # Graceful legs -- Trailblazer
+    25078: "Graceful legs (Trailblazer).png",
+    25080: "Graceful legs (Trailblazer).png",
+    # Graceful legs -- Adventurer
+    27453: "Graceful legs (Adventurer).png",
+    27455: "Graceful legs (Adventurer).png",
+    # Graceful gloves -- original
+    11858: "Graceful gloves.png",
+    11859: "Graceful gloves.png",
+    # Graceful gloves -- Arceuus
+    13587: "Graceful gloves (Arceuus).png",
+    13588: "Graceful gloves (Arceuus).png",
+    # Graceful gloves -- Piscarilius
+    13599: "Graceful gloves (Piscarilius).png",
+    13600: "Graceful gloves (Piscarilius).png",
+    # Graceful gloves -- Lovakengj
+    13611: "Graceful gloves (Lovakengj).png",
+    13612: "Graceful gloves (Lovakengj).png",
+    # Graceful gloves -- Shayzien
+    13623: "Graceful gloves (Shayzien).png",
+    13624: "Graceful gloves (Shayzien).png",
+    # Graceful gloves -- Hosidius
+    13635: "Graceful gloves (Hosidius).png",
+    13636: "Graceful gloves (Hosidius).png",
+    # Graceful gloves -- Kourend
+    13675: "Graceful gloves (Kourend).png",
+    13676: "Graceful gloves (Kourend).png",
+    # Graceful gloves -- Agility Arena
+    21073: "Graceful gloves (Agility Arena).png",
+    21075: "Graceful gloves (Agility Arena).png",
+    # Graceful gloves -- Varlamore
+    30057: "Graceful gloves (Varlamore).png",
+    30059: "Graceful gloves (Varlamore).png",
+    # Graceful gloves -- Hallowed
+    24755: "Graceful gloves (Hallowed).png",
+    24757: "Graceful gloves (Hallowed).png",
+    # Graceful gloves -- Trailblazer
+    25081: "Graceful gloves (Trailblazer).png",
+    25083: "Graceful gloves (Trailblazer).png",
+    # Graceful gloves -- Adventurer
+    27456: "Graceful gloves (Adventurer).png",
+    27458: "Graceful gloves (Adventurer).png",
+    # Graceful boots -- original
+    11860: "Graceful boots.png",
+    11861: "Graceful boots.png",
+    # Graceful boots -- Arceuus
+    13589: "Graceful boots (Arceuus).png",
+    13590: "Graceful boots (Arceuus).png",
+    # Graceful boots -- Piscarilius
+    13601: "Graceful boots (Piscarilius).png",
+    13602: "Graceful boots (Piscarilius).png",
+    # Graceful boots -- Lovakengj
+    13613: "Graceful boots (Lovakengj).png",
+    13614: "Graceful boots (Lovakengj).png",
+    # Graceful boots -- Shayzien
+    13625: "Graceful boots (Shayzien).png",
+    13626: "Graceful boots (Shayzien).png",
+    # Graceful boots -- Hosidius
+    13637: "Graceful boots (Hosidius).png",
+    13638: "Graceful boots (Hosidius).png",
+    # Graceful boots -- Kourend
+    13677: "Graceful boots (Kourend).png",
+    13678: "Graceful boots (Kourend).png",
+    # Graceful boots -- Agility Arena
+    21076: "Graceful boots (Agility Arena).png",
+    21078: "Graceful boots (Agility Arena).png",
+    # Graceful boots -- Varlamore
+    30060: "Graceful boots (Varlamore).png",
+    30062: "Graceful boots (Varlamore).png",
+    # Graceful boots -- Hallowed
+    24758: "Graceful boots (Hallowed).png",
+    24760: "Graceful boots (Hallowed).png",
+    # Graceful boots -- Trailblazer
+    25084: "Graceful boots (Trailblazer).png",
+    25086: "Graceful boots (Trailblazer).png",
+    # Graceful boots -- Adventurer
+    27459: "Graceful boots (Adventurer).png",
+    27461: "Graceful boots (Adventurer).png",
+}
+
 
 def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: dict) -> dict:
     """Returns {"name", "icon", "tradeable", "highAlch"} for one real
@@ -235,8 +477,11 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
     _CRYSTAL_ARMOUR_ICON_OVERRIDES for the same reason on a completely
     different class of item: crystal helm/body/legs, where the bare
     name is shared by all eight cosmetic recolors (that table's own
-    comment has the full story), so the bare-name guess this branch
-    otherwise relies on can't tell them apart at all."""
+    comment has the full story), and through
+    _GRACEFUL_OUTFIT_ICON_OVERRIDES for the same reason again on the
+    Graceful outfit's six pieces, each shared by all twelve of its
+    recolors, so the bare-name guess this branch otherwise relies on
+    can't tell any of them apart at all."""
     meta = mapping.get(str(item_id))
     if meta:
         icon_filename = meta.get("icon")
@@ -254,7 +499,12 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
         name = name or f"Item #{item_id}"
         icon_filename = name
 
-    icon_filename = _STACK_ICON_OVERRIDES.get(item_id) or _CRYSTAL_ARMOUR_ICON_OVERRIDES.get(item_id) or icon_filename
+    icon_filename = (
+        _STACK_ICON_OVERRIDES.get(item_id)
+        or _CRYSTAL_ARMOUR_ICON_OVERRIDES.get(item_id)
+        or _GRACEFUL_OUTFIT_ICON_OVERRIDES.get(item_id)
+        or icon_filename
+    )
     return {
         "name": name,
         "icon": item_icon_url(icon_filename),

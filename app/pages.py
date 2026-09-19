@@ -1158,11 +1158,26 @@ def render_purchase_goals(player: Player) -> str:
             e.dataTransfer.setData('text/plain', btn.getAttribute('data-setup-id'));
             draggedEl = btn;
             dropped = false;
+            // Same PG.dragging flag wireSummaryDrag's own dragstart
+            // sets -- the 5s background poll at the bottom of this
+            // script checks it and skips its refresh while it's true.
+            // Missing this was the actual bug behind a dropped setup
+            // reorder silently not sticking: nothing here previously
+            // told the poll a drag was in progress, so a poll landing
+            // mid-drag would call render() -> renderIconRow(), which
+            // tears down and rebuilds every button in this row from
+            // the OLD (pre-drag) PG.data -- including the very button
+            // the browser's native drag session was still tracking as
+            // its source. Ripping that element out from under an
+            // in-flight native drag silently ends the gesture, so the
+            // drop the player thought they'd made never fires at all.
+            PG.dragging = true;
             btn.classList.add('dragging');
           });
           btn.addEventListener('dragend', function () {
             btn.classList.remove('dragging');
             draggedEl = null;
+            PG.dragging = false;
             // A completed drag shouldn't ALSO register as a click that
             // switches the active setup -- see the click handler above.
             PG.dragSuppressClick = true;
@@ -4187,65 +4202,107 @@ def render_mindmaps(player: Player) -> str:
         }
         if (MM.popoverPanBaselineX == null) MM.popoverPanBaselineX = MM.pan.x;
         if (MM.popoverPanBaselineY == null) MM.popoverPanBaselineY = MM.pan.y;
+        var layout = MM.lastLayout;
+        var pos = layout && MM.selectedNodeId ? layout.positions[MM.selectedNodeId] : null;
+        // Nothing to line the popover up against without its node's own
+        // layout position -- shouldn't happen while one's actually showing
+        // (renderNodePopoverHtml/renderSharedChildPopoverHtml only ever
+        // render for the current selection), but bail rather than throw
+        // if render() and this ever end up looking at different nodes.
+        if (!pos) return;
         var canvas = document.getElementById('mmCanvas');
         var canvasRect = canvas.getBoundingClientRect();
-        // .mm-world carries an always-on 0.18s transform transition (see
-        // its own comment in mindmaps.css), so an ordinary applyTransform()
-        // call glides rather than snaps. That's fine for the ONE nudge
-        // below that actually needs to be visible -- but switching node
-        // TYPE in the edit popup (or any other rapid back-to-back popover
-        // change) fires a fresh render(), and therefore a fresh call to
-        // this function, well within the previous call's own 180ms glide.
-        // MM.pan.x/y is always the JS-tracked TARGET pan -- the resting
-        // place a previous call already decided on -- but at that moment
-        // the popover's actual on-screen position is still mid-flight
-        // toward it. Reading getBoundingClientRect() right then measures
-        // that stale, still-catching-up position, while the baseline
-        // reset and overflow math below both treat MM.pan as if it were
-        // already fully applied on screen -- the mismatch between "where
-        // JS thinks it settled" and "where it's actually rendered right
-        // now" is exactly what produced the reported "seemingly random"
-        // up/down jumps on quick successive type switches. setFullscreen
-        // hit this identical mismatch once already (see its own comment)
-        // and fixed it the same way: force the baseline-reset AND the
-        // measurement that follows it to land/read instantly, so what
-        // gets measured always matches MM.pan exactly, then hand the
-        // transition back before the one nudge that should actually
-        // glide.
-        mmWorldEl.style.transitionDuration = '0s';
-        if (MM.pan.x !== MM.popoverPanBaselineX) {
-          MM.pan.x = MM.popoverPanBaselineX;
-          applyTransform();
-        }
-        if (MM.pan.y !== MM.popoverPanBaselineY) {
-          MM.pan.y = MM.popoverPanBaselineY;
-          applyTransform();
-        }
-        var popRect = popover.getBoundingClientRect();
-        mmWorldEl.style.transitionDuration = '';
+        // Worked out analytically instead of measuring the popover's live
+        // getBoundingClientRect(), on purpose. .mm-world carries an
+        // always-on 0.18s transform transition (see its own comment in
+        // mindmaps.css), so switching node TYPE in the edit popup (or any
+        // other rapid back-to-back popover change) can fire a fresh
+        // render() -- and therefore a fresh call to this function -- well
+        // within the PREVIOUS call's own 180ms glide, while that glide is
+        // still carrying the world toward an earlier target. A first
+        // attempt at this (see git history) forced the pan back in sync by
+        // zeroing mmWorldEl.style.transitionDuration and re-applying
+        // MM.pan right before measuring -- which only actually re-synced
+        // anything when MM.pan itself had just changed; if THIS call
+        // found MM.pan already equal to the baseline (nothing to reset),
+        // it skipped straight to measuring, and getBoundingClientRect()
+        // then read whatever still-mid-flight position the PRIOR call's
+        // own glide had left on screen -- exactly the "seemingly random"
+        // up/down jump the user kept seeing switching types, since it
+        // depended on how far a still-running transition had gotten
+        // rather than on the new type's actual popover height. It also
+        // meant even a correctly-detected "no longer needs the room"
+        // case still forced an instant, unannounced teleport back to
+        // baseline (duration zeroed for the reset itself) rather than
+        // ever really just staying still.
+        //
+        // Computing the popover's box from data instead of the DOM's
+        // current paint sidesteps all of that: .mm-world's transform is
+        // `translate(pan.x, pan.y) scale(zoom)` with transform-origin 0 0
+        // (mindmaps.css), so screen = pan + zoom * local for any point in
+        // its LOCAL (pre-transform) coordinate space -- and MM.pan/MM.zoom
+        // are the authoritative JS-tracked targets regardless of whatever
+        // a CSS transition is still animating toward on screen. The
+        // popover's local box comes from the exact same CSS it's actually
+        // laid out with (.mm-node-popover: `top: calc(100% + 22px)` off
+        // its node, `left: 50%` then `transform: translateX(-50%)` to
+        // center under it) plus offsetWidth/offsetHeight -- pure layout
+        // measurements render() just settled synchronously, and (unlike
+        // getBoundingClientRect) never affected by .mm-world's own
+        // pan/zoom transform, so they're accurate the instant this runs
+        // no matter what's still mid-glide. That leaves nothing here
+        // depending on transition timing at all.
+        var localTop = pos.y + NODE_HEIGHT + 22;
+        var localBottom = localTop + popover.offsetHeight;
+        var localCenterX = pos.x + NODE_WIDTH / 2;
+        var localLeft = localCenterX - popover.offsetWidth / 2;
+        var localRight = localCenterX + popover.offsetWidth / 2;
         var MARGIN = 16;
-        var overflowBelow = popRect.bottom - (canvasRect.bottom - MARGIN);
-        var overflowAbove = (canvasRect.top + MARGIN) - popRect.top;
+
+        // Always measured from the baseline pan -- the one resting spot
+        // this popover session started from -- never from wherever this
+        // node's popover happens to be sitting from an earlier nudge, so
+        // switching to a type that no longer needs the room lands back at
+        // baseline exactly (not wherever the last nudge left off), and
+        // switching to one that does only ever nudges by what THAT type
+        // actually needs. Whatever the result, it's applied as a single
+        // target pan and left to glide there normally -- never force-
+        // snapped first -- so a popover that doesn't overflow the new
+        // type simply never moves, and one that does gets exactly one
+        // smooth scroll toward it, matching "only scroll if the new type
+        // would actually run past the view."
+        var targetPanY = MM.popoverPanBaselineY;
+        var screenTop = canvasRect.top + targetPanY + MM.zoom * localTop;
+        var screenBottom = canvasRect.top + targetPanY + MM.zoom * localBottom;
+        var overflowBelow = screenBottom - (canvasRect.bottom - MARGIN);
+        var overflowAbove = (canvasRect.top + MARGIN) - screenTop;
         if (overflowBelow > 0) {
-          MM.pan.y -= overflowBelow;
-          applyTransform();
+          targetPanY -= overflowBelow;
         } else if (overflowAbove > 0) {
-          MM.pan.y += overflowAbove;
+          targetPanY += overflowAbove;
+        }
+        if (targetPanY !== MM.pan.y) {
+          MM.pan.y = targetPanY;
           applyTransform();
         }
-        // Same idea, sideways -- a node isn't always near the vertical
-        // center of the tree, and the popover is centered under its
-        // node (see .mm-node-popover in mindmaps.css), so a node close
-        // to either edge of the current view can have its popover run
-        // past .mm-canvas's own left/right edge exactly the same way
-        // one near the bottom runs past the bottom edge above.
-        var overflowRight = popRect.right - (canvasRect.right - MARGIN);
-        var overflowLeft = (canvasRect.left + MARGIN) - popRect.left;
+
+        // Same idea, sideways -- a node isn't always near the horizontal
+        // center of the tree, and the popover is centered under its node,
+        // so a node close to either edge of the current view can have its
+        // popover run past .mm-canvas's own left/right edge exactly the
+        // same way one near the bottom runs past the bottom edge above.
+        var targetPanX = MM.popoverPanBaselineX;
+        var screenLeft = canvasRect.left + targetPanX + MM.zoom * localLeft;
+        var screenRight = canvasRect.left + targetPanX + MM.zoom * localRight;
+        var overflowRight = screenRight - (canvasRect.right - MARGIN);
+        var overflowLeft = (canvasRect.left + MARGIN) - screenLeft;
         if (overflowRight > 0) {
-          MM.pan.x -= overflowRight;
-          applyTransform();
+          targetPanX -= overflowRight;
         } else if (overflowLeft > 0) {
-          MM.pan.x += overflowLeft;
+          targetPanX += overflowLeft;
+        }
+        if (targetPanX !== MM.pan.x) {
+          MM.pan.x = targetPanX;
           applyTransform();
         }
       }
