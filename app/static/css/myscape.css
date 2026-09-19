@@ -444,6 +444,7 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   padding: 10px 12px;
   border-radius: var(--radius);
   margin-bottom: 16px;
+  text-align: center;
 }
 
 .auth-success.show { display: block; }

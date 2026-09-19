@@ -727,7 +727,7 @@ def render_login() -> str:
             <label for="password">Password</label>
             <input type="password" id="password" name="password" placeholder="Your password" required />
           </div>
-          <div class="auth-forgot"><a href="/forgot-password">Forgot your password?</a></div>
+          <div class="auth-forgot"><a href="/forgot-password">FORGOT PASSWORD?</a></div>
           <button class="primary" type="submit">LOG IN</button>
         </form>
         <div class="auth-switch">Don't have an account? <a href="/signup">SIGN UP</a></div>
@@ -787,7 +787,7 @@ def render_forgot_password() -> str:
           </div>
           <button class="primary" type="submit">SEND RESET LINK</button>
         </form>
-        <div class="auth-switch"><a href="/login">Back to log in</a></div>
+        <div class="auth-switch"><a href="/login">BACK TO LOG IN</a></div>
       </div>
     </div>
     """
