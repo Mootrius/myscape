@@ -63,6 +63,13 @@
   cursor: pointer; white-space: nowrap;
 }
 .loot-range-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+/* Toggled on while the menu below it is open (see the button's own
+   click handler and closeRangeMenu in the page script) -- same gold
+   "currently on" treatment as .loot-sort-tab.active/
+   .loot-hide-toggle.active further down, so the button itself reads
+   as active for as long as its own dropdown is showing, not just
+   whichever preset happens to be checked inside it. */
+.loot-range-btn.active { border-color: var(--gold); color: var(--gold); }
 .loot-range-caret { font-size: 9px; color: var(--text-faint); }
 .loot-range-menu {
   position: absolute; top: calc(100% + 4px); left: 0;

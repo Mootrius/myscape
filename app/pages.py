@@ -3300,6 +3300,7 @@ def render_loot_tracker(player: Player) -> str:
       function closeRangeMenu() {
         document.getElementById('lootRangeMenu').style.display = 'none';
         document.getElementById('lootRangeCustom').style.display = 'none';
+        document.getElementById('lootRangeBtn').classList.remove('active');
       }
 
       document.getElementById('lootRangeBtn').addEventListener('click', function () {
@@ -3307,6 +3308,13 @@ def render_loot_tracker(player: Player) -> str:
         var opening = menu.style.display === 'none';
         menu.style.display = opening ? 'flex' : 'none';
         if (!opening) document.getElementById('lootRangeCustom').style.display = 'none';
+        // Gold-highlighted (see .loot-range-btn.active in
+        // loot-tracker.css) for as long as its own dropdown is open --
+        // every path that actually closes the menu (outside click,
+        // picking a preset, Apply) already routes through
+        // closeRangeMenu above, which un-highlights it there, so this
+        // is the only place that needs to turn it ON.
+        this.classList.toggle('active', opening);
       });
       document.addEventListener('click', function (e) {
         var wrap = document.getElementById('lootChartRange');
