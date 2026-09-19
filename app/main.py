@@ -2,10 +2,21 @@
 early account system (website signup/login, RuneLite plugin account
 linking) -- see README.md for how the pieces fit together.
 """
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+# Without this, the root logger defaults to WARNING-and-up with no
+# handler attached, which silently drops every log.info() call in the
+# app (e.g. app/email_client.py's "RESEND_API_KEY not set -- would have
+# emailed ..." line) -- they'd never reach Render's log viewer at all,
+# regardless of whether that's actually what happened, which makes
+# exactly the kind of "why didn't this email send" question this app
+# needs to answer unanswerable from the logs alone. INFO is still well
+# below DEBUG, so this doesn't turn on noisy per-request debug output.
+logging.basicConfig(level=logging.INFO)
 
 from alembic import command
 from alembic.config import Config
