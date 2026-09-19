@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 from alembic import command
 from alembic.config import Config
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
@@ -367,22 +367,6 @@ def on_startup():
     # "migrated" -- see migrations/versions/5cf359e6d5b1_initial_schema.py.
     alembic_cfg = Config(os.path.join(_REPO_ROOT, "alembic.ini"))
     command.upgrade(alembic_cfg, "head")
-
-
-# TEMPORARY -- diagnostic only, to check whether slowapi's rate limiter
-# (get_remote_address, which reads request.client.host) is actually
-# seeing each visitor's real IP behind Render's proxy, or whether every
-# visitor collapses onto the same address because uvicorn isn't told to
-# trust X-Forwarded-For from Render's edge. Nothing sensitive here (an
-# IP address is about as private as what any "what's my IP" site shows
-# a visitor about themselves) -- remove once this is settled either way.
-@app.get("/api/debug/request-info")
-def debug_request_info(request: Request):
-    return {
-        "client_host": request.client.host if request.client else None,
-        "x_forwarded_for": request.headers.get("x-forwarded-for"),
-        "x_real_ip": request.headers.get("x-real-ip"),
-    }
 
 
 @app.get("/", response_class=HTMLResponse)
