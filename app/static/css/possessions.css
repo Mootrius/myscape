@@ -248,8 +248,20 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
    (both classes together) so the data rows' own icon+name cells above
    are untouched. */
 .pm-col-image.pm-sort-header { padding-left: 6px; }
-.pm-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto; }
-.pm-icon-blank { width: 26px; height: 26px; }
+/* Bumped from 26px, plus a small translate to recenter -- these are
+   real item icons off RuneLite's own CDN, which draws on a fixed
+   canvas with built-in padding down the right side for the in-game
+   stack-count badge -- see .loot-item-box-icon's own comment in
+   loot-tracker.css for the full empirical writeup behind both this
+   size bump and the exact translate. .pm-icon-blank (the no-icon
+   placeholder some rows render instead -- see rowHtml in the page's
+   own script) matches the new size so a row missing an icon still
+   lines up with the ones that have one. */
+.pm-row-icon {
+  width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto;
+  transform: translate(5.5%, -1%);
+}
+.pm-icon-blank { width: 30px; height: 30px; }
 .pm-row-name {
   font-size: 13px; color: var(--text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

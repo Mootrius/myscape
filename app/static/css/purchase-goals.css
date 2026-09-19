@@ -33,7 +33,17 @@
   overflow: hidden;
 }
 
-.tracker-icon-btn img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+/* Bumped from 30px, plus a small translate to recenter -- a real item
+   icon off RuneLite's own CDN, which draws on a fixed canvas with
+   built-in padding down the right side for the in-game stack-count
+   badge -- see .loot-item-box-icon's own comment in loot-tracker.css
+   for the full empirical writeup behind both this size bump and the
+   exact translate. .tracker-icon-btn is 44px, so there's still
+   comfortable margin around it. */
+.tracker-icon-btn img {
+  width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated;
+  transform: translate(5.5%, -1%);
+}
 .tracker-icon-btn.active { border-color: var(--gold); }
 .tracker-icon-btn:hover { border-color: var(--gold-dim); }
 /* Every setup icon is draggable to reorder the row itself (see
@@ -146,7 +156,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 .overlay-side { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .overlay-side.overlay-target { flex-direction: row-reverse; }
-.overlay-icon { width: 38px; height: 38px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0; }
+.overlay-icon { width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0; }
+/* #pgOverlayIconImg (see app/pages.py) is the one .overlay-icon that's
+   ever a real RuneLite CDN item icon -- the Coins icon just above it
+   in the markup is always the bundled /static/img/icon-coins.png, not
+   from the CDN, so it doesn't get this. Same built-in-canvas-padding
+   translate as .loot-item-box-icon in loot-tracker.css (see its own
+   comment for the numbers), targeted by id rather than a shared class
+   since the two icons share one CSS class but only one of them needs
+   this. */
+#pgOverlayIconImg { transform: translate(5.5%, -1%); }
 .overlay-amount { font-size: 23px; font-weight: normal; color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .overlay-progress { flex: 1; min-width: 60px; }
 .progress-track { height: 9px; background: #100e0b; border-radius: 0; overflow: hidden; border: 1px solid var(--border); }
@@ -155,11 +174,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .progress-track.overlay-track { height: 16px; }
 
 .overlay-icon-wrap {
-  width: 38px; height: 38px; flex-shrink: 0; cursor: pointer; border-radius: 50%;
+  width: 44px; height: 44px; flex-shrink: 0; cursor: pointer; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
 }
 .overlay-icon-wrap:hover { background: rgba(255,255,255,0.06); }
-.overlay-icon-wrap .overlay-icon { width: 38px; height: 38px; }
+.overlay-icon-wrap .overlay-icon { width: 44px; height: 44px; }
 .overlay-icon-placeholder {
   width: 30px; height: 30px; border-radius: 50%; border: 1px dashed var(--text-faint);
   color: var(--text-faint); display: flex; align-items: center; justify-content: center;
@@ -293,7 +312,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
    specificity instead of depending on which rule happens to come
    later in this file. */
 .gear-slot.gear-slot-sm { width: auto; height: 40px; }
-.gear-slot.gear-slot-sm .gear-slot-icon { width: 26px; height: 26px; }
+.gear-slot.gear-slot-sm .gear-slot-icon { width: 30px; height: 30px; }
 
 .inventory-grid {
   display: grid;
@@ -331,7 +350,17 @@ button.primary#pgNameSave, .pg-setup-form-save {
    still starting its own native image drag from a draggable="false"
    <img> unless this is also set, which would again grab just the icon
    instead of the whole .gear-slot box underneath it. */
-.gear-slot-icon { width: 38px; height: 38px; object-fit: contain; image-rendering: pixelated; -webkit-user-drag: none; }
+/* Bumped from 38px, plus a small translate to recenter -- a real item
+   icon off RuneLite's own CDN, which draws on a fixed canvas with
+   built-in padding down the right side for the in-game stack-count
+   badge -- see .loot-item-box-icon's own comment in loot-tracker.css
+   for the full empirical writeup behind both this size bump and the
+   exact translate. .gear-slot is 56px, so there's still comfortable
+   margin around it. */
+.gear-slot-icon {
+  width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; -webkit-user-drag: none;
+  transform: translate(5.5%, -1%);
+}
 
 /* Drag-and-drop (see wireSlotClicks/moveSlotItem in app/pages.py) --
    an outline rather than a border/background change so it never
@@ -410,10 +439,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-summary-empty { font-size: 12.5px; color: var(--text-dim); }
 .gear-next-purchase { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .gear-next-purchase-icon-wrap {
-  width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center;
   background: var(--panel-2); border: 1px solid var(--border);
 }
-.gear-next-purchase-icon { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+/* Bumped from 30px, plus a small translate to recenter -- same
+   built-in-canvas-padding fix as .loot-item-box-icon in
+   loot-tracker.css (see its own comment for the numbers). */
+.gear-next-purchase-icon {
+  width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated;
+  transform: translate(5.5%, -1%);
+}
 .gear-next-purchase-body { flex: 1; min-width: 0; }
 .gear-next-purchase-label { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
 .gear-next-purchase-name { font-size: 13.5px; color: var(--text); margin: 1px 0 5px; }
@@ -426,7 +461,13 @@ button.primary#pgNameSave, .pg-setup-form-save {
    as .gear-slot-icon: without it, starting a drag with the pointer
    over the icon grabs the browser's own native image drag instead of
    the row underneath it. */
-.gear-summary-row-icon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: none; -webkit-user-drag: none; }
+/* Bumped from 26px, plus a small translate to recenter -- same
+   built-in-canvas-padding fix as .loot-item-box-icon in
+   loot-tracker.css (see its own comment for the numbers). */
+.gear-summary-row-icon {
+  width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; flex: none; -webkit-user-drag: none;
+  transform: translate(5.5%, -1%);
+}
 .gear-summary-row-name { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gear-summary-row-cost { font-size: 12px; color: var(--gold); white-space: nowrap; }
 .gear-summary-row-cost.na { color: var(--text-faint); }
@@ -501,7 +542,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
   color: var(--text); cursor: pointer;
 }
 .suggestion:hover, .suggestion.active { background: var(--panel-2); }
-.suggestion img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
+/* Bumped from 22px, plus a small translate to recenter -- these
+   suggestion rows only ever show a real item icon off RuneLite's own
+   CDN (see renderIconSuggestions/renderSlotSuggestions in
+   app/pages.py) -- same built-in-canvas-padding fix as
+   .loot-item-box-icon in loot-tracker.css (see its own comment for
+   the numbers). */
+.suggestion img {
+  width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated;
+  transform: translate(5.5%, -1%);
+}
 
 /* The "no match" row that replaces the search results when the query
    matches nothing at all -- search now spans live Grand Exchange

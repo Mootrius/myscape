@@ -436,7 +436,28 @@
      none here (class + :hover beats element + :hover) to keep it off. */
   text-decoration: none;
 }
-.loot-item-box-icon { width: 24px; height: 24px; object-fit: contain; image-rendering: pixelated; }
+/* Bumped from 24px and nudged with a small translate -- RuneLite's own
+   static item-icon CDN (see item_icon_url in app/purchase_goals.py)
+   draws every item on a fixed 36x32 canvas that leaves room down its
+   right side for the in-game stack-count badge, so the actual item
+   art only fills part of that canvas and sits visibly left-of-center
+   within it. Sampling ~30 real item icons off the CDN found that bias
+   is remarkably consistent regardless of the item's own shape (a
+   dagger and a two-handed sword alike): roughly -5.5% of the icon's
+   own width, and a much smaller ~+1% of its height. object-fit:
+   contain has no way to know about that built-in padding -- it just
+   centers the whole 36x32 canvas, off-center content and all -- so
+   this translate shifts the rendered icon right/up by about that same
+   amount to compensate, on every item icon across the site (NPC
+   portraits and this app's own bundled icons -- goal-type badges, the
+   Coins overlay icon -- aren't drawn this way and don't get this
+   rule). It's a flat average correction, not a per-item recalculation,
+   so it won't be pixel-perfect for every single item, but it visibly
+   fixes the "small and shifted left" look across the board. */
+.loot-item-box-icon {
+  width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated;
+  transform: translate(5.5%, -1%);
+}
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
 

@@ -888,7 +888,18 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   color: var(--text); cursor: pointer; text-transform: none;
 }
 .mm-suggestion:hover { background: var(--panel-2); }
-.mm-suggestion img { width: 18px; height: 18px; object-fit: contain; image-rendering: pixelated; flex: none; }
+/* Bumped from 18px, plus a small translate to recenter -- these are
+   real item icons off RuneLite's own CDN (see renderGoalSuggestions'
+   own comment above: an icon only ever renders here for an item
+   result, never an NPC/quest one), which draw on a fixed canvas with
+   built-in padding down the right side for the in-game stack-count
+   badge -- see .loot-item-box-icon's own comment in loot-tracker.css
+   for the full empirical writeup behind both the size bump and this
+   exact translate. */
+.mm-suggestion img {
+  width: 20px; height: 20px; object-fit: contain; image-rendering: pixelated; flex: none;
+  transform: translate(5.5%, -1%);
+}
 .mm-suggestion-empty {
   padding: 6px 8px; font-size: 11.5px; color: var(--text-faint); font-style: italic; cursor: default;
   text-transform: none;
