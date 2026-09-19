@@ -939,7 +939,7 @@ def render_verify_email_required(player: Player) -> str:
         <h2>VERIFY YOUR EMAIL</h2>
         <div class="auth-error" id="formError"></div>
         <div class="auth-success" id="formSuccess"></div>
-        <p class="verify-email-message">We sent a confirmation link to <strong>{escape(player.email or "your email address")}</strong>.<br>Click it to finish setting up your account.</p>
+        <p class="verify-email-message">We sent a confirmation link to <strong>{escape(player.email or "your email address")}</strong>.<br>Click the verification link in your email to get access.</p>
         <button class="primary" id="resendBtn" type="button">RESEND EMAIL</button>
       </div>
     </div>
