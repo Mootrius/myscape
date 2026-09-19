@@ -27,8 +27,25 @@ import pathlib
 from typing import Dict, List, Optional
 
 ITEM_IDS_PATH = pathlib.Path(__file__).resolve().parent / "data" / "item_ids.json"
+# {wiki image filename (lowercase, no "File:" prefix): [item_id, ...]}
+# -- a DIFFERENT snapshot from item_ids.json above, and the reason it
+# exists rather than just reusing that one: item_ids.json merges every
+# cosmetic recolor of one item page under a single shared NAME (e.g.
+# every Crystal helm colour is stored under the one key "crystal
+# helm"), because that's what the wiki's own infobox_item rows share
+# too -- so it has no way to tell "Crystal helm (Ithell)" apart from
+# any other colour by name alone. Those same rows each carry their OWN
+# distinct 'image' field, though (e.g. "File:Crystal helm
+# (Ithell).png") -- exactly the filename app/data/recipes.json already
+# stores per colour variant -- so keying by THAT instead resolves an
+# exact recipe icon filename straight to its real id, letting
+# _untradeable_item_icon (app/purchase_goals.py) reach the RuneLite CDN
+# for a cosmetic-variant name even though item_ids.json's name-merged
+# snapshot can't place it. See scripts/fetch_icon_ids_by_filename.py.
+ICON_IDS_BY_FILENAME_PATH = pathlib.Path(__file__).resolve().parent / "data" / "icon_ids_by_filename.json"
 
 _item_index: Optional[Dict[str, dict]] = None
+_icon_filename_index: Optional[Dict[str, List[int]]] = None
 
 
 def get_item_index() -> Dict[str, dict]:
@@ -40,6 +57,17 @@ def get_item_index() -> Dict[str, dict]:
         except (OSError, json.JSONDecodeError):
             _item_index = {}
     return _item_index
+
+
+def get_icon_filename_index() -> Dict[str, List[int]]:
+    global _icon_filename_index
+    if _icon_filename_index is None:
+        try:
+            with open(ICON_IDS_BY_FILENAME_PATH, "r", encoding="utf-8") as f:
+                _icon_filename_index = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            _icon_filename_index = {}
+    return _icon_filename_index
 
 
 def find_item_ids(item_name: str) -> Optional[List[int]]:
@@ -54,17 +82,6 @@ def find_item_ids(item_name: str) -> Optional[List[int]]:
     return entry["ids"] if entry else None
 
 
-def find_item_icon(item_name: str) -> Optional[str]:
-    """Returns the wiki image filename (not yet a full URL -- see
-    item_icon_url in app/purchase_goals.py) documented for item_name
-    (case-insensitive exact match), or None if it isn't in the
-    snapshot or has no image on file."""
-    if not item_name:
-        return None
-    entry = get_item_index().get(item_name.strip().lower())
-    return entry.get("icon") if entry else None
-
-
 def find_item_by_exact_name(item_name: str) -> Optional[dict]:
     """Returns the raw {"name": str, "icon": str|None, "ids": [int, ...]}
     entry for item_name (case-insensitive exact match), or None. Used by
@@ -77,6 +94,29 @@ def find_item_by_exact_name(item_name: str) -> Optional[dict]:
     if not item_name:
         return None
     return get_item_index().get(item_name.strip().lower())
+
+
+def find_item_id_by_icon_filename(icon_filename: str) -> Optional[int]:
+    """Returns a real item id for a wiki image filename (case-
+    insensitive, "File:" prefix optional) documented in
+    ICON_IDS_BY_FILENAME_PATH's snapshot, or None if it isn't there.
+    Used by _untradeable_item_icon in app/purchase_goals.py to resolve
+    an exact cosmetic-variant name (e.g. "Crystal helm (Ithell)") that
+    find_item_ids above can't place -- item_ids.json merges every
+    recolor of one item page under a single shared name, but each
+    recolor's own icon filename is still distinct, and that's exactly
+    what app/data/recipes.json stores per variant. A filename can list
+    more than one real id (an inventory/worn pair sharing one look,
+    same as find_item_ids' own multi-id case) -- the first is used,
+    since by construction every id sharing a filename shares its icon
+    too, so which one is "as good as any" here."""
+    if not icon_filename:
+        return None
+    name = icon_filename.strip()
+    if name.lower().startswith("file:"):
+        name = name[len("file:"):]
+    ids = get_icon_filename_index().get(name.lower())
+    return ids[0] if ids else None
 
 
 def search_item_names(query: str, limit: int, exclude: Optional[set] = None) -> List[dict]:

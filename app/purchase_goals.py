@@ -38,7 +38,12 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.item_ids import find_item_by_exact_name, find_item_ids, search_item_names
+from app.item_ids import (
+    find_item_by_exact_name,
+    find_item_id_by_icon_filename,
+    find_item_ids,
+    search_item_names,
+)
 from app.models import (
     BankItem,
     EquipmentItem,
@@ -81,21 +86,25 @@ USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 # this is addressed by the item's own permanent numeric id, which every
 # call site below either already has (every tradeable item, every
 # plugin-synced possession/loot row) or can resolve via
-# app/item_ids.py's name->id snapshot (see _untradeable_item_id below),
-# rather than a wiki page's filename string, so there's no
-# fetch-and-cache-the-bytes-ourselves step left to do for it at all --
-# item_icon_url below just builds the CDN URL directly, no network
-# round trip, no local cache, nothing to ever go stale.
+# app/item_ids.py's name->id snapshot (see _untradeable_item_id below)
+# or, for a cosmetic-recolor name that snapshot merges away (see
+# find_item_id_by_icon_filename, also in app/item_ids.py, and
+# _untradeable_item_icon's own comment further down), its icon
+# filename -- rather than a wiki page's filename string on its own, so
+# there's no fetch-and-cache-the-bytes-ourselves step left to do for it
+# at all -- item_icon_url below just builds the CDN URL directly, no
+# network round trip, no local cache, nothing to ever go stale.
 #
 # icon_cache.py's own wiki-fetching machinery isn't gone, though -- it's
 # still what NPC portraits in app/loot.py's npc_icon_url use, since
 # there's no numeric NPC id anywhere in this app's data model for this
 # CDN (keyed by item id only) to serve those from at all, and it's also
-# still the last-resort fallback _untradeable_item_icon below falls
-# through to for the rare combination-item name that the item-id
-# snapshot doesn't happen to cover under its exact stored spelling. See
-# that module's own top-of-file comment for the full rationale, which
-# still applies unchanged to both of those.
+# still the genuinely-last-resort fallback _untradeable_item_icon below
+# falls through to for the rare handful of names (event cosmetics,
+# furniture, and the like) that don't resolve to a real id by NAME or
+# by ICON FILENAME either. See that module's own top-of-file comment
+# for the full rationale, which still applies unchanged to both of
+# those.
 ITEM_ICON_CDN_BASE = "https://static.runelite.net/cache/item/icon/"
 
 # How long cached data is considered fresh before hitting the wiki API
@@ -674,19 +683,35 @@ def _untradeable_item_icon(name: str) -> Optional[str]:
     friends) look broken once actually placed into a slot despite
     showing correctly in search.
 
-    Only when the snapshot doesn't cover this exact name at all --
-    ~190 of app/recipes.py's ~1200 known combination items, mostly
-    cosmetic colour variants and disambiguation-suffixed wiki page
-    names item_ids.json's Bucket-extension dump never recorded under
-    this exact spelling -- does this fall through to the one remaining
-    wiki-filename path (_wiki_icon_url, routed through app/icon_cache.py
-    same as an NPC portrait), using whatever icon filename the recipe
-    itself has on file."""
+    When the snapshot doesn't cover this exact name -- ~190 of
+    app/recipes.py's ~1200 known combination items, mostly cosmetic
+    colour variants and disambiguation-suffixed wiki page names
+    item_ids.json's Bucket-extension dump never recorded under this
+    exact spelling -- this doesn't give up on the CDN straight away
+    either: item_ids.json merges every recolor of one item page under
+    a single shared name (every Crystal helm colour is just "crystal
+    helm" there), which is exactly why the name lookup above just
+    failed, but the wiki's own data still has each recolor's own
+    distinct icon FILENAME on file, and app/data/recipes.json already
+    stores that same filename per variant -- so
+    find_item_id_by_icon_filename (app/item_ids.py, backed by its own
+    ICON_IDS_BY_FILENAME_PATH snapshot) is tried next, resolving a
+    name like "Crystal helm (Ithell)" to its real id (27717) via its
+    icon filename instead of its merged name, and reaching the CDN
+    exactly like every other real id in this file. Only when even
+    THAT doesn't cover this filename either -- a genuine handful of
+    recipes with no real infobox id on file at all (event cosmetics,
+    furniture, and the like) -- does this fall through to the one
+    remaining wiki-filename path (_wiki_icon_url, routed through
+    app/icon_cache.py same as an NPC portrait)."""
     item_id = _untradeable_item_id(name)
     if item_id is not None:
         return item_icon_url(item_id)
     recipe = find_recipe(name)
     if recipe and recipe.get("icon"):
+        by_filename = find_item_id_by_icon_filename(recipe["icon"])
+        if by_filename is not None:
+            return item_icon_url(by_filename)
         return _wiki_icon_url(recipe["icon"])
     return None
 

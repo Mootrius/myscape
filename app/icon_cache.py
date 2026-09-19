@@ -12,11 +12,16 @@ exists at all:
    -- there's no numeric NPC id anywhere in this app's data model (see
    npc_hide_key's own comment there) for an id-keyed CDN to serve those
    from at all, so a guessed wiki filename is still the only option.
-2. The rare combination-item name app/item_ids.json's snapshot doesn't
-   cover under its exact stored spelling (_untradeable_item_icon's own
-   last-resort fallback in app/purchase_goals.py, via _wiki_icon_url) --
-   about 190 of app/recipes.py's ~1200 known recipes at last count,
-   mostly cosmetic colour variants.
+2. The genuinely rare combination-item name that resolves to a real id
+   neither by name nor by icon filename in app/item_ids.py's two
+   snapshots (_untradeable_item_icon's own last-resort fallback in
+   app/purchase_goals.py, via _wiki_icon_url) -- a small handful of
+   app/recipes.py's ~1200 known recipes at last count (event
+   cosmetics, furniture, and the like with no real infobox id on file
+   at all), now that the icon-filename snapshot resolves the ~190
+   cosmetic colour variants (Crystal armour, Bow of Faerdhinen,
+   Graceful, and friends) that used to fall all the way through to
+   here.
 
 Both still need exactly the machinery this module was built for in the
 first place: item_icon_url (app/purchase_goals.py) used to hand the
