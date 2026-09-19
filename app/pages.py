@@ -980,10 +980,9 @@ def render_verify_email() -> str:
         <h2>VERIFY EMAIL</h2>
         <div class="auth-error" id="formError"></div>
         <div class="auth-error" id="noTokenError">
-          Click the verification link in your email to get access.
+          You need to verify your email to access this content.<br>Your code may be expired — please try again.
         </div>
         <p class="verify-email-message" id="verifyingMessage">Confirming your email&hellip;</p>
-        <div class="auth-switch"><a href="/login">LOG IN</a></div>
       </div>
     </div>
     """
