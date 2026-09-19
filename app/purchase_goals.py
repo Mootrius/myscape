@@ -1052,8 +1052,21 @@ def build_purchase_goals_state(db: Session, player: Player) -> dict:
         "coins": coins,
         "pricesError": prices_err,
         "mappingError": mapping_err,
-        # Most expensive setup (full cost, ignoring what's already owned)
-        # first -- same as Maintrius's own build_state.
-        "gearSetups": sorted(build_gear_setups(db, player, mapping, prices, coins), key=lambda s: -s["totalFullCost"]),
+        # Used to always be most-expensive-full-cost-first here (same as
+        # Maintrius's own build_state) -- that was fine back when setup
+        # order was never anything the player controlled, but it silently
+        # survived the drag-and-drop setup reorder feature (see
+        # set_gear_setup_order in app/main.py and wireSetupIconDrag in
+        # this page's own script) getting added on top of it: this
+        # re-sort ran on every fetch of this state, including the
+        # reorder PUT's own response, so a drag would persist its new
+        # sort_order to the DB correctly and then get immediately
+        # overridden back to cost order the instant the client re-
+        # rendered from what this endpoint just handed back -- exactly
+        # what read as "it sticks for a second, then snaps back". Gear
+        # setups now come through in whatever order build_gear_setups
+        # already queried them in (GearSetup.sort_order.asc(), its own
+        # docstring above has the full ordering story), unchanged here.
+        "gearSetups": build_gear_setups(db, player, mapping, prices, coins),
         "ownedItems": pool_by_name,
     }
