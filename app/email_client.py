@@ -46,6 +46,10 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
     could usefully change about that response anyway, and the request
     itself did everything it could (a token really was generated and
     stored)."""
+    # TEMPORARY: print(), not log.*, to rule out a Render log-viewer
+    # filter hiding our normal logging -- remove once root-caused.
+    print(f"[DEBUG email_client] send_email called, to={to!r}, "
+          f"RESEND_API_KEY set={bool(RESEND_API_KEY)}, from={EMAIL_FROM_ADDRESS!r}", flush=True)
     if not RESEND_API_KEY:
         log.info("RESEND_API_KEY not set -- would have emailed %s (%r):\n%s", to, subject, text)
         return
@@ -67,10 +71,12 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS):
-            pass
+        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS) as resp:
+            print(f"[DEBUG email_client] Resend accepted, HTTP {resp.status}", flush=True)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        print(f"[DEBUG email_client] Resend rejected HTTP {exc.code}: {detail}", flush=True)
         log.warning("Resend rejected an email to %s (HTTP %s): %s", to, exc.code, detail)
-    except Exception:  # noqa: BLE001 -- best-effort send, see docstring
+    except Exception as exc:  # noqa: BLE001 -- best-effort send, see docstring
+        print(f"[DEBUG email_client] send failed: {exc!r}", flush=True)
         log.warning("Failed to send email to %s", to, exc_info=True)
