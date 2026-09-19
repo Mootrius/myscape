@@ -670,6 +670,10 @@ def render_signup() -> str:
             <label for="password">Password</label>
             <input type="password" id="password" name="password" placeholder="At least 8 characters" required minlength="8" />
           </div>
+          <div class="field">
+            <label for="confirmPassword">Confirm password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Re-enter your password" required minlength="8" />
+          </div>
           <button class="primary" type="submit">SIGN UP</button>
         </form>
         <div class="auth-switch">Already have an account? <a href="/login">LOG IN</a></div>
@@ -681,6 +685,13 @@ def render_signup() -> str:
       e.preventDefault();
       const errorEl = document.getElementById('formError');
       errorEl.classList.remove('show');
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      if (password !== confirmPassword) {
+        errorEl.textContent = 'Passwords do not match.';
+        errorEl.classList.add('show');
+        return;
+      }
       const submitBtn = e.target.querySelector('button[type="submit"]');
       submitBtn.disabled = true;
       try {
@@ -689,7 +700,7 @@ def render_signup() -> str:
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: document.getElementById('email').value,
-            password: document.getElementById('password').value,
+            password: password,
           }),
         });
         if (res.ok) {
