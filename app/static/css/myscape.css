@@ -483,6 +483,15 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   margin: 0 0 20px;
 }
 
+/* render_verify_email's "missing/invalid link" state (app/pages.py) --
+   .auth-error itself stays left-aligned everywhere else (it sits above
+   left-aligned form fields on every other page that uses it), but this
+   page has no form at all, just this one message, so it's centered
+   like the rest of this page's text instead. */
+#noTokenError {
+  text-align: center;
+}
+
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
