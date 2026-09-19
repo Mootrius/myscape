@@ -3771,13 +3771,6 @@ def render_mindmaps(player: Player) -> str:
         flippedNodeIds: new Set(),
         nameFormMode: null, // 'new' | 'rename' | null
         pan: { x: 0, y: 0 },
-        // The pan.x/pan.y ensurePopoverVisible last nudged FROM, kept
-        // so repeated renders of the same still-open popover always
-        // re-measure overflow from the same starting point rather than
-        // compounding on top of the last render's own nudge -- see
-        // ensurePopoverVisible's own comment.
-        popoverPanBaselineX: null,
-        popoverPanBaselineY: null,
         zoom: 1,
         lastLayout: null, // set by renderCanvas, read by zoomToFit
         // Per-mindmap edit history -- each entry is a full past
@@ -4160,42 +4153,32 @@ def render_mindmaps(player: Player) -> str:
       // this canvas's own pan instead of the page's scroll, and never
       // shrinking/zooming the popover to force it to fit.
       //
-      // MM.popoverPanBaselineX/Y are the pan.x/pan.y this function is
-      // nudging FROM: set the first time a popover shows up after
-      // there wasn't one (or after the selection moved to a different
-      // node), and re-applied every render a popover stays open, so
-      // re-measuring overflow always starts from that same unnudged
-      // point rather than whatever pan the LAST render's own nudge
-      // left behind -- that's what keeps clicking straight from one
-      // node to another, or typing into a field that re-renders the
-      // same popover, from compounding a fresh nudge on top of an
-      // already-nudged position.
-      //
-      // Deliberately NOT restored on close any more (clicking out, or
-      // Save/Delete deselecting the node) -- that used to snap pan.y
-      // straight back to the baseline the instant the popover
-      // disappeared, which read as its own awkward, unrequested jump
-      // right as the player closed out, and was removed by request
-      // (never applied to pan.x either, for the same reason, from the
-      // start). Both baselines are still CLEARED on close, though,
-      // just never applied: leaving one set would make the very next
-      // popover to open immediately snap that axis's pan back to this
-      // now-stale value (the "if (MM.pan.y/x !== ...)" checks a few
-      // lines down exist for exactly that re-baselining, and can't
-      // tell a stale leftover baseline apart from a live one they
-      // should actually be enforcing) -- clearing them here instead
-      // makes wherever pan happens to be resting, once nothing has a
-      // popover open, the fresh starting point for whichever node
-      // opens next.
+      // Always measures overflow against MM.pan itself -- wherever the
+      // view is ACTUALLY resting right now, including any earlier
+      // nudge from this same popover session -- never against some
+      // remembered "where this popover session started" baseline. An
+      // earlier version of this function anchored every measurement to
+      // exactly that kind of baseline (nudge FROM the pan the popover
+      // first opened at, every single render), specifically so that
+      // switching to a shorter type would land back at that original
+      // spot -- which sounds reasonable, but wasn't: it meant switching
+      // from a tall type (a KC goal, say, which had nudged the view
+      // down to fit) back to a short one (Item) actively snapped the
+      // view back UP to the original spot on every single switch, even
+      // though the short popup already fit perfectly well wherever the
+      // tall one had left the view -- there was nothing there to
+      // scroll for. That's exactly the reported bug: switching Item ->
+      // KC scrolls down as expected (KC's popover genuinely doesn't
+      // fit yet), but switching back to Item scrolled back up too,
+      // even though Item's popover was never in any danger of running
+      // past the view at all. Measuring from the current pan instead
+      // makes this purely one-directional: a type that overflows
+      // nudges the view just enough to fit it, and a type that
+      // doesn't -- shorter or not -- never moves anything, because
+      // there's nothing left here to "restore" toward.
       function ensurePopoverVisible() {
         var popover = document.querySelector('#mmNodesLayer [data-role="popover"]');
-        if (!popover) {
-          MM.popoverPanBaselineX = null;
-          MM.popoverPanBaselineY = null;
-          return;
-        }
-        if (MM.popoverPanBaselineX == null) MM.popoverPanBaselineX = MM.pan.x;
-        if (MM.popoverPanBaselineY == null) MM.popoverPanBaselineY = MM.pan.y;
+        if (!popover) return;
         var layout = MM.lastLayout;
         var pos = layout && MM.selectedNodeId ? layout.positions[MM.selectedNodeId] : null;
         // Nothing to line the popover up against without its node's own
@@ -4213,22 +4196,14 @@ def render_mindmaps(player: Player) -> str:
         // other rapid back-to-back popover change) can fire a fresh
         // render() -- and therefore a fresh call to this function -- well
         // within the PREVIOUS call's own 180ms glide, while that glide is
-        // still carrying the world toward an earlier target. A first
-        // attempt at this (see git history) forced the pan back in sync by
-        // zeroing mmWorldEl.style.transitionDuration and re-applying
-        // MM.pan right before measuring -- which only actually re-synced
-        // anything when MM.pan itself had just changed; if THIS call
-        // found MM.pan already equal to the baseline (nothing to reset),
-        // it skipped straight to measuring, and getBoundingClientRect()
-        // then read whatever still-mid-flight position the PRIOR call's
-        // own glide had left on screen -- exactly the "seemingly random"
-        // up/down jump the user kept seeing switching types, since it
-        // depended on how far a still-running transition had gotten
-        // rather than on the new type's actual popover height. It also
-        // meant even a correctly-detected "no longer needs the room"
-        // case still forced an instant, unannounced teleport back to
-        // baseline (duration zeroed for the reset itself) rather than
-        // ever really just staying still.
+        // still carrying the world toward an earlier target. Reading
+        // getBoundingClientRect() here would catch the popover wherever
+        // that still-running glide happens to have painted it so far,
+        // not where it's actually headed -- exactly the kind of
+        // "seemingly random" up/down jump switching types used to
+        // produce, since it depended on how far a still-running
+        // transition had gotten rather than on the new type's actual
+        // popover height.
         //
         // Computing the popover's box from data instead of the DOM's
         // current paint sidesteps all of that: .mm-world's transform is
@@ -4253,19 +4228,13 @@ def render_mindmaps(player: Player) -> str:
         var localRight = localCenterX + popover.offsetWidth / 2;
         var MARGIN = 16;
 
-        // Always measured from the baseline pan -- the one resting spot
-        // this popover session started from -- never from wherever this
-        // node's popover happens to be sitting from an earlier nudge, so
-        // switching to a type that no longer needs the room lands back at
-        // baseline exactly (not wherever the last nudge left off), and
-        // switching to one that does only ever nudges by what THAT type
-        // actually needs. Whatever the result, it's applied as a single
-        // target pan and left to glide there normally -- never force-
-        // snapped first -- so a popover that doesn't overflow the new
-        // type simply never moves, and one that does gets exactly one
-        // smooth scroll toward it, matching "only scroll if the new type
-        // would actually run past the view."
-        var targetPanY = MM.popoverPanBaselineY;
+        // Applied as a single target pan and left to glide there
+        // normally -- never force-snapped first -- so a popover that
+        // doesn't overflow from wherever the view already sits simply
+        // never moves, and one that does gets exactly one smooth scroll
+        // toward it, matching "only scroll if this type actually runs
+        // past the view right now."
+        var targetPanY = MM.pan.y;
         var screenTop = canvasRect.top + targetPanY + MM.zoom * localTop;
         var screenBottom = canvasRect.top + targetPanY + MM.zoom * localBottom;
         var overflowBelow = screenBottom - (canvasRect.bottom - MARGIN);
@@ -4285,7 +4254,7 @@ def render_mindmaps(player: Player) -> str:
         // so a node close to either edge of the current view can have its
         // popover run past .mm-canvas's own left/right edge exactly the
         // same way one near the bottom runs past the bottom edge above.
-        var targetPanX = MM.popoverPanBaselineX;
+        var targetPanX = MM.pan.x;
         var screenLeft = canvasRect.left + targetPanX + MM.zoom * localLeft;
         var screenRight = canvasRect.left + targetPanX + MM.zoom * localRight;
         var overflowRight = screenRight - (canvasRect.right - MARGIN);
@@ -4436,22 +4405,18 @@ def render_mindmaps(player: Player) -> str:
         // "closing out" of fullscreen with a popup still open was
         // leaving cut off).
         //
-        // ensurePopoverVisible's own baselines are for the pan THIS
-        // popover session last nudged away from -- zoomToFit just
-        // established a brand new resting pan/zoom for the canvas's new
-        // size, so the OLD baselines (captured under the other canvas
-        // size entirely) are meaningless here. Clear both first so
-        // ensurePopoverVisible treats this as a fresh "no popover has
-        // nudged anything yet" starting point, same as when a popover
-        // first opens, rather than trying to restore toward a pan value
-        // that belonged to the canvas size this is leaving.
-        // (scrollCanvasPopoverIntoView had the same kind of baseline
-        // here once too, for the outer page's own scroll position --
+        // ensurePopoverVisible measures overflow straight off MM.pan
+        // itself now (see its own comment), so there's no separate
+        // baseline left to reset here either -- zoomToFit just set
+        // MM.pan to the new canvas size's own correct resting spot, and
+        // that's exactly what the very next ensurePopoverVisible call
+        // below measures the popover against, same as it would after
+        // any other render.
+        // (scrollCanvasPopoverIntoView had its own version of this kind
+        // of reset once too, for the outer page's own scroll position --
         // removed along with the rest of that function's body, see its
-        // own comment, so there's nothing left to reset for it.)
+        // own comment, so there's nothing left to reset for it either.)
         if (MM.selectedNodeId) {
-          MM.popoverPanBaselineX = null;
-          MM.popoverPanBaselineY = null;
           // zoomToFit's own applyTransform() just kicked off .mm-world's
           // 0.18s CSS transition (see its own "carries a CSS transition"
           // comment) -- ensurePopoverVisible reading the popover's
