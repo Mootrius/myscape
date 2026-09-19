@@ -36,6 +36,13 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 LINK_CODE_LIFETIME = timedelta(minutes=10)
+# Longer than LINK_CODE_LIFETIME on purpose -- a link code is shown
+# on-screen for an immediate copy/paste into the plugin, but a
+# password reset token has to survive an email actually arriving and
+# the player noticing it, so it needs real slack. An hour is generous
+# enough for that without leaving a stale, unused reset link valid for
+# days.
+PASSWORD_RESET_TOKEN_LIFETIME = timedelta(hours=1)
 
 
 def _utcnow():
@@ -124,6 +131,7 @@ class Player(Base):
 
     link_codes = relationship("LinkCode", back_populates="player", cascade="all, delete-orphan")
     api_keys = relationship("PlayerApiKey", back_populates="player", cascade="all, delete-orphan")
+    password_reset_tokens = relationship("PasswordResetToken", back_populates="player", cascade="all, delete-orphan")
     bank_items = relationship("BankItem", back_populates="player", cascade="all, delete-orphan")
     inventory_items = relationship("InventoryItem", back_populates="player", cascade="all, delete-orphan")
     equipment_items = relationship("EquipmentItem", back_populates="player", cascade="all, delete-orphan")
@@ -189,6 +197,32 @@ class PlayerApiKey(Base):
     @property
     def is_active(self) -> bool:
         return self.revoked_at is None
+
+
+class PasswordResetToken(Base):
+    """A short-lived, single-use token emailed to a player who asked to
+    reset their password (see POST /api/auth/forgot-password in
+    app/routers/auth.py). Same shape and same reasoning as LinkCode
+    above -- only its hash is stored, the raw token only ever exists in
+    the email itself and the URL the player clicks from it -- just with
+    its own, longer lifetime (see PASSWORD_RESET_TOKEN_LIFETIME) since
+    it has to survive an actual email delivery rather than an
+    instant on-screen copy/paste."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    token_hash = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+
+    player = relationship("Player", back_populates="password_reset_tokens")
+
+    @property
+    def is_valid(self) -> bool:
+        return self.used_at is None and _utcnow() < _as_aware_utc(self.expires_at)
 
 
 class BankItem(Base):

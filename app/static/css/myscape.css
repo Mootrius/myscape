@@ -432,6 +432,22 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 
 .auth-error.show { display: block; }
 
+/* Same shape as .auth-error above (used by render_forgot_password's
+   "check your inbox" message), just green instead of red for a
+   success/confirmation state rather than a problem. */
+.auth-success {
+  display: none;
+  background: rgba(111, 174, 90, 0.12);
+  border: 1px solid var(--green);
+  color: #b9d9ac;
+  font-size: 14.5px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.auth-success.show { display: block; }
+
 .auth-switch {
   text-align: center;
   font-size: 14.5px;
@@ -441,6 +457,17 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 
 .auth-switch a { color: var(--gold-dim); text-decoration: none; }
 .auth-switch a:hover { color: var(--gold); }
+
+/* The "Forgot your password?" link under the login form's password
+   field (see render_login in app/pages.py) -- right-aligned and
+   pulled up snug under that field rather than the centered, ~22px-
+   below-the-whole-form treatment .auth-switch above gets, since this
+   one belongs to the password field specifically, not the card as a
+   whole. Same gold-dim/gold link coloring as .auth-switch either
+   way, so the two still read as the same kind of secondary link. */
+.auth-forgot { text-align: right; margin: -10px 0 18px; }
+.auth-forgot a { font-size: 13px; color: var(--gold-dim); text-decoration: none; }
+.auth-forgot a:hover { color: var(--gold); }
 
 .dash-grid {
   display: grid;

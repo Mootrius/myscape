@@ -727,6 +727,7 @@ def render_login() -> str:
             <label for="password">Password</label>
             <input type="password" id="password" name="password" placeholder="Your password" required />
           </div>
+          <div class="auth-forgot"><a href="/forgot-password">Forgot your password?</a></div>
           <button class="primary" type="submit">LOG IN</button>
         </form>
         <div class="auth-switch">Don't have an account? <a href="/signup">SIGN UP</a></div>
@@ -770,6 +771,147 @@ def render_login() -> str:
     });
     """
     return _shell(title="Log in — myscape", player=None, body=body, extra_script=script)
+
+
+def render_forgot_password() -> str:
+    body = """
+    <div class="auth-shell">
+      <div class="auth-card">
+        <h2>FORGOT PASSWORD</h2>
+        <div class="auth-error" id="formError"></div>
+        <div class="auth-success" id="formSuccess"></div>
+        <form id="forgotForm">
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="you@example.com" required />
+          </div>
+          <button class="primary" type="submit">SEND RESET LINK</button>
+        </form>
+        <div class="auth-switch"><a href="/login">Back to log in</a></div>
+      </div>
+    </div>
+    """
+    script = """
+    document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const errorEl = document.getElementById('formError');
+      const successEl = document.getElementById('formSuccess');
+      errorEl.classList.remove('show');
+      successEl.classList.remove('show');
+      const submitBtn = form.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          // The backend always returns the same generic message here
+          // whether or not the email actually has an account (see
+          // forgot_password's own docstring in app/routers/auth.py) --
+          // so swapping in that message on any 200 is the whole story,
+          // there's no separate "found" vs "not found" branch to add.
+          form.style.display = 'none';
+          successEl.textContent = data.detail || "If that email has an account, we've sent a password reset link.";
+          successEl.classList.add('show');
+          return;
+        }
+        errorEl.textContent = describeError(data, 'Something went wrong. Please try again.');
+        errorEl.classList.add('show');
+      } catch (err) {
+        errorEl.textContent = 'Something went wrong. Please try again.';
+        errorEl.classList.add('show');
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+    """
+    return _shell(title="Forgot password — myscape", player=None, body=body, extra_script=script)
+
+
+def render_reset_password() -> str:
+    body = """
+    <div class="auth-shell">
+      <div class="auth-card">
+        <h2>RESET PASSWORD</h2>
+        <div class="auth-error" id="formError"></div>
+        <div class="auth-error" id="noTokenError">
+          This password reset link is missing or invalid.
+          <a href="/forgot-password">Request a new one</a>.
+        </div>
+        <form id="resetForm">
+          <div class="field">
+            <label for="password">New password</label>
+            <input type="password" id="password" name="password" placeholder="At least 8 characters" required minlength="8" />
+          </div>
+          <div class="field">
+            <label for="confirmPassword">Confirm new password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Re-enter your new password" required minlength="8" />
+          </div>
+          <button class="primary" type="submit">RESET PASSWORD</button>
+        </form>
+      </div>
+    </div>
+    """
+    script = """
+    (function () {
+      const token = new URLSearchParams(window.location.search).get('token');
+      const form = document.getElementById('resetForm');
+      const noTokenError = document.getElementById('noTokenError');
+      if (!token) {
+        // No token in the URL at all -- someone navigated here directly
+        // rather than following a real reset link -- so there's nothing
+        // to submit; point them at requesting a fresh one instead of
+        // showing an empty form that can only ever fail.
+        form.style.display = 'none';
+        noTokenError.classList.add('show');
+        return;
+      }
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('formError');
+        errorEl.classList.remove('show');
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        if (password !== confirmPassword) {
+          errorEl.textContent = 'Passwords do not match.';
+          errorEl.classList.add('show');
+          return;
+        }
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+          const res = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token, password: password }),
+          });
+          if (res.ok) {
+            // Same reasoning as signup/login's own redirect -- reset-
+            // password logs the player in immediately on success (see
+            // reset_password in app/routers/auth.py), so send them
+            // straight into the app rather than back to /login.
+            window.location.href = '/dashboard';
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          errorEl.textContent = describeError(data, 'Could not reset your password. The link may have expired.');
+          errorEl.classList.add('show');
+        } catch (err) {
+          errorEl.textContent = 'Something went wrong. Please try again.';
+          errorEl.classList.add('show');
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+    """
+    return _shell(title="Reset password — myscape", player=None, body=body, extra_script=script)
 
 
 def render_purchase_goals(player: Player) -> str:

@@ -61,7 +61,18 @@ from app.models import (
     SeedVaultItem,
     TackleBoxItem,
 )
-from app.pages import render_dashboard, render_landing, render_login, render_loot_tracker, render_mindmaps, render_possessions, render_purchase_goals, render_signup
+from app.pages import (
+    render_dashboard,
+    render_forgot_password,
+    render_landing,
+    render_login,
+    render_loot_tracker,
+    render_mindmaps,
+    render_possessions,
+    render_purchase_goals,
+    render_reset_password,
+    render_signup,
+)
 from app.possessions import (
     build_possessions_summary,
     build_trackers_state,
@@ -373,6 +384,24 @@ def login_page(player: Optional[Player] = Depends(get_optional_current_player_fr
     if player:
         return RedirectResponse("/dashboard", status_code=302)
     return render_login()
+
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    if player:
+        return RedirectResponse("/dashboard", status_code=302)
+    return render_forgot_password()
+
+
+@app.get("/reset-password", response_class=HTMLResponse)
+def reset_password_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    # No redirect-if-logged-in here, unlike the other auth pages -- the
+    # token itself is read client-side from the URL's query string (see
+    # render_reset_password's own script), so there's no server-side
+    # reason to gate this on session state, and someone already logged
+    # in in one tab may still be legitimately using a reset link they
+    # requested (or were sent) in another.
+    return render_reset_password()
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

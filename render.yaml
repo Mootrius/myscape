@@ -45,3 +45,19 @@ services:
         # session would silently break every time the free-tier service
         # spins down from inactivity and wakes back up.
         generateValue: true
+      - key: RESEND_API_KEY
+        # Used by app/email_client.py to send password-reset emails via
+        # Resend. sync: false means Render prompts for this in the
+        # dashboard instead of storing a value here -- an API key doesn't
+        # belong committed to the repo. Without it set, email_client.py
+        # just logs the email instead of sending it (see that module's
+        # own comment), which is fine for local dev but means password
+        # reset silently won't deliver anything here until this is set.
+        sync: false
+      - key: EMAIL_FROM_ADDRESS
+        # Optional -- app/email_client.py falls back to a sensible default
+        # ("myscape <noreply@myscape.io>") if this isn't set. Only worth
+        # setting explicitly once a sending domain is verified with Resend
+        # for myscape.io; until then Resend will reject or hold mail from
+        # an unverified domain regardless of what this says.
+        sync: false
