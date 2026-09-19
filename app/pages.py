@@ -545,19 +545,29 @@ def render_landing(player: Optional[Player]) -> str:
     return _shell(title="myscape", player=player, body=body, extra_script=script, body_class="landing")
 
 
-# Small inline SVGs for the dashboard cards below -- drawn from scratch in
-# the game's own item icons (from the OSRS Wiki), not drawings of our own --
-# so a returning player recognizes them at a glance.
-_ICON_COINS = "/static/img/icon-coins.png"
-_ICON_BONES = "/static/img/icon-dragon-bones.png"
-_ICON_CLUELESS_SCROLL = "/static/img/icon-clueless-scroll.png"
-# Routed through item_icon_url (app/purchase_goals.py) -- RuneLite's own
-# static icon CDN, by real item id -- rather than a bundled static file
-# like the three above, since a Heavy casket is a real OSRS item with
-# its own icon already (id 19941, confirmed against the CDN directly)
-# -- a container stuffed full of loot is a fitting stand-in for
-# "everything you own", the same reasoning behind Purchase Goals' coins
-# and Loot Tracker's dragon bones above.
+# Icons for the dashboard cards below -- each a real OSRS item that's a
+# fitting stand-in for its feature (Coins for Purchase Goals, Dragon
+# bones for Loot Tracker, a Clue scroll for Mindmaps -- "Clueless
+# scroll" is the pun -- a Heavy casket, stuffed full of loot, for
+# Storages Viewer's "everything you own") -- all four routed through
+# item_icon_url (app/purchase_goals.py), RuneLite's own static icon
+# CDN, by real item id, so a returning player recognizes them at a
+# glance without this app hosting a single pixel of them itself.
+# Coins uses the same id (995) Purchase Goals' own live GP figure
+# already resolves to that CDN as -- confirmed to come back as the
+# "biggest pile" denomination art, matching the site's usual
+# denomination-scaled-icon convention (see item_icon_url's own
+# comment). Dragon bones (536) has only the one real id. The Clue
+# scroll tiers (Beginner/Easy/Medium/.../Master) all share the same
+# rolled-parchment shape with only a small seal color to tell them
+# apart, so there's no single "generic" clue scroll id to reach for --
+# Easy (2677, one of several ids sharing that tier's icon) was picked
+# as the one most players think of first when they hear "clue scroll"
+# at all, not because Mindmaps has anything to do with Treasure
+# Trails specifically.
+_ICON_COINS = item_icon_url(995)
+_ICON_BONES = item_icon_url(536)
+_ICON_CLUELESS_SCROLL = item_icon_url(2677)
 _ICON_HEAVY_CASKET = item_icon_url(19941)
 
 
