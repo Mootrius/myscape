@@ -46,10 +46,6 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
     could usefully change about that response anyway, and the request
     itself did everything it could (a token really was generated and
     stored)."""
-    # TEMPORARY: print(), not log.*, to rule out a Render log-viewer
-    # filter hiding our normal logging -- remove once root-caused.
-    print(f"[DEBUG email_client] send_email called, to={to!r}, "
-          f"RESEND_API_KEY set={bool(RESEND_API_KEY)}, from={EMAIL_FROM_ADDRESS!r}", flush=True)
     if not RESEND_API_KEY:
         log.info("RESEND_API_KEY not set -- would have emailed %s (%r):\n%s", to, subject, text)
         return
@@ -68,15 +64,22 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
         headers={
             "Authorization": f"Bearer {RESEND_API_KEY}",
             "Content-Type": "application/json",
+            # Without an explicit User-Agent, urllib sends its own
+            # default ("Python-urllib/3.x") -- Resend's API sits behind
+            # Cloudflare, and that default signature is exactly the
+            # kind of generic-script fingerprint Cloudflare's bot
+            # protection flags, which is what was causing every send
+            # to get rejected with a Cloudflare "error code: 1010"
+            # (banned browser signature) 403 before Resend's own logic
+            # ever saw the request.
+            "User-Agent": "myscape-web/1.0 (+https://myscape.io)",
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS) as resp:
-            print(f"[DEBUG email_client] Resend accepted, HTTP {resp.status}", flush=True)
+        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS):
+            pass
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        print(f"[DEBUG email_client] Resend rejected HTTP {exc.code}: {detail}", flush=True)
         log.warning("Resend rejected an email to %s (HTTP %s): %s", to, exc.code, detail)
-    except Exception as exc:  # noqa: BLE001 -- best-effort send, see docstring
-        print(f"[DEBUG email_client] send failed: {exc!r}", flush=True)
+    except Exception:  # noqa: BLE001 -- best-effort send, see docstring
         log.warning("Failed to send email to %s", to, exc_info=True)

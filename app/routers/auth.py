@@ -87,18 +87,12 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
     app/routers/linking.py's start_link), but password_hash is
     nullable for admin-created rows (see Player's own docstring), so
     this stays defensive rather than assuming that invariant forever."""
-    # TEMPORARY: bypasses Python logging entirely (print, not log.*) to
-    # rule out a Render log-viewer filter hiding our normal logging --
-    # remove once the "email never arrives" issue is root-caused.
     player = db.query(Player).filter(Player.email == payload.email).first()
-    print(f"[DEBUG forgot-password] email={payload.email!r} player_found={player is not None} "
-          f"has_password_hash={bool(player and player.password_hash)}", flush=True)
     if player is not None and player.password_hash:
         raw_token = generate_token()
         expires_at = datetime.now(timezone.utc) + PASSWORD_RESET_TOKEN_LIFETIME
         db.add(PasswordResetToken(player_id=player.id, token_hash=hash_token(raw_token), expires_at=expires_at))
         db.commit()
-        print("[DEBUG forgot-password] token stored, about to call send_email", flush=True)
 
         reset_url = f"{str(request.base_url).rstrip('/')}/reset-password?token={raw_token}"
         send_email(
