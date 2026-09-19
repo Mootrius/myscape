@@ -71,6 +71,10 @@
    whichever preset happens to be checked inside it. */
 .loot-range-btn.active { border-color: var(--gold); color: var(--gold); }
 .loot-range-caret { font-size: 9px; color: var(--text-faint); }
+/* The caret's own color above wins over .loot-range-btn.active's
+   inherited gold otherwise -- a more specific selector, not just
+   later in the sheet, so .active alone never actually reached it. */
+.loot-range-btn.active .loot-range-caret { color: var(--gold); }
 .loot-range-menu {
   position: absolute; top: calc(100% + 4px); left: 0;
   display: flex; flex-direction: column; gap: 2px;
