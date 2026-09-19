@@ -6870,16 +6870,20 @@ def render_mindmaps(player: Player) -> str:
 
 # Storages Viewer's location-filter row groups the raw
 # per-source storage keys (same key spelling as POSSESSION_STORAGE_KEYS
-# in app/schemas.py/STORAGE_SOURCES in app/possessions.py) into five
-# buttons rather than one per source -- with twelve sources now, one
+# in app/schemas.py/STORAGE_SOURCES in app/possessions.py) into six
+# buttons rather than one per source -- with fourteen sources now, one
 # button each stopped fitting on the same row as the search box.
 # BANK folds Potion Storage in (both are things you visit a bank-like
 # interface for); CHARACTER is what's actively worn/carried in the
 # main inventory; PORTABLE is every other carried container item
 # (Looting Bag, Rune Pouch, Tackle Box, Forestry Kit, Master Scroll
-# Book, Seed Box); PoH is Player-Owned-House storage (today, just the
-# Costume Room -- see PohItem's docstring in app/models.py); SEED
-# VAULT stays its own button since it's neither carried nor a bank.
+# Book, Seed Box, Huntsman's Kit); PoH is Player-Owned-House storage
+# (today, just the Costume Room -- see PohItem's docstring in
+# app/models.py); BOATS is every one of a player's (up to five)
+# boats' cargo holds combined (see BoatCargoItem's own docstring for
+# why they're still one button/key despite each boat's contents being
+# genuinely separate underneath); SEED VAULT stays its own button
+# since it's neither carried nor a bank.
 # Each group is (label, [storage keys]) -- clicking a button toggles
 # every key in its group together (see the click handler in the script
 # below), so filtering is still exactly as granular as before under
@@ -6889,7 +6893,8 @@ _POSSESSION_LOCATION_GROUPS = [
     ("BANK", ["bank", "potion_storage"]),
     ("SEED VAULT", ["seed_vault"]),
     ("PoH", ["poh"]),
-    ("PORTABLE", ["looting_bag", "rune_pouch", "tackle_box", "forestry_kit", "master_scroll_book", "seed_box"]),
+    ("BOATS", ["boat_cargo"]),
+    ("PORTABLE", ["looting_bag", "rune_pouch", "tackle_box", "forestry_kit", "master_scroll_book", "seed_box", "huntsmans_kit"]),
     ("CHARACTER", ["equipment", "inventory"]),
 ]
 
@@ -6913,6 +6918,8 @@ _POSSESSION_STORAGE_LABELS = {
     "forestry_kit": "Forestry Kit",
     "master_scroll_book": "Master Scroll Book",
     "seed_box": "Seed Box",
+    "huntsmans_kit": "Huntsman's Kit",
+    "boat_cargo": "Boat Cargo",
 }
 
 

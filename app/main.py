@@ -42,9 +42,11 @@ from app.mindmaps import (
 )
 from app.models import (
     BankItem,
+    BoatCargoItem,
     EquipmentItem,
     ForestryKitItem,
     GearSetup,
+    HuntsmansKitItem,
     InventoryItem,
     LootingBagItem,
     MasterScrollBookItem,
@@ -87,6 +89,10 @@ from app.schemas import (
     BankItemOut,
     BankSyncRequest,
     BankSyncResponse,
+    BoatCargoOut,
+    BoatCargoItemOut,
+    BoatCargoSyncRequest,
+    BoatCargoSyncResponse,
     CreateGearSetupRequest,
     CreateMindMapRequest,
     DiariesSyncRequest,
@@ -103,6 +109,10 @@ from app.schemas import (
     GEAR_SETUP_EQUIPMENT_SLOTS,
     HideLootItemRequest,
     HideLootNpcRequest,
+    HuntsmansKitOut,
+    HuntsmansKitItemOut,
+    HuntsmansKitSyncRequest,
+    HuntsmansKitSyncResponse,
     INVENTORY_SIZE,
     InventoryOut,
     InventoryItemOut,
@@ -227,6 +237,18 @@ MAX_MASTER_SCROLL_BOOK_ITEMS = 150
 # generous headroom past that fixed ceiling, same spirit as
 # MAX_RUNE_POUCH_ITEMS, in case a future update raises it.
 MAX_SEED_BOX_ITEMS = 20
+# The Huntsman's Kit holds a handful of creature-specific Hunter
+# equipment sets -- generous headroom past that, same spirit as
+# MAX_FORESTRY_KIT_ITEMS, not a tight fit.
+MAX_HUNTSMANS_KIT_ITEMS = 50
+# One boat's cargo hold capacity scales with its wood tier (Basic
+# through Ironwood -- see the OSRS Wiki's "Cargo hold" article), but
+# even the biggest tier is nowhere near this -- generous headroom past
+# the real ceiling, same spirit as MAX_SEED_VAULT_ITEMS, per sync (this
+# bounds ONE boat slot's own request -- see sync_boat_cargo below,
+# and BoatCargoItem's docstring in app/models.py -- not a combined
+# total across all five of a player's boats).
+MAX_BOAT_CARGO_ITEMS = 100
 # There are exactly 24 real OSRS skills (see SKILL_NAMES in
 # app/mindmaps.py) -- a real ceiling, not a guess.
 MAX_SKILLS_PER_SYNC = 24
@@ -932,6 +954,109 @@ def read_seed_box(db: Session = Depends(get_db), player: Player = Depends(get_cu
     )
     updated_at = items[0].updated_at if items else None
     return SeedBoxOut(items=[SeedBoxItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/huntsmans-kit", response_model=HuntsmansKitSyncResponse)
+def sync_huntsmans_kit(
+    payload: HuntsmansKitSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for a
+    Huntsman's Kit's contents instead -- see
+    MyscapeClient#syncHuntsmansKit in the Mootrius/myscape-plugin repo
+    and HuntsmansKitItem's docstring in app/models.py. Full replace,
+    never a merge."""
+    if len(payload.items) > MAX_HUNTSMANS_KIT_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_HUNTSMANS_KIT_ITEMS}).",
+        )
+
+    db.query(HuntsmansKitItem).filter(HuntsmansKitItem.player_id == player.id).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(HuntsmansKitItem(
+            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    _stamp_storage_synced(player, "huntsmans_kit", now)
+    db.commit()
+
+    return HuntsmansKitSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/huntsmans-kit", response_model=HuntsmansKitOut)
+def read_huntsmans_kit(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for the
+    Huntsman's Kit instead."""
+    items = (
+        db.query(HuntsmansKitItem)
+        .filter(HuntsmansKitItem.player_id == player.id)
+        .order_by(HuntsmansKitItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return HuntsmansKitOut(items=[HuntsmansKitItemOut.model_validate(item) for item in items], updated_at=updated_at)
+
+
+@app.post("/api/players/me/boat-cargo/{slot}", response_model=BoatCargoSyncResponse)
+def sync_boat_cargo(
+    slot: int,
+    payload: BoatCargoSyncRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_api_key),
+):
+    """Same contract as POST /api/players/me/bank above, for ONE of the
+    player's (up to five) boats' cargo hold contents instead -- `slot`
+    (1-5) picks which one. Deletes and replaces only THAT slot's own
+    rows (BoatCargoItem.player_id AND .slot both filtered on below,
+    unlike every other per-storage sync here which only ever needs
+    player_id) -- see BoatCargoItem's docstring in app/models.py for
+    why a sync of one boat must never touch what's already known about
+    the other four."""
+    if slot < 1 or slot > 5:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slot must be between 1 and 5.")
+    if len(payload.items) > MAX_BOAT_CARGO_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many items in one sync (max {MAX_BOAT_CARGO_ITEMS}).",
+        )
+
+    db.query(BoatCargoItem).filter(BoatCargoItem.player_id == player.id, BoatCargoItem.slot == slot).delete()
+    now = datetime.now(timezone.utc)
+    for item in payload.items:
+        db.add(BoatCargoItem(
+            player_id=player.id, slot=slot, item_id=item.item_id, item_name=item.item_name,
+            quantity=item.quantity, updated_at=now,
+        ))
+    # One shared "boat_cargo" timestamp across all five slots (see
+    # BoatCargoItem's own docstring for why) -- bumped by whichever
+    # slot happens to sync most recently, same simplification PoH's
+    # single "poh" key already makes for its six furniture pieces.
+    _stamp_storage_synced(player, "boat_cargo", now)
+    db.commit()
+
+    return BoatCargoSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/boat-cargo", response_model=BoatCargoOut)
+def read_boat_cargo(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_session)):
+    """Same contract as GET /api/players/me/bank above, for every one of
+    the player's boats' cargo combined -- unlike every other single-
+    container GET here, this one has no per-slot equivalent of its own
+    (nothing on the website currently needs just one boat's contents on
+    their own), so it always returns every slot's rows together,
+    ordered by slot then item id, each row's own `slot` still attached
+    (see BoatCargoItemOut's own docstring in app/schemas.py)."""
+    items = (
+        db.query(BoatCargoItem)
+        .filter(BoatCargoItem.player_id == player.id)
+        .order_by(BoatCargoItem.slot, BoatCargoItem.item_id)
+        .all()
+    )
+    updated_at = items[0].updated_at if items else None
+    return BoatCargoOut(items=[BoatCargoItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
 
 @app.get("/api/players/me/sync-status", response_model=SyncStatusOut)

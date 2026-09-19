@@ -663,6 +663,112 @@ class SeedBoxOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+# -- Huntsman's Kit: identical shape to Tackle Box/Forestry Kit above,
+# just a separate container -- see HuntsmansKitItem's docstring in
+# app/models.py. Grouped under "PORTABLE" on Storages Viewer, same as
+# those two. -------------------------------------------------------------
+
+class HuntsmansKitItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class HuntsmansKitSyncRequest(BaseModel):
+    items: List[HuntsmansKitItemIn]
+
+
+class HuntsmansKitSyncResponse(BaseModel):
+    item_count: int
+
+
+class HuntsmansKitItemOut(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class HuntsmansKitOut(BaseModel):
+    items: List[HuntsmansKitItemOut]
+    updated_at: Optional[datetime] = None
+
+
+# -- Boat Cargo: its own new "BOATS" section on Storages Viewer, right
+# after PoH -- see BoatCargoItem's docstring in app/models.py for why
+# this one carries a `slot` (1-5, one of a player's up to five
+# independently-owned boats -- see the Sailing skill's own boat-
+# ownership rules) that every other storage schema here doesn't need.
+# Synced and read one slot at a time (POST/GET .../boat-cargo/{slot})
+# rather than all five in one request/response, specifically so a sync
+# of the one boat a player is currently near never has to say anything
+# -- and therefore never risks accidentally wiping anything -- about
+# the other four boats' own last-known cargo. ---------------------------
+
+class BoatCargoItemIn(BaseModel):
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    @field_validator("item_id")
+    @classmethod
+    def check_item_id(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("item_id must be a positive integer.")
+        return value
+
+    @field_validator("quantity")
+    @classmethod
+    def check_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("quantity must be a positive integer.")
+        return value
+
+
+class BoatCargoSyncRequest(BaseModel):
+    items: List[BoatCargoItemIn]
+
+
+class BoatCargoSyncResponse(BaseModel):
+    item_count: int
+
+
+class BoatCargoItemOut(BaseModel):
+    # Present here (unlike every other *ItemOut above) even though
+    # nothing on the website currently displays it -- see
+    # BoatCargoItem's own docstring in app/models.py for why the
+    # underlying row always has one; dropping it on the way back out
+    # would throw away real data for no reason.
+    slot: int
+    item_id: int
+    item_name: Optional[str] = None
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class BoatCargoOut(BaseModel):
+    items: List[BoatCargoItemOut]
+    updated_at: Optional[datetime] = None
+
+
 # -- Storages Viewer: the min/max item trackers (sections 1/2)
 # and the storage sync-status map the plugin side panel's Status
 # section reads -- see PossessionTracker/Player.storage_synced_at's
@@ -676,6 +782,7 @@ POSSESSION_STORAGE_KEYS = [
     "bank", "equipment", "inventory", "potion_storage",
     "rune_pouch", "seed_vault", "looting_bag", "tackle_box",
     "poh", "forestry_kit", "master_scroll_book", "seed_box",
+    "huntsmans_kit", "boat_cargo",
 ]
 
 

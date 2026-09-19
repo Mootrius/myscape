@@ -101,12 +101,13 @@ class Player(Base):
     diary_tiers = Column(JSONB, nullable=False, default=dict)
 
     # storage_synced_at: {<storage key>: <ISO 8601 timestamp>} for every
-    # one of the twelve sources Storages Viewer's side-panel
+    # one of the fourteen sources Storages Viewer's side-panel
     # Status section reports on -- "bank", "equipment", "inventory",
     # "potion_storage", "rune_pouch", "seed_vault", "looting_bag",
     # "tackle_box", "poh", "forestry_kit", "master_scroll_book",
-    # "seed_box" -- stamped every time that source's own sync endpoint
-    # is hit (see each POST /api/players/me/<source> handler in
+    # "seed_box", "huntsmans_kit", "boat_cargo" -- stamped every time
+    # that source's own sync endpoint is hit (see each POST
+    # /api/players/me/<source> handler in
     # app/main.py), full replace of just that one key rather than the
     # whole dict.
     #
@@ -135,6 +136,8 @@ class Player(Base):
     forestry_kit_items = relationship("ForestryKitItem", back_populates="player", cascade="all, delete-orphan")
     master_scroll_book_items = relationship("MasterScrollBookItem", back_populates="player", cascade="all, delete-orphan")
     seed_box_items = relationship("SeedBoxItem", back_populates="player", cascade="all, delete-orphan")
+    huntsmans_kit_items = relationship("HuntsmansKitItem", back_populates="player", cascade="all, delete-orphan")
+    boat_cargo_items = relationship("BoatCargoItem", back_populates="player", cascade="all, delete-orphan")
     gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
     loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
     mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
@@ -629,6 +632,94 @@ class SeedBoxItem(Base):
     player = relationship("Player", back_populates="seed_box_items")
 
     __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_seed_box_items_player_item"),)
+
+
+class HuntsmansKitItem(Base):
+    """The player's current Huntsman's Kit contents -- same
+    full-snapshot, delete-and-replace model as every other item-source
+    table above. Synced by POST /api/players/me/huntsmans-kit (see
+    MyscapeClient#syncHuntsmansKit in the Mootrius/myscape-plugin repo).
+    Like the Forestry Kit/Seed Box above, this is a portable carried
+    item (Storages Viewer's "PORTABLE" location group), not PoH
+    furniture.
+
+    A genuine ItemContainer RuneLite exposes directly (InventoryID.
+    HUNTSMANS_KIT), read the same straightforward way Tackle Box/
+    Forestry Kit/Seed Box are, and with the same caveat: it only
+    reports real contents once the player has actually opened it at
+    least once in the current session (see
+    MyscapePlugin#readHuntsmansKitItems there).
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above."""
+
+    __tablename__ = "huntsmans_kit_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="huntsmans_kit_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_huntsmans_kit_items_player_item"),)
+
+
+class BoatCargoItem(Base):
+    """The player's current cargo hold contents for ONE of their (up to
+    five, at max Sailing level -- see the OSRS Wiki's "Boat" article)
+    independently-owned boats -- same full-snapshot, delete-and-replace
+    model as every other item-source table above, just scoped to one
+    more column: `slot` (1-5), which boat this row belongs to. Synced
+    by POST /api/players/me/boat-cargo/{slot}, one slot at a time (see
+    MyscapeClient#syncBoatCargo in the Mootrius/myscape-plugin repo) --
+    unlike PoH's Costume Room above, where six pieces of furniture all
+    turned out to read from one shared, identical container, a boat's
+    cargo genuinely is its own separate contents per boat, so merging
+    every slot into one storage the way PoH does would silently lose
+    (or cross-contaminate) whichever boats weren't the one just synced.
+    Deleting and replacing only rows matching (player_id, slot) on each
+    sync -- never every row for the player -- is what keeps a sync of
+    the boat the player happens to be standing near from wiping out
+    what's already known about their other boats.
+
+    Rolled up into a single "boat_cargo" entry in
+    Player.storage_synced_at and Storages Viewer's own location
+    groups/breakdowns regardless of slot (see POSSESSION_STORAGE_KEYS
+    in app/schemas.py and STORAGE_SOURCES in app/possessions.py) --
+    those only ever needed one row per physical *kind* of storage, the
+    same simplification PoH's own single "poh" key already makes, and
+    nothing currently reads `slot` back out at that level; it exists
+    purely so a per-boat sync can target and replace only its own rows.
+
+    A genuine ItemContainer RuneLite exposes directly, one distinct id
+    per boat slot (InventoryID.SAILING_BOAT_1_CARGOHOLD through
+    SAILING_BOAT_5_CARGOHOLD, all backed by the same InterfaceID.
+    SAILING_BOAT_CARGOHOLD interface regardless of which boat opened
+    it), read the same straightforward way every other single-container
+    source above is, and with the same caveat: a given slot only
+    reports real contents once the player has actually opened THAT
+    boat's cargo hold at least once in the current session (see
+    MyscapePlugin#readBoatCargoItems there).
+
+    item_name plays the same untradeable-item-matching role documented
+    on BankItem above."""
+
+    __tablename__ = "boat_cargo_items"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    slot = Column(Integer, nullable=False)
+    item_id = Column(Integer, nullable=False)
+    item_name = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="boat_cargo_items")
+
+    __table_args__ = (UniqueConstraint("player_id", "slot", "item_id", name="uq_boat_cargo_items_player_slot_item"),)
 
 
 class GearSetup(Base):
