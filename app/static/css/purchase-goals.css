@@ -36,6 +36,11 @@
 .tracker-icon-btn img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
 .tracker-icon-btn.active { border-color: var(--gold); }
 .tracker-icon-btn:hover { border-color: var(--gold-dim); }
+/* Every setup icon is draggable to reorder the row itself (see
+   wireSetupIconDrag in app/pages.py) -- .dragging fades the one being
+   picked up, same opacity/cursor treatment as .gear-summary-row's own
+   .dragging below. */
+.tracker-icon-btn.dragging { opacity: 0.4; cursor: grabbing; }
 .tracker-icon-fallback { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1.15; padding: 0 3px; }
 
 .tracker-menu-wrap { position: relative; }
@@ -125,7 +130,15 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 .overlay-card {
   border-radius: var(--radius);
-  padding: 18px 22px; margin-bottom: 24px;
+  padding: 18px 22px;
+  /* 18px, not the 24px this used to be -- matches the gap Loot
+     Tracker's own .loot-chart-card (loot-tracker.css) leaves below
+     itself before its NPC/item panels, so the space below this page's
+     own "graph-equivalent" section (this overview card) reads the
+     same as the space below that one, rather than visibly wider. See
+     .pg-body's own gap just below for the other half of this page's
+     standardized-to-Loot-Tracker spacing. */
+  margin-bottom: 18px;
   display: flex; align-items: center; gap: 18px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
@@ -154,7 +167,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 .overlay-icon-wrap:hover .overlay-icon-placeholder { border-color: var(--gold-dim); color: var(--gold); }
 
-.pg-body { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+/* 18px, not the 28px this used to be -- matches .loot-panels' own gap
+   between its NPC and item panels (loot-tracker.css), the same "two
+   panels side by side" shape this row and that one both are (gear
+   frame + slot picker column, still-to-purchase summary column). */
+.pg-body { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
 /* Holds the gear-frame (below) and, when a slot is being edited, the
    slot picker -- stacked in this one column so the picker appears
    directly under the gear+inventory box rather than at the bottom of

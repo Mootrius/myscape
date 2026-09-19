@@ -185,7 +185,9 @@ button.primary#mmNameSave, .mm-name-form-save {
 .mm-zoom-divider { height: 1px; background: var(--border); margin: 2px 2px; }
 /* Undo/redo disable themselves (see updateHistoryButtons in the
    script) rather than disappearing, so the layout never shifts --
-   same reasoning as any other disabled control site-wide. */
+   same reasoning as any other disabled control site-wide. The zoom
+   in/out buttons share this exact rule too (see updateZoomButtons),
+   dimming whichever direction is already at MIN_ZOOM/MAX_ZOOM. */
 .mm-zoom-controls button:disabled {
   opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-dim);
 }
@@ -352,16 +354,16 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
    to flip back. Works from plain browsing (a view action, not an edit
    one) the same way the gray manual-complete checkbox above does, and
    is excluded from the pointerdown delegation's Edit-Mode gate the same
-   way that checkbox is (see the page script). It's hidden for the whole
-   duration of Edit Mode though (see the :not(.mm-view-mode) rule right
-   below) -- Edit Mode already pins its own "+" edge buttons to a node's
-   corners (see .mm-edge-btn), so this button would either collide with
-   those or just add more clutter for an action that isn't part of
-   editing anyway; setEditMode also force-flips every node back to its
-   front face the instant Edit Mode turns on (see the page script), so
-   there's never a back face left stranded with no way to flip back to
-   its front -- the hidden button couldn't be clicked to do that during
-   Edit Mode regardless.
+   way that checkbox is (see the page script). It USED to be hidden for
+   the whole duration of Edit Mode, by request -- reversed by a later
+   request: it stays visible now (Edit Mode already pins its own "+"
+   edge buttons to a node's corners, see .mm-edge-btn, and the two
+   don't collide -- opposite corners) but is inert for that whole
+   duration instead (see the :not(.mm-view-mode) rule right below),
+   since flipping a node over isn't itself part of editing and
+   setEditMode force-flips every node back to its front face the
+   instant Edit Mode turns on anyway (see the page script) -- nothing
+   to flip TO from here even if it did respond to a click.
    A node with no note gets none of this at all -- no button, no
    flip-inner wrapper, nothing to flip TO -- so it costs nothing in the
    common case. */
@@ -379,10 +381,20 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 }
 .mm-node-note-toggle svg { width: 12px; height: 12px; display: block; }
 /* #mmNodesLayer only carries .mm-view-mode outside Edit Mode (see
-   renderCanvas's own nodesLayer.classList.toggle) -- so this hides the
-   note-toggle button specifically WHILE Edit Mode is on, per the note
-   toggle's own comment above. */
-#mmNodesLayer:not(.mm-view-mode) .mm-node-note-toggle { display: none; }
+   renderCanvas's own nodesLayer.classList.toggle) -- so this is what
+   makes the note-toggle button inert specifically WHILE Edit Mode is
+   on, per the note toggle's own comment above: pointer-events: none
+   makes a click on it fall straight through to whatever's underneath
+   (the node itself) rather than flipping anything, and the dimmed
+   opacity + default cursor read as "here, but not clickable right
+   now" rather than a plain visual bug. The click delegation's own
+   note-toggle handler (see the page script) also checks MM.editMode
+   before acting, so this stays inert even for a click that somehow
+   still lands on the button itself (a stray touch event, dev tools,
+   etc.) instead of relying on pointer-events alone. */
+#mmNodesLayer:not(.mm-view-mode) .mm-node-note-toggle {
+  pointer-events: none; cursor: default; opacity: 0.35;
+}
 /* Completed: filled solid with that color's own fill-color (see each
    .mm-node-<color>.completed rule below), so the icon becomes a shade
    DARKER than that exact fill instead -- one rule per color, same

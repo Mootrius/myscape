@@ -110,6 +110,91 @@ _STACK_ICON_OVERRIDES = {
     26792: "Abyssal pearls 5.png",
 }
 
+# Crystal helm/body/legs can be recolored to match any of seven Iorwerth
+# Clan houses (Amlodd/Cadarn/Crwys/Hefin/Iorwerth/Ithell/Trahaearn --
+# there's no Meilyr recolor for the armour, unlike the crystal bow/
+# blade's own ornament kits, confirmed against the wiki's own Bucket
+# data below turning up zero Meilyr rows for these three items), on top
+# of the original un-recolored look -- eight total looks per piece, all
+# purely cosmetic. The game's own client calls every single one of them
+# by the exact same name ("Crystal helm", or "Crystal helm (inactive)"
+# once its charges run out -- recoloring never changes the name shown
+# in a tooltip), so the RuneLite plugin's own item_name for one is
+# never enough to tell them apart -- only the real item id is different
+# per colour. item_ids.json (built from the wiki's Bucket:Infobox_item
+# table by name -- see scripts/fetch_item_ids.py) merges every colour's
+# ids into that one "Crystal helm" entry for exactly that reason, and
+# keeps only ONE icon for the whole group -- so resolve_item_display's
+# usual name-based icon guess always lands on the same (effectively
+# arbitrary) colour's picture regardless of which one a player actually
+# owns.
+#
+# This table is what actually fixes that: every real crystal armour
+# item id mapped straight to ITS OWN colour's icon filename, queried
+# live off the wiki's Bucket:Infobox_item table one level below where
+# fetch_item_ids.py stops (per id, not merged by name) rather than
+# guessed -- so a player's own Ithell helm shows the Ithell icon, not
+# whichever colour happened to be first/marked default. Doesn't cover
+# the Deadman Mode/Last Man Standing-only variants (own separate ids,
+# but not obtainable in a normal game and so never actually reported by
+# the plugin) -- add them here too if that ever changes.
+_CRYSTAL_ARMOUR_ICON_OVERRIDES = {
+    # Crystal helm -- active
+    23971: "Crystal helm.png",  # original, un-recolored
+    27705: "Crystal helm (Hefin).png",
+    27717: "Crystal helm (Ithell).png",
+    27729: "Crystal helm (Iorwerth).png",
+    27741: "Crystal helm (Trahaearn).png",
+    27753: "Crystal helm (Cadarn).png",
+    27765: "Crystal helm (Crwys).png",
+    27777: "Crystal helm (Amlodd).png",
+    # Crystal helm -- inactive (0 charges left)
+    23973: "Crystal helm (inactive).png",
+    27707: "Crystal helm (inactive) (Hefin).png",
+    27719: "Crystal helm (inactive) (Ithell).png",
+    27731: "Crystal helm (inactive) (Iorwerth).png",
+    27743: "Crystal helm (inactive) (Trahaearn).png",
+    27755: "Crystal helm (inactive) (Cadarn).png",
+    27767: "Crystal helm (inactive) (Crwys).png",
+    27779: "Crystal helm (inactive) (Amlodd).png",
+    # Crystal body -- active
+    23975: "Crystal body.png",
+    27697: "Crystal body (Hefin).png",
+    27709: "Crystal body (Ithell).png",
+    27721: "Crystal body (Iorwerth).png",
+    27733: "Crystal body (Trahaearn).png",
+    27745: "Crystal body (Cadarn).png",
+    27757: "Crystal body (Crwys).png",
+    27769: "Crystal body (Amlodd).png",
+    # Crystal body -- inactive
+    23977: "Crystal body (inactive).png",
+    27699: "Crystal body (inactive) (Hefin).png",
+    27711: "Crystal body (inactive) (Ithell).png",
+    27723: "Crystal body (inactive) (Iorwerth).png",
+    27735: "Crystal body (inactive) (Trahaearn).png",
+    27747: "Crystal body (inactive) (Cadarn).png",
+    27759: "Crystal body (inactive) (Crwys).png",
+    27771: "Crystal body (inactive) (Amlodd).png",
+    # Crystal legs -- active
+    23979: "Crystal legs.png",
+    27701: "Crystal legs (Hefin).png",
+    27713: "Crystal legs (Ithell).png",
+    27725: "Crystal legs (Iorwerth).png",
+    27737: "Crystal legs (Trahaearn).png",
+    27749: "Crystal legs (Cadarn).png",
+    27761: "Crystal legs (Crwys).png",
+    27773: "Crystal legs (Amlodd).png",
+    # Crystal legs -- inactive
+    23981: "Crystal legs (inactive).png",
+    27703: "Crystal legs (inactive) (Hefin).png",
+    27715: "Crystal legs (inactive) (Ithell).png",
+    27727: "Crystal legs (inactive) (Iorwerth).png",
+    27739: "Crystal legs (inactive) (Trahaearn).png",
+    27751: "Crystal legs (inactive) (Cadarn).png",
+    27763: "Crystal legs (inactive) (Crwys).png",
+    27775: "Crystal legs (inactive) (Amlodd).png",
+}
+
 
 def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: dict) -> dict:
     """Returns {"name", "icon", "tradeable", "highAlch"} for one real
@@ -146,7 +231,12 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
     relies on, rather than reproducing its own separate one -- run
     through _STACK_ICON_OVERRIDES afterward for the two items (Coins
     being the motivating case) where that redirect still doesn't land
-    on the specific denomination we want."""
+    on the specific denomination we want -- and through
+    _CRYSTAL_ARMOUR_ICON_OVERRIDES for the same reason on a completely
+    different class of item: crystal helm/body/legs, where the bare
+    name is shared by all eight cosmetic recolors (that table's own
+    comment has the full story), so the bare-name guess this branch
+    otherwise relies on can't tell them apart at all."""
     meta = mapping.get(str(item_id))
     if meta:
         icon_filename = meta.get("icon")
@@ -164,7 +254,7 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
         name = name or f"Item #{item_id}"
         icon_filename = name
 
-    icon_filename = _STACK_ICON_OVERRIDES.get(item_id, icon_filename)
+    icon_filename = _STACK_ICON_OVERRIDES.get(item_id) or _CRYSTAL_ARMOUR_ICON_OVERRIDES.get(item_id) or icon_filename
     return {
         "name": name,
         "icon": item_icon_url(icon_filename),

@@ -1064,15 +1064,24 @@ def render_purchase_goals(player: Player) -> str:
         row.innerHTML = PG.data.gearSetups.map(function (s) {
           var active = s.id === PG.activeSetupId ? ' active' : '';
           if (s.icon && s.icon.icon) {
-            return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" type="button" title="' + esc(s.name) + '">' +
+            return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" draggable="true" type="button" title="' + esc(s.name) + '">' +
               '<img src="' + esc(s.icon.icon) + '" alt="" /></button>';
           }
           var label = esc((s.icon && s.icon.itemName) || s.name || '?').slice(0, 3);
-          return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" type="button" title="' + esc(s.name) + '">' +
+          return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" draggable="true" type="button" title="' + esc(s.name) + '">' +
             '<span class="tracker-icon-fallback">' + label + '</span></button>';
         }).join('');
         row.querySelectorAll('[data-setup-id]').forEach(function (btn) {
           btn.addEventListener('click', function () {
+            // A completed drag shouldn't ALSO register as a click that
+            // switches the active setup -- same dragSuppressClick
+            // convention wireSlotClicks already uses for the same
+            // reason, set on dragend below and cleared the instant this
+            // fires.
+            if (PG.dragSuppressClick) {
+              PG.dragSuppressClick = false;
+              return;
+            }
             setActiveSetupId(btn.getAttribute('data-setup-id'));
             PG.picker = null;
             PG.iconPicker = false;
@@ -1082,6 +1091,105 @@ def render_purchase_goals(player: Player) -> str:
             // apply a future search to the wrong sockets.
             PG.multiSelect = [];
             render();
+          });
+        });
+        wireSetupIconDrag(row);
+      }
+
+      // Drag-and-drop reordering for the setup icon row itself --
+      // same FLIP-preview/live-DOM-order/full-replacement shape as
+      // wireSummaryDrag below, just over data-setup-id rows instead of
+      // data-slot-type/data-slot ones, and always active (no separate
+      // "custom mode" gate -- reordering setups is never anything
+      // other than a drag, there's no equivalent of the still-to-
+      // purchase list's other four sort buttons to gate it behind).
+      // Animates BOTH x and y, unlike wireSummaryDrag's y-only FLIP --
+      // .tracker-icon-row wraps (see purchase-goals.css), so dragging
+      // a setup can just as easily shift every icon after it sideways
+      // within a row as bump it down to the next one.
+      function wireSetupIconDrag(row) {
+        var draggedEl = null;
+        var dropped = false;
+
+        function iconKey(btn) {
+          return btn.getAttribute('data-setup-id');
+        }
+
+        function animateReorder(mutate) {
+          var btns = Array.prototype.slice.call(row.querySelectorAll('.tracker-icon-btn'));
+          var firstRects = {};
+          btns.forEach(function (btn) { firstRects[iconKey(btn)] = btn.getBoundingClientRect(); });
+
+          mutate();
+
+          btns.forEach(function (btn) {
+            if (btn === draggedEl) return;
+            var first = firstRects[iconKey(btn)];
+            var last = btn.getBoundingClientRect();
+            var dx = first.left - last.left;
+            var dy = first.top - last.top;
+            if (!dx && !dy) return;
+            btn.style.transition = 'none';
+            btn.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+            btn.getBoundingClientRect();
+            btn.style.transition = 'transform 150ms ease';
+            btn.style.transform = '';
+            btn.addEventListener('transitionend', function handler() {
+              btn.style.transition = '';
+              btn.removeEventListener('transitionend', handler);
+            });
+          });
+        }
+
+        async function commitDomOrder() {
+          var order = Array.prototype.slice.call(row.querySelectorAll('.tracker-icon-btn')).map(function (btn) {
+            return btn.getAttribute('data-setup-id');
+          });
+          const data = await apiCall('/api/gear-setups/order', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: order }),
+          });
+          if (data) { PG.stateVersion++; PG.data = data; render(); }
+        }
+
+        row.querySelectorAll('.tracker-icon-btn').forEach(function (btn) {
+          btn.addEventListener('dragstart', function (e) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', btn.getAttribute('data-setup-id'));
+            draggedEl = btn;
+            dropped = false;
+            btn.classList.add('dragging');
+          });
+          btn.addEventListener('dragend', function () {
+            btn.classList.remove('dragging');
+            draggedEl = null;
+            // A completed drag shouldn't ALSO register as a click that
+            // switches the active setup -- see the click handler above.
+            PG.dragSuppressClick = true;
+            // A drag that ends without a drop (dropped outside the
+            // row, or cancelled with Escape) leaves the live-preview
+            // DOM order sitting there with nothing saved server-side
+            // to back it up -- a plain re-render from the untouched
+            // PG.data snaps it straight back to the last real order.
+            if (!dropped) renderIconRow();
+          });
+          btn.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (!draggedEl || draggedEl === btn) return;
+            var rect = btn.getBoundingClientRect();
+            var before = e.clientX < rect.left + rect.width / 2;
+            var alreadyBefore = btn.previousElementSibling === draggedEl;
+            var alreadyAfter = btn.nextElementSibling === draggedEl;
+            if (before ? alreadyBefore : alreadyAfter) return;
+            animateReorder(function () {
+              row.insertBefore(draggedEl, before ? btn : btn.nextSibling);
+            });
+          });
+          btn.addEventListener('drop', function (e) {
+            e.preventDefault();
+            dropped = true;
+            commitDomOrder();
           });
         });
       }
@@ -3976,6 +4084,16 @@ def render_mindmaps(player: Player) -> str:
         positionFloatingSuggestions();
       }
 
+      // The outer zoom-out limit -- how far away the player can pull
+      // back -- twice as far out as it used to be (was 0.4; a LOWER
+      // zoom factor shows MORE of the world in the same viewport
+      // pixels, so halving it is what doubles the visible width/height
+      // -- see MIN_ZOOM's own use in setZoom/zoomToFit below, both
+      // previously hardcoding 0.4 here). MAX_ZOOM (the zoom-IN limit)
+      // is untouched -- only the zoom-out side of this was asked for.
+      var MIN_ZOOM = 0.2;
+      var MAX_ZOOM = 2;
+
       // Zooms toward/away from a fixed screen point -- (originX, originY)
       // in canvas-viewport pixels, defaulting to the viewport's own
       // center when omitted (both the +/-/reset buttons and the wheel
@@ -3991,14 +4109,21 @@ def render_mindmaps(player: Player) -> str:
         var canvas = document.getElementById('mmCanvas');
         if (originX == null) originX = canvas.clientWidth / 2;
         if (originY == null) originY = canvas.clientHeight / 2;
-        var newZoom = Math.max(0.4, Math.min(2, z));
-        if (newZoom === MM.zoom) return;
-        var worldX = (originX - MM.pan.x) / MM.zoom;
-        var worldY = (originY - MM.pan.y) / MM.zoom;
-        MM.zoom = newZoom;
-        MM.pan.x = originX - worldX * MM.zoom;
-        MM.pan.y = originY - worldY * MM.zoom;
-        applyTransform();
+        var newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+        if (newZoom !== MM.zoom) {
+          var worldX = (originX - MM.pan.x) / MM.zoom;
+          var worldY = (originY - MM.pan.y) / MM.zoom;
+          MM.zoom = newZoom;
+          MM.pan.x = originX - worldX * MM.zoom;
+          MM.pan.y = originY - worldY * MM.zoom;
+          applyTransform();
+        }
+        // Called even when newZoom didn't move MM.zoom at all (already
+        // sitting right on a limit and asked to go further the same
+        // way) -- cheap, and the buttons need to reflect that limit
+        // whether this is the click that FIRST reached it or the
+        // twentieth click that's still pinned there.
+        updateZoomButtons();
       }
 
       // Nudges the pan (never the zoom) just enough that a freshly-
@@ -4064,6 +4189,30 @@ def render_mindmaps(player: Player) -> str:
         if (MM.popoverPanBaselineY == null) MM.popoverPanBaselineY = MM.pan.y;
         var canvas = document.getElementById('mmCanvas');
         var canvasRect = canvas.getBoundingClientRect();
+        // .mm-world carries an always-on 0.18s transform transition (see
+        // its own comment in mindmaps.css), so an ordinary applyTransform()
+        // call glides rather than snaps. That's fine for the ONE nudge
+        // below that actually needs to be visible -- but switching node
+        // TYPE in the edit popup (or any other rapid back-to-back popover
+        // change) fires a fresh render(), and therefore a fresh call to
+        // this function, well within the previous call's own 180ms glide.
+        // MM.pan.x/y is always the JS-tracked TARGET pan -- the resting
+        // place a previous call already decided on -- but at that moment
+        // the popover's actual on-screen position is still mid-flight
+        // toward it. Reading getBoundingClientRect() right then measures
+        // that stale, still-catching-up position, while the baseline
+        // reset and overflow math below both treat MM.pan as if it were
+        // already fully applied on screen -- the mismatch between "where
+        // JS thinks it settled" and "where it's actually rendered right
+        // now" is exactly what produced the reported "seemingly random"
+        // up/down jumps on quick successive type switches. setFullscreen
+        // hit this identical mismatch once already (see its own comment)
+        // and fixed it the same way: force the baseline-reset AND the
+        // measurement that follows it to land/read instantly, so what
+        // gets measured always matches MM.pan exactly, then hand the
+        // transition back before the one nudge that should actually
+        // glide.
+        mmWorldEl.style.transitionDuration = '0s';
         if (MM.pan.x !== MM.popoverPanBaselineX) {
           MM.pan.x = MM.popoverPanBaselineX;
           applyTransform();
@@ -4073,6 +4222,7 @@ def render_mindmaps(player: Player) -> str:
           applyTransform();
         }
         var popRect = popover.getBoundingClientRect();
+        mmWorldEl.style.transitionDuration = '';
         var MARGIN = 16;
         var overflowBelow = popRect.bottom - (canvasRect.bottom - MARGIN);
         var overflowAbove = (canvasRect.top + MARGIN) - popRect.top;
@@ -4127,8 +4277,8 @@ def render_mindmaps(player: Player) -> str:
 
       // Fits the WHOLE tree's bounding box inside the current viewport
       // -- picks whichever of width/height is the tighter constraint,
-      // clamped to the same 0.4-2 zoom range as everything else, then
-      // centers the fitted box in the viewport. Uses the actual tight
+      // clamped to the same MIN_ZOOM-MAX_ZOOM range as everything else,
+      // then centers the fitted box in the viewport. Uses the actual tight
       // bounding box of the node positions themselves (not
       // layout.worldWidth/worldHeight) -- those two are sized for
       // computeLayout's own arithmetic convenience and end up with
@@ -4163,12 +4313,13 @@ def render_mindmaps(player: Player) -> str:
         var viewW = canvas.clientWidth, viewH = canvas.clientHeight;
         var pad = 40; // breathing room inside the viewport edges
         var availW = Math.max(1, viewW - pad * 2), availH = Math.max(1, viewH - pad * 2);
-        var z = Math.max(0.4, Math.min(2, Math.min(availW / boxW, availH / boxH)));
+        var z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min(availW / boxW, availH / boxH)));
         MM.zoom = z;
         var boxCenterX = minX + boxW / 2, boxCenterY = minY + boxH / 2;
         MM.pan.x = viewW / 2 - boxCenterX * z;
         MM.pan.y = viewH / 2 - boxCenterY * z;
         applyTransform();
+        updateZoomButtons();
       }
 
       // If a node's text is mid-edit (its label is focused and
@@ -4628,12 +4779,12 @@ def render_mindmaps(player: Player) -> str:
               var rawTargetForMetric = targetForMetric.value.trim();
               if (rawTargetForMetric !== '') {
                 // The box is still showing the OLD metric's value here
-                // (newMetric is what it's switching TO) -- if that was
-                // XP, it may have a "150k"-style shorthand in it (see
-                // parseMoneySuffix) that needs resolving before it can
-                // be converted to a level.
-                var oldMetric = newMetric === 'xp' ? 'level' : 'xp';
-                var nTargetForMetric = Number(oldMetric === 'xp' ? parseMoneySuffix(rawTargetForMetric) : rawTargetForMetric);
+                // (newMetric is what it's switching TO) -- it may have
+                // a "150k"-style shorthand or thousands-separator
+                // commas in it either way (see parseMoneySuffix and
+                // filterNumericSuffixInput) that need resolving before
+                // it can be converted to a level.
+                var nTargetForMetric = Number(parseMoneySuffix(rawTargetForMetric));
                 if (Number.isInteger(nTargetForMetric)) {
                   targetForMetric.value = newMetric === 'xp'
                     ? xpForLevel(nTargetForMetric)
@@ -4670,14 +4821,22 @@ def render_mindmaps(player: Player) -> str:
         }
         // The note-flip button (see renderCanvas) -- purely a local
         // view toggle (MM.flippedNodeIds), no request, same "works on
-        // ANY node this way, whether or not Edit Mode is on" reasoning
-        // as the manual-complete checkbox just above. Reads the
-        // CLICKED node's id straight off its ancestor .mm-node rather
-        // than assuming it's the selected one, for the same double-
-        // click-doesn't-desync reason that checkbox does. The actual
-        // squish-and-reveal animation lives in flipNodeNote below.
+        // ANY node this way" reasoning as the manual-complete checkbox
+        // just above, EXCEPT while Edit Mode is on: the button stays
+        // visible there now (see .mm-node-note-toggle's own comment in
+        // mindmaps.css for why it used to be hidden instead), but is
+        // deliberately inert for that whole duration -- pointer-events:
+        // none in that same CSS rule normally keeps a click from ever
+        // reaching here at all, this MM.editMode check is just the
+        // belt-and-suspenders backstop for a click that somehow still
+        // lands on the button anyway. Reads the CLICKED node's id
+        // straight off its ancestor .mm-node rather than assuming it's
+        // the selected one, for the same double-click-doesn't-desync
+        // reason that checkbox does. The actual squish-and-reveal
+        // animation lives in flipNodeNote below.
         var noteToggleEl = e.target.closest('[data-role="note-toggle"]');
         if (noteToggleEl) {
+          if (MM.editMode) return;
           var noteToggleNodeEl = noteToggleEl.closest('.mm-node');
           var noteToggleNodeId = noteToggleNodeEl && noteToggleNodeEl.getAttribute('data-node-id');
           if (noteToggleNodeId) flipNodeNote(noteToggleNodeId);
@@ -4764,24 +4923,17 @@ def render_mindmaps(player: Player) -> str:
             }
           }
           var goal = {};
-          // The skill goal's own target only accepts the K/M/B
-          // shorthand while XP is the selected metric (see
-          // renderGoalFieldsHtml/validateSkillTarget) -- read here,
-          // once, rather than inside the loop below, since the metric
-          // field isn't necessarily visited before the target field is
-          // (querySelectorAll returns them in DOM order, and the
-          // segmented toggle's hidden field comes after the visible
-          // buttons but the order of [data-goal-field] elements overall
-          // isn't something this loop should have to depend on).
-          var metricHidden = fieldsWrap.querySelector('[data-goal-field="metric"]');
-          var savingXpTarget = metricHidden && metricHidden.value === 'xp';
           fieldsWrap.querySelectorAll('[data-goal-field]').forEach(function (input) {
             var val = (input.value || '').trim();
             var field = input.getAttribute('data-goal-field');
-            // The gp target and (only in XP mode) the skill target both
-            // accept the K/M/B shorthand (see parseMoneySuffix) --
-            // everything else is sent as typed.
-            if (field === 'targetGp' || (field === 'target' && savingXpTarget)) val = parseMoneySuffix(val);
+            // Every plain numeric-target field -- kc's targetCount,
+            // item's targetQty, gp's targetGp, and the skill target
+            // (either metric -- see parseMoneySuffix's own comment for
+            // why LVL doesn't need to be excluded) -- accepts the
+            // K/M/B shorthand and comma separators (see
+            // parseMoneySuffix); everything else is sent as typed.
+            var isNumericTargetField = field === 'targetGp' || field === 'targetCount' || field === 'targetQty' || field === 'target';
+            if (isNumericTargetField) val = parseMoneySuffix(val);
             if (val !== '') goal[field] = val;
           });
           // The Save button (unlike the manual-complete toggle, which
@@ -4851,6 +5003,14 @@ def render_mindmaps(player: Player) -> str:
           searchDebounceTimers.set(searchInput, setTimeout(function () { runGoalSearch(searchInput); }, 200));
           return;
         }
+        // Every plain numeric-target field (see NUMERIC_SUFFIX_FIELDS_SELECTOR/
+        // filterNumericSuffixInput) gets its typed value cleaned up
+        // FIRST, before anything downstream (validateSkillTarget right
+        // below, in particular) ever reads it -- so a disallowed
+        // character never even flashes into the field for one frame
+        // before being stripped back out.
+        var numericField = e.target.closest(NUMERIC_SUFFIX_FIELDS_SELECTOR);
+        if (numericField) filterNumericSuffixInput(numericField);
         var targetInput = e.target.closest('[data-goal-field="target"]');
         if (targetInput && targetInput.closest('.mm-goal-fields')) validateSkillTarget(targetInput);
         var sinceDateInput = e.target.closest('[data-goal-field="sinceDate"]');
@@ -4890,21 +5050,71 @@ def render_mindmaps(player: Player) -> str:
 
       function fmtNum(n) { return Number(n).toLocaleString('en-US'); }
 
-      // Lets the gp goal's target be typed as a shorthand -- "140k",
-      // "2.5m", "1b" -- and resolves it to the plain integer the
-      // server actually stores (140000, 2500000, 1000000000); the
-      // node itself always displays the resolved number with commas
-      // (see goalDisplayText's "gp" branch, unchanged), never the
-      // shorthand the player typed. Anything that isn't a number
-      // immediately followed by k/m/b (case-insensitive) -- including
-      // a plain "140000" -- passes through untouched, so typing the
-      // full number still works exactly as before.
+      // Lets any plain-numeric goal target (kc's targetCount, item's
+      // targetQty, gp's targetGp, skill's target) be typed as a
+      // shorthand -- "140k", "2.5m", "1b" -- and resolves it to the
+      // plain integer the server actually stores (140000, 2500000,
+      // 1000000000); the node itself always displays the resolved
+      // number with commas (see goalDisplayText, unchanged), never the
+      // shorthand the player typed. Commas are stripped unconditionally
+      // first (filterNumericSuffixInput lets a player type them into
+      // any of these fields as a thousands separator, purely for
+      // readability while typing -- "2,500k" and "2500k" resolve
+      // identically), so what's left is either a plain integer or a
+      // number+suffix. Anything that isn't a number immediately
+      // followed by k/m/b (case-insensitive) after that -- including a
+      // plain "140000" -- passes through untouched, so typing the full
+      // number still works exactly as before.
       function parseMoneySuffix(raw) {
-        var s = (raw || '').trim();
+        var s = (raw || '').trim().replace(/,/g, '');
         var m = /^([0-9]*\.?[0-9]+)\s*([kKmMbB])$/.exec(s);
         if (!m) return s;
         var mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2].toLowerCase()];
         return String(Math.round(parseFloat(m[1]) * mult));
+      }
+
+      // Every field parseMoneySuffix ever resolves -- kc's
+      // targetCount, item's targetQty, gp's targetGp, skill's target
+      // (either metric) -- shares the one filterNumericSuffixInput
+      // treatment below, keyed off this same selector.
+      var NUMERIC_SUFFIX_FIELDS_SELECTOR =
+        '[data-goal-field="targetCount"], [data-goal-field="targetQty"], ' +
+        '[data-goal-field="targetGp"], [data-goal-field="target"]';
+
+      // Restricts what actually lands in one of the fields above to
+      // exactly the characters that could ever be valid in one: digits,
+      // commas (a typing-time thousands separator -- parseMoneySuffix
+      // strips them back out before saving/validating), a decimal
+      // point (only meaningful together with a k/m/b suffix -- see
+      // parseMoneySuffix -- but harmless on its own), and k/m/b
+      // themselves (case-insensitive). Anything else typed, pasted, or
+      // dropped in -- a letter, a symbol, an emoji -- is silently
+      // dropped rather than shown and then complained about, same
+      // "just doesn't work" feel a plain <input type="number"> already
+      // gives a stray letter, just extended to cover the K/M/B
+      // shorthand these fields ALSO need to accept, which a real
+      // number input could never be made to allow (hence these being
+      // type="text" inputmode="decimal" rather than type="number" --
+      // see renderGoalFieldsHtml). Called from the shared delegated
+      // 'input' listener below, so it runs on every keystroke (and on
+      // a paste/drop, which fires 'input' too) before anything
+      // downstream -- validateSkillTarget in particular -- ever reads
+      // the field's value.
+      var NUMERIC_SUFFIX_DISALLOWED_RE = /[^0-9,.kKmMbB]/g;
+
+      function filterNumericSuffixInput(input) {
+        var cleaned = input.value.replace(NUMERIC_SUFFIX_DISALLOWED_RE, '');
+        if (cleaned === input.value) return;
+        // Keeps the caret sitting after the same VALID characters it
+        // was after before the strip, rather than letting the browser's
+        // default post-assignment behavior jump it to the end -- counts
+        // how many of the characters before the old cursor position
+        // survive the same filter, and that count is exactly where the
+        // cursor belongs in the cleaned-up value too.
+        var cursor = input.selectionStart;
+        var keptBeforeCursor = input.value.slice(0, cursor).replace(NUMERIC_SUFFIX_DISALLOWED_RE, '').length;
+        input.value = cleaned;
+        input.setSelectionRange(keptBeforeCursor, keptBeforeCursor);
       }
 
       // The kc goal's optional sinceDate field masks itself exactly
@@ -5126,14 +5336,18 @@ def render_mindmaps(player: Player) -> str:
         var metric = (metricHidden && metricHidden.value === 'xp') ? 'xp' : 'level';
         var raw = input.value.trim();
         if (raw === '') { errEl.textContent = ''; errEl.classList.remove('show'); return; }
-        // XP accepts the same "140k"/"2.5m"/"1b" shorthand the gp
-        // goal's target does (see parseMoneySuffix) -- resolve it
-        // before range-checking so typing "150k" doesn't flash an
+        // Resolved through parseMoneySuffix either way -- both to
+        // strip a thousands-separator comma (filterNumericSuffixInput
+        // lets a player type one into this field regardless of metric)
+        // and, in XP mode, to resolve the "140k"/"2.5m"/"1b" shorthand
+        // before range-checking, so typing "150k" doesn't flash an
         // out-of-range error while the player's still typing it out in
-        // full. LVL never accepts the shorthand, so it's left as typed
-        // -- Number() on a stray "5k" there is NaN either way, which
-        // already fails the integer check below exactly as it should.
-        var n = Number(metric === 'xp' ? parseMoneySuffix(raw) : raw);
+        // full. LVL never has a REAL use for the k/m/b shorthand (a
+        // level suffix makes no sense at OSRS's 1-126 scale), but
+        // running it through the same resolver anyway costs nothing --
+        // a stray "5k" there resolves to 5000, which the max check
+        // below rejects exactly as an out-of-range level should be.
+        var n = Number(parseMoneySuffix(raw));
         var min = metric === 'xp' ? MIN_SKILL_XP : MIN_SKILL_LEVEL;
         var max = metric === 'xp' ? MAX_SKILL_XP : MAX_SKILL_LEVEL;
         if (!Number.isInteger(n) || n < min || n > max) {
@@ -5907,7 +6121,12 @@ def render_mindmaps(player: Player) -> str:
           fields =
             renderSearchFieldHtml('sourceName', 'npc', 'Search for an NPC', goal.sourceName) +
             '<input type="hidden" data-goal-field="activityType" value="npc">' +
-            '<input class="mm-goal-input" type="number" data-goal-field="targetCount" placeholder="Target kc" min="1" value="' + esc(goal.targetCount != null ? goal.targetCount : '') + '">' +
+            // type="text" (not "number"), same reasoning as the gp
+            // goal's own target field below -- accepts the same
+            // "140k"/"2.5m"/"1b" shorthand (see parseMoneySuffix and
+            // filterNumericSuffixInput), which a real number input
+            // would refuse to let the player type at all.
+            '<input class="mm-goal-input" type="text" inputmode="decimal" data-goal-field="targetCount" placeholder="Target kc" value="' + esc(goal.targetCount != null ? goal.targetCount : '') + '">' +
             // Optional -- narrows targetCount to only count kc from this
             // date on, without ever showing on the node face itself (see
             // the kc summary text below and clean_goal's own comment in
@@ -5934,7 +6153,12 @@ def render_mindmaps(player: Player) -> str:
         } else if (type === 'item') {
           fields =
             renderSearchFieldHtml('itemName', 'item', 'Search for an item', goal.itemName) +
-            '<input class="mm-goal-input" type="number" data-goal-field="targetQty" placeholder="Target quantity" min="1" value="' + esc(goal.targetQty != null ? goal.targetQty : '') + '">';
+            // type="text" (not "number"), same reasoning as the gp
+            // goal's own target field below -- accepts the same
+            // "140k"/"2.5m"/"1b" shorthand (see parseMoneySuffix and
+            // filterNumericSuffixInput), which a real number input
+            // would refuse to let the player type at all.
+            '<input class="mm-goal-input" type="text" inputmode="decimal" data-goal-field="targetQty" placeholder="Target quantity" value="' + esc(goal.targetQty != null ? goal.targetQty : '') + '">';
         } else if (type === 'gp') {
           // type="text" (not "number") because the shorthand this
           // accepts -- "140k", "2.5m", "1b" -- has letters in it, which
@@ -6175,6 +6399,20 @@ def render_mindmaps(player: Player) -> str:
         var redoBtn = document.getElementById('mmRedoBtn');
         if (undoBtn) undoBtn.disabled = !MM.undoStack.length;
         if (redoBtn) redoBtn.disabled = !MM.redoStack.length;
+      }
+
+      // Same disable-rather-than-hide treatment as updateHistoryButtons
+      // just above (see its own comment, and .mm-zoom-controls
+      // button:disabled in mindmaps.css, which both share), just keyed
+      // off MM.zoom against MIN_ZOOM/MAX_ZOOM instead of the undo/redo
+      // stacks -- called from every place MM.zoom can change (setZoom,
+      // zoomToFit), so the +/- buttons are always dimmed exactly when
+      // another click in that direction genuinely wouldn't do anything.
+      function updateZoomButtons() {
+        var zoomInBtn = document.getElementById('mmZoomIn');
+        var zoomOutBtn = document.getElementById('mmZoomOut');
+        if (zoomInBtn) zoomInBtn.disabled = MM.zoom >= MAX_ZOOM;
+        if (zoomOutBtn) zoomOutBtn.disabled = MM.zoom <= MIN_ZOOM;
       }
 
       // The pencil toggle's own gold-when-on/gray-when-off state --

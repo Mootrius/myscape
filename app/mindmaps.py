@@ -835,6 +835,31 @@ def _normalize_lookup_name(name: Optional[str]) -> str:
     return (name or "").strip().lower()
 
 
+_OFFHAND_SUFFIX = " (off-hand)"
+
+
+def _offhand_pair_name(item_name: Optional[str]) -> Optional[str]:
+    """Returns the OTHER name in an "item" goal's off-hand pair, if
+    item_name has one -- OSRS has a small handful of tools with a
+    dedicated "(off-hand)" variant (Imcando hammer, Amy's saw, Bruma
+    torch, as of this writing -- confirmed live against
+    app/data/item_ids.json, which is also where any future addition
+    would show up, so nothing here is a hardcoded item list): worn in
+    the shield slot instead of the weapon slot, but functionally the
+    same tool either way, so a player with either one in their bank has
+    satisfied a goal asking for it regardless which name they typed in.
+    Purely a naming-convention transform, not a lookup of its own --
+    find_item_ids on whatever this returns is what confirms the pair
+    actually exists as a real item before evaluate_completion ever
+    pools its ids in."""
+    name = (item_name or "").strip()
+    if not name:
+        return None
+    if name.lower().endswith(_OFFHAND_SUFFIX):
+        return name[: -len(_OFFHAND_SUFFIX)].strip() or None
+    return name + _OFFHAND_SUFFIX
+
+
 def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
     """Returns {node_id: bool} for every node in `nodes` -- whether that
     node's goal is currently satisfied. `context` is a plain dict built
@@ -917,10 +942,24 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
         elif goal_type == "item":
             item_name, target = goal.get("itemName"), goal.get("targetQty")
             if item_name and target:
-                ids = find_item_ids(item_name) or []
-                owned = sum(owned_pool_by_id.get(i, 0) for i in ids)
-                if not ids:
-                    owned = owned_pool_by_name.get(_normalize_lookup_name(item_name), 0)
+                # Either name in an off-hand pair (see
+                # _offhand_pair_name) satisfies the other -- a player
+                # who typed "Imcando hammer" into this node completes
+                # it whether their bank holds the plain weapon, the
+                # off-hand variant, or some of each, so every id EITHER
+                # name resolves to gets pooled into one combined owned
+                # count. Deduped against item_name itself so an item
+                # with no real pair (pair_name guessed but not a real
+                # item) never double-counts the same ids twice.
+                names = [item_name]
+                pair_name = _offhand_pair_name(item_name)
+                if pair_name and pair_name.lower() != item_name.strip().lower():
+                    names.append(pair_name)
+                ids = [i for n in names for i in (find_item_ids(n) or [])]
+                if ids:
+                    owned = sum(owned_pool_by_id.get(i, 0) for i in ids)
+                else:
+                    owned = sum(owned_pool_by_name.get(_normalize_lookup_name(n), 0) for n in names)
                 done = owned >= target
         elif goal_type == "gp":
             target = goal.get("targetGp")

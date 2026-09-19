@@ -698,6 +698,20 @@ class GearSetup(Base):
     # pending item with no entry here (new, or reordering never
     # touched it) falls back to cost-ascending, same as "low_to_high".
     still_to_purchase_custom_order = Column(JSONB, nullable=True)
+    # The player's own drag-and-drop order for their LIST of gear
+    # setups (contrast still_to_purchase_custom_order above, which
+    # orders the rows INSIDE one setup) -- nullable, and left NULL
+    # until a player actually reorders something. build_gear_setups in
+    # app/purchase_goals.py orders by this column first and created_at
+    # second, so with every setup's sort_order still NULL (nothing
+    # dragged yet), the created_at tiebreaker alone decides the order:
+    # oldest first, newest last, the default. Reordering (see the
+    # PUT /api/gear-setups/order route in app/main.py) always rewrites
+    # every setup's sort_order to its plain position (0, 1, 2, ...) in
+    # the new order, the same "just re-send the whole list" approach
+    # still_to_purchase_custom_order itself uses, rather than fractional
+    # single-row inserts.
+    sort_order = Column(Float, nullable=True)
 
     player = relationship("Player", back_populates="gear_setups")
 

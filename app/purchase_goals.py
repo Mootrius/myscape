@@ -960,7 +960,22 @@ def _player_coins(db: Session, player: Player) -> int:
 
 
 def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, coins: int) -> List[dict]:
-    setups = db.query(GearSetup).filter(GearSetup.player_id == player.id).order_by(GearSetup.created_at).all()
+    # sort_order first, created_at second -- see GearSetup's own
+    # docstring in app/models.py. Postgres already sorts NULLs last on
+    # an ascending order by default, but that's not something to lean
+    # on silently -- every setup's sort_order is NULL until a player
+    # actually drags one, at which point created_at (itself always
+    # oldest-first) is the ENTIRE order, landing new setups at the end
+    # exactly where "newest last" wants them; once any reordering has
+    # happened, sort_order alone decides it (every setup gets a fresh
+    # one on any reorder -- see set_gear_setup_order in app/main.py --
+    # so ties needing the created_at tiebreaker again shouldn't occur).
+    setups = (
+        db.query(GearSetup)
+        .filter(GearSetup.player_id == player.id)
+        .order_by(GearSetup.sort_order.asc(), GearSetup.created_at.asc())
+        .all()
+    )
     base_pool_by_id, base_pool_by_name = build_owned_pools(db, player)
 
     results = []

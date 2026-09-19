@@ -152,6 +152,7 @@ from app.schemas import (
     SeedVaultSyncRequest,
     SeedVaultSyncResponse,
     SetGearSetupIconRequest,
+    SetGearSetupOrderRequest,
     SetGearSlotRequest,
     SetStillToPurchaseOrderRequest,
     SetStillToPurchaseSortRequest,
@@ -1398,6 +1399,37 @@ def create_gear_setup(
     name = (payload.name or "").strip() or "New Setup"
     setup = GearSetup(player_id=player.id, name=name, equipment={}, inventory=[None] * INVENTORY_SIZE)
     db.add(setup)
+    db.commit()
+    return build_purchase_goals_state(db, player)
+
+
+@app.put("/api/gear-setups/order")
+def set_gear_setup_order(
+    payload: SetGearSetupOrderRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Saves a drag-and-drop reorder of the player's gear setup LIST
+    itself (the icon row above the gear frame -- contrast
+    set_still_to_purchase_order below, which reorders rows INSIDE one
+    setup) -- payload.order is the complete list of setup ids in their
+    new order, not a delta, same convention as every other reorder
+    endpoint here. Every setup this player owns gets a fresh sort_order
+    (its plain 0-based position in payload.order) in one pass; any of
+    the player's setup ids payload.order left out (a stale client, or a
+    setup deleted mid-drag) keeps whatever sort_order it already had
+    rather than erroring the whole request out, and any id in
+    payload.order that ISN'T one of the player's own setups is silently
+    ignored -- the same defensive stance _get_owned_gear_setup takes
+    everywhere else, just applied per-id instead of failing the batch."""
+    owned_setups = {
+        str(s.id): s
+        for s in db.query(GearSetup).filter(GearSetup.player_id == player.id).all()
+    }
+    for index, setup_id in enumerate(payload.order):
+        setup = owned_setups.get(setup_id)
+        if setup is not None:
+            setup.sort_order = float(index)
     db.commit()
     return build_purchase_goals_state(db, player)
 

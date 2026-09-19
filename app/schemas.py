@@ -1029,6 +1029,17 @@ class SetStillToPurchaseOrderRequest(BaseModel):
     order: List[StillToPurchaseOrderEntryIn]
 
 
+class SetGearSetupOrderRequest(BaseModel):
+    """The full new order of a player's gear setup LIST after a drag-
+    and-drop reorder (contrast SetStillToPurchaseOrderRequest above,
+    which reorders the rows INSIDE one setup) -- always the complete
+    list of setup ids as currently displayed, not a delta, same
+    full-replacement convention every other reorder here follows. See
+    sort_order on GearSetup in app/models.py."""
+
+    order: List[str]
+
+
 class CreateGearSetupRequest(BaseModel):
     name: str = ""
 

@@ -445,7 +445,13 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
+  /* 18px, not the 20px this used to be -- standardized to the same
+     between-sections gap Purchase Goals and Loot Tracker's own cards
+     use (see .overlay-card/.pg-body in purchase-goals.css and
+     .loot-chart-card/.loot-panels in loot-tracker.css), so the space
+     between top-level cards reads the same across every one of these
+     pages instead of each picking its own slightly different number. */
+  gap: 18px;
   margin-top: 14px;
 }
 
