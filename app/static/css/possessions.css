@@ -340,21 +340,22 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 
 /* Quantity/GE/HA's 7-way operator picker -- all on one row instead
    of letting the group wrap the way it used to.
-   The six comparison symbols are a fixed, equal size regardless of
-   how wide their own glyph happens to be -- ">"/"<" alone otherwise
-   look noticeably smaller/thinner next to ">="/"<=" purely because
-   they're a single character next to a two-character one, so those
-   two get their own larger font-size to read as the same visual
-   weight as the rest, not because they're a different kind of
-   control. BETWEEN -- the one segment that's an actual word, not a
+   All six comparison symbols are plain ASCII (">=" and "<=" as two
+   characters, not the single "≥"/"≤" glyphs) so every one of
+   them renders in RuneScapePlain11 itself, the same pixel font as
+   the rest of the site, rather than some falling back to a different
+   (smooth system) font for glyphs the pixel font doesn't have --
+   that mismatch was what made ">"/"<" look like they were in a
+   different typeface once they'd been sized up on their own. Within
+   RuneScapePlain11 the ASCII punctuation glyphs only occupy a sliver
+   of their own character box (this pixel font wasn't designed to be
+   scaled past its native ~11px), so all six get the same larger
+   font-size here to read at a normal weight instead of looking thin
+   and small. BETWEEN -- the one segment that's an actual word, not a
    symbol -- sizes to fit its own label instead of being squeezed to
    match the fixed-width symbol segments beside it. */
 .pm-segment-group[data-role="op"] .pm-segment-btn {
-  flex: 0 0 36px; width: 36px; font-size: 16px; padding: 7px 2px;
-}
-.pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value=">"],
-.pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value="<"] {
-  font-size: 20px;
+  flex: 0 0 36px; width: 36px; font-size: 24px; padding: 7px 2px;
 }
 .pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value="between"] {
   flex: 0 0 auto; width: auto; padding: 7px 14px; font-size: 10.5px;
