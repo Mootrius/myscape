@@ -194,9 +194,8 @@ a:hover { color: var(--gold); text-decoration: underline; }
    compete visually with a real button. Without this, a bare <button
    class="link"> falls back to the browser's native button chrome (a
    white, rounded box), which is what was happening before this rule
-   existed -- .nav-side/.footer-linked-note below still win on specificity
-   for their own two-class selectors, so this only fills the gap
-   everywhere else. */
+   existed -- .nav-side below still wins on specificity for its own
+   two-class selector, so this only fills the gap everywhere else. */
 button.link {
   background: none;
   border: none;
@@ -811,40 +810,6 @@ footer {
   text-align: center;
 }
 
-.footer-linked-note {
-  color: var(--text-dim);
-  font-size: 14.5px;
-  margin: 0 0 10px;
-}
-
-/* The "Unlink" button next to the linked note -- a plain inline text
-   link, styled to match the site's signature gold link color exactly
-   (same color/hover pair as .footer-trademark a below), rather than a
-   boxed button, since it's a minor, occasional action sitting inside a
-   sentence right next to another inline link. Uppercased in CSS same
-   as the header nav (see .nav-side above) rather than writing "UNLINK"
-   into the HTML itself -- the source text stays normal title case
-   either way (readable in the DOM, in an error message built off the
-   same word, etc.), only the on-page rendering changes. */
-.footer-linked-note button.link {
-  background: none;
-  border: none;
-  color: var(--gold-dim);
-  font-size: inherit;
-  font-family: inherit;
-  text-decoration: none;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-  padding: 0;
-  margin-left: 4px;
-}
-
-.footer-linked-note button.link:hover { color: var(--gold); text-decoration: underline; }
-.footer-linked-note button.link:disabled { opacity: 0.5; cursor: default; }
-
-.footer-unlink-error { max-width: 420px; margin: 0 auto 14px; }
-
 /* The GitHub/Discord/Patreon row (see _footer() in app/pages.py) --
    the same three icons (minus its own myscape.io one, which would
    just link back to the page the player's already on) the RuneLite
@@ -1091,11 +1056,13 @@ footer {
    what actually keeps the purchase-planner panel above it fully
    scrolled out of view once you land here -- without it, footer would
    just be its own small natural height and the panel above would
-   still show through the top of the viewport. Centering footer-inner
-   inside that full-height footer (rather than pinning the CTA to the
-   top and the social/trademark row to the bottom) keeps this simple
-   and reads fine -- the CTA, then a clear gap, then the same compact
-   social/trademark block every other page's footer ends in. Scoped to
+   still show through the top of the viewport. Anchoring footer-inner
+   to the BOTTOM of that full-height footer (rather than centering it
+   in the middle of all that empty space) keeps it reading as the
+   page's actual floor, same as every other page's footer -- the CTA,
+   then a clear gap, then the same compact social/trademark block
+   every other page's footer ends in, just sitting flush with the
+   bottom of the viewport instead of floating mid-screen. Scoped to
    body.landing only, same as every other landing-only rule here --
    everywhere else footer keeps its ordinary compact height. */
 body.landing footer {
@@ -1109,10 +1076,10 @@ body.landing footer {
      spanning full width, breaking .footer-inner's own text-align:
      center. column flips that: align-items' default (stretch) now
      applies on the horizontal cross axis, so footer-inner fills the
-     full width for free, and justify-content centers it vertically
-     on what's now the main (vertical) axis. */
+     full width for free, and justify-content anchors it to the
+     bottom on what's now the main (vertical) axis. */
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 .landing-cta {
@@ -1155,7 +1122,7 @@ body.landing footer {
   color: #221c10;
   border: 1px solid var(--gold);
 }
-.landing-cta-btn--primary:hover { background: #ffab42; border-color: #ffab42; text-decoration: none; }
+.landing-cta-btn--primary:hover { background: #ffab42; border-color: #ffab42; color: #221c10; text-decoration: none; }
 
 .landing-cta-btn--secondary {
   background: transparent;

@@ -178,38 +178,24 @@ def _footer(player: Optional[PlayerView], extra: str = "") -> str:
     instead of down, so it unmistakably reads as a floor under the
     page rather than a second, weaker header.
 
-    Holds three things, none of which is really page content: the same
+    Holds two things, neither of which is really page content: the same
     GitHub/Discord/Patreon icon row the RuneLite plugin's own sidebar
     shows (see buildSocialLinksRow in MyscapePanel.java in the
     myscape-plugin repo -- everything there except its own myscape.io
     icon, since a link back to the site the player is already standing
-    on would be pointless here), the "Linked to <name>" status (moved
-    down here from the dashboard body -- it's chrome about the
-    player's account, not something specific to that one page, so
-    every page showing it is more consistent than just the one) with
-    its "Unlink" button, and the OSRS trademark attribution. The social
-    row and trademark belong on every page regardless of login state,
-    same as each other -- the social row sits above the (login-gated)
-    linked note rather than being gated on it too, so on a page where
-    the player isn't linked it just ends up sitting directly above the
-    trademark instead, with nothing in between. See _shell()'s
-    shared_script for the Unlink button's click handler and its own
-    unlink-poller (the mirror of _link_banner()'s poller below, for
-    the opposite direction).
+    on would be pointless here), and the OSRS trademark attribution.
+    Both belong on every page regardless of login state, same as each
+    other. (This used to also carry a "Linked to <name>" status with
+    its own "Unlink" button, mirroring the dashboard's game-account
+    chrome -- removed as redundant now that the account page's own
+    "LINKED ACCOUNTS" section (render_account()) is the one place that
+    actually manages linked characters.)
 
     `extra` is page-specific content to render ahead of all of that,
     still inside .footer-inner -- currently only render_landing()'s
     "ARE YOU READY?" call-to-action, threaded through from _shell()'s
     own footer_extra param. Empty for every other page, so this footer
     looks exactly as it always has anywhere but the landing page."""
-    linked_line = ""
-    if player and player.account_hash:
-        linked_line = f"""
-        <p class="footer-linked-note" id="footerLinkedNote">Linked to <strong>{escape(player.runescape_name or "your game account")}</strong>
-          <button class="link" id="footerUnlinkBtn" type="button">Unlink</button>
-        </p>
-        <div class="auth-error footer-unlink-error" id="footerUnlinkError"></div>
-        """
     return f"""
     <footer>
       <div class="footer-inner wrap">
@@ -219,7 +205,6 @@ def _footer(player: Optional[PlayerView], extra: str = "") -> str:
           <a class="footer-social-link footer-social-discord" href="https://discord.gg/myscape" target="_blank" rel="noopener" title="Discord" aria-label="Discord"></a>
           <a class="footer-social-link footer-social-patreon" href="https://patreon.com/myscape" target="_blank" rel="noopener" title="Patreon" aria-label="Patreon"></a>
         </div>
-        {linked_line}
         <p class="footer-trademark">
           <a href="https://oldschool.runescape.com/" target="_blank" rel="noopener">Old School RuneScape</a>
           is a trademark of
@@ -299,52 +284,6 @@ def _shell(*, title: str, player: Optional[PlayerView], body: str, extra_script:
       if (typeof data.detail === 'string') return data.detail;
       if (Array.isArray(data.detail) && data.detail[0]?.msg) return data.detail[0].msg;
       return fallback;
-    }
-
-    document.getElementById('footerUnlinkBtn')?.addEventListener('click', async (e) => {
-      const btn = e.target;
-      const errorEl = document.getElementById('footerUnlinkError');
-      errorEl.classList.remove('show');
-      btn.disabled = true;
-      try {
-        const res = await fetch('/api/link/unlink', { method: 'POST' });
-        if (res.ok) {
-          window.location.reload();
-          return;
-        }
-        const data = await res.json().catch(() => ({}));
-        errorEl.textContent = describeError(data, 'Could not unlink. Please try again.');
-        errorEl.classList.add('show');
-      } catch (err) {
-        errorEl.textContent = 'Something went wrong. Please try again.';
-        errorEl.classList.add('show');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    // The mirror image of the link banner's own poller just below: while
-    // the footer shows "Linked to <name>", nothing here would otherwise
-    // notice becoming unlinked elsewhere -- the plugin's own Unlink
-    // button chief among them, since (like linking itself) it has no way
-    // to tell an already-open browser tab about it directly. The click
-    // handler above already reloads immediately on success, so this only
-    // ever ends up doing the work when the *other* side triggered it.
-    const footerLinkedNote = document.getElementById('footerLinkedNote');
-    if (footerLinkedNote) {
-      const unlinkPollInterval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/auth/me');
-          if (!res.ok) return; // e.g. session expired -- a normal reload will sort that out
-          const data = await res.json();
-          if (!data.account_hash) {
-            clearInterval(unlinkPollInterval);
-            window.location.reload();
-          }
-        } catch (err) {
-          // Transient network hiccup -- just try again next tick.
-        }
-      }, 3000);
     }
 
     // Linking itself happens over on the RuneLite side (the player pastes
