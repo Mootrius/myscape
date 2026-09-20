@@ -7767,7 +7767,42 @@ def render_possessions(player: Player) -> str:
       // opening/using a filter never also re-sorts the column it's
       // attached to) --------------------------------------------------
 
-      var FILTER_COLUMNS = { alpha: 'text', qty: 'simple', ge: 'rich', ha: 'rich', tradeable: 'tradeable' };
+      var FILTER_COLUMNS = { alpha: 'text', qty: 'numeric', ge: 'numeric', ha: 'numeric', tradeable: 'tradeable' };
+      // Quantity/GE Value/HA Value all share the exact same numeric
+      // filter (see numericMatch below) -- only the number field's
+      // own placeholder differs, so a player always knows which
+      // number a bare "150" in the box actually means.
+      var NUMERIC_PLACEHOLDERS = { qty: 'Quantity', ge: 'Value', ha: 'Value' };
+
+      // One button standing in for what would otherwise be several
+      // side-by-side options -- clicking it cycles to the next value
+      // in its group (wrapping back to the first past the last),
+      // rather than picking one of several buttons shown at once. Used
+      // for every mode/operator choice in every popover below (Item's
+      // Contains/Does Not Contain, Quantity/GE/HA's operator, and
+      // Tradeable?'s Tradeable/Untradeable) -- see
+      // .pm-filter-toggle-btn in possessions.css for why it's always
+      // drawn as the "this is the current selection" gold/outlined
+      // look rather than toggling an on/off state the way
+      // .pm-filter-btn elsewhere on this page does.
+      var TOGGLE_OPTIONS = {
+        alphaMode: { options: ['contains', 'not_contains'], labels: { contains: 'Contains', not_contains: 'Does Not Contain' } },
+        numericOp: {
+          options: ['>', '>=', '<', '<=', '=', '!=', 'between'],
+          // Escaped for the same reason the old operator <select>'s
+          // own option labels were -- a raw "<"/">" as element TEXT
+          // content (this button's own textContent, set via innerHTML
+          // below) would otherwise be parsed as the start of a tag.
+          labels: { '>': '&gt;', '>=': '&ge;', '<': '&lt;', '<=': '&le;', '=': '=', '!=': '&ne;', between: 'Between' },
+        },
+        tradeableMode: { options: ['tradeable', 'untradeable'], labels: { tradeable: 'Tradeable', untradeable: 'Untradeable' } },
+      };
+
+      function toggleButtonHtml(groupKey, role, current) {
+        var group = TOGGLE_OPTIONS[groupKey];
+        var value = current || group.options[0];
+        return '<button type="button" class="pm-filter-toggle-btn" data-role="' + role + '" data-group="' + groupKey + '" data-value="' + value + '">' + group.labels[value] + '</button>';
+      }
 
       function filterPopoverHtml(col) {
         var kind = FILTER_COLUMNS[col];
@@ -7778,72 +7813,27 @@ def render_possessions(player: Player) -> str:
           '<button type="button" class="pm-filter-apply-btn" data-action="apply">Apply</button>' +
           '</div>'
         );
-        function modeBtn(attr, value, label, activeValue) {
-          var cls = 'pm-filter-mode-btn' + (value === activeValue ? ' active' : '');
-          return '<button type="button" class="' + cls + '" data-' + attr + '="' + value + '">' + label + '</button>';
-        }
         if (kind === 'text') {
           var mode = (current && current.mode) || 'contains';
           var text = current ? (current.text || '') : '';
+          var placeholder = mode === 'not_contains' ? 'Name does not contain...' : 'Name contains...';
           return (
-            '<div class="pm-filter-popover-row">' +
-            modeBtn('mode', 'contains', 'Contains', mode) +
-            modeBtn('mode', 'not_contains', 'Does Not Contain', mode) +
-            '</div>' +
-            '<input type="text" class="pm-filter-input" data-role="text" placeholder="Item name contains..." value="' + escapeHtml(text) + '" />' +
+            '<div class="pm-filter-popover-row">' + toggleButtonHtml('alphaMode', 'mode', mode) + '</div>' +
+            '<input type="text" class="pm-filter-input" data-role="text" placeholder="' + placeholder + '" value="' + escapeHtml(text) + '" />' +
             actions
           );
         }
-        if (kind === 'simple') {
-          var mode = (current && current.mode) || 'include';
-          var cmp = (current && current.cmp) || 'above';
-          var value = current && typeof current.value === 'number' ? current.value : '';
-          return (
-            '<div class="pm-filter-popover-row">' +
-            modeBtn('mode', 'include', 'Include', mode) +
-            modeBtn('mode', 'exclude', 'Exclude', mode) +
-            '</div>' +
-            '<div class="pm-filter-popover-row">' +
-            modeBtn('cmp', 'above', 'Above', cmp) +
-            modeBtn('cmp', 'below', 'Below', cmp) +
-            '</div>' +
-            '<input type="number" class="pm-filter-input" data-role="value" placeholder="Quantity" value="' + value + '" />' +
-            actions
-          );
-        }
-        if (kind === 'rich') {
-          var mode = (current && current.mode) || 'include';
-          var rkind = (current && current.kind) || 'operator';
+        if (kind === 'numeric') {
           var op = (current && current.op) || '>=';
           var value = current && typeof current.value === 'number' ? current.value : '';
           var min = current && typeof current.min === 'number' ? current.min : '';
           var max = current && typeof current.max === 'number' ? current.max : '';
-          var opDisplay = rkind === 'operator' ? '' : ' style="display:none;"';
-          var betweenDisplay = rkind === 'between' ? '' : ' style="display:none;"';
+          var isBetween = op === 'between';
+          var placeholder = NUMERIC_PLACEHOLDERS[col] || 'Value';
           return (
-            '<div class="pm-filter-popover-row">' +
-            modeBtn('mode', 'include', 'Include', mode) +
-            modeBtn('mode', 'exclude', 'Exclude', mode) +
-            '</div>' +
-            '<div class="pm-filter-popover-row">' +
-            modeBtn('kind', 'operator', 'Operator', rkind) +
-            modeBtn('kind', 'between', 'Between', rkind) +
-            '</div>' +
-            '<div class="pm-filter-popover-row" data-role="operator-row"' + opDisplay + '>' +
-            '<select class="pm-filter-select" data-role="op">' +
-            ['>', '>=', '<', '<=', '=', '!='].map(function (o) {
-              // Display label is HTML-escaped (a raw "<" as element
-              // TEXT content, unlike inside the value="..." attribute
-              // below, would otherwise be parsed as the start of a new
-              // tag) -- the stored/compared value itself stays the
-              // plain operator string, never the escaped label.
-              var label = o === '<' ? '&lt;' : o === '<=' ? '&le;' : o === '>=' ? '&ge;' : o === '!=' ? '&ne;' : o;
-              return '<option value="' + o + '"' + (o === op ? ' selected' : '') + '>' + label + '</option>';
-            }).join('') +
-            '</select>' +
-            '<input type="number" class="pm-filter-input" data-role="value" placeholder="Value" value="' + value + '" />' +
-            '</div>' +
-            '<div class="pm-filter-input-pair" data-role="between-row"' + betweenDisplay + '>' +
+            '<div class="pm-filter-popover-row">' + toggleButtonHtml('numericOp', 'op', op) + '</div>' +
+            '<input type="number" class="pm-filter-input" data-role="value" placeholder="' + placeholder + '" value="' + value + '"' + (isBetween ? ' style="display:none;"' : '') + ' />' +
+            '<div class="pm-filter-input-pair" data-role="between-row"' + (isBetween ? '' : ' style="display:none;"') + '>' +
             '<input type="number" class="pm-filter-input" data-role="min" placeholder="Min" value="' + min + '" />' +
             '<span class="pm-filter-input-pair-sep">&ndash;</span>' +
             '<input type="number" class="pm-filter-input" data-role="max" placeholder="Max" value="' + max + '" />' +
@@ -7854,10 +7844,7 @@ def render_possessions(player: Player) -> str:
         // tradeable
         var mode = (current && current.mode) || 'tradeable';
         return (
-          '<div class="pm-filter-popover-row">' +
-          modeBtn('mode', 'tradeable', 'Tradeable', mode) +
-          modeBtn('mode', 'untradeable', 'Untradeable', mode) +
-          '</div>' +
+          '<div class="pm-filter-popover-row">' + toggleButtonHtml('tradeableMode', 'mode', mode) + '</div>' +
           actions
         );
       }
@@ -7875,50 +7862,50 @@ def render_possessions(player: Player) -> str:
       // filter on this column" rather than an error.
       function buildFilterFromPopover(col, popoverEl) {
         var kind = FILTER_COLUMNS[col];
-        function activeAttr(attr, fallback) {
-          var btn = popoverEl.querySelector('[data-' + attr + '].pm-filter-mode-btn.active');
-          return btn ? btn.getAttribute('data-' + attr) : fallback;
+        function toggleValue(role) {
+          var btn = popoverEl.querySelector('[data-role="' + role + '"].pm-filter-toggle-btn');
+          return btn ? btn.getAttribute('data-value') : null;
         }
         if (kind === 'text') {
           var input = popoverEl.querySelector('[data-role="text"]');
           var text = input ? input.value.trim() : '';
           if (!text) return null;
-          return { mode: activeAttr('mode', 'contains'), text: text };
+          return { mode: toggleValue('mode') || 'contains', text: text };
         }
-        if (kind === 'simple') {
-          var value = numOrNull(popoverEl.querySelector('[data-role="value"]'));
-          if (value === null) return null;
-          return { mode: activeAttr('mode', 'include'), cmp: activeAttr('cmp', 'above'), value: value };
-        }
-        if (kind === 'rich') {
-          var mode = activeAttr('mode', 'include');
-          var rkind = activeAttr('kind', 'operator');
-          if (rkind === 'between') {
+        if (kind === 'numeric') {
+          var op = toggleValue('op') || '>=';
+          if (op === 'between') {
             var min = numOrNull(popoverEl.querySelector('[data-role="min"]'));
             var max = numOrNull(popoverEl.querySelector('[data-role="max"]'));
             if (min === null || max === null) return null;
-            return { mode: mode, kind: 'between', min: min, max: max };
+            return { op: 'between', min: min, max: max };
           }
-          var op = popoverEl.querySelector('[data-role="op"]').value;
           var value = numOrNull(popoverEl.querySelector('[data-role="value"]'));
           if (value === null) return null;
-          return { mode: mode, kind: 'operator', op: op, value: value };
+          return { op: op, value: value };
         }
         // tradeable
-        return { mode: activeAttr('mode', 'tradeable') };
+        return { mode: toggleValue('mode') || 'tradeable' };
       }
 
       function wirePopoverControls(col, popoverEl) {
-        popoverEl.querySelectorAll('.pm-filter-mode-btn').forEach(function (btn) {
+        popoverEl.querySelectorAll('.pm-filter-toggle-btn').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            var row = btn.parentElement;
-            row.querySelectorAll('.pm-filter-mode-btn').forEach(function (sib) { sib.classList.remove('active'); });
-            btn.classList.add('active');
-            if (btn.hasAttribute('data-kind')) {
-              var operatorRow = popoverEl.querySelector('[data-role="operator-row"]');
+            var group = TOGGLE_OPTIONS[btn.getAttribute('data-group')];
+            var idx = group.options.indexOf(btn.getAttribute('data-value'));
+            var next = group.options[(idx + 1) % group.options.length];
+            btn.setAttribute('data-value', next);
+            btn.innerHTML = group.labels[next];
+
+            if (btn.getAttribute('data-role') === 'mode' && col === 'alpha') {
+              var textInput = popoverEl.querySelector('[data-role="text"]');
+              if (textInput) textInput.placeholder = next === 'not_contains' ? 'Name does not contain...' : 'Name contains...';
+            }
+            if (btn.getAttribute('data-role') === 'op') {
+              var valueInput = popoverEl.querySelector('[data-role="value"]');
               var betweenRow = popoverEl.querySelector('[data-role="between-row"]');
-              var isBetween = btn.getAttribute('data-kind') === 'between';
-              if (operatorRow) operatorRow.style.display = isBetween ? 'none' : '';
+              var isBetween = next === 'between';
+              if (valueInput) valueInput.style.display = isBetween ? 'none' : '';
               if (betweenRow) betweenRow.style.display = isBetween ? '' : 'none';
             }
           });
@@ -7940,7 +7927,7 @@ def render_possessions(player: Player) -> str:
           updateFilterIconStates();
           renderTable();
         });
-        // Never let a click inside the popover (a mode button, an
+        // Never let a click inside the popover (the toggle button, an
         // input, Apply/Clear) bubble up to the document-level
         // "click outside closes it" listener in wireFilterIcons below.
         popoverEl.addEventListener('click', function (e) { e.stopPropagation(); });
@@ -8106,41 +8093,28 @@ def render_possessions(player: Player) -> str:
       // ---- Per-column filters (funnel icon beside each header, see
       // wireFilterIcons) ---------------------------------------------
 
-      // Quantity's own filter -- deliberately simpler than GE/HA
-      // Value's below (no operator dropdown, no between-two-values),
-      // exactly as asked for: include/exclude plus above/below one
-      // typed number.
-      function simpleNumericMatch(value, filter) {
-        var hit = filter.cmp === 'above' ? value > filter.value : value < filter.value;
-        return filter.mode === 'exclude' ? !hit : hit;
-      }
-
-      // GE Value/HA Value's one unified control -- either an operator
-      // (>, >=, <, <=, =, !=) against one value, or a between-two-
-      // values range, either way wrapped in one include/exclude
-      // toggle that flips whichever match is chosen. Applied against
-      // the STACK total (price * qty), matching both what the column
-      // itself displays as its primary line and what sorting by this
-      // same column already ranks by (see visibleRows' own sort
-      // below) -- never the per-unit price alone.
-      function richNumericMatch(value, filter) {
-        var hit;
-        if (filter.kind === 'between') {
+      // Quantity/GE Value/HA Value's shared filter -- an operator (>,
+      // >=, <, <=, =, !=) against one typed number, or a between-two-
+      // values range. Applied against QUANTITY as shown for the qty
+      // column, and against the STACK total (price * qty) for GE/HA --
+      // matching both what those two columns display as their primary
+      // line and what sorting by them already ranks by (see
+      // visibleRows' own sort below), never the per-unit price alone.
+      function numericMatch(value, filter) {
+        if (filter.op === 'between') {
           var lo = Math.min(filter.min, filter.max);
           var hi = Math.max(filter.min, filter.max);
-          hit = value >= lo && value <= hi;
-        } else {
-          switch (filter.op) {
-            case '>': hit = value > filter.value; break;
-            case '>=': hit = value >= filter.value; break;
-            case '<': hit = value < filter.value; break;
-            case '<=': hit = value <= filter.value; break;
-            case '=': hit = value === filter.value; break;
-            case '!=': hit = value !== filter.value; break;
-            default: hit = true;
-          }
+          return value >= lo && value <= hi;
         }
-        return filter.mode === 'exclude' ? !hit : hit;
+        switch (filter.op) {
+          case '>': return value > filter.value;
+          case '>=': return value >= filter.value;
+          case '<': return value < filter.value;
+          case '<=': return value <= filter.value;
+          case '=': return value === filter.value;
+          case '!=': return value !== filter.value;
+          default: return true;
+        }
       }
 
       // One combined check across every active column filter -- a row
@@ -8157,9 +8131,9 @@ def render_possessions(player: Player) -> str:
           if (f.alpha.mode === 'not_contains') hit = !hit;
           if (!hit) return false;
         }
-        if (f.qty && !simpleNumericMatch(qty, f.qty)) return false;
-        if (f.ge && !richNumericMatch((item.gePrice || 0) * qty, f.ge)) return false;
-        if (f.ha && !richNumericMatch((item.highAlch || 0) * qty, f.ha)) return false;
+        if (f.qty && !numericMatch(qty, f.qty)) return false;
+        if (f.ge && !numericMatch((item.gePrice || 0) * qty, f.ge)) return false;
+        if (f.ha && !numericMatch((item.highAlch || 0) * qty, f.ha)) return false;
         if (f.tradeable) {
           var wantTradeable = f.tradeable.mode === 'tradeable';
           if (!!item.tradeable !== wantTradeable) return false;
