@@ -767,7 +767,7 @@ def render_account(player: PlayerView) -> str:
 
         <div class="account-section account-section--danger">
           <p class="account-section-title account-section-title--danger">ACCOUNT DELETION</p>
-          <p class="account-section-hint">This will PERMANENTLY delete your myscape account and data attached to it. You can create a new account afterward, but you CANNOT undo this action.</p>
+          <p class="account-section-hint">This will PERMANENTLY delete your myscape account and all data attached to it. You can create a new account afterward, but you CANNOT undo this action.</p>
           <div class="auth-error" id="deleteError"></div>
           <form id="deleteForm">
             <div class="field">
