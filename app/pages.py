@@ -1029,6 +1029,26 @@ def render_verify_email() -> str:
     return _shell(title="Verify email — myscape", player=None, body=body, extra_script=script)
 
 
+def render_not_found() -> str:
+    """The styled 404 page -- see the custom exception_handler in
+    app/main.py for when this actually gets used instead of a raw
+    {"detail": "Not Found"} JSON body. Always renders as logged-out
+    (player=None), same simplification render_forgot_password and its
+    siblings already make -- a mistyped/broken URL isn't worth a real
+    session lookup just to get the header nav's Dashboard/Log out
+    state right."""
+    body = """
+    <div class="auth-shell">
+      <div class="auth-card">
+        <h2>PAGE NOT FOUND</h2>
+        <p class="verify-email-message">The page you're looking for doesn't exist or may have moved.</p>
+        <div class="auth-switch"><a href="/">BACK TO HOME</a></div>
+      </div>
+    </div>
+    """
+    return _shell(title="Page not found — myscape", player=None, body=body)
+
+
 def render_purchase_goals(player: Player) -> str:
     """The Purchase Goals page -- named "gear setups" a player plans and
     tracks GP toward, ported feature-for-feature from the original

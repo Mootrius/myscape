@@ -20,7 +20,8 @@ logging.basicConfig(level=logging.INFO)
 
 from alembic import command
 from alembic.config import Config
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.exception_handlers import http_exception_handler as _default_http_exception_handler
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
@@ -79,6 +80,7 @@ from app.pages import (
     render_login,
     render_loot_tracker,
     render_mindmaps,
+    render_not_found,
     render_possessions,
     render_purchase_goals,
     render_reset_password,
@@ -302,6 +304,20 @@ if not SESSION_SECRET_KEY:
 app = FastAPI(title="myscape")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(HTTPException)
+async def _styled_not_found_handler(request: Request, exc: HTTPException):
+    """Swaps in render_not_found's styled page for a 404 hit while
+    browsing the site itself -- everywhere else (every /api/* and
+    /static/* response, and every non-404 status anywhere) keeps
+    FastAPI's normal {"detail": ...} JSON body untouched, since the
+    site's own JS (describeError() in app/pages.py) parses that JSON
+    for every form's error message and would break if it got HTML
+    back instead."""
+    if exc.status_code == status.HTTP_404_NOT_FOUND and not request.url.path.startswith(("/api/", "/static/")):
+        return HTMLResponse(render_not_found(), status_code=status.HTTP_404_NOT_FOUND)
+    return await _default_http_exception_handler(request, exc)
 # Session cookies back website login (see app/auth.py). `https_only` is on
 # because myscape.io is HTTPS-only in production; if that ever gets in the
 # way of local http://localhost testing, override it with an env var --
