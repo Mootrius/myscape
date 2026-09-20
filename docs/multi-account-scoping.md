@@ -262,3 +262,79 @@ multi-account feature, step 7) creates a *new* `GameAccount` row.
 This preserves every existing signup/dashboard/link-flow behavior
 with no new error states, and is the natural substrate multi-account
 needs later anyway.
+
+## Steps 4 and 5: the code layer, done in one pass
+
+- [x] `app/auth.py`, `app/routers/auth.py`, `app/routers/linking.py`,
+  `app/main.py`, `app/possessions.py`, `app/purchase_goals.py`,
+  `app/loot.py`, `app/mindmaps.py`, `app/pages.py`, `app/schemas.py`
+  (doc-only) -- every remaining `Player`/`player_id` reference across
+  the app now says `Account`/`GameAccount`/`game_account_id`, and the
+  whole app imports and runs again.
+
+**This was found mid-refactor, not planned upfront**: after step 3
+was committed and pushed, `app/main.py` (what Render actually boots
+via `uvicorn app.main:app`) still imported the now-deleted `Player`
+name at module load time, and `render.yaml` has no `autoDeploy:
+false` -- so that push almost certainly took production down.
+Confirmed by reproducing the exact `ImportError` locally against the
+pushed commit. That turned steps 4/5 from "the next batch, in careful
+order" into "get `app.main` importing again, now" -- the two ended up
+being the same work, just done under time pressure instead of at a
+leisurely pace. The lesson for next time: step 3 (the model split)
+and step 4/5 (updating every consumer) probably shouldn't have been
+separate commits/pushes in the first place, since nothing in between
+them was ever actually deployable.
+
+**The `Player`/`GameAccount` split wasn't 1:1 everywhere.** Most of
+`app/main.py` and the four business-logic modules only ever needed
+`GameAccount` (game data has no identity concept) -- a mechanical,
+tokenize-based rename (Python's `tokenize` module, not plain regex,
+so only real code identifiers were touched and prose/comments talking
+about "the player" as a person were left alone) handled those safely
+across hundreds of references. But the website's own server-rendered
+pages (`app/pages.py`'s `render_dashboard`, `_footer`'s "Linked to
+X" note, `_link_banner`'s verified-email gate, etc.) need *both*
+identity fields (`email`, `email_verified_at`, from `Account`) and
+game-data fields (`runescape_name`, `account_hash`, from the active
+`GameAccount`) at once -- the exact same conflation `PlayerOut` (the
+API response schema) already had, just on the HTML side. Fixed the
+same way in both places: a small combined view built fresh per
+request (`PlayerView` + `build_player_view` in `app/pages.py`, used
+by a new `get_optional_current_player_view_from_session` dependency
+in `app/auth.py`) rather than trying to make `GameAccount` or
+`Account` alone carry fields that don't belong to it. `PlayerOut`
+itself (the plugin/API-facing schema) is now built by hand at each of
+the ~9 call sites from `account`/`game_account.account`, instead of
+just returning the ORM row directly.
+
+**Verified end-to-end against a real, freshly-migrated Postgres 16
+database** (not just import/compile-clean): replayed all 26
+migrations from scratch, then ran the *actual* FastAPI app (via
+`TestClient`, no mocking) through signup (confirms it creates one
+`Account` + one empty `GameAccount`) -> dashboard's unverified-redirect
+-> email verification -> `/api/link/start` -> `/api/link/exchange`
+(simulating the RuneLite plugin) -> `/api/players/me` (confirms the
+combined identity+game-data response) -> a real bank sync via the
+issued API key -> the website reading that bank data back over its
+own session -> the dashboard footer actually showing "Linked to
+<name>" -> unlink -> confirming the revoked API key now 401s -> a
+second, independent signup. Then a second pass exercised the Mindmaps,
+Loot Tracker, Storages Viewer, and Purchase Goals pages and their data
+endpoints (create/list a mindmap, hide a loot NPC, read possession
+trackers/summary, create a gear setup, read skills/quests/diaries) the
+same way. `configure_mappers()` still passes. Still not run against
+production -- only the throwaway local database.
+
+**Still true and unchanged from before**: do not run `alembic upgrade
+head` against production until this code is deployed. That boundary
+was never actually at risk here -- the outage above was an import
+error in already-deployed application code, unrelated to whether any
+migration had been applied -- but it's worth restating since this was
+the closest this project has come to a real incident.
+
+**What's left**: steps 6 (drop the old `players` table, once this is
+verified live in production) and 7 (the "link another account"
+endpoint + account-switcher UI -- the backend substrate for it,
+`GameAccount`/`_resolve_active_game_account`, already exists; nothing
+in the UI calls it yet).

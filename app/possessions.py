@@ -40,7 +40,7 @@ from app.models import (
     LootingBagItem,
     MasterScrollBookItem,
     PinnedPossessionItem,
-    Player,
+    GameAccount,
     PohItem,
     PossessionTracker,
     PossessionView,
@@ -53,7 +53,7 @@ from app.models import (
 from app.purchase_goals import COINS_ITEM_ID, derived_price_for, get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
 
 # Storage key (matches schemas.POSSESSION_STORAGE_KEYS and
-# Player.storage_synced_at's own keys) -> the model table it's read
+# GameAccount.storage_synced_at's own keys) -> the model table it's read
 # from, in the fixed order every location-breakdown dict and the
 # plugin panel's own Status section list them in.
 STORAGE_SOURCES = [
@@ -72,7 +72,7 @@ STORAGE_SOURCES = [
     ("huntsmans_kit", HuntsmansKitItem),
     # BoatCargoItem rows carry a `slot` column the other tables here
     # don't (see its own docstring in app/models.py), but this loop
-    # only ever reads player_id/item_id/quantity/item_name off each
+    # only ever reads game_account_id/item_id/quantity/item_name off each
     # row -- exactly what every other source already has -- so it
     # plugs into get_owned_breakdown below the same way every other
     # source does, `slot` simply along for the ride, unread here.
@@ -80,7 +80,7 @@ STORAGE_SOURCES = [
 ]
 
 
-def get_owned_breakdown(db: Session, player: Player) -> Dict[int, dict]:
+def get_owned_breakdown(db: Session, game_account: GameAccount) -> Dict[int, dict]:
     """Returns {item_id: {"itemName": str|None, "total": int,
     "byLocation": {storage_key: int}}} across every one of the fourteen
     synced storages -- the single query this whole module (both the
@@ -91,7 +91,7 @@ def get_owned_breakdown(db: Session, player: Player) -> Dict[int, dict]:
     fallback, same role it plays here)."""
     breakdown: Dict[int, dict] = {}
     for key, model in STORAGE_SOURCES:
-        rows = db.query(model).filter(model.player_id == player.id).all()
+        rows = db.query(model).filter(model.game_account_id == game_account.id).all()
         for row in rows:
             entry = breakdown.setdefault(row.item_id, {"itemName": None, "total": 0, "byLocation": {}})
             entry["total"] += row.quantity
@@ -380,17 +380,17 @@ def _tracker_out(tracker: PossessionTracker, mapping: dict, breakdown: Dict[int,
     }
 
 
-def build_trackers_state(db: Session, player: Player) -> dict:
+def build_trackers_state(db: Session, game_account: GameAccount) -> dict:
     """The combined payload the page's min/max sections poll -- both
     kinds of tracker, each already resolved against a live owned-
     quantity breakdown and a live GE mapping (icon/name/tradeable),
     sorted the same way Mindmaps orders sibling nodes (sort_order,
     lowest first -- see PossessionTracker's own docstring)."""
     mapping, mapping_error = get_mapping()
-    breakdown = get_owned_breakdown(db, player)
+    breakdown = get_owned_breakdown(db, game_account)
     trackers = (
         db.query(PossessionTracker)
-        .filter(PossessionTracker.player_id == player.id)
+        .filter(PossessionTracker.game_account_id == game_account.id)
         .order_by(PossessionTracker.sort_order)
         .all()
     )
@@ -399,7 +399,7 @@ def build_trackers_state(db: Session, player: Player) -> dict:
     return {"minTrackers": min_trackers, "maxTrackers": max_trackers, "mappingError": mapping_error}
 
 
-def pinned_item_ids(db: Session, player: Player) -> set:
+def pinned_item_ids(db: Session, game_account: GameAccount) -> set:
     """Every item id this player currently has pinned (see
     PinnedPossessionItem's own docstring in app/models.py) -- a plain
     set, since every caller (build_possessions_summary below, and the
@@ -408,13 +408,13 @@ def pinned_item_ids(db: Session, player: Player) -> set:
     flat list, never the rows themselves."""
     rows = (
         db.query(PinnedPossessionItem.item_id)
-        .filter(PinnedPossessionItem.player_id == player.id)
+        .filter(PinnedPossessionItem.game_account_id == game_account.id)
         .all()
     )
     return {row[0] for row in rows}
 
 
-def hidden_storage_keys(db: Session, player: Player) -> set:
+def hidden_storage_keys(db: Session, game_account: GameAccount) -> set:
     """Every storage source key this player has switched off in
     Storages Viewer's settings menu (see
     HiddenPossessionStorage's own docstring in app/models.py) -- same
@@ -424,13 +424,13 @@ def hidden_storage_keys(db: Session, player: Player) -> set:
     the rows themselves."""
     rows = (
         db.query(HiddenPossessionStorage.storage_key)
-        .filter(HiddenPossessionStorage.player_id == player.id)
+        .filter(HiddenPossessionStorage.game_account_id == game_account.id)
         .all()
     )
     return {row[0] for row in rows}
 
 
-def set_storage_hidden(db: Session, player: Player, storage_key: str, hidden: bool) -> None:
+def set_storage_hidden(db: Session, game_account: GameAccount, storage_key: str, hidden: bool) -> None:
     """Flips one storage source on/off for this player -- the gear-icon
     settings menu next to Storages Viewer's location filter
     buttons (see render_possessions in app/pages.py). Idempotent both
@@ -441,18 +441,18 @@ def set_storage_hidden(db: Session, player: Player, storage_key: str, hidden: bo
     never surfaces an error banner over it."""
     existing = (
         db.query(HiddenPossessionStorage)
-        .filter(HiddenPossessionStorage.player_id == player.id, HiddenPossessionStorage.storage_key == storage_key)
+        .filter(HiddenPossessionStorage.game_account_id == game_account.id, HiddenPossessionStorage.storage_key == storage_key)
         .first()
     )
     if hidden and not existing:
-        db.add(HiddenPossessionStorage(player_id=player.id, storage_key=storage_key))
+        db.add(HiddenPossessionStorage(game_account_id=game_account.id, storage_key=storage_key))
         db.commit()
     elif not hidden and existing:
         db.delete(existing)
         db.commit()
 
 
-def build_possessions_summary(db: Session, player: Player) -> dict:
+def build_possessions_summary(db: Session, game_account: GameAccount) -> dict:
     """Section 3's payload -- every item currently owned in any
     storage, each with its live GE/high-alch value and a per-location
     quantity breakdown, so the page's own location toggles (and the
@@ -480,7 +480,7 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
     definition, every time."""
     mapping, mapping_error = get_mapping()
     prices, price_error = get_latest_prices()
-    breakdown = get_owned_breakdown(db, player)
+    breakdown = get_owned_breakdown(db, game_account)
 
     # Coins and Platinum tokens are currency, not goods -- neither has a
     # real Grand Exchange listing (both already show TRADEABLE: NO), but
@@ -539,7 +539,7 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
     # -- a merged potion row's own itemId (see _merge_dose_families) is
     # what the frontend actually has and what a pin was made against,
     # never one of the pre-merge dose variants' ids.
-    pinned_ids = pinned_item_ids(db, player)
+    pinned_ids = pinned_item_ids(db, game_account)
     for item in items:
         item["pinned"] = item["itemId"] in pinned_ids
 
@@ -547,11 +547,11 @@ def build_possessions_summary(db: Session, player: Player) -> dict:
         "items": items,
         "mappingError": mapping_error,
         "priceError": price_error,
-        "hiddenStorageKeys": sorted(hidden_storage_keys(db, player)),
+        "hiddenStorageKeys": sorted(hidden_storage_keys(db, game_account)),
     }
 
 
-def next_sort_order(db: Session, player: Player, kind: str) -> float:
+def next_sort_order(db: Session, game_account: GameAccount, kind: str) -> float:
     """One past the highest existing sort_order for this player's
     trackers of this kind -- a new tracker always lands at the end of
     its own section, same "append past the current max" approach
@@ -559,7 +559,7 @@ def next_sort_order(db: Session, player: Player, kind: str) -> float:
     app/mindmaps.py)."""
     highest = (
         db.query(PossessionTracker)
-        .filter(PossessionTracker.player_id == player.id, PossessionTracker.kind == kind)
+        .filter(PossessionTracker.game_account_id == game_account.id, PossessionTracker.kind == kind)
         .order_by(PossessionTracker.sort_order.desc())
         .first()
     )
@@ -570,7 +570,7 @@ def _view_out(view: PossessionView) -> dict:
     return {"id": str(view.id), "name": view.name, "config": view.config or {}}
 
 
-def build_possession_views(db: Session, player: Player) -> List[dict]:
+def build_possession_views(db: Session, game_account: GameAccount) -> List[dict]:
     """Every saved Storages Viewer view this player has, in their own
     reorder-strip order (nulls-last, same convention as GearSetup's
     own sort_order -- a freshly-created view without one yet, if that
@@ -578,19 +578,19 @@ def build_possession_views(db: Session, player: Player) -> List[dict]:
     own NULL ordering)."""
     views = (
         db.query(PossessionView)
-        .filter(PossessionView.player_id == player.id)
+        .filter(PossessionView.game_account_id == game_account.id)
         .order_by(PossessionView.sort_order.is_(None), PossessionView.sort_order, PossessionView.created_at)
         .all()
     )
     return [_view_out(v) for v in views]
 
 
-def next_possession_view_sort_order(db: Session, player: Player) -> float:
+def next_possession_view_sort_order(db: Session, game_account: GameAccount) -> float:
     """Same "append past the current max" approach as next_sort_order
     above, over this player's saved views instead of their trackers."""
     highest = (
         db.query(PossessionView)
-        .filter(PossessionView.player_id == player.id)
+        .filter(PossessionView.game_account_id == game_account.id)
         .order_by(PossessionView.sort_order.desc())
         .first()
     )

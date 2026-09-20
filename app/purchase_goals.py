@@ -51,7 +51,7 @@ from app.models import (
     GearSetup,
     InventoryItem,
     MasterScrollBookItem,
-    Player,
+    GameAccount,
     PohItem,
     PotionStorageItem,
     RunePouchItem,
@@ -936,7 +936,7 @@ def _still_to_purchase_summary(
     return still_to_purchase, next_purchase
 
 
-def build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict[str, int]]:
+def build_owned_pools(db: Session, game_account: GameAccount) -> Tuple[Dict[int, int], Dict[str, int]]:
     """Combines bank+inventory+equipment+potion storage+rune pouch+seed
     vault+tackle box+the whole PoH Costume Room+Forestry Kit+Master
     Scroll Book+Seed Box into the same shape Maintrius's own
@@ -981,33 +981,33 @@ def build_owned_pools(db: Session, player: Player) -> Tuple[Dict[int, int], Dict
             key = _normalize_item_name(item_name)
             pool_by_name[key] = pool_by_name.get(key, 0) + quantity
 
-    for item in db.query(BankItem).filter(BankItem.player_id == player.id).all():
+    for item in db.query(BankItem).filter(BankItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(InventoryItem).filter(InventoryItem.player_id == player.id).all():
+    for item in db.query(InventoryItem).filter(InventoryItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).all():
+    for item in db.query(EquipmentItem).filter(EquipmentItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(PotionStorageItem).filter(PotionStorageItem.player_id == player.id).all():
+    for item in db.query(PotionStorageItem).filter(PotionStorageItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(RunePouchItem).filter(RunePouchItem.player_id == player.id).all():
+    for item in db.query(RunePouchItem).filter(RunePouchItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(SeedVaultItem).filter(SeedVaultItem.player_id == player.id).all():
+    for item in db.query(SeedVaultItem).filter(SeedVaultItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(TackleBoxItem).filter(TackleBoxItem.player_id == player.id).all():
+    for item in db.query(TackleBoxItem).filter(TackleBoxItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(PohItem).filter(PohItem.player_id == player.id).all():
+    for item in db.query(PohItem).filter(PohItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(ForestryKitItem).filter(ForestryKitItem.player_id == player.id).all():
+    for item in db.query(ForestryKitItem).filter(ForestryKitItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(MasterScrollBookItem).filter(MasterScrollBookItem.player_id == player.id).all():
+    for item in db.query(MasterScrollBookItem).filter(MasterScrollBookItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
-    for item in db.query(SeedBoxItem).filter(SeedBoxItem.player_id == player.id).all():
+    for item in db.query(SeedBoxItem).filter(SeedBoxItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
 
     return pool_by_id, pool_by_name
 
 
-def _player_coins(db: Session, player: Player) -> int:
+def _player_coins(db: Session, game_account: GameAccount) -> int:
     """GP in possession, summed across every storage build_owned_pools
     sweeps (bank+inventory+equipment+potion storage+rune pouch+seed
     vault+tackle box+PoH Costume Room+Forestry Kit+Master Scroll Book+
@@ -1030,7 +1030,7 @@ def _player_coins(db: Session, player: Player) -> int:
     ):
         row = (
             db.query(model)
-            .filter(model.player_id == player.id, model.item_id == COINS_ITEM_ID)
+            .filter(model.game_account_id == game_account.id, model.item_id == COINS_ITEM_ID)
             .first()
         )
         if row:
@@ -1038,7 +1038,7 @@ def _player_coins(db: Session, player: Player) -> int:
     return total
 
 
-def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, coins: int) -> List[dict]:
+def build_gear_setups(db: Session, game_account: GameAccount, mapping: dict, prices: dict, coins: int) -> List[dict]:
     # sort_order first, created_at second -- see GearSetup's own
     # docstring in app/models.py. Postgres already sorts NULLs last on
     # an ascending order by default, but that's not something to lean
@@ -1051,11 +1051,11 @@ def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, 
     # so ties needing the created_at tiebreaker again shouldn't occur).
     setups = (
         db.query(GearSetup)
-        .filter(GearSetup.player_id == player.id)
+        .filter(GearSetup.game_account_id == game_account.id)
         .order_by(GearSetup.sort_order.asc(), GearSetup.created_at.asc())
         .all()
     )
-    base_pool_by_id, base_pool_by_name = build_owned_pools(db, player)
+    base_pool_by_id, base_pool_by_name = build_owned_pools(db, game_account)
 
     results = []
     for s in setups:
@@ -1115,7 +1115,7 @@ def build_gear_setups(db: Session, player: Player, mapping: dict, prices: dict, 
     return results
 
 
-def build_purchase_goals_state(db: Session, player: Player) -> dict:
+def build_purchase_goals_state(db: Session, game_account: GameAccount) -> dict:
     """The Purchase Goals page's own poll payload -- coins, every gear
     setup (fully priced/owned-checked), the owned-items pool (for any
     future UI that wants to show it), and whatever wiki fetch errors are
@@ -1124,8 +1124,8 @@ def build_purchase_goals_state(db: Session, player: Player) -> dict:
     here yet."""
     mapping, mapping_err = get_mapping()
     prices, prices_err = get_latest_prices()
-    coins = _player_coins(db, player)
-    _, pool_by_name = build_owned_pools(db, player)
+    coins = _player_coins(db, game_account)
+    _, pool_by_name = build_owned_pools(db, game_account)
 
     return {
         "coins": coins,
@@ -1146,6 +1146,6 @@ def build_purchase_goals_state(db: Session, player: Player) -> dict:
         # setups now come through in whatever order build_gear_setups
         # already queried them in (GearSetup.sort_order.asc(), its own
         # docstring above has the full ordering story), unchanged here.
-        "gearSetups": build_gear_setups(db, player, mapping, prices, coins),
+        "gearSetups": build_gear_setups(db, game_account, mapping, prices, coins),
         "ownedItems": pool_by_name,
     }

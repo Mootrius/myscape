@@ -69,7 +69,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.models import HiddenLootEntry, LootEvent, Player
+from app.models import HiddenLootEntry, LootEvent, GameAccount
 from app.purchase_goals import COINS_ITEM_ID, get_latest_prices, get_mapping, item_icon_url
 
 # The timerange presets the chart's range button offers (see
@@ -273,31 +273,31 @@ def item_hide_key(item_id: Optional[int], item_name: Optional[str]) -> str:
     return "name:" + (item_name or "").strip().lower()
 
 
-def hidden_npc_keys(db: Session, player: Player) -> set:
+def hidden_npc_keys(db: Session, game_account: GameAccount) -> set:
     """Every NPC this player currently has hidden (see npc_hide_key),
     as a plain set -- build_loot_state's only use for this is
     membership, same as pinned_item_ids in app/possessions.py."""
     rows = (
         db.query(HiddenLootEntry.key)
-        .filter(HiddenLootEntry.player_id == player.id, HiddenLootEntry.kind == "npc")
+        .filter(HiddenLootEntry.game_account_id == game_account.id, HiddenLootEntry.kind == "npc")
         .all()
     )
     return {row[0] for row in rows}
 
 
-def hidden_item_keys(db: Session, player: Player) -> set:
+def hidden_item_keys(db: Session, game_account: GameAccount) -> set:
     """Every item this player currently has hidden (see item_hide_key),
     as a plain set -- same role as hidden_npc_keys above, just the
     other kind."""
     rows = (
         db.query(HiddenLootEntry.key)
-        .filter(HiddenLootEntry.player_id == player.id, HiddenLootEntry.kind == "item")
+        .filter(HiddenLootEntry.game_account_id == game_account.id, HiddenLootEntry.kind == "item")
         .all()
     )
     return {row[0] for row in rows}
 
 
-def set_npc_hidden(db: Session, player: Player, name: str, hidden: bool) -> None:
+def set_npc_hidden(db: Session, game_account: GameAccount, name: str, hidden: bool) -> None:
     """Hides or unhides one NPC by name (see the eye button on each NPC
     tile in render_loot_tracker, app/pages.py) -- idempotent either
     way, same as Storages Viewer's pin/unpin endpoints: hiding
@@ -306,29 +306,29 @@ def set_npc_hidden(db: Session, player: Player, name: str, hidden: bool) -> None
     key = npc_hide_key(name)
     existing = (
         db.query(HiddenLootEntry)
-        .filter(HiddenLootEntry.player_id == player.id, HiddenLootEntry.kind == "npc", HiddenLootEntry.key == key)
+        .filter(HiddenLootEntry.game_account_id == game_account.id, HiddenLootEntry.kind == "npc", HiddenLootEntry.key == key)
         .first()
     )
     if hidden and not existing:
-        db.add(HiddenLootEntry(player_id=player.id, kind="npc", key=key))
+        db.add(HiddenLootEntry(game_account_id=game_account.id, kind="npc", key=key))
         db.commit()
     elif not hidden and existing:
         db.delete(existing)
         db.commit()
 
 
-def set_item_hidden(db: Session, player: Player, item_id: Optional[int], item_name: Optional[str], hidden: bool) -> None:
+def set_item_hidden(db: Session, game_account: GameAccount, item_id: Optional[int], item_name: Optional[str], hidden: bool) -> None:
     """Hides or unhides one item by the same (itemId, itemName) ->
     item_hide_key resolution build_loot_state itself uses -- same
     idempotence as set_npc_hidden above."""
     key = item_hide_key(item_id, item_name)
     existing = (
         db.query(HiddenLootEntry)
-        .filter(HiddenLootEntry.player_id == player.id, HiddenLootEntry.kind == "item", HiddenLootEntry.key == key)
+        .filter(HiddenLootEntry.game_account_id == game_account.id, HiddenLootEntry.kind == "item", HiddenLootEntry.key == key)
         .first()
     )
     if hidden and not existing:
-        db.add(HiddenLootEntry(player_id=player.id, kind="item", key=key))
+        db.add(HiddenLootEntry(game_account_id=game_account.id, kind="item", key=key))
         db.commit()
     elif not hidden and existing:
         db.delete(existing)
@@ -438,7 +438,7 @@ def _finalize_items(bucket: Dict[object, dict]) -> List[dict]:
     return out
 
 
-def build_loot_state(db: Session, player: Player, start: datetime, end: datetime) -> dict:
+def build_loot_state(db: Session, game_account: GameAccount, start: datetime, end: datetime) -> dict:
     """Everything the Loot Tracker page needs in one payload, all
     scoped to [start, end) (see resolve_range, which turns the page's
     range button/CUSTOM picker into this pair): the bar chart's own
@@ -464,8 +464,8 @@ def build_loot_state(db: Session, player: Player, start: datetime, end: datetime
     implements."""
     mapping, mapping_error = get_mapping()
     prices, prices_error = get_latest_prices()
-    hidden_npcs = hidden_npc_keys(db, player)
-    hidden_items = hidden_item_keys(db, player)
+    hidden_npcs = hidden_npc_keys(db, game_account)
+    hidden_items = hidden_item_keys(db, game_account)
 
     num_buckets, bucket_width, granularity = _bucket_plan(start, end)
     bucket_seconds = bucket_width.total_seconds()
@@ -478,7 +478,7 @@ def build_loot_state(db: Session, player: Player, start: datetime, end: datetime
     # recent drop" trick above holds.
     events = (
         db.query(LootEvent)
-        .filter(LootEvent.player_id == player.id, LootEvent.occurred_at >= start, LootEvent.occurred_at <= end)
+        .filter(LootEvent.game_account_id == game_account.id, LootEvent.occurred_at >= start, LootEvent.occurred_at <= end)
         .order_by(desc(LootEvent.occurred_at))
         .all()
     )
@@ -608,7 +608,7 @@ def build_loot_state(db: Session, player: Player, start: datetime, end: datetime
     }
 
 
-def sync_loot_events(db: Session, player: Player, events: list) -> int:
+def sync_loot_events(db: Session, game_account: GameAccount, events: list) -> int:
     """Inserts whichever of `events` (LootEventIn-shaped) this player
     doesn't already have on file, keyed by event_id -- see LootEvent's
     docstring in app/models.py for why this is an insert-if-new rather
@@ -621,7 +621,7 @@ def sync_loot_events(db: Session, player: Player, events: list) -> int:
     existing_ids = {
         row[0] for row in (
             db.query(LootEvent.event_id)
-            .filter(LootEvent.player_id == player.id, LootEvent.event_id.in_(incoming_ids))
+            .filter(LootEvent.game_account_id == game_account.id, LootEvent.event_id.in_(incoming_ids))
             .all()
         )
     }
@@ -636,7 +636,7 @@ def sync_loot_events(db: Session, player: Player, events: list) -> int:
             continue
         existing_ids.add(event.event_id)
         db.add(LootEvent(
-            player_id=player.id,
+            game_account_id=game_account.id,
             event_id=event.event_id,
             source_name=event.source_name,
             source_type=event.source_type,
@@ -649,7 +649,7 @@ def sync_loot_events(db: Session, player: Player, events: list) -> int:
     return added
 
 
-def kc_counts_by_player(db: Session, player: Player) -> Dict[Tuple[str, str], List[datetime]]:
+def kc_counts_by_player(db: Session, game_account: GameAccount) -> Dict[Tuple[str, str], List[datetime]]:
     """{(source_type, <lowercased source_name>): [occurred_at, ...]}
     across this player's ENTIRE LootEvent history (not windowed by a
     range, unlike build_loot_state above) -- every occurrence's own
@@ -674,7 +674,7 @@ def kc_counts_by_player(db: Session, player: Player) -> Dict[Tuple[str, str], Li
     why)."""
     rows = (
         db.query(LootEvent.source_type, LootEvent.source_name, LootEvent.occurred_at)
-        .filter(LootEvent.player_id == player.id)
+        .filter(LootEvent.game_account_id == game_account.id)
         .all()
     )
     counts: Dict[Tuple[str, str], List[datetime]] = {}

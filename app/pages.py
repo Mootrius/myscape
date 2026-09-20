@@ -5,11 +5,53 @@ adding a Jinja2 dependency for a handful of pages. If the page count
 grows past "a handful," that tradeoff is worth revisiting.
 """
 import os
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
 from html import escape
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from app.models import Player
 from app.purchase_goals import item_icon_url
+
+if TYPE_CHECKING:
+    from app.models import Account, GameAccount
+
+
+@dataclass
+class PlayerView:
+    """The combined identity + game-data view every render_* function in
+    this file needs for its header nav and page content. Post the
+    multi-account split (see docs/multi-account-scoping.md), a signed-in
+    website login (Account) and its currently-active linked OSRS
+    character (GameAccount) are two separate database rows -- this is
+    the one shape this file works with regardless, built fresh per
+    request by build_player_view below (in app/auth.py's session
+    dependencies) from whichever Account+GameAccount pair a session
+    resolves to. Nothing in this file ever queries either model
+    directly."""
+
+    id: uuid.UUID
+    email: Optional[str]
+    email_verified_at: Optional[datetime]
+    runescape_name: Optional[str]
+    account_hash: Optional[str]
+
+
+def build_player_view(account: "Account", game_account: Optional["GameAccount"]) -> PlayerView:
+    """Combines a signed-in Account with its (possibly absent, e.g. a
+    stale/edge-case session -- see _resolve_active_game_account's own
+    docstring in app/auth.py for why that's normally unreachable) active
+    GameAccount into the single PlayerView this file's render_*
+    functions expect. The identity fields (id, email, email_verified_at)
+    always come from the Account; the game-data fields (runescape_name,
+    account_hash) come from the GameAccount when there is one."""
+    return PlayerView(
+        id=account.id,
+        email=account.email,
+        email_verified_at=account.email_verified_at,
+        runescape_name=game_account.runescape_name if game_account else None,
+        account_hash=game_account.account_hash if game_account else None,
+    )
 
 # Cache-busting query string for the stylesheet link in _shell() below.
 # Without this, a browser that already has myscape.css cached (Starlette's
@@ -68,7 +110,7 @@ except OSError:
     _POSSESSIONS_CSS_VERSION = 0
 
 
-def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
+def _nav_sides(player: Optional[PlayerView]) -> tuple[str, str]:
     """The single link/button that goes on each side of the centered
     logo in the header (see _shell). Logged out: Log in on the left,
     Sign up on the right. Logged in: Dashboard on the left, Account on
@@ -88,7 +130,7 @@ def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
     )
 
 
-def _link_banner(player: Optional[Player]) -> str:
+def _link_banner(player: Optional[PlayerView]) -> str:
     """A site-wide banner telling a logged-in, not-yet-linked player to
     link their RuneLite plugin -- shown above the header on every page
     (see _shell), not just the dashboard, since linking is a
@@ -129,7 +171,7 @@ def _link_banner(player: Optional[Player]) -> str:
     """
 
 
-def _footer(player: Optional[Player]) -> str:
+def _footer(player: Optional[PlayerView]) -> str:
     """A site-wide footer, the visual mirror of the header (see the
     `header` rule in myscape.css and its comment) -- same full-width
     darkening gradient technique, but stronger and fading upward
@@ -181,7 +223,7 @@ def _footer(player: Optional[Player]) -> str:
     """
 
 
-def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str = "", extra_head: str = "", body_class: str = "") -> str:
+def _shell(*, title: str, player: Optional[PlayerView], body: str, extra_script: str = "", extra_head: str = "", body_class: str = "") -> str:
     nav_left, nav_right = _nav_sides(player)
     shared_script = """
     // See myscape.css's own `user-select: none` for the text-selection
@@ -373,7 +415,7 @@ def _shell(*, title: str, player: Optional[Player], body: str, extra_script: str
 </html>"""
 
 
-def render_landing(player: Optional[Player]) -> str:
+def render_landing(player: Optional[PlayerView]) -> str:
     # Renders for a logged-in player too now (see root() in main.py) --
     # the header's "myscape" logo/nav and the footer's own linked-status
     # note (both from _shell/player below) already handle either case
@@ -599,7 +641,7 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
     """
 
 
-def render_dashboard(player: Player) -> str:
+def render_dashboard(player: PlayerView) -> str:
     # Wrapped in a plain link rather than restyling _dash_card for a
     # click handler -- the inline style just strips the anchor's default
     # underline/color so it reads as the same card, not a text link.
@@ -663,7 +705,7 @@ def render_dashboard(player: Player) -> str:
     return _shell(title="Dashboard — myscape", player=player, body=body)
 
 
-def render_account(player: Player) -> str:
+def render_account(player: PlayerView) -> str:
     """The header's Account link (see _nav_sides) -- log out plus the
     three things a player can do to their own account: change email,
     change password, delete the account entirely (see the matching
@@ -1144,7 +1186,7 @@ def render_reset_password() -> str:
     return _shell(title="Reset password — myscape", player=None, body=body, extra_script=script)
 
 
-def render_verify_email_required(player: Player) -> str:
+def render_verify_email_required(player: PlayerView) -> str:
     body = f"""
     <div class="auth-shell">
       <div class="auth-card">
@@ -1185,7 +1227,7 @@ def render_verify_email_required(player: Player) -> str:
     return _shell(title="Verify your email — myscape", player=player, body=body, extra_script=script)
 
 
-def render_verify_email(player: Optional[Player] = None) -> str:
+def render_verify_email(player: Optional[PlayerView] = None) -> str:
     body = """
     <div class="auth-shell">
       <div class="auth-card">
@@ -1241,7 +1283,7 @@ def render_verify_email(player: Optional[Player] = None) -> str:
     return _shell(title="Verify email — myscape", player=player, body=body, extra_script=script)
 
 
-def render_not_found(player: Optional[Player] = None) -> str:
+def render_not_found(player: Optional[PlayerView] = None) -> str:
     """The styled 404 page -- see the custom exception_handler in
     app/main.py for when this actually gets used instead of a raw
     {"detail": "Not Found"} JSON body. Unlike most of this module's
@@ -1271,7 +1313,7 @@ def render_not_found(player: Optional[Player] = None) -> str:
     return _shell(title="Page not found — myscape", player=player, body=body)
 
 
-def render_purchase_goals(player: Player) -> str:
+def render_purchase_goals(player: PlayerView) -> str:
     """The Purchase Goals page -- named "gear setups" a player plans and
     tracks GP toward, ported feature-for-feature from the original
     single-user Maintrius tool's own Purchase Goals UI (see
@@ -2753,7 +2795,7 @@ def render_purchase_goals(player: Player) -> str:
     )
 
 
-def render_loot_tracker(player: Player) -> str:
+def render_loot_tracker(player: PlayerView) -> str:
     """The Loot Tracker page -- a first pass at porting the original
     single-user Maintrius tool's Loot Tracker/Trip Tracker features
     (see app/loot.py's module docstring for what's here today and
@@ -4017,7 +4059,7 @@ def render_loot_tracker(player: Player) -> str:
     )
 
 
-def render_mindmaps(player: Player) -> str:
+def render_mindmaps(player: PlayerView) -> str:
     """The Mindmaps page -- brand new feature, no Maintrius equivalent to
     port. Same overall shape as Purchase Goals/Loot Tracker: a static
     HTML skeleton, everything below it rendered client-side from one
@@ -7403,7 +7445,7 @@ _POSSESSION_STORAGE_LABELS = {
 }
 
 
-def render_possessions(player: Player) -> str:
+def render_possessions(player: PlayerView) -> str:
     """The Storages Viewer page -- a single line-by-line table of
     everything the player currently owns across every synced storage
     (see get_owned_breakdown in app/possessions.py), fetched from GET

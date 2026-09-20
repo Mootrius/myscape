@@ -27,7 +27,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.item_ids import find_item_ids
-from app.models import MindMap, Player
+from app.models import MindMap, GameAccount
 
 # The fixed palette a node's `color` can be -- deliberately a small,
 # named set (not a free-form hex value) so the client can style each
@@ -1008,7 +1008,7 @@ def serialize_mindmap(mindmap: MindMap, context: Optional[Dict] = None) -> Dict:
     }
 
 
-def build_mindmaps_state(db: Session, player: Player, context: Optional[Dict] = None) -> Dict:
+def build_mindmaps_state(db: Session, game_account: GameAccount, context: Optional[Dict] = None) -> Dict:
     """The combined state the Mindmaps page loads once (see
     render_mindmaps in app/pages.py) -- every one of the player's
     mindmaps, each with its full node list, ordered oldest-created
@@ -1020,7 +1020,7 @@ def build_mindmaps_state(db: Session, player: Player, context: Optional[Dict] = 
     always real, not just defaulted false."""
     mindmaps = (
         db.query(MindMap)
-        .filter(MindMap.player_id == player.id)
+        .filter(MindMap.game_account_id == game_account.id)
         .order_by(MindMap.created_at.asc())
         .all()
     )

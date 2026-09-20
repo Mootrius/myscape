@@ -825,7 +825,7 @@ class BoatCargoOut(BaseModel):
 
 # -- Storages Viewer: the min/max item trackers (sections 1/2)
 # and the storage sync-status map the plugin side panel's Status
-# section reads -- see PossessionTracker/Player.storage_synced_at's
+# section reads -- see PossessionTracker/GameAccount.storage_synced_at's
 # own docstrings in app/models.py. ---------------------------------
 
 #: Every storage source Storages Viewer (and the plugin panel's
@@ -958,7 +958,7 @@ class SetPossessionViewOrderRequest(BaseModel):
 # -- Skills/quests/diaries: unlike every item source above, each of
 # these is always exactly one whole snapshot (one level+xp per skill,
 # one completed-quest list, one highest tier per diary area) rather
-# than many independent rows -- see Player.skills/completed_quests/
+# than many independent rows -- see GameAccount.skills/completed_quests/
 # diary_tiers' own comments in app/models.py. Each sync is still a full
 # replace, same spirit as every item source. ---------------------------
 

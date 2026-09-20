@@ -32,9 +32,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.auth import (
-    get_current_player_from_api_key,
-    get_current_verified_player_from_session,
-    get_optional_current_player_from_session,
+    get_current_game_account_from_api_key,
+    get_current_verified_game_account_from_session,
+    get_optional_current_player_view_from_session,
 )
 from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
@@ -58,6 +58,7 @@ from app.models import (
     BoatCargoItem,
     EquipmentItem,
     ForestryKitItem,
+    GameAccount,
     GearSetup,
     HuntsmansKitItem,
     InventoryItem,
@@ -65,7 +66,6 @@ from app.models import (
     MasterScrollBookItem,
     MindMap,
     PinnedPossessionItem,
-    Player,
     PohItem,
     PossessionTracker,
     PossessionView,
@@ -76,6 +76,7 @@ from app.models import (
     TackleBoxItem,
 )
 from app.pages import (
+    PlayerView,
     render_account,
     render_dashboard,
     render_forgot_password,
@@ -337,14 +338,14 @@ async def _styled_not_found_handler(request: Request, exc: StarletteHTTPExceptio
     if exc.status_code == status.HTTP_404_NOT_FOUND and not request.url.path.startswith(("/api/", "/static/")):
         # Exception handlers aren't routed through FastAPI's dependency
         # injection, so this can't just take a
-        # player: Optional[Player] = Depends(get_optional_current_player_from_session)
+        # player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)
         # parameter the way every other page route in this file does --
         # open and close a DB session by hand instead, purely to get the
         # header nav's Dashboard/Log out state right for a signed-in
         # visitor who hits a broken link.
         db = SessionLocal()
         try:
-            player = get_optional_current_player_from_session(request, db)
+            player = get_optional_current_player_view_from_session(request, db)
         finally:
             db.close()
         return HTMLResponse(render_not_found(player), status_code=status.HTTP_404_NOT_FOUND)
@@ -419,7 +420,7 @@ def on_startup():
 
 
 @app.get("/", response_class=HTMLResponse)
-def root(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def root(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     # Used to redirect a logged-in player straight to /dashboard, on the
     # theory that they'd have no reason to want the landing page once
     # they're already a user -- but that also meant the header's own
@@ -433,28 +434,28 @@ def root(player: Optional[Player] = Depends(get_optional_current_player_from_ses
 
 
 @app.get("/signup", response_class=HTMLResponse)
-def signup_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def signup_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if player:
         return RedirectResponse("/dashboard", status_code=302)
     return render_signup()
 
 
 @app.get("/login", response_class=HTMLResponse)
-def login_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def login_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if player:
         return RedirectResponse("/dashboard", status_code=302)
     return render_login()
 
 
 @app.get("/forgot-password", response_class=HTMLResponse)
-def forgot_password_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def forgot_password_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if player:
         return RedirectResponse("/dashboard", status_code=302)
     return render_forgot_password()
 
 
 @app.get("/reset-password", response_class=HTMLResponse)
-def reset_password_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def reset_password_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     # No redirect-if-logged-in here, unlike the other auth pages -- the
     # token itself is read client-side from the URL's query string (see
     # render_reset_password's own script), so there's no server-side
@@ -465,7 +466,7 @@ def reset_password_page(player: Optional[Player] = Depends(get_optional_current_
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def dashboard_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:
@@ -474,7 +475,7 @@ def dashboard_page(player: Optional[Player] = Depends(get_optional_current_playe
 
 
 @app.get("/account", response_class=HTMLResponse)
-def account_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def account_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     # No email_verified_at gate here, unlike dashboard_page above --
     # render_account's own docstring covers why (log out, and fixing a
     # mistyped signup email in particular, both need to stay reachable
@@ -485,7 +486,7 @@ def account_page(player: Optional[Player] = Depends(get_optional_current_player_
 
 
 @app.get("/verify-email-required", response_class=HTMLResponse)
-def verify_email_required_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def verify_email_required_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
     if player.email_verified_at:
@@ -496,7 +497,7 @@ def verify_email_required_page(player: Optional[Player] = Depends(get_optional_c
 
 
 @app.get("/verify-email", response_class=HTMLResponse)
-def verify_email_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def verify_email_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if player and player.email_verified_at:
         # Already verified in this session -- most likely they followed
         # a bookmarked/stale link, or already verified in another tab.
@@ -530,29 +531,41 @@ def health_db(db: Session = Depends(get_db)):
 
 
 @app.get("/api/players/me", response_model=PlayerOut)
-def read_current_player(player: Player = Depends(get_current_player_from_api_key)):
+def read_current_player(game_account: GameAccount = Depends(get_current_game_account_from_api_key)):
     """First real use of the API key auth: the plugin calls this (with
     its `Authorization: Bearer <key>` header) to confirm it's linked and
-    see which player it's linked to."""
-    return player
+    see which player it's linked to.
+
+    PlayerOut mixes identity (email) and game-data (runescape_name,
+    account_hash) fields -- same conflation as app/routers/auth.py's own
+    _player_out_for, which has the fuller explanation. Built by hand
+    here (rather than just returning game_account) since email now
+    lives on the separate Account row this GameAccount belongs to, not
+    on GameAccount itself."""
+    return PlayerOut(
+        id=game_account.id,
+        email=game_account.account.email,
+        runescape_name=game_account.runescape_name,
+        account_hash=game_account.account_hash,
+    )
 
 
 @app.post("/api/players/me/unlink", status_code=status.HTTP_204_NO_CONTENT)
-def unlink_player(db: Session = Depends(get_db), player: Player = Depends(get_current_player_from_api_key)):
+def unlink_player(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_game_account_from_api_key)):
     """Called by the RuneLite plugin's "Unlink" button (API-key
     authenticated). See linking.revoke_link() for what this actually
     does and why POST /api/link/unlink there is this endpoint's
     session-authenticated counterpart, not a duplicate."""
-    linking.revoke_link(db, player)
+    linking.revoke_link(db, game_account)
 
 
-def _stamp_storage_synced(player: Player, storage_key: str, now: datetime) -> None:
+def _stamp_storage_synced(game_account: GameAccount, storage_key: str, now: datetime) -> None:
     """Records that `storage_key` (one of POSSESSION_STORAGE_KEYS) was
     just synced -- called from the bottom of every one of the twelve
     per-storage POST handlers below, right before their own db.commit()
-    (storage_synced_at is a plain column on the same Player row already
+    (storage_synced_at is a plain column on the same GameAccount row already
     being flushed, so this never needs a commit of its own). See
-    Player.storage_synced_at's own docstring in app/models.py for why
+    GameAccount.storage_synced_at's own docstring in app/models.py for why
     this exists at all rather than just reading the item tables' own
     updated_at back.
 
@@ -561,14 +574,14 @@ def _stamp_storage_synced(player: Player, storage_key: str, now: datetime) -> No
     brand-new object assigned to it, not an in-place `dict[key] = ...`
     on the same object, so mutating in place would silently fail to
     persist."""
-    player.storage_synced_at = {**(player.storage_synced_at or {}), storage_key: now.isoformat()}
+    game_account.storage_synced_at = {**(game_account.storage_synced_at or {}), storage_key: now.isoformat()}
 
 
 @app.post("/api/players/me/bank", response_model=BankSyncResponse)
 def sync_bank(
     payload: BankSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Called by the RuneLite plugin (API-key authenticated) whenever
     the bank interface is open and its contents settle after a change
@@ -585,28 +598,28 @@ def sync_bank(
             detail=f"Too many items in one sync (max {MAX_BANK_ITEMS}).",
         )
 
-    db.query(BankItem).filter(BankItem.player_id == player.id).delete()
+    db.query(BankItem).filter(BankItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(BankItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "bank", now)
+    _stamp_storage_synced(game_account, "bank", now)
     db.commit()
 
     return BankSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/bank", response_model=BankOut)
-def read_bank(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_bank(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """The website's own read of the last-synced bank snapshot --
     session-authenticated (unlike the POST above), since it's the
     website reading this back, not the plugin writing it. Nothing in
     the UI surfaces this yet (Purchase Goals is still a placeholder
     card on /dashboard), but this is what that card will eventually
     read from."""
-    items = db.query(BankItem).filter(BankItem.player_id == player.id).order_by(BankItem.item_id).all()
+    items = db.query(BankItem).filter(BankItem.game_account_id == game_account.id).order_by(BankItem.item_id).all()
     updated_at = items[0].updated_at if items else None
     return BankOut(items=[BankItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
@@ -615,7 +628,7 @@ def read_bank(db: Session = Depends(get_db), player: Player = Depends(get_curren
 def sync_inventory(
     payload: InventorySyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for the main
     28-slot inventory instead -- see MyscapeClient#syncInventory in the
@@ -626,24 +639,24 @@ def sync_inventory(
             detail=f"Too many items in one sync (max {MAX_INVENTORY_ITEMS}).",
         )
 
-    db.query(InventoryItem).filter(InventoryItem.player_id == player.id).delete()
+    db.query(InventoryItem).filter(InventoryItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(InventoryItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "inventory", now)
+    _stamp_storage_synced(game_account, "inventory", now)
     db.commit()
 
     return InventorySyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/inventory", response_model=InventoryOut)
-def read_inventory(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_inventory(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the
     inventory instead."""
-    items = db.query(InventoryItem).filter(InventoryItem.player_id == player.id).order_by(InventoryItem.item_id).all()
+    items = db.query(InventoryItem).filter(InventoryItem.game_account_id == game_account.id).order_by(InventoryItem.item_id).all()
     updated_at = items[0].updated_at if items else None
     return InventoryOut(items=[InventoryItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
@@ -652,7 +665,7 @@ def read_inventory(db: Session = Depends(get_db), player: Player = Depends(get_c
 def sync_equipment(
     payload: EquipmentSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for worn
     equipment instead -- see MyscapeClient#syncEquipment in the
@@ -666,24 +679,24 @@ def sync_equipment(
             detail=f"Too many items in one sync (max {MAX_EQUIPMENT_ITEMS}).",
         )
 
-    db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).delete()
+    db.query(EquipmentItem).filter(EquipmentItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(EquipmentItem(
-            player_id=player.id, slot=item.slot, item_id=item.item_id,
+            game_account_id=game_account.id, slot=item.slot, item_id=item.item_id,
             item_name=item.item_name, quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "equipment", now)
+    _stamp_storage_synced(game_account, "equipment", now)
     db.commit()
 
     return EquipmentSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/equipment", response_model=EquipmentOut)
-def read_equipment(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_equipment(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for worn
     equipment instead."""
-    items = db.query(EquipmentItem).filter(EquipmentItem.player_id == player.id).order_by(EquipmentItem.slot).all()
+    items = db.query(EquipmentItem).filter(EquipmentItem.game_account_id == game_account.id).order_by(EquipmentItem.slot).all()
     updated_at = items[0].updated_at if items else None
     return EquipmentOut(items=[EquipmentItemOut.model_validate(item) for item in items], updated_at=updated_at)
 
@@ -692,7 +705,7 @@ def read_equipment(db: Session = Depends(get_db), player: Player = Depends(get_c
 def sync_potion_storage(
     payload: PotionStorageSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for the
     Player-Owned-House Potion Storage instead -- see
@@ -711,26 +724,26 @@ def sync_potion_storage(
             detail=f"Too many items in one sync (max {MAX_POTION_STORAGE_ITEMS}).",
         )
 
-    db.query(PotionStorageItem).filter(PotionStorageItem.player_id == player.id).delete()
+    db.query(PotionStorageItem).filter(PotionStorageItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(PotionStorageItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "potion_storage", now)
+    _stamp_storage_synced(game_account, "potion_storage", now)
     db.commit()
 
     return PotionStorageSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/potion-storage", response_model=PotionStorageOut)
-def read_potion_storage(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_potion_storage(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for potion
     storage instead."""
     items = (
         db.query(PotionStorageItem)
-        .filter(PotionStorageItem.player_id == player.id)
+        .filter(PotionStorageItem.game_account_id == game_account.id)
         .order_by(PotionStorageItem.item_id)
         .all()
     )
@@ -742,7 +755,7 @@ def read_potion_storage(db: Session = Depends(get_db), player: Player = Depends(
 def sync_rune_pouch(
     payload: RunePouchSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for a Rune
     Pouch's contents instead -- see MyscapeClient#syncRunePouch in the
@@ -762,26 +775,26 @@ def sync_rune_pouch(
             detail=f"Too many items in one sync (max {MAX_RUNE_POUCH_ITEMS}).",
         )
 
-    db.query(RunePouchItem).filter(RunePouchItem.player_id == player.id).delete()
+    db.query(RunePouchItem).filter(RunePouchItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(RunePouchItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "rune_pouch", now)
+    _stamp_storage_synced(game_account, "rune_pouch", now)
     db.commit()
 
     return RunePouchSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/rune-pouch", response_model=RunePouchOut)
-def read_rune_pouch(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_rune_pouch(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the rune
     pouch instead."""
     items = (
         db.query(RunePouchItem)
-        .filter(RunePouchItem.player_id == player.id)
+        .filter(RunePouchItem.game_account_id == game_account.id)
         .order_by(RunePouchItem.item_id)
         .all()
     )
@@ -793,7 +806,7 @@ def read_rune_pouch(db: Session = Depends(get_db), player: Player = Depends(get_
 def sync_seed_vault(
     payload: SeedVaultSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for a
     Player-Owned-House Seed Vault's contents instead -- see
@@ -806,26 +819,26 @@ def sync_seed_vault(
             detail=f"Too many items in one sync (max {MAX_SEED_VAULT_ITEMS}).",
         )
 
-    db.query(SeedVaultItem).filter(SeedVaultItem.player_id == player.id).delete()
+    db.query(SeedVaultItem).filter(SeedVaultItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(SeedVaultItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "seed_vault", now)
+    _stamp_storage_synced(game_account, "seed_vault", now)
     db.commit()
 
     return SeedVaultSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/seed-vault", response_model=SeedVaultOut)
-def read_seed_vault(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_seed_vault(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the seed
     vault instead."""
     items = (
         db.query(SeedVaultItem)
-        .filter(SeedVaultItem.player_id == player.id)
+        .filter(SeedVaultItem.game_account_id == game_account.id)
         .order_by(SeedVaultItem.item_id)
         .all()
     )
@@ -837,7 +850,7 @@ def read_seed_vault(db: Session = Depends(get_db), player: Player = Depends(get_
 def sync_looting_bag(
     payload: LootingBagSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for a Looting
     Bag's contents instead -- see MyscapeClient#syncLootingBag in the
@@ -849,26 +862,26 @@ def sync_looting_bag(
             detail=f"Too many items in one sync (max {MAX_LOOTING_BAG_ITEMS}).",
         )
 
-    db.query(LootingBagItem).filter(LootingBagItem.player_id == player.id).delete()
+    db.query(LootingBagItem).filter(LootingBagItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(LootingBagItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "looting_bag", now)
+    _stamp_storage_synced(game_account, "looting_bag", now)
     db.commit()
 
     return LootingBagSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/looting-bag", response_model=LootingBagOut)
-def read_looting_bag(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_looting_bag(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the looting
     bag instead."""
     items = (
         db.query(LootingBagItem)
-        .filter(LootingBagItem.player_id == player.id)
+        .filter(LootingBagItem.game_account_id == game_account.id)
         .order_by(LootingBagItem.item_id)
         .all()
     )
@@ -880,7 +893,7 @@ def read_looting_bag(db: Session = Depends(get_db), player: Player = Depends(get
 def sync_tackle_box(
     payload: TackleBoxSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for a Tackle
     Box's contents instead -- see MyscapeClient#syncTackleBox in the
@@ -892,26 +905,26 @@ def sync_tackle_box(
             detail=f"Too many items in one sync (max {MAX_TACKLE_BOX_ITEMS}).",
         )
 
-    db.query(TackleBoxItem).filter(TackleBoxItem.player_id == player.id).delete()
+    db.query(TackleBoxItem).filter(TackleBoxItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(TackleBoxItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "tackle_box", now)
+    _stamp_storage_synced(game_account, "tackle_box", now)
     db.commit()
 
     return TackleBoxSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/tackle-box", response_model=TackleBoxOut)
-def read_tackle_box(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_tackle_box(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the Tackle
     Box instead."""
     items = (
         db.query(TackleBoxItem)
-        .filter(TackleBoxItem.player_id == player.id)
+        .filter(TackleBoxItem.game_account_id == game_account.id)
         .order_by(TackleBoxItem.item_id)
         .all()
     )
@@ -923,7 +936,7 @@ def read_tackle_box(db: Session = Depends(get_db), player: Player = Depends(get_
 def sync_poh(
     payload: PohSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for the whole
     Player-Owned-House Costume Room instead -- see MyscapeClient#syncPoh
@@ -937,26 +950,26 @@ def sync_poh(
             detail=f"Too many items in one sync (max {MAX_POH_ITEMS}).",
         )
 
-    db.query(PohItem).filter(PohItem.player_id == player.id).delete()
+    db.query(PohItem).filter(PohItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(PohItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "poh", now)
+    _stamp_storage_synced(game_account, "poh", now)
     db.commit()
 
     return PohSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/poh", response_model=PohOut)
-def read_poh(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_poh(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the whole
     PoH Costume Room instead."""
     items = (
         db.query(PohItem)
-        .filter(PohItem.player_id == player.id)
+        .filter(PohItem.game_account_id == game_account.id)
         .order_by(PohItem.item_id)
         .all()
     )
@@ -968,7 +981,7 @@ def read_poh(db: Session = Depends(get_db), player: Player = Depends(get_current
 def sync_forestry_kit(
     payload: ForestryKitSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for the
     Forestry Kit's contents instead -- see
@@ -981,26 +994,26 @@ def sync_forestry_kit(
             detail=f"Too many items in one sync (max {MAX_FORESTRY_KIT_ITEMS}).",
         )
 
-    db.query(ForestryKitItem).filter(ForestryKitItem.player_id == player.id).delete()
+    db.query(ForestryKitItem).filter(ForestryKitItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(ForestryKitItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "forestry_kit", now)
+    _stamp_storage_synced(game_account, "forestry_kit", now)
     db.commit()
 
     return ForestryKitSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/forestry-kit", response_model=ForestryKitOut)
-def read_forestry_kit(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_forestry_kit(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the
     Forestry Kit instead."""
     items = (
         db.query(ForestryKitItem)
-        .filter(ForestryKitItem.player_id == player.id)
+        .filter(ForestryKitItem.game_account_id == game_account.id)
         .order_by(ForestryKitItem.item_id)
         .all()
     )
@@ -1012,7 +1025,7 @@ def read_forestry_kit(db: Session = Depends(get_db), player: Player = Depends(ge
 def sync_master_scroll_book(
     payload: MasterScrollBookSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for the
     Master Scroll Book's stored teleport scrolls instead -- see
@@ -1027,26 +1040,26 @@ def sync_master_scroll_book(
             detail=f"Too many items in one sync (max {MAX_MASTER_SCROLL_BOOK_ITEMS}).",
         )
 
-    db.query(MasterScrollBookItem).filter(MasterScrollBookItem.player_id == player.id).delete()
+    db.query(MasterScrollBookItem).filter(MasterScrollBookItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(MasterScrollBookItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "master_scroll_book", now)
+    _stamp_storage_synced(game_account, "master_scroll_book", now)
     db.commit()
 
     return MasterScrollBookSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/master-scroll-book", response_model=MasterScrollBookOut)
-def read_master_scroll_book(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_master_scroll_book(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the
     Master Scroll Book instead."""
     items = (
         db.query(MasterScrollBookItem)
-        .filter(MasterScrollBookItem.player_id == player.id)
+        .filter(MasterScrollBookItem.game_account_id == game_account.id)
         .order_by(MasterScrollBookItem.item_id)
         .all()
     )
@@ -1058,7 +1071,7 @@ def read_master_scroll_book(db: Session = Depends(get_db), player: Player = Depe
 def sync_seed_box(
     payload: SeedBoxSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for the Seed
     Box's contents instead -- see MyscapeClient#syncSeedBox in the
@@ -1070,26 +1083,26 @@ def sync_seed_box(
             detail=f"Too many items in one sync (max {MAX_SEED_BOX_ITEMS}).",
         )
 
-    db.query(SeedBoxItem).filter(SeedBoxItem.player_id == player.id).delete()
+    db.query(SeedBoxItem).filter(SeedBoxItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(SeedBoxItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "seed_box", now)
+    _stamp_storage_synced(game_account, "seed_box", now)
     db.commit()
 
     return SeedBoxSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/seed-box", response_model=SeedBoxOut)
-def read_seed_box(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_seed_box(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the Seed
     Box instead."""
     items = (
         db.query(SeedBoxItem)
-        .filter(SeedBoxItem.player_id == player.id)
+        .filter(SeedBoxItem.game_account_id == game_account.id)
         .order_by(SeedBoxItem.item_id)
         .all()
     )
@@ -1101,7 +1114,7 @@ def read_seed_box(db: Session = Depends(get_db), player: Player = Depends(get_cu
 def sync_huntsmans_kit(
     payload: HuntsmansKitSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for a
     Huntsman's Kit's contents instead -- see
@@ -1114,26 +1127,26 @@ def sync_huntsmans_kit(
             detail=f"Too many items in one sync (max {MAX_HUNTSMANS_KIT_ITEMS}).",
         )
 
-    db.query(HuntsmansKitItem).filter(HuntsmansKitItem.player_id == player.id).delete()
+    db.query(HuntsmansKitItem).filter(HuntsmansKitItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(HuntsmansKitItem(
-            player_id=player.id, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    _stamp_storage_synced(player, "huntsmans_kit", now)
+    _stamp_storage_synced(game_account, "huntsmans_kit", now)
     db.commit()
 
     return HuntsmansKitSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/huntsmans-kit", response_model=HuntsmansKitOut)
-def read_huntsmans_kit(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_huntsmans_kit(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for the
     Huntsman's Kit instead."""
     items = (
         db.query(HuntsmansKitItem)
-        .filter(HuntsmansKitItem.player_id == player.id)
+        .filter(HuntsmansKitItem.game_account_id == game_account.id)
         .order_by(HuntsmansKitItem.item_id)
         .all()
     )
@@ -1146,14 +1159,14 @@ def sync_boat_cargo(
     slot: int,
     payload: BoatCargoSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Same contract as POST /api/players/me/bank above, for ONE of the
     player's (up to five) boats' cargo hold contents instead -- `slot`
     (1-5) picks which one. Deletes and replaces only THAT slot's own
-    rows (BoatCargoItem.player_id AND .slot both filtered on below,
+    rows (BoatCargoItem.game_account_id AND .slot both filtered on below,
     unlike every other per-storage sync here which only ever needs
-    player_id) -- see BoatCargoItem's docstring in app/models.py for
+    game_account_id) -- see BoatCargoItem's docstring in app/models.py for
     why a sync of one boat must never touch what's already known about
     the other four."""
     if slot < 1 or slot > 5:
@@ -1164,25 +1177,25 @@ def sync_boat_cargo(
             detail=f"Too many items in one sync (max {MAX_BOAT_CARGO_ITEMS}).",
         )
 
-    db.query(BoatCargoItem).filter(BoatCargoItem.player_id == player.id, BoatCargoItem.slot == slot).delete()
+    db.query(BoatCargoItem).filter(BoatCargoItem.game_account_id == game_account.id, BoatCargoItem.slot == slot).delete()
     now = datetime.now(timezone.utc)
     for item in payload.items:
         db.add(BoatCargoItem(
-            player_id=player.id, slot=slot, item_id=item.item_id, item_name=item.item_name,
+            game_account_id=game_account.id, slot=slot, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
     # One shared "boat_cargo" timestamp across all five slots (see
     # BoatCargoItem's own docstring for why) -- bumped by whichever
     # slot happens to sync most recently, same simplification PoH's
     # single "poh" key already makes for its six furniture pieces.
-    _stamp_storage_synced(player, "boat_cargo", now)
+    _stamp_storage_synced(game_account, "boat_cargo", now)
     db.commit()
 
     return BoatCargoSyncResponse(item_count=len(payload.items))
 
 
 @app.get("/api/players/me/boat-cargo", response_model=BoatCargoOut)
-def read_boat_cargo(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def read_boat_cargo(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Same contract as GET /api/players/me/bank above, for every one of
     the player's boats' cargo combined -- unlike every other single-
     container GET here, this one has no per-slot equivalent of its own
@@ -1192,7 +1205,7 @@ def read_boat_cargo(db: Session = Depends(get_db), player: Player = Depends(get_
     (see BoatCargoItemOut's own docstring in app/schemas.py)."""
     items = (
         db.query(BoatCargoItem)
-        .filter(BoatCargoItem.player_id == player.id)
+        .filter(BoatCargoItem.game_account_id == game_account.id)
         .order_by(BoatCargoItem.slot, BoatCargoItem.item_id)
         .all()
     )
@@ -1201,7 +1214,7 @@ def read_boat_cargo(db: Session = Depends(get_db), player: Player = Depends(get_
 
 
 @app.get("/api/players/me/sync-status", response_model=SyncStatusOut)
-def read_sync_status(player: Player = Depends(get_current_player_from_api_key)):
+def read_sync_status(game_account: GameAccount = Depends(get_current_game_account_from_api_key)):
     """API-key authenticated (unlike the website's own session-
     authenticated GETs above) -- this is what the RuneLite plugin's
     side panel Status section actually polls (see MyscapePanel's
@@ -1209,10 +1222,10 @@ def read_sync_status(player: Player = Depends(get_current_player_from_api_key)):
     plugin has no browser session to authenticate with, the same
     reason every other plugin-facing endpoint here is API-key
     authenticated too. Returns every one of POSSESSION_STORAGE_KEYS,
-    `None` for anything never synced (see Player.storage_synced_at's
+    `None` for anything never synced (see GameAccount.storage_synced_at's
     own docstring in app/models.py for why that's not the same thing
     as "synced empty")."""
-    stamped = player.storage_synced_at or {}
+    stamped = game_account.storage_synced_at or {}
     return SyncStatusOut(storages={key: stamped.get(key) for key in POSSESSION_STORAGE_KEYS})
 
 
@@ -1220,10 +1233,10 @@ def read_sync_status(player: Player = Depends(get_current_player_from_api_key)):
 def sync_skills(
     payload: SkillsSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Full replace of the player's current level+xp in every skill --
-    see Player.skills' own comment in app/models.py and
+    see GameAccount.skills' own comment in app/models.py and
     MyscapeClient#syncSkills in the Mootrius/myscape-plugin repo. Unlike
     bank/inventory/etc., this isn't many independent rows to delete-and-
     replace, just one JSONB column to overwrite outright, since a
@@ -1233,52 +1246,52 @@ def sync_skills(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Too many skills in one sync (max {MAX_SKILLS_PER_SYNC}).",
         )
-    player.skills = {s.skill: {"level": s.level, "xp": s.xp} for s in payload.skills}
+    game_account.skills = {s.skill: {"level": s.level, "xp": s.xp} for s in payload.skills}
     db.commit()
     return SkillsSyncResponse(skill_count=len(payload.skills))
 
 
 @app.get("/api/players/me/skills")
-def read_skills(player: Player = Depends(get_current_verified_player_from_session)):
+def read_skills(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """The website's own read of the last-synced skills snapshot --
     session-authenticated like every other GET here."""
-    return {"skills": player.skills or {}}
+    return {"skills": game_account.skills or {}}
 
 
 @app.post("/api/players/me/quests", response_model=QuestsSyncResponse)
 def sync_quests(
     payload: QuestsSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Full replace of the player's completed quest/miniquest list --
-    see Player.completed_quests' own comment in app/models.py and
+    see GameAccount.completed_quests' own comment in app/models.py and
     MyscapeClient#syncQuests in the Mootrius/myscape-plugin repo."""
     if len(payload.completed_quests) > MAX_QUESTS_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Too many quests in one sync (max {MAX_QUESTS_PER_SYNC}).",
         )
-    player.completed_quests = [q.strip() for q in payload.completed_quests if q and q.strip()]
+    game_account.completed_quests = [q.strip() for q in payload.completed_quests if q and q.strip()]
     db.commit()
-    return QuestsSyncResponse(quest_count=len(player.completed_quests))
+    return QuestsSyncResponse(quest_count=len(game_account.completed_quests))
 
 
 @app.get("/api/players/me/quests")
-def read_quests(player: Player = Depends(get_current_verified_player_from_session)):
+def read_quests(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """The website's own read of the last-synced completed-quests
     snapshot -- session-authenticated like every other GET here."""
-    return {"completedQuests": player.completed_quests or []}
+    return {"completedQuests": game_account.completed_quests or []}
 
 
 @app.post("/api/players/me/diaries", response_model=DiariesSyncResponse)
 def sync_diaries(
     payload: DiariesSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Full replace of the player's highest completed tier per
-    achievement diary area -- see Player.diary_tiers' own comment in
+    achievement diary area -- see GameAccount.diary_tiers' own comment in
     app/models.py and MyscapeClient#syncDiaries in the
     Mootrius/myscape-plugin repo. The plugin sends only each area's
     HIGHEST completed tier (matching how the in-game diary journal
@@ -1288,23 +1301,23 @@ def sync_diaries(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Too many diary areas in one sync (max {MAX_DIARY_AREAS_PER_SYNC}).",
         )
-    player.diary_tiers = {d.area: d.tier for d in payload.diary_tiers}
+    game_account.diary_tiers = {d.area: d.tier for d in payload.diary_tiers}
     db.commit()
     return DiariesSyncResponse(area_count=len(payload.diary_tiers))
 
 
 @app.get("/api/players/me/diaries")
-def read_diaries(player: Player = Depends(get_current_verified_player_from_session)):
+def read_diaries(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """The website's own read of the last-synced diary-tiers snapshot
     -- session-authenticated like every other GET here."""
-    return {"diaryTiers": player.diary_tiers or {}}
+    return {"diaryTiers": game_account.diary_tiers or {}}
 
 
 @app.post("/api/players/me/loot", response_model=LootSyncResponse)
 def sync_loot(
     payload: LootSyncRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_player_from_api_key),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Records one or more loot events (a kill, a clue casket, a
     pickpocket -- see MyscapePlugin#onLootReceived in the
@@ -1319,7 +1332,7 @@ def sync_loot(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Too many events in one sync (max {MAX_LOOT_EVENTS_PER_SYNC}).",
         )
-    added_count = sync_loot_events(db, player, payload.events)
+    added_count = sync_loot_events(db, game_account, payload.events)
     return LootSyncResponse(added_count=added_count)
 
 
@@ -1329,7 +1342,7 @@ def read_loot(
     start: Optional[str] = None,
     end: Optional[str] = None,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """The combined state the Loot Tracker page polls -- the bar
     chart's buckets and a per-NPC breakdown of the same range,
@@ -1359,47 +1372,47 @@ def read_loot(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start/end must be YYYY-MM-DD dates.")
     range_start, range_end = resolve_range(range, start_dt, end_dt)
-    return build_loot_state(db, player, range_start, range_end)
+    return build_loot_state(db, game_account, range_start, range_end)
 
 
 @app.post("/api/players/me/loot/hidden-npcs")
-def hide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def hide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Hides one NPC from Loot Tracker -- the eye button on an NPC
     tile's hover corner in render_loot_tracker, app/pages.py. See
     set_npc_hidden in app/loot.py for what this actually removes from
     the tracker's own totals."""
-    set_npc_hidden(db, player, payload.name, True)
+    set_npc_hidden(db, game_account, payload.name, True)
     return {"ok": True}
 
 
 @app.delete("/api/players/me/loot/hidden-npcs")
-def unhide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def unhide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Reverses hide_loot_npc above -- the same eye button, now shown on
     a dimmed (already-hidden) tile once the panel's own "show hidden"
     toggle has revealed it."""
-    set_npc_hidden(db, player, payload.name, False)
+    set_npc_hidden(db, game_account, payload.name, False)
     return {"ok": True}
 
 
 @app.post("/api/players/me/loot/hidden-items")
-def hide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def hide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Hides one item from Loot Tracker -- same eye-button affordance as
     hide_loot_npc above, one level down (see set_item_hidden in
     app/loot.py)."""
-    set_item_hidden(db, player, payload.item_id, payload.item_name, True)
+    set_item_hidden(db, game_account, payload.item_id, payload.item_name, True)
     return {"ok": True}
 
 
 @app.delete("/api/players/me/loot/hidden-items")
-def unhide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def unhide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Reverses hide_loot_item above -- same relationship as
     unhide_loot_npc has to hide_loot_npc."""
-    set_item_hidden(db, player, payload.item_id, payload.item_name, False)
+    set_item_hidden(db, game_account, payload.item_id, payload.item_name, False)
     return {"ok": True}
 
 
 @app.get("/api/items/search", response_model=ItemSearchResponse)
-def item_search(q: str = "", player: Player = Depends(get_current_verified_player_from_session)):
+def item_search(q: str = "", game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Backs the gear-setup slot picker's search box (see
     app/purchase_goals.py's search_items -- ported from Maintrius's own
     search_items in osrs_tracker.py) -- session-authenticated like every
@@ -1409,7 +1422,7 @@ def item_search(q: str = "", player: Player = Depends(get_current_verified_playe
 
 
 @app.get("/api/npcs/search", response_model=NpcSearchResponse)
-def npc_search(q: str = "", player: Player = Depends(get_current_verified_player_from_session)):
+def npc_search(q: str = "", game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Backs the Mindmaps KC goal's NPC search field (see
     app/npc_names.py) -- session-authenticated like item_search above,
     since only the website UI calls this."""
@@ -1417,7 +1430,7 @@ def npc_search(q: str = "", player: Player = Depends(get_current_verified_player
 
 
 @app.get("/api/quests/search", response_model=QuestSearchResponse)
-def quest_search(q: str = "", player: Player = Depends(get_current_verified_player_from_session)):
+def quest_search(q: str = "", game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Backs the Mindmaps QUEST goal's quest/miniquest search field
     (see app/quest_names.py) -- session-authenticated like
     item_search above, since only the website UI calls this."""
@@ -1425,7 +1438,7 @@ def quest_search(q: str = "", player: Player = Depends(get_current_verified_play
 
 
 @app.get("/dashboard/purchase-goals", response_class=HTMLResponse)
-def purchase_goals_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def purchase_goals_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:
@@ -1434,7 +1447,7 @@ def purchase_goals_page(player: Optional[Player] = Depends(get_optional_current_
 
 
 @app.get("/dashboard/loot", response_class=HTMLResponse)
-def loot_tracker_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def loot_tracker_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:
@@ -1443,7 +1456,7 @@ def loot_tracker_page(player: Optional[Player] = Depends(get_optional_current_pl
 
 
 @app.get("/dashboard/mindmaps", response_class=HTMLResponse)
-def mindmaps_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def mindmaps_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:
@@ -1452,7 +1465,7 @@ def mindmaps_page(player: Optional[Player] = Depends(get_optional_current_player
 
 
 @app.get("/dashboard/possessions", response_class=HTMLResponse)
-def possessions_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+def possessions_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:
@@ -1461,7 +1474,7 @@ def possessions_page(player: Optional[Player] = Depends(get_optional_current_pla
 
 
 @app.get("/api/possessions/search-items", response_model=ItemSearchResponse)
-def possessions_item_search(q: str = "", player: Player = Depends(get_current_verified_player_from_session)):
+def possessions_item_search(q: str = "", game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Backs the min/max tracker "add an item" search field on the
     Storages Viewer page -- session-authenticated like
     item_search above, since only the website UI calls this. Unlike
@@ -1472,30 +1485,30 @@ def possessions_item_search(q: str = "", player: Player = Depends(get_current_ve
 
 
 @app.get("/api/possessions/summary")
-def possessions_summary(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def possessions_summary(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Section 3's payload -- every item currently owned in any synced
     storage, priced and broken down by location (see
     build_possessions_summary in app/possessions.py). Not pinned to a
     response_model, same reasoning as /api/gear-setups below: a plain
     list of dicts is simpler than fixing a schema for data this shape-
     stable in practice but not worth formally modeling."""
-    return build_possessions_summary(db, player)
+    return build_possessions_summary(db, game_account)
 
 
 @app.get("/api/possessions/trackers")
-def possessions_trackers(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def possessions_trackers(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Sections 1/2's combined payload -- both the minimum and maximum
     trackers the player has set up, each already resolved against a
     live owned-quantity count (see build_trackers_state in
     app/possessions.py)."""
-    return build_trackers_state(db, player)
+    return build_trackers_state(db, game_account)
 
 
 @app.post("/api/possessions/trackers", status_code=status.HTTP_201_CREATED)
 def create_possession_tracker(
     payload: PossessionTrackerIn,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Adds one new min or max tracker. item_name is whatever the
     search result the player picked carried (see
@@ -1510,7 +1523,7 @@ def create_possession_tracker(
     existing = (
         db.query(PossessionTracker)
         .filter(
-            PossessionTracker.player_id == player.id,
+            PossessionTracker.game_account_id == game_account.id,
             PossessionTracker.kind == payload.kind,
             PossessionTracker.item_id == payload.item_id,
         )
@@ -1523,15 +1536,15 @@ def create_possession_tracker(
         db.commit()
     else:
         db.add(PossessionTracker(
-            player_id=player.id,
+            game_account_id=game_account.id,
             kind=payload.kind,
             item_id=payload.item_id,
             item_name=payload.item_name,
             target_quantity=payload.target_quantity,
-            sort_order=next_sort_order(db, player, payload.kind),
+            sort_order=next_sort_order(db, game_account, payload.kind),
         ))
         db.commit()
-    return build_trackers_state(db, player)
+    return build_trackers_state(db, game_account)
 
 
 @app.patch("/api/possessions/trackers/{tracker_id}")
@@ -1539,7 +1552,7 @@ def update_possession_tracker(
     tracker_id: uuid.UUID,
     payload: PossessionTrackerUpdate,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Edits an existing tracker's target quantity in place -- the only
     thing the page's own UI ever lets a player change about one after
@@ -1547,25 +1560,25 @@ def update_possession_tracker(
     see PossessionTrackerUpdate's own docstring in app/schemas.py)."""
     tracker = (
         db.query(PossessionTracker)
-        .filter(PossessionTracker.id == tracker_id, PossessionTracker.player_id == player.id)
+        .filter(PossessionTracker.id == tracker_id, PossessionTracker.game_account_id == game_account.id)
         .first()
     )
     if not tracker:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracker not found.")
     tracker.target_quantity = payload.target_quantity
     db.commit()
-    return build_trackers_state(db, player)
+    return build_trackers_state(db, game_account)
 
 
 @app.delete("/api/possessions/trackers/{tracker_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_possession_tracker(
     tracker_id: uuid.UUID,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     tracker = (
         db.query(PossessionTracker)
-        .filter(PossessionTracker.id == tracker_id, PossessionTracker.player_id == player.id)
+        .filter(PossessionTracker.id == tracker_id, PossessionTracker.game_account_id == game_account.id)
         .first()
     )
     if not tracker:
@@ -1578,7 +1591,7 @@ def delete_possession_tracker(
 def pin_possession_item(
     item_id: int,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Pins one item to the top of section 3's list (see
     PinnedPossessionItem's own docstring in app/models.py, and the pin
@@ -1593,35 +1606,35 @@ def pin_possession_item(
     should never see an error banner over it."""
     existing = (
         db.query(PinnedPossessionItem)
-        .filter(PinnedPossessionItem.player_id == player.id, PinnedPossessionItem.item_id == item_id)
+        .filter(PinnedPossessionItem.game_account_id == game_account.id, PinnedPossessionItem.item_id == item_id)
         .first()
     )
     if not existing:
-        db.add(PinnedPossessionItem(player_id=player.id, item_id=item_id))
+        db.add(PinnedPossessionItem(game_account_id=game_account.id, item_id=item_id))
         db.commit()
-    return {"pinnedItemIds": sorted(pinned_item_ids(db, player))}
+    return {"pinnedItemIds": sorted(pinned_item_ids(db, game_account))}
 
 
 @app.delete("/api/possessions/pins/{item_id}")
 def unpin_possession_item(
     item_id: int,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Unpins one item -- same idempotent shape as pin_possession_item
     above, a no-op rather than a 404 if it wasn't pinned to begin with."""
     db.query(PinnedPossessionItem).filter(
-        PinnedPossessionItem.player_id == player.id, PinnedPossessionItem.item_id == item_id
+        PinnedPossessionItem.game_account_id == game_account.id, PinnedPossessionItem.item_id == item_id
     ).delete()
     db.commit()
-    return {"pinnedItemIds": sorted(pinned_item_ids(db, player))}
+    return {"pinnedItemIds": sorted(pinned_item_ids(db, game_account))}
 
 
 @app.post("/api/possessions/hidden-storages/{storage_key}")
 def hide_possession_storage(
     storage_key: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Switches one storage source off in Storages Viewer's
     settings menu (see HiddenPossessionStorage's own docstring in
@@ -1631,37 +1644,37 @@ def hide_possession_storage(
     switched back on."""
     if storage_key not in POSSESSION_STORAGE_KEYS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown storage.")
-    set_storage_hidden(db, player, storage_key, True)
-    return {"hiddenStorageKeys": sorted(hidden_storage_keys(db, player))}
+    set_storage_hidden(db, game_account, storage_key, True)
+    return {"hiddenStorageKeys": sorted(hidden_storage_keys(db, game_account))}
 
 
 @app.delete("/api/possessions/hidden-storages/{storage_key}")
 def unhide_possession_storage(
     storage_key: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Reverses hide_possession_storage above -- same idempotent shape
     as unpin_possession_item."""
     if storage_key not in POSSESSION_STORAGE_KEYS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown storage.")
-    set_storage_hidden(db, player, storage_key, False)
-    return {"hiddenStorageKeys": sorted(hidden_storage_keys(db, player))}
+    set_storage_hidden(db, game_account, storage_key, False)
+    return {"hiddenStorageKeys": sorted(hidden_storage_keys(db, game_account))}
 
 
 @app.get("/api/possessions/views")
-def list_possession_views(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def list_possession_views(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Every saved Storages Viewer view this player has (see
     build_possession_views in app/possessions.py), in their own
     reorder-strip order."""
-    return {"views": build_possession_views(db, player)}
+    return {"views": build_possession_views(db, game_account)}
 
 
 @app.post("/api/possessions/views", status_code=status.HTTP_201_CREATED)
 def create_possession_view(
     payload: PossessionViewSaveRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Saves the page's current filter/sort setup as a new named view
     -- always appended past the end of the player's existing views
@@ -1669,20 +1682,20 @@ def create_possession_view(
     existing one even if the name matches -- renaming/overwriting an
     existing view is what PATCH .../{view_id} is for."""
     db.add(PossessionView(
-        player_id=player.id,
+        game_account_id=game_account.id,
         name=payload.name,
         config=payload.config,
-        sort_order=next_possession_view_sort_order(db, player),
+        sort_order=next_possession_view_sort_order(db, game_account),
     ))
     db.commit()
-    return {"views": build_possession_views(db, player)}
+    return {"views": build_possession_views(db, game_account)}
 
 
 @app.put("/api/possessions/views/order")
 def set_possession_view_order(
     payload: SetPossessionViewOrderRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Saves a drag-and-drop reorder of the saved-views strip -- same
     full-replacement convention as set_gear_setup_order above:
@@ -1695,24 +1708,24 @@ def set_possession_view_order(
     defensive stance as set_gear_setup_order."""
     owned_views = {
         str(v.id): v
-        for v in db.query(PossessionView).filter(PossessionView.player_id == player.id).all()
+        for v in db.query(PossessionView).filter(PossessionView.game_account_id == game_account.id).all()
     }
     for index, view_id in enumerate(payload.order):
         view = owned_views.get(view_id)
         if view is not None:
             view.sort_order = float(index)
     db.commit()
-    return {"views": build_possession_views(db, player)}
+    return {"views": build_possession_views(db, game_account)}
 
 
-def _get_owned_possession_view(db: Session, player: Player, view_id: str) -> PossessionView:
+def _get_owned_possession_view(db: Session, game_account: GameAccount, view_id: str) -> PossessionView:
     try:
         view_uuid = uuid.UUID(view_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found.")
     view = (
         db.query(PossessionView)
-        .filter(PossessionView.id == view_uuid, PossessionView.player_id == player.id)
+        .filter(PossessionView.id == view_uuid, PossessionView.game_account_id == game_account.id)
         .first()
     )
     if view is None:
@@ -1725,34 +1738,34 @@ def update_possession_view(
     view_id: str,
     payload: PossessionViewUpdateRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Renames an existing saved view, replaces its stored config with
     the page's current filter/sort setup, or both at once -- see
     PossessionViewUpdateRequest's own docstring in app/schemas.py."""
-    view = _get_owned_possession_view(db, player, view_id)
+    view = _get_owned_possession_view(db, game_account, view_id)
     if payload.name is not None:
         view.name = payload.name
     if payload.config is not None:
         view.config = payload.config
     db.commit()
-    return {"views": build_possession_views(db, player)}
+    return {"views": build_possession_views(db, game_account)}
 
 
 @app.delete("/api/possessions/views/{view_id}")
 def delete_possession_view(
     view_id: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    view = _get_owned_possession_view(db, player, view_id)
+    view = _get_owned_possession_view(db, game_account, view_id)
     db.delete(view)
     db.commit()
-    return {"views": build_possession_views(db, player)}
+    return {"views": build_possession_views(db, game_account)}
 
 
 @app.get("/api/gear-setups")
-def list_gear_setups(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def list_gear_setups(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """The combined state the Purchase Goals page polls (see
     app/purchase_goals.py's build_purchase_goals_state, ported from
     Maintrius's own build_state in osrs_tracker.py) -- every one of the
@@ -1763,27 +1776,27 @@ def list_gear_setups(db: Session = Depends(get_db), player: Player = Depends(get
     app/schemas.py) since the shape is too dynamic/nested to usefully
     fix -- FastAPI serializes the plain dict build_purchase_goals_state
     returns as-is."""
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
 @app.post("/api/gear-setups", status_code=status.HTTP_201_CREATED)
 def create_gear_setup(
     payload: CreateGearSetupRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     name = (payload.name or "").strip() or "New Setup"
-    setup = GearSetup(player_id=player.id, name=name, equipment={}, inventory=[None] * INVENTORY_SIZE)
+    setup = GearSetup(game_account_id=game_account.id, name=name, equipment={}, inventory=[None] * INVENTORY_SIZE)
     db.add(setup)
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
 @app.put("/api/gear-setups/order")
 def set_gear_setup_order(
     payload: SetGearSetupOrderRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Saves a drag-and-drop reorder of the player's gear setup LIST
     itself (the icon row above the gear frame -- contrast
@@ -1800,24 +1813,24 @@ def set_gear_setup_order(
     everywhere else, just applied per-id instead of failing the batch."""
     owned_setups = {
         str(s.id): s
-        for s in db.query(GearSetup).filter(GearSetup.player_id == player.id).all()
+        for s in db.query(GearSetup).filter(GearSetup.game_account_id == game_account.id).all()
     }
     for index, setup_id in enumerate(payload.order):
         setup = owned_setups.get(setup_id)
         if setup is not None:
             setup.sort_order = float(index)
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
-def _get_owned_gear_setup(db: Session, player: Player, setup_id: str) -> GearSetup:
+def _get_owned_gear_setup(db: Session, game_account: GameAccount, setup_id: str) -> GearSetup:
     try:
         setup_uuid = uuid.UUID(setup_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="gear setup not found")
     setup = (
         db.query(GearSetup)
-        .filter(GearSetup.id == setup_uuid, GearSetup.player_id == player.id)
+        .filter(GearSetup.id == setup_uuid, GearSetup.game_account_id == game_account.id)
         .first()
     )
     if setup is None:
@@ -1830,24 +1843,24 @@ def rename_gear_setup(
     setup_id: str,
     payload: RenameGearSetupRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup = _get_owned_gear_setup(db, game_account, setup_id)
     setup.name = payload.name
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
 @app.delete("/api/gear-setups/{setup_id}")
 def delete_gear_setup(
     setup_id: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup = _get_owned_gear_setup(db, game_account, setup_id)
     db.delete(setup)
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
 @app.put("/api/gear-setups/{setup_id}/icon")
@@ -1855,19 +1868,19 @@ def set_gear_setup_icon(
     setup_id: str,
     payload: SetGearSetupIconRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Sets (or, with icon omitted/null, clears) the display-only icon
     shown next to a setup's total cost -- purely cosmetic, never affects
     cost/ownership (see GearSetup's docstring in app/models.py and
     _handle_set_gear_setup_icon in Maintrius's own osrs_tracker.py)."""
-    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup = _get_owned_gear_setup(db, game_account, setup_id)
     if payload.icon is None:
         setup.icon = None
     else:
         setup.icon = {"itemId": payload.icon.item_id, "itemName": payload.icon.item_name or None}
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
 @app.put("/api/gear-setups/{setup_id}/slot")
@@ -1875,7 +1888,7 @@ def set_gear_slot(
     setup_id: str,
     payload: SetGearSlotRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Fills (or, with item omitted/null, clears) one equipment or
     inventory slot of a gear setup -- see SetGearSlotRequest/
@@ -1892,7 +1905,7 @@ def set_gear_slot(
     faceguard" directly instead of having to know it's built from a
     Helm of Neitiznot + a Basilisk jaw and build it from parts
     themselves -- the frontend never has to know the difference."""
-    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup = _get_owned_gear_setup(db, game_account, setup_id)
 
     if payload.item is None:
         stored_item = None
@@ -1953,7 +1966,7 @@ def set_gear_slot(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slot_type must be 'equipment' or 'inventory'")
 
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
 def _check_gear_slot(slot_type: str, slot: Any) -> None:
@@ -1994,7 +2007,7 @@ def move_gear_slot_item(
     setup_id: str,
     payload: MoveGearSlotItemRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Drag-and-drop: moves whatever's stored in (from_slot_type,
     from_slot) into (to_slot_type, to_slot), across equipment and
@@ -2007,14 +2020,14 @@ def move_gear_slot_item(
     frontend renders -- so a combo's exact stored components move
     across untouched rather than being reconstructed from (and
     potentially drifting from) their priced/resolved form."""
-    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup = _get_owned_gear_setup(db, game_account, setup_id)
 
     _check_gear_slot(payload.from_slot_type, payload.from_slot)
     _check_gear_slot(payload.to_slot_type, payload.to_slot)
 
     if payload.from_slot_type == payload.to_slot_type and payload.from_slot == payload.to_slot:
         # Dropped a slot onto itself -- nothing to do.
-        return build_purchase_goals_state(db, player)
+        return build_purchase_goals_state(db, game_account)
 
     # Fresh dict/list, not an in-place mutation of the loaded ones -- see
     # the IMPORTANT note on GearSetup in app/models.py for why that
@@ -2033,7 +2046,7 @@ def move_gear_slot_item(
     setup.equipment = equipment
     setup.inventory = inventory
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
 @app.put("/api/gear-setups/{setup_id}/still-to-purchase-sort")
@@ -2041,7 +2054,7 @@ def set_still_to_purchase_sort(
     setup_id: str,
     payload: SetStillToPurchaseSortRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Switches which of the buttons above a setup's "Still to
     Purchase" list is active -- see STILL_TO_PURCHASE_SORT_MODES in
@@ -2051,10 +2064,10 @@ def set_still_to_purchase_sort(
     back doesn't lose a previously-dragged order, and switching away
     from "custom" doesn't erase it either, it's just not applied while
     a different mode is active."""
-    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup = _get_owned_gear_setup(db, game_account, setup_id)
     setup.still_to_purchase_sort_mode = payload.sort_mode
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
 @app.put("/api/gear-setups/{setup_id}/still-to-purchase-order")
@@ -2062,7 +2075,7 @@ def set_still_to_purchase_order(
     setup_id: str,
     payload: SetStillToPurchaseOrderRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Saves a drag-and-drop reorder of a setup's "Still to Purchase"
     list -- payload.order is the complete list as currently displayed
@@ -2073,16 +2086,16 @@ def set_still_to_purchase_order(
     only ever possible in "custom" mode client-side (see
     renderSummaryList in app/pages.py), so this is a defensive
     backstop, not something a well-behaved client should ever rely on."""
-    setup = _get_owned_gear_setup(db, player, setup_id)
+    setup = _get_owned_gear_setup(db, game_account, setup_id)
     setup.still_to_purchase_sort_mode = "custom"
     setup.still_to_purchase_custom_order = [
         {"slotType": entry.slot_type, "slot": entry.slot} for entry in payload.order
     ]
     db.commit()
-    return build_purchase_goals_state(db, player)
+    return build_purchase_goals_state(db, game_account)
 
 
-def _build_goal_context(db: Session, player: Player) -> dict:
+def _build_goal_context(db: Session, game_account: GameAccount) -> dict:
     """Everything Mindmaps' goal-node auto-completion (see
     evaluate_completion in app/mindmaps.py) needs to check every node
     in every one of this player's mindmaps against, gathered once per
@@ -2100,7 +2113,7 @@ def _build_goal_context(db: Session, player: Player) -> dict:
     An item-goal node and a gear-setup slot are checking the literal
     same "what does this player currently have" question, so this
     reuses build_owned_pools outright rather than re-deriving it."""
-    owned_pool_by_id, owned_pool_by_name = build_owned_pools(db, player)
+    owned_pool_by_id, owned_pool_by_name = build_owned_pools(db, game_account)
     platinum_qty = sum(owned_pool_by_id.get(i, 0) for i in (find_item_ids("Platinum token") or []))
     gp_total = owned_pool_by_id.get(COINS_ITEM_ID, 0) + platinum_qty * 1000
 
@@ -2108,43 +2121,43 @@ def _build_goal_context(db: Session, player: Player) -> dict:
         "owned_pool_by_id": owned_pool_by_id,
         "owned_pool_by_name": owned_pool_by_name,
         "gp_total": gp_total,
-        "skills": player.skills or {},
-        "completed_quests": {(q or "").strip().lower() for q in (player.completed_quests or [])},
-        "diary_tiers": player.diary_tiers or {},
-        "kc_counts": kc_counts_by_player(db, player),
+        "skills": game_account.skills or {},
+        "completed_quests": {(q or "").strip().lower() for q in (game_account.completed_quests or [])},
+        "diary_tiers": game_account.diary_tiers or {},
+        "kc_counts": kc_counts_by_player(db, game_account),
     }
 
 
 @app.get("/api/mindmaps")
-def list_mindmaps(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+def list_mindmaps(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Every one of the player's mindmaps, each with its full node list
     -- see build_mindmaps_state in app/mindmaps.py. Not pinned to a
     Pydantic response_model, same reasoning as GET /api/gear-setups
     above (see MindMapsState's docstring in app/schemas.py)."""
-    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+    return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
 
 
 @app.post("/api/mindmaps", status_code=status.HTTP_201_CREATED)
 def create_mindmap(
     payload: CreateMindMapRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     name = (payload.name or "").strip() or "New Mindmap"
-    mindmap = MindMap(player_id=player.id, name=name, nodes=[new_root_node(name)])
+    mindmap = MindMap(game_account_id=game_account.id, name=name, nodes=[new_root_node(name)])
     db.add(mindmap)
     db.commit()
-    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+    return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
 
 
-def _get_owned_mindmap(db: Session, player: Player, mindmap_id: str) -> MindMap:
+def _get_owned_mindmap(db: Session, game_account: GameAccount, mindmap_id: str) -> MindMap:
     try:
         mindmap_uuid = uuid.UUID(mindmap_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="mindmap not found")
     mindmap = (
         db.query(MindMap)
-        .filter(MindMap.id == mindmap_uuid, MindMap.player_id == player.id)
+        .filter(MindMap.id == mindmap_uuid, MindMap.game_account_id == game_account.id)
         .first()
     )
     if mindmap is None:
@@ -2157,24 +2170,24 @@ def rename_mindmap(
     mindmap_id: str,
     payload: RenameMindMapRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     mindmap.name = payload.name
     db.commit()
-    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+    return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
 
 
 @app.delete("/api/mindmaps/{mindmap_id}")
 def delete_mindmap(
     mindmap_id: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     db.delete(mindmap)
     db.commit()
-    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+    return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
 
 
 @app.post("/api/mindmaps/{mindmap_id}/nodes", status_code=status.HTTP_201_CREATED)
@@ -2182,9 +2195,9 @@ def add_mindmap_node(
     mindmap_id: str,
     payload: AddMindMapNodeRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         new_nodes, new_node_id = add_node(
             mindmap.nodes, payload.relative_to, payload.relation, payload.text, payload.color, payload.before
@@ -2193,7 +2206,7 @@ def add_mindmap_node(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     mindmap.nodes = new_nodes
     db.commit()
-    state = build_mindmaps_state(db, player, _build_goal_context(db, player))
+    state = build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
     # See add_node's docstring in app/mindmaps.py -- handed back
     # alongside the full state so the client can select the new node
     # without diffing old vs. new node lists itself.
@@ -2206,19 +2219,19 @@ def add_mindmap_shared_child(
     mindmap_id: str,
     payload: AddMindMapSharedChildRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """The node canvas's shift-click multi-select: adds one new node as
     a shared child connected below two or more existing ones -- see
     add_shared_child in app/mindmaps.py."""
-    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         new_nodes, new_node_id = add_shared_child(mindmap.nodes, payload.parent_ids, payload.text, payload.color)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     mindmap.nodes = new_nodes
     db.commit()
-    state = build_mindmaps_state(db, player, _build_goal_context(db, player))
+    state = build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
     state["newNodeId"] = new_node_id
     return state
 
@@ -2228,19 +2241,19 @@ def replace_mindmap_nodes(
     mindmap_id: str,
     payload: ReplaceMindMapNodesRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Restores a mindmap's whole node tree to a previously-seen
     snapshot -- what the node canvas's undo/redo buttons use (see
     replace_nodes in app/mindmaps.py) in place of a confirm-before-
     delete dialog on individual node deletes."""
-    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         mindmap.nodes = replace_nodes([n.model_dump(exclude_none=True) for n in payload.nodes])
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
-    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+    return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
 
 
 @app.patch("/api/mindmaps/{mindmap_id}/nodes/{node_id}")
@@ -2249,15 +2262,15 @@ def update_mindmap_node(
     node_id: str,
     payload: UpdateMindMapNodeRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         mindmap.nodes = update_node(mindmap.nodes, node_id, payload.text, payload.color, payload.note)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
-    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+    return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
 
 
 @app.patch("/api/mindmaps/{mindmap_id}/nodes/{node_id}/goal")
@@ -2266,7 +2279,7 @@ def set_mindmap_node_goal(
     node_id: str,
     payload: SetMindMapNodeGoalRequest,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Saves a node's goal fields -- the per-color forms described in
     app/mindmaps.py's clean_goal docstring (kc target + activity for
@@ -2283,7 +2296,7 @@ def set_mindmap_node_goal(
     update_node a plain node-PATCH uses, against the already-updated
     node list, so a trackable node's popover Save button persists its
     goal AND its note in one request/one undo step instead of two."""
-    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         nodes = set_node_goal(mindmap.nodes, node_id, payload.goal)
         if payload.note is not None:
@@ -2292,7 +2305,7 @@ def set_mindmap_node_goal(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
-    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+    return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
 
 
 @app.delete("/api/mindmaps/{mindmap_id}/nodes/{node_id}")
@@ -2300,12 +2313,12 @@ def delete_mindmap_node(
     mindmap_id: str,
     node_id: str,
     db: Session = Depends(get_db),
-    player: Player = Depends(get_current_verified_player_from_session),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    mindmap = _get_owned_mindmap(db, player, mindmap_id)
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         mindmap.nodes = delete_node(mindmap.nodes, node_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
-    return build_mindmaps_state(db, player, _build_goal_context(db, player))
+    return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
