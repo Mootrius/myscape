@@ -3050,7 +3050,7 @@ def render_loot_tracker(player: PlayerView) -> str:
             {_sort_tabs("lootNpcSortTabs", "KC", "lootNpcHideToggle")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
-            No NPC kills in this range yet.
+            No NPCs killed in this range.
           </p>
           <div class="loot-npc-row" id="lootNpcRow"></div>
         </div>
@@ -3060,7 +3060,7 @@ def render_loot_tracker(player: PlayerView) -> str:
             {_sort_tabs("lootItemSortTabs", "Qty", "lootItemHideToggle")}
           </div>
           <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
-            No items dropped in this range yet.
+            No items dropped in this range.
           </p>
           <div class="loot-item-list" id="lootItemList"></div>
         </div>
@@ -3609,7 +3609,7 @@ def render_loot_tracker(player: PlayerView) -> str:
         var emptyEl = document.getElementById('lootNpcEmpty');
         var rowEl = document.getElementById('lootNpcRow');
         if (!npcs.length) {
-          emptyEl.textContent = 'No NPC kills in this range yet.';
+          emptyEl.textContent = 'No NPCs killed in this range.';
           emptyEl.style.display = '';
           rowEl.innerHTML = '';
           lastNpcKey = null;
@@ -3625,7 +3625,7 @@ def render_loot_tracker(player: PlayerView) -> str:
         // loot-tracker.css for the button that flips this.
         var visible = state.npcShowHidden ? npcs : npcs.filter(function (n) { return !npcEffectiveHidden(n); });
         if (!visible.length) {
-          emptyEl.textContent = npcs.length ? 'Every NPC in this range is hidden.' : 'No NPC kills in this range yet.';
+          emptyEl.textContent = npcs.length ? 'Every NPC in this range is hidden.' : 'No NPCs killed in this range.';
           emptyEl.style.display = '';
           rowEl.innerHTML = '';
           lastNpcKey = null;
@@ -3754,7 +3754,7 @@ def render_loot_tracker(player: PlayerView) -> str:
         // it from, so it.hidden alone decides.
         var visible = state.itemShowHidden ? items : items.filter(function (it) { return !it.hidden; });
         if (!visible.length) {
-          emptyEl.textContent = items.length ? 'Every item here is hidden.' : 'No items dropped in this range yet.';
+          emptyEl.textContent = items.length ? 'Every item here is hidden.' : 'No items dropped in this range.';
           emptyEl.style.display = '';
           listEl.innerHTML = '';
           lastItemKey = null;
