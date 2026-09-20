@@ -653,19 +653,25 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   margin: -10px 0 8px;
 }
 
+/* A small bordered button (not the plain text link it used to be) --
+   same look as button.secondary, just compact and shrink-to-fit
+   (no width: 100%) since it sits under the email rather than
+   anchoring a whole .account-section. */
 .account-logout-link {
   display: block;
+  width: auto;
   margin: 0 auto 24px;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--gold-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 16px;
+  color: var(--text-dim);
   font-size: 13px;
   letter-spacing: 0.05em;
   cursor: pointer;
 }
 
-.account-logout-link:hover { color: var(--gold); text-decoration: underline; }
+.account-logout-link:hover { border-color: var(--gold-dim); color: var(--gold); }
 
 /* The 404/teleport-icon header on render_not_found (app/pages.py) --
    the 404 number sits plain (not a link) right under the heading, and
