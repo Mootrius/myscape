@@ -326,17 +326,52 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
    between its two segments, same single-row look as Mindmaps' own
    LVL/XP toggle. */
 .pm-segment-group {
-  display: flex; flex-wrap: wrap; gap: 1px;
+  display: flex; flex-wrap: nowrap; gap: 1px;
   background: var(--border); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden;
 }
 .pm-segment-btn {
-  flex: 1 1 0; min-width: 44px; background: #100e0b; border: none;
+  flex: 1 1 0; background: #100e0b; border: none;
   color: var(--text-dim); font-family: inherit; font-size: 10.5px; letter-spacing: 0.02em;
   padding: 7px 4px; cursor: pointer; text-align: center; text-transform: uppercase;
 }
 .pm-segment-btn:hover { color: var(--text); }
 .pm-segment-btn.active { background: var(--panel-2); color: var(--gold); }
+
+/* Quantity/GE/HA's 7-way operator picker -- all on one row instead
+   of letting the group wrap the way it used to.
+   The six comparison symbols are a fixed, equal size regardless of
+   how wide their own glyph happens to be -- ">"/"<" alone otherwise
+   look noticeably smaller/thinner next to ">="/"<=" purely because
+   they're a single character next to a two-character one, so those
+   two get their own larger font-size to read as the same visual
+   weight as the rest, not because they're a different kind of
+   control. BETWEEN -- the one segment that's an actual word, not a
+   symbol -- sizes to fit its own label instead of being squeezed to
+   match the fixed-width symbol segments beside it. */
+.pm-segment-group[data-role="op"] .pm-segment-btn {
+  flex: 0 0 36px; width: 36px; font-size: 16px; padding: 7px 2px;
+}
+.pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value=">"],
+.pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value="<"] {
+  font-size: 20px;
+}
+.pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value="between"] {
+  flex: 0 0 auto; width: auto; padding: 7px 14px; font-size: 10.5px;
+}
+
+/* No explicit width here -- .pm-filter-popover itself never sets one
+   either (only a 210px min-width floor), so this popover's own box
+   simply shrink-wraps to whatever its widest row actually needs (the
+   seven-segment operator row below), same as every other popover
+   already does. align-self: flex-start on that row is what makes
+   this work: without it, the popover's default align-items: stretch
+   would instead stretch the row to match the POPOVER's own resolved
+   width, leaving dead space past BETWEEN once that width settles on
+   something wider than the row's real content. */
+.pm-segment-group[data-role="op"] {
+  align-self: flex-start;
+}
 .pm-filter-input,
 .pm-filter-select {
   height: 28px; padding: 0 8px; box-sizing: border-box; width: 100%;
