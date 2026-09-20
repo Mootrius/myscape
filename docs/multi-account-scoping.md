@@ -197,3 +197,29 @@ new one. Still needs:
   updated yet -- the ORM models and every route still read/write the
   old `player_id` columns, so right now the live schema and the ORM's
   idea of the schema have diverged. That gets fixed in step 3.
+- [x] **Step 3 (`app/models.py`):** splits `Player` into `Account`
+  (email, password_hash, token_version, email_verified_at,
+  created_at) and `GameAccount` (account_hash, runescape_name,
+  skills, completed_quests, diary_tiers, storage_synced_at, plus the
+  24 character-scoped relationships), matching the schema the last
+  two migrations already created. The 24 character-scoped child
+  classes now FK to `game_accounts.id` via a `game_account_id`
+  column and a `game_account` relationship; the 2 identity-scoped
+  token classes now FK to `accounts.id` via `account_id`/`account`.
+  Verified three ways: `sqlalchemy.orm.configure_mappers()` against
+  the bare module (catches any back_populates mismatch immediately),
+  then a real end-to-end run against a freshly migrated Postgres --
+  created an `Account` with two linked `GameAccount`s (a main and an
+  alt, the actual multi-account shape this whole project is for),
+  added a `BankItem`/`GearSetup`/`PasswordResetToken` through the ORM
+  relationships, re-fetched everything from scratch by querying (not
+  reusing the same Python objects) to prove it round-trips through
+  the real committed schema, and confirmed the account-hard-delete
+  decision cascades correctly (deleting the `Account` removed both
+  `GameAccount`s and every one of their item rows).
+
+  Still not deployable on its own: every route in `app/main.py` and
+  the other application modules (`app/auth.py`, `app/possessions.py`,
+  `app/purchase_goals.py`, `app/loot.py`, `app/mindmaps.py`) still say
+  `Player`/`player_id` and haven't been updated to `GameAccount`/
+  `Account` yet -- that's steps 4 and 5.

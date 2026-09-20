@@ -66,14 +66,17 @@ def _as_aware_utc(value):
     return value
 
 
-class Player(Base):
-    __tablename__ = "players"
+class Account(Base):
+    """The website login -- email, password, and everything about
+    verifying who's signing in. Split out from what used to be one
+    combined Player row (see GameAccount just below, and
+    docs/multi-account-scoping.md for the full multi-account plan) so
+    that one login can own more than one linked OSRS character: an
+    Account has many GameAccounts, not the other way around."""
+
+    __tablename__ = "accounts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    # The player's OSRS display name, as reported by the RuneLite plugin
-    # once it's linked. Mutable (players rename), so it's informational,
-    # never the identity key -- that's account_hash below.
-    runescape_name = Column(String, nullable=True)
     email = Column(String, nullable=True, unique=True)
     # Nullable because it's meaningless for a row that only ever gets
     # created by admin tooling; every row created through the real
@@ -83,7 +86,7 @@ class Player(Base):
     # (see that endpoint in app/routers/auth.py). The session cookie
     # set at login carries a snapshot of this value (see log_in_player
     # in app/auth.py); a session whose snapshot no longer matches the
-    # player's current value is treated as stale and logged out. That's
+    # account's current value is treated as stale and logged out. That's
     # what actually invalidates every *other* already-logged-in session
     # the moment a password gets reset -- sessions are just signed
     # cookies here (no server-side session store to delete rows from),
@@ -101,14 +104,38 @@ class Player(Base):
     # existing account -- only accounts created from that point on
     # start out unverified.
     email_verified_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    game_accounts = relationship("GameAccount", back_populates="account", cascade="all, delete-orphan")
+    password_reset_tokens = relationship("PasswordResetToken", back_populates="account", cascade="all, delete-orphan")
+    email_verification_tokens = relationship("EmailVerificationToken", back_populates="account", cascade="all, delete-orphan")
+
+
+class GameAccount(Base):
+    """One linked OSRS character and everything the RuneLite plugin
+    actually reports for it -- skills, quests, bank, gear, and every
+    other item-source table below. This is what Player used to be
+    before the multi-account split (see Account just above, and
+    docs/multi-account-scoping.md) -- owned by exactly one Account, but
+    an Account can own more than one GameAccount, since a person can
+    link more than one OSRS character under a single myscape login."""
+
+    __tablename__ = "game_accounts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False)
+    # The player's OSRS display name, as reported by the RuneLite plugin
+    # once it's linked. Mutable (players rename), so it's informational,
+    # never the identity key -- that's account_hash below.
+    runescape_name = Column(String, nullable=True)
     # RuneLite's stable per-account identifier. Nullable until the first
     # successful link-code exchange, unique once set so one game account
-    # can't be linked to two myscape players.
+    # can't be linked to two myscape game accounts.
     account_hash = Column(String, nullable=True, unique=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
     # Three more player-state snapshots synced by the RuneLite plugin,
-    # alongside bank/inventory/equipment/etc. above -- what Mindmaps'
+    # alongside bank/inventory/equipment/etc. below -- what Mindmaps'
     # goal-node auto-completion (see evaluate_completion in
     # app/mindmaps.py) checks green/blue/purple nodes against. Unlike
     # those item tables, each of these is always exactly one current
@@ -158,32 +185,32 @@ class Player(Base):
     # independent of whatever that source currently holds.
     storage_synced_at = Column(JSONB, nullable=False, default=dict)
 
-    link_codes = relationship("LinkCode", back_populates="player", cascade="all, delete-orphan")
-    api_keys = relationship("PlayerApiKey", back_populates="player", cascade="all, delete-orphan")
-    password_reset_tokens = relationship("PasswordResetToken", back_populates="player", cascade="all, delete-orphan")
-    email_verification_tokens = relationship("EmailVerificationToken", back_populates="player", cascade="all, delete-orphan")
-    bank_items = relationship("BankItem", back_populates="player", cascade="all, delete-orphan")
-    inventory_items = relationship("InventoryItem", back_populates="player", cascade="all, delete-orphan")
-    equipment_items = relationship("EquipmentItem", back_populates="player", cascade="all, delete-orphan")
-    potion_storage_items = relationship("PotionStorageItem", back_populates="player", cascade="all, delete-orphan")
-    rune_pouch_items = relationship("RunePouchItem", back_populates="player", cascade="all, delete-orphan")
-    seed_vault_items = relationship("SeedVaultItem", back_populates="player", cascade="all, delete-orphan")
-    looting_bag_items = relationship("LootingBagItem", back_populates="player", cascade="all, delete-orphan")
-    tackle_box_items = relationship("TackleBoxItem", back_populates="player", cascade="all, delete-orphan")
-    poh_items = relationship("PohItem", back_populates="player", cascade="all, delete-orphan")
-    forestry_kit_items = relationship("ForestryKitItem", back_populates="player", cascade="all, delete-orphan")
-    master_scroll_book_items = relationship("MasterScrollBookItem", back_populates="player", cascade="all, delete-orphan")
-    seed_box_items = relationship("SeedBoxItem", back_populates="player", cascade="all, delete-orphan")
-    huntsmans_kit_items = relationship("HuntsmansKitItem", back_populates="player", cascade="all, delete-orphan")
-    boat_cargo_items = relationship("BoatCargoItem", back_populates="player", cascade="all, delete-orphan")
-    gear_setups = relationship("GearSetup", back_populates="player", cascade="all, delete-orphan")
-    loot_events = relationship("LootEvent", back_populates="player", cascade="all, delete-orphan")
-    mindmaps = relationship("MindMap", back_populates="player", cascade="all, delete-orphan")
-    possession_trackers = relationship("PossessionTracker", back_populates="player", cascade="all, delete-orphan")
-    pinned_possession_items = relationship("PinnedPossessionItem", back_populates="player", cascade="all, delete-orphan")
-    hidden_loot_entries = relationship("HiddenLootEntry", back_populates="player", cascade="all, delete-orphan")
-    hidden_possession_storages = relationship("HiddenPossessionStorage", back_populates="player", cascade="all, delete-orphan")
-    possession_views = relationship("PossessionView", back_populates="player", cascade="all, delete-orphan")
+    account = relationship("Account", back_populates="game_accounts")
+
+    link_codes = relationship("LinkCode", back_populates="game_account", cascade="all, delete-orphan")
+    api_keys = relationship("PlayerApiKey", back_populates="game_account", cascade="all, delete-orphan")
+    bank_items = relationship("BankItem", back_populates="game_account", cascade="all, delete-orphan")
+    inventory_items = relationship("InventoryItem", back_populates="game_account", cascade="all, delete-orphan")
+    equipment_items = relationship("EquipmentItem", back_populates="game_account", cascade="all, delete-orphan")
+    potion_storage_items = relationship("PotionStorageItem", back_populates="game_account", cascade="all, delete-orphan")
+    rune_pouch_items = relationship("RunePouchItem", back_populates="game_account", cascade="all, delete-orphan")
+    seed_vault_items = relationship("SeedVaultItem", back_populates="game_account", cascade="all, delete-orphan")
+    looting_bag_items = relationship("LootingBagItem", back_populates="game_account", cascade="all, delete-orphan")
+    tackle_box_items = relationship("TackleBoxItem", back_populates="game_account", cascade="all, delete-orphan")
+    poh_items = relationship("PohItem", back_populates="game_account", cascade="all, delete-orphan")
+    forestry_kit_items = relationship("ForestryKitItem", back_populates="game_account", cascade="all, delete-orphan")
+    master_scroll_book_items = relationship("MasterScrollBookItem", back_populates="game_account", cascade="all, delete-orphan")
+    seed_box_items = relationship("SeedBoxItem", back_populates="game_account", cascade="all, delete-orphan")
+    huntsmans_kit_items = relationship("HuntsmansKitItem", back_populates="game_account", cascade="all, delete-orphan")
+    boat_cargo_items = relationship("BoatCargoItem", back_populates="game_account", cascade="all, delete-orphan")
+    gear_setups = relationship("GearSetup", back_populates="game_account", cascade="all, delete-orphan")
+    loot_events = relationship("LootEvent", back_populates="game_account", cascade="all, delete-orphan")
+    mindmaps = relationship("MindMap", back_populates="game_account", cascade="all, delete-orphan")
+    possession_trackers = relationship("PossessionTracker", back_populates="game_account", cascade="all, delete-orphan")
+    pinned_possession_items = relationship("PinnedPossessionItem", back_populates="game_account", cascade="all, delete-orphan")
+    hidden_loot_entries = relationship("HiddenLootEntry", back_populates="game_account", cascade="all, delete-orphan")
+    hidden_possession_storages = relationship("HiddenPossessionStorage", back_populates="game_account", cascade="all, delete-orphan")
+    possession_views = relationship("PossessionView", back_populates="game_account", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -195,13 +222,13 @@ class LinkCode(Base):
     __tablename__ = "link_codes"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     code_hash = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
 
-    player = relationship("Player", back_populates="link_codes")
+    game_account = relationship("GameAccount", back_populates="link_codes")
 
     @property
     def is_valid(self) -> bool:
@@ -217,13 +244,13 @@ class PlayerApiKey(Base):
     __tablename__ = "player_api_keys"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     key_hash = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
 
-    player = relationship("Player", back_populates="api_keys")
+    game_account = relationship("GameAccount", back_populates="api_keys")
 
     @property
     def is_active(self) -> bool:
@@ -243,13 +270,13 @@ class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False)
     token_hash = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
 
-    player = relationship("Player", back_populates="password_reset_tokens")
+    account = relationship("Account", back_populates="password_reset_tokens")
 
     @property
     def is_valid(self) -> bool:
@@ -267,13 +294,13 @@ class EmailVerificationToken(Base):
     __tablename__ = "email_verification_tokens"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False)
     token_hash = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
 
-    player = relationship("Player", back_populates="email_verification_tokens")
+    account = relationship("Account", back_populates="email_verification_tokens")
 
     @property
     def is_valid(self) -> bool:
@@ -318,15 +345,15 @@ class BankItem(Base):
     __tablename__ = "bank_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="bank_items")
+    game_account = relationship("GameAccount", back_populates="bank_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_bank_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_bank_items_game_account_item"),)
 
 
 class InventoryItem(Base):
@@ -350,15 +377,15 @@ class InventoryItem(Base):
     __tablename__ = "inventory_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="inventory_items")
+    game_account = relationship("GameAccount", back_populates="inventory_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_inventory_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_inventory_items_game_account_item"),)
 
 
 class EquipmentItem(Base):
@@ -378,16 +405,16 @@ class EquipmentItem(Base):
     __tablename__ = "equipment_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     slot = Column(String, nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="equipment_items")
+    game_account = relationship("GameAccount", back_populates="equipment_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "slot", name="uq_equipment_items_player_slot"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "slot", name="uq_equipment_items_game_account_slot"),)
 
 
 class PotionStorageItem(Base):
@@ -421,15 +448,15 @@ class PotionStorageItem(Base):
     __tablename__ = "potion_storage_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="potion_storage_items")
+    game_account = relationship("GameAccount", back_populates="potion_storage_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_potion_storage_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_potion_storage_items_game_account_item"),)
 
 
 class RunePouchItem(Base):
@@ -470,15 +497,15 @@ class RunePouchItem(Base):
     __tablename__ = "rune_pouch_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="rune_pouch_items")
+    game_account = relationship("GameAccount", back_populates="rune_pouch_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_rune_pouch_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_rune_pouch_items_game_account_item"),)
 
 
 class SeedVaultItem(Base):
@@ -502,15 +529,15 @@ class SeedVaultItem(Base):
     __tablename__ = "seed_vault_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="seed_vault_items")
+    game_account = relationship("GameAccount", back_populates="seed_vault_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_seed_vault_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_seed_vault_items_game_account_item"),)
 
 
 class LootingBagItem(Base):
@@ -533,15 +560,15 @@ class LootingBagItem(Base):
     __tablename__ = "looting_bag_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="looting_bag_items")
+    game_account = relationship("GameAccount", back_populates="looting_bag_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_looting_bag_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_looting_bag_items_game_account_item"),)
 
 
 class TackleBoxItem(Base):
@@ -563,15 +590,15 @@ class TackleBoxItem(Base):
     __tablename__ = "tackle_box_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="tackle_box_items")
+    game_account = relationship("GameAccount", back_populates="tackle_box_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_tackle_box_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_tackle_box_items_game_account_item"),)
 
 
 class PohItem(Base):
@@ -608,15 +635,15 @@ class PohItem(Base):
     __tablename__ = "poh_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="poh_items")
+    game_account = relationship("GameAccount", back_populates="poh_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_poh_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_poh_items_game_account_item"),)
 
 
 class ForestryKitItem(Base):
@@ -640,15 +667,15 @@ class ForestryKitItem(Base):
     __tablename__ = "forestry_kit_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="forestry_kit_items")
+    game_account = relationship("GameAccount", back_populates="forestry_kit_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_forestry_kit_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_forestry_kit_items_game_account_item"),)
 
 
 class MasterScrollBookItem(Base):
@@ -679,15 +706,15 @@ class MasterScrollBookItem(Base):
     __tablename__ = "master_scroll_book_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="master_scroll_book_items")
+    game_account = relationship("GameAccount", back_populates="master_scroll_book_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_master_scroll_book_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_master_scroll_book_items_game_account_item"),)
 
 
 class SeedBoxItem(Base):
@@ -712,15 +739,15 @@ class SeedBoxItem(Base):
     __tablename__ = "seed_box_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="seed_box_items")
+    game_account = relationship("GameAccount", back_populates="seed_box_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_seed_box_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_seed_box_items_game_account_item"),)
 
 
 class HuntsmansKitItem(Base):
@@ -745,15 +772,15 @@ class HuntsmansKitItem(Base):
     __tablename__ = "huntsmans_kit_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="huntsmans_kit_items")
+    game_account = relationship("GameAccount", back_populates="huntsmans_kit_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "item_id", name="uq_huntsmans_kit_items_player_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "item_id", name="uq_huntsmans_kit_items_game_account_item"),)
 
 
 class BoatCargoItem(Base):
@@ -769,13 +796,13 @@ class BoatCargoItem(Base):
     cargo genuinely is its own separate contents per boat, so merging
     every slot into one storage the way PoH does would silently lose
     (or cross-contaminate) whichever boats weren't the one just synced.
-    Deleting and replacing only rows matching (player_id, slot) on each
+    Deleting and replacing only rows matching (game_account_id, slot) on each
     sync -- never every row for the player -- is what keeps a sync of
     the boat the player happens to be standing near from wiping out
     what's already known about their other boats.
 
     Rolled up into a single "boat_cargo" entry in
-    Player.storage_synced_at and Storages Viewer's own location
+    GameAccount.storage_synced_at and Storages Viewer's own location
     groups/breakdowns regardless of slot (see POSSESSION_STORAGE_KEYS
     in app/schemas.py and STORAGE_SOURCES in app/possessions.py) --
     those only ever needed one row per physical *kind* of storage, the
@@ -799,16 +826,16 @@ class BoatCargoItem(Base):
     __tablename__ = "boat_cargo_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     slot = Column(Integer, nullable=False)
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="boat_cargo_items")
+    game_account = relationship("GameAccount", back_populates="boat_cargo_items")
 
-    __table_args__ = (UniqueConstraint("player_id", "slot", "item_id", name="uq_boat_cargo_items_player_slot_item"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "slot", "item_id", name="uq_boat_cargo_items_game_account_slot_item"),)
 
 
 class GearSetup(Base):
@@ -855,7 +882,7 @@ class GearSetup(Base):
     __tablename__ = "gear_setups"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     name = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     icon = Column(JSONB, nullable=True)
@@ -893,7 +920,7 @@ class GearSetup(Base):
     # single-row inserts.
     sort_order = Column(Float, nullable=True)
 
-    player = relationship("Player", back_populates="gear_setups")
+    game_account = relationship("GameAccount", back_populates="gear_setups")
 
 
 class MindMap(Base):
@@ -925,12 +952,12 @@ class MindMap(Base):
     __tablename__ = "mindmaps"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
     name = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     nodes = Column(JSONB, nullable=False, default=list)
 
-    player = relationship("Player", back_populates="mindmaps")
+    game_account = relationship("GameAccount", back_populates="mindmaps")
 
 
 class LootEvent(Base):
@@ -949,7 +976,7 @@ class LootEvent(Base):
     a delete-and-replace is naturally idempotent; retrying an insert
     isn't) -- event_id exists specifically to make it idempotent anyway:
     the plugin generates a random id once, the moment the drop happens,
-    and a sync that already has a matching (player_id, event_id) row is
+    and a sync that already has a matching (game_account_id, event_id) row is
     just skipped rather than double-counted, so a retried or
     double-submitted sync can never inflate a player's totals.
 
@@ -972,7 +999,7 @@ class LootEvent(Base):
     __tablename__ = "loot_events"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False, index=True)
     event_id = Column(String, nullable=False)
     source_name = Column(String, nullable=False)
     source_type = Column(String, nullable=False)
@@ -981,9 +1008,9 @@ class LootEvent(Base):
     occurred_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="loot_events")
+    game_account = relationship("GameAccount", back_populates="loot_events")
 
-    __table_args__ = (UniqueConstraint("player_id", "event_id", name="uq_loot_events_player_event"),)
+    __table_args__ = (UniqueConstraint("game_account_id", "event_id", name="uq_loot_events_game_account_event"),)
 
 
 class PossessionTracker(Base):
@@ -1026,7 +1053,7 @@ class PossessionTracker(Base):
     __tablename__ = "possession_trackers"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False, index=True)
     kind = Column(String, nullable=False)  # "min" or "max"
     item_id = Column(Integer, nullable=False)
     item_name = Column(String, nullable=True)
@@ -1034,10 +1061,10 @@ class PossessionTracker(Base):
     sort_order = Column(Float, nullable=False, default=0.0)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="possession_trackers")
+    game_account = relationship("GameAccount", back_populates="possession_trackers")
 
     __table_args__ = (
-        UniqueConstraint("player_id", "kind", "item_id", name="uq_possession_trackers_player_kind_item"),
+        UniqueConstraint("game_account_id", "kind", "item_id", name="uq_possession_trackers_game_account_kind_item"),
     )
 
 
@@ -1068,14 +1095,14 @@ class PinnedPossessionItem(Base):
     __tablename__ = "pinned_possession_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False, index=True)
     item_id = Column(Integer, nullable=False)
     pinned_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="pinned_possession_items")
+    game_account = relationship("GameAccount", back_populates="pinned_possession_items")
 
     __table_args__ = (
-        UniqueConstraint("player_id", "item_id", name="uq_pinned_possession_items_player_item"),
+        UniqueConstraint("game_account_id", "item_id", name="uq_pinned_possession_items_game_account_item"),
     )
 
 
@@ -1108,15 +1135,15 @@ class HiddenLootEntry(Base):
     __tablename__ = "hidden_loot_entries"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False, index=True)
     kind = Column(String, nullable=False)
     key = Column(String, nullable=False)
     hidden_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="hidden_loot_entries")
+    game_account = relationship("GameAccount", back_populates="hidden_loot_entries")
 
     __table_args__ = (
-        UniqueConstraint("player_id", "kind", "key", name="uq_hidden_loot_entries_player_kind_key"),
+        UniqueConstraint("game_account_id", "kind", "key", name="uq_hidden_loot_entries_game_account_kind_key"),
     )
 
 
@@ -1136,7 +1163,7 @@ class HiddenPossessionStorage(Base):
 
     storage_key is one of POSSESSION_STORAGE_KEYS (app/schemas.py) --
     the same raw per-source key spelling as STORAGE_SOURCES in
-    app/possessions.py, BankItem and friends' own player_id-scoped
+    app/possessions.py, BankItem and friends' own game_account_id-scoped
     tables, and the plugin panel's own Status section list -- never
     one of render_possessions' five grouped filter-button labels
     (BANK, CHARACTER, ...), which stay a purely client-side grouping
@@ -1145,14 +1172,14 @@ class HiddenPossessionStorage(Base):
     __tablename__ = "hidden_possession_storages"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False, index=True)
     storage_key = Column(String, nullable=False)
     hidden_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="hidden_possession_storages")
+    game_account = relationship("GameAccount", back_populates="hidden_possession_storages")
 
     __table_args__ = (
-        UniqueConstraint("player_id", "storage_key", name="uq_hidden_possession_storages_player_key"),
+        UniqueConstraint("game_account_id", "storage_key", name="uq_hidden_possession_storages_game_account_key"),
     )
 
 
@@ -1183,10 +1210,10 @@ class PossessionView(Base):
     __tablename__ = "possession_views"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     config = Column(JSONB, nullable=False, default=dict)
     sort_order = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
 
-    player = relationship("Player", back_populates="possession_views")
+    game_account = relationship("GameAccount", back_populates="possession_views")
