@@ -724,6 +724,12 @@ def render_account(player: PlayerView) -> str:
         <button class="account-logout-link" id="logoutBtn" type="button">LOG OUT</button>
 
         <div class="account-section">
+          <div class="auth-error" id="gameAccountsError"></div>
+          <div class="game-accounts-list" id="gameAccountsList"></div>
+          <button class="secondary" id="addGameAccountBtn" type="button">+ ADD ANOTHER ACCOUNT</button>
+        </div>
+
+        <div class="account-section">
           <div class="auth-error" id="emailError"></div>
           <div class="auth-success" id="emailSuccess"></div>
           <form id="emailForm">
@@ -759,15 +765,8 @@ def render_account(player: PlayerView) -> str:
           </form>
         </div>
 
-        <div class="account-section">
-          <p class="account-section-title">LINKED ACCOUNTS</p>
-          <p class="account-section-hint">Every OSRS character linked to this myscape login. Switch which one you're viewing or add another -- there's no limit. Removing one permanently deletes all of its data; unlinking it from the plugin (on the dashboard) does not.</p>
-          <div class="auth-error" id="gameAccountsError"></div>
-          <div class="game-accounts-list" id="gameAccountsList"></div>
-          <button class="secondary" id="addGameAccountBtn" type="button">+ ADD ANOTHER ACCOUNT</button>
-        </div>
-
         <div class="account-section account-section--danger">
+          <p class="account-section-title account-section-title--danger">ACCOUNT DELETION</p>
           <p class="account-section-hint">This will PERMANENTLY delete your myscape account and data attached to it. You can create a new account afterward, but you CANNOT undo this action.</p>
           <div class="auth-error" id="deleteError"></div>
           <form id="deleteForm">
@@ -979,7 +978,7 @@ def render_account(player: PlayerView) -> str:
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'danger';
-        removeBtn.textContent = 'REMOVE';
+        removeBtn.textContent = 'DELETE CHARACTER';
         removeBtn.dataset.armed = 'false';
         // Same arm-then-confirm two-step as DELETE ACCOUNT above, for
         // the same reason -- this is also a permanent, undoable-only-
@@ -1003,12 +1002,12 @@ def render_account(player: PlayerView) -> str:
             gameAccountsError.textContent = describeError(data, 'Could not remove this account.');
             gameAccountsError.classList.add('show');
             removeBtn.dataset.armed = 'false';
-            removeBtn.textContent = 'REMOVE';
+            removeBtn.textContent = 'DELETE CHARACTER';
           } catch (err) {
             gameAccountsError.textContent = 'Something went wrong. Please try again.';
             gameAccountsError.classList.add('show');
             removeBtn.dataset.armed = 'false';
-            removeBtn.textContent = 'REMOVE';
+            removeBtn.textContent = 'DELETE CHARACTER';
           } finally {
             removeBtn.disabled = false;
           }

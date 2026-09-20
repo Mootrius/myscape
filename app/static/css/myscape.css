@@ -573,6 +573,17 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   letter-spacing: 0.05em;
 }
 
+/* Danger-zone variant of the title above -- centered and in --red,
+   for ACCOUNT DELETION right above the "This will PERMANENTLY..."
+   warning in render_account (app/pages.py). Combined with
+   .account-section-title, not a replacement for it, so it keeps that
+   class's size/weight/letter-spacing and only overrides alignment
+   and color. */
+.account-section-title--danger {
+  text-align: center;
+  color: var(--red);
+}
+
 /* Linked Accounts list (render_account, app/pages.py -- step 7 of
    docs/multi-account-scoping.md). One .game-account-row per GameAccount
    under the signed-in Account. */
