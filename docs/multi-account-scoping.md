@@ -223,3 +223,42 @@ new one. Still needs:
   `app/purchase_goals.py`, `app/loot.py`, `app/mindmaps.py`) still say
   `Player`/`player_id` and haven't been updated to `GameAccount`/
   `Account` yet -- that's steps 4 and 5.
+
+## Scope correction after starting step 4
+
+The original code-surface count (~120 touchpoints, `app/main.py` +
+four business-logic modules) undercounted -- it missed
+`app/routers/auth.py` (signup/login/logout/forgot-password/
+reset-password/change-email/change-password/delete-account/
+verify-email, 52 references), `app/routers/linking.py` (the
+LinkCode/PlayerApiKey exchange itself, 15 references), and
+`app/pages.py` (HTML rendering for every one of those pages plus the
+dashboard, 23 references) entirely, and undercounted `app/main.py`
+itself (189, not 78 -- the original grep pattern missed type
+annotations and the `get_current_player_from_session`-family
+dependency names). Real total across all 10 files: ~374.
+
+This matters because the two biggest of those missed files are the
+signup/login/password-reset/email-verification flow itself --
+getting this wrong risks locking real users out, not just a broken
+feature page.
+
+### A real design wrinkle found while starting app/auth.py
+
+Today, a brand new signup creates one `Player` row immediately, with
+`account_hash = NULL` until the RuneLite link flow fills it in --
+"signed up but not yet linked" is just a `Player` row with empty/null
+game fields, not a missing row. After the split, that state has
+nothing to attach to: a fresh `Account` has *zero* `GameAccount` rows
+until linking creates one, so any session dependency that resolves
+"the active GameAccount" has a real gap for that (common, expected)
+state that didn't exist before.
+
+The fix: signup creates an empty, unlinked `GameAccount` alongside
+the new `Account`, exactly mirroring today's `account_hash = NULL`
+initial state -- the first link-code exchange fills in that same row
+(as it always has), and only a second linked account (the actual
+multi-account feature, step 7) creates a *new* `GameAccount` row.
+This preserves every existing signup/dashboard/link-flow behavior
+with no new error states, and is the natural substrate multi-account
+needs later anyway.
