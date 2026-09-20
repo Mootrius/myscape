@@ -492,6 +492,36 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   text-align: center;
 }
 
+/* The teleport-icon/404 header on render_not_found (app/pages.py) --
+   a clickable home-teleport icon standing in for the usual text
+   "back to home" link, with the 404 number stacked underneath it in
+   the same gold used for primary actions elsewhere on the site. */
+.not-found-teleport {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  margin-bottom: 20px;
+}
+
+.not-found-icon {
+  width: 80px;
+  height: 80px;
+  transition: transform 0.15s;
+}
+
+.not-found-teleport:hover .not-found-icon { transform: scale(1.08); }
+
+.not-found-code {
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+  margin-top: 10px;
+}
+
+.not-found-teleport:hover .not-found-code { color: #ffab42; }
+
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

@@ -1041,8 +1041,11 @@ def render_not_found() -> str:
     <div class="auth-shell">
       <div class="auth-card">
         <h2>PAGE NOT FOUND</h2>
-        <p class="verify-email-message">The page you're looking for doesn't exist or may have moved.</p>
-        <div class="auth-switch"><a href="/">BACK TO HOME</a></div>
+        <a href="/" class="not-found-teleport" title="Cast Home Teleport">
+          <img class="not-found-icon" src="https://oldschool.runescape.wiki/images/Lumbridge_Home_Teleport_icon_%28mobile%29.png?5d949" alt="Home Teleport icon" />
+          <div class="not-found-code">404</div>
+        </a>
+        <p class="verify-email-message">Seems like you're lost. Cast your home teleport spell by clicking above to return somewhere more familiar.</p>
       </div>
     </div>
     """
