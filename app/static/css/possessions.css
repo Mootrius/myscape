@@ -443,12 +443,26 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 /* Same base look as the filter popover's own "Clear" button above
    (they share .pm-filter-clear-btn), but this one -- the Save View
    popover's "Cancel" -- isn't a destructive/reset action, just closes
-   the popover, so it gets the site's standard gold-outline hover
-   (same pair as .landing-cta-btn--secondary:hover/.account-logout
-   -link:hover) instead of Clear's red. Two-class selector for
-   same-or-higher specificity over .pm-filter-clear-btn:hover so this
-   doesn't depend on staying declared after it in source order. */
-.pm-filter-clear-btn.pm-view-cancel-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+   the popover, so it gets a gold border-only hover instead of Clear's
+   red. Text stays at .pm-filter-clear-btn's own resting color rather
+   than following the border to gold too (unlike the similar-looking
+   .landing-cta-btn--secondary:hover/.account-logout-link:hover pair
+   elsewhere, which color both) -- just the outline lighting up reads
+   as "this is hoverable" without also suggesting Cancel is now the
+   emphasized action, which coloring the text gold would. Two-class
+   selector for same-or-higher specificity over
+   .pm-filter-clear-btn:hover so this doesn't depend on staying
+   declared after it in source order -- and `color` has to be
+   reasserted here (not just left off) to the same value
+   .pm-filter-clear-btn's own resting rule already uses, or the
+   *other* .pm-filter-clear-btn:hover rule's `color: var(--red)`
+   still wins the cascade for that one property (same specificity
+   issue as button.danger vs .mm-menu-item.danger elsewhere on the
+   site -- omitting a property here doesn't mean "inherit the resting
+   value," it means "let the next-highest-specificity hover rule that
+   still declares it win," which for this shared base class is
+   Clear's red). */
+.pm-filter-clear-btn.pm-view-cancel-btn:hover { border-color: var(--gold-dim); color: var(--text-dim); }
 
 /* ---- Saved views strip (drag-and-drop reorderable, sits directly
    above the table headers -- see PossessionView in app/models.py and
