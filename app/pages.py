@@ -171,7 +171,7 @@ def _link_banner(player: Optional[PlayerView]) -> str:
     """
 
 
-def _footer(player: Optional[PlayerView]) -> str:
+def _footer(player: Optional[PlayerView], extra: str = "") -> str:
     """A site-wide footer, the visual mirror of the header (see the
     `header` rule in myscape.css and its comment) -- same full-width
     darkening gradient technique, but stronger and fading upward
@@ -195,7 +195,13 @@ def _footer(player: Optional[PlayerView]) -> str:
     trademark instead, with nothing in between. See _shell()'s
     shared_script for the Unlink button's click handler and its own
     unlink-poller (the mirror of _link_banner()'s poller below, for
-    the opposite direction)."""
+    the opposite direction).
+
+    `extra` is page-specific content to render ahead of all of that,
+    still inside .footer-inner -- currently only render_landing()'s
+    "ARE YOU READY?" call-to-action, threaded through from _shell()'s
+    own footer_extra param. Empty for every other page, so this footer
+    looks exactly as it always has anywhere but the landing page."""
     linked_line = ""
     if player and player.account_hash:
         linked_line = f"""
@@ -207,6 +213,7 @@ def _footer(player: Optional[PlayerView]) -> str:
     return f"""
     <footer>
       <div class="footer-inner wrap">
+        {extra}
         <div class="footer-social">
           <a class="footer-social-link footer-social-github" href="https://github.com/Mootrius" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub"></a>
           <a class="footer-social-link footer-social-discord" href="https://discord.gg/myscape" target="_blank" rel="noopener" title="Discord" aria-label="Discord"></a>
@@ -223,7 +230,7 @@ def _footer(player: Optional[PlayerView]) -> str:
     """
 
 
-def _shell(*, title: str, player: Optional[PlayerView], body: str, extra_script: str = "", extra_head: str = "", body_class: str = "") -> str:
+def _shell(*, title: str, player: Optional[PlayerView], body: str, extra_script: str = "", extra_head: str = "", body_class: str = "", footer_extra: str = "") -> str:
     nav_left, nav_right = _nav_sides(player)
     shared_script = """
     // See myscape.css's own `user-select: none` for the text-selection
@@ -406,7 +413,7 @@ def _shell(*, title: str, player: Optional[PlayerView], body: str, extra_script:
       {body}
     </div>
   </div>
-  {_footer(player)}
+  {_footer(player, extra=footer_extra)}
   <script>
     {shared_script}
     {extra_script}
@@ -421,6 +428,34 @@ def render_landing(player: Optional[PlayerView]) -> str:
     # note (both from _shell/player below) already handle either case
     # correctly on their own, so this needs nothing extra here to
     # support it.
+    # The footer's own "ARE YOU READY?" call to action (see _footer()'s
+    # extra param and _shell()'s footer_extra) -- deliberately rendered
+    # *inside* <footer> rather than as one more .landing-anchor, so it
+    # shares that single scroll-snap stop with the footer below it
+    # instead of being a fourth full-screen panel of its own (see
+    # body.landing footer's min-height in myscape.css, which is what
+    # actually gives this stop enough room that the purchase-planner
+    # panel above it is fully scrolled out of view once you land here,
+    # the same way every .landing-anchor already clears the one before
+    # it). One button logged in (straight to the dashboard), two side
+    # by side logged out -- the same Log in/Sign up split as the
+    # header nav above, just as real buttons instead of plain text
+    # links, since this is the page's actual closing pitch.
+    if player:
+        cta_actions = '<a class="landing-cta-btn landing-cta-btn--primary" href="/dashboard">DASHBOARD</a>'
+    else:
+        cta_actions = (
+            '<a class="landing-cta-btn landing-cta-btn--secondary" href="/login">LOG IN</a>'
+            '<a class="landing-cta-btn landing-cta-btn--primary" href="/signup">SIGN UP</a>'
+        )
+    landing_cta = f"""
+        <div class="landing-cta">
+          <p class="landing-cta-heading">ARE YOU READY?</p>
+          <div class="landing-cta-actions">
+            {cta_actions}
+          </div>
+        </div>
+    """
     # Three "anchor" panels -- pre-composited marketing art (logo/
     # tagline, then one per showcased feature), not live markup, since
     # each one is a fixed graphic that already has its own baked-in
@@ -592,7 +627,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
     # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
     # every other page keeps its ordinary, un-snapped scrolling.
-    return _shell(title="myscape", player=player, body=body, extra_script=script, body_class="landing")
+    return _shell(title="myscape", player=player, body=body, extra_script=script, body_class="landing", footer_extra=landing_cta)
 
 
 # Icons for the dashboard cards below -- each a real OSRS item that's a

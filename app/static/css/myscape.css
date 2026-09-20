@@ -1080,3 +1080,86 @@ footer {
 .landing-anchor--intro img {
   width: min(450px, 55vw);
 }
+
+/* The landing page's closing "ARE YOU READY?" pitch (see
+   render_landing()'s landing_cta/_footer()'s extra param in
+   app/pages.py) -- rendered inside <footer> itself rather than as
+   another .landing-anchor, so it shares footer's existing scroll-snap
+   stop (see body.landing footer, up near .landing-anchor's own scroll
+   -snap rules) instead of adding a fourth full-screen panel. Giving
+   that stop the same min-height every .landing-anchor already gets is
+   what actually keeps the purchase-planner panel above it fully
+   scrolled out of view once you land here -- without it, footer would
+   just be its own small natural height and the panel above would
+   still show through the top of the viewport. Centering footer-inner
+   inside that full-height footer (rather than pinning the CTA to the
+   top and the social/trademark row to the bottom) keeps this simple
+   and reads fine -- the CTA, then a clear gap, then the same compact
+   social/trademark block every other page's footer ends in. Scoped to
+   body.landing only, same as every other landing-only rule here --
+   everywhere else footer keeps its ordinary compact height. */
+body.landing footer {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  /* column, not the flex default row -- footer-inner is this
+     footer's only child, and row's default align-items: stretch only
+     applies on the CROSS axis (vertical in row mode); the child would
+     stay shrink-to-fit and left-anchored on the main axis instead of
+     spanning full width, breaking .footer-inner's own text-align:
+     center. column flips that: align-items' default (stretch) now
+     applies on the horizontal cross axis, so footer-inner fills the
+     full width for free, and justify-content centers it vertically
+     on what's now the main (vertical) axis. */
+  flex-direction: column;
+  justify-content: center;
+}
+
+.landing-cta {
+  margin-bottom: 40px;
+}
+
+.landing-cta-heading {
+  margin: 0 0 28px;
+  color: var(--gold);
+  font-size: 40px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.landing-cta-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Same shape/weight as button.primary/button.secondary elsewhere on
+   the site, just as an <a> (these are plain navigation, not form
+   submits) and sized to its own label instead of button.primary's
+   width: 100% -- two of these need to sit side by side, not stack
+   full-width the way a form's fields do. */
+.landing-cta-btn {
+  display: inline-block;
+  padding: 13px 32px;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.landing-cta-btn--primary {
+  background: var(--gold);
+  color: #221c10;
+  border: 1px solid var(--gold);
+}
+.landing-cta-btn--primary:hover { background: #ffab42; border-color: #ffab42; text-decoration: none; }
+
+.landing-cta-btn--secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.landing-cta-btn--secondary:hover { border-color: var(--gold-dim); color: var(--gold); text-decoration: none; }
