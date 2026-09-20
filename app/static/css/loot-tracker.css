@@ -143,7 +143,7 @@
    the column's bottom edge via position:absolute rather than the old
    single-bar flex layout, so the fill can sit at a different height
    than the outline around it. */
-.loot-bar-col { flex: 1 1 0; height: 100%; position: relative; cursor: pointer; }
+.loot-bar-col { flex: 1 1 0; height: 100%; position: relative; }
 .loot-bar-outline {
   position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box;
   border: 1px solid transparent;
@@ -155,25 +155,36 @@
   transition: height 0.5s ease, background-color 0.5s ease, opacity 0.12s ease;
 }
 .loot-bar-fill.has-value { background: var(--gold); }
+/* cursor/click hit area lives on the outline+fill themselves, not the
+   whole .loot-bar-col (see that column's own comment above) -- so the
+   pointer only looks (and acts) clickable over the actual rendered
+   bar, never the empty column space above a short one. A zero-height
+   bar has no pixels here to hover in the first place, so there's
+   nothing further to do for that case. */
+.loot-bar-outline, .loot-bar-fill { cursor: pointer; }
 /* Hovering a bar (title="..." above is its native tooltip) fades the
    fill down a bit as nice, cheap visual confirmation of which one the
    pointer is actually over -- keyed off .loot-bar-col:hover rather
-   than .loot-bar-fill:hover itself so the whole column's hit area
-   (including the part of the column above a short bar) triggers it,
-   not just the fill's own pixels. Clicking one re-scopes the NPC/item
+   than .loot-bar-fill:hover itself so the fill still fades from
+   hovering anywhere in the outline's own taller box, not just the
+   (possibly shorter) filled-in part of it. :not(.selected) so this
+   can't fight the selected bar's own persistent dim just below over
+   which one the cascade actually applies -- both match at equal
+   specificity otherwise, which is exactly the kind of ordering trap
+   this file's own .pm-filter-clear-btn/.pm-view-cancel-btn fix (see
+   possessions.css) ran into. Clicking a bar re-scopes the NPC/item
    panels and the chart's own title/header to just that bucket's own
    window -- see the loot-bar-col click handler in render_loot_tracker's
-   script (app/pages.py) and .loot-bar-col.selected just below for the
-   persistent version of this same highlight. */
-.loot-bar-col:hover .loot-bar-fill { opacity: 0.7; }
-/* The persistent marker for whichever bar is currently selected --
-   same "solo selection gets the strong gold treatment" convention as
-   .loot-npc-box.active, just applied to a bar instead of a box: a
-   solid (rather than dim) outline border, and the fill locked to full
-   opacity so hovering a *different* bar can't make the selected one
-   look temporarily deselected. */
-.loot-bar-col.selected .loot-bar-outline { border-color: var(--gold); }
-.loot-bar-col.selected .loot-bar-fill { opacity: 1; }
+   script (app/pages.py). */
+.loot-bar-col:hover:not(.selected) .loot-bar-fill { opacity: 0.7; }
+/* The persistent marker for whichever bar's contents are currently
+   being shown below -- dims the fill rather than brightening it, so
+   attention stays on the NPC/item panels doing the actual showing
+   rather than pulling it back up to the bar itself. Distinct from
+   (and dimmer than) the plain hover fade above -- see that rule's own
+   :not(.selected) guard -- so a selected bar reads the same whether
+   or not the pointer happens to still be over it. */
+.loot-bar-col.selected .loot-bar-fill { opacity: 0.4; }
 .loot-bar-x-labels { display: flex; gap: 3px; padding-left: 10px; margin-top: 6px; }
 /* min-width: 0 overrides the flex item default of min-width: auto,
    which otherwise refuses to shrink a label below its own text's

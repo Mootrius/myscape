@@ -3463,39 +3463,40 @@ def render_loot_tracker(player: PlayerView) -> str:
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       }
 
-      // A clicked bar's own precise time/date range, for the chart
-      // title once state.selectedBucket is set (see renderBarChart) --
-      // deliberately NOT keyed off granularity the way fmtBucketLabel's
-      // x-axis ticks are, since bucket boundaries are never calendar-
-      // aligned in the first place (see _bucket_plan in app/loot.py:
-      // bucket width is the selected range's own span divided evenly
-      // by however many buckets it gets, not real hours/days/weeks/
-      // months), so even an "hourly" bucket can start at, say, 3:14 PM
-      // rather than the top of the hour -- this always shows the
-      // bucket's own actual start/end instead of rounding to whatever
-      // granularity produced it. The end shown is 1 second before the
-      // bucket's real (exclusive) end boundary -- see bucketUrl's own
-      // comment for why the fetch itself does the same -- so a bucket
-      // spanning 3:00:00-3:59:59 reads as "3:00 - 3:59 PM" rather than
-      // the confusingly-exact-looking "3:00 - 4:00 PM", which would
-      // look like a full extra minute shared with the next bar. Only
-      // shows the end's own date when it differs from the start's --
-      // the overwhelmingly common case (any bucket under a day wide)
-      // is same-day, and repeating an identical date on both sides
-      // would just be noise.
+      // Zero-padded 'YYYY-MM-DD' for a plain JS Date, in local time --
+      // same convention isValidIsoDate/the range menu's own inputs
+      // use, just built by hand rather than parsed, since
+      // toLocaleDateString has no built-in ISO-basic output format.
+      function fmtIsoDateLocal(d) {
+        var month = String(d.getMonth() + 1);
+        if (month.length < 2) month = '0' + month;
+        var day = String(d.getDate());
+        if (day.length < 2) day = '0' + day;
+        return d.getFullYear() + '-' + month + '-' + day;
+      }
+
+      // A clicked bar's own date range, for the chart title once
+      // state.selectedBucket is set (see renderBarChart) -- just the
+      // calendar day(s) the bucket falls on, not its own precise
+      // time-of-day (the panels below it are still scoped to the
+      // bucket's exact instant either way -- see bucketUrl -- this is
+      // purely what the title displays). A single date when the
+      // bucket's start and (see below) end share the same day, which
+      // covers every bucket under a day wide -- by far the common
+      // case, and every daily/weekly/monthly bucket too once dates
+      // this coarse are compared day-to-day rather than to the
+      // minute. The end shown is 1 second before the bucket's real
+      // (exclusive) end boundary -- see bucketUrl's own comment for
+      // why the fetch itself does the same -- so a bucket ending
+      // exactly at midnight reads as covering the day before it, not
+      // the next one it barely touches.
       function fmtBucketRangeLabel(startIso, endIso) {
         var start = new Date(startIso);
         var end = new Date(new Date(endIso).getTime() - 1000);
-        var dateOpts = { month: 'short', day: 'numeric', year: 'numeric' };
-        var timeOpts = { hour: 'numeric', minute: '2-digit' };
-        var startDateStr = start.toLocaleDateString('en-US', dateOpts);
-        var startTimeStr = start.toLocaleTimeString('en-US', timeOpts);
-        var endTimeStr = end.toLocaleTimeString('en-US', timeOpts);
-        if (start.toDateString() === end.toDateString()) {
-          return startDateStr + ', ' + startTimeStr + ' \\u2013 ' + endTimeStr;
-        }
-        var endDateStr = end.toLocaleDateString('en-US', dateOpts);
-        return startDateStr + ', ' + startTimeStr + ' \\u2013 ' + endDateStr + ', ' + endTimeStr;
+        var startDateStr = fmtIsoDateLocal(start);
+        var endDateStr = fmtIsoDateLocal(end);
+        if (startDateStr === endDateStr) return startDateStr;
+        return startDateStr + ' \\u2013 ' + endDateStr;
       }
 
       function rangeButtonLabel() {
@@ -4135,7 +4136,20 @@ def render_loot_tracker(player: PlayerView) -> str:
       });
 
       document.getElementById('lootBarBars').addEventListener('click', function (e) {
-        var col = e.target.closest('.loot-bar-col');
+        // Matched against the outline/fill themselves, not the whole
+        // .loot-bar-col (which spans the full plot height so the
+        // column lines up under its own x-axis label) -- both anchor
+        // to the column's bottom edge and size to the bucket's own
+        // value (see renderBarChart), so this only actually hits the
+        // rendered bar shape itself, never the empty air above a
+        // short bar. A zero-value bucket's outline/fill both render
+        // at 0% height, so there's nothing there to hit at all --
+        // clicking one of those is the same as clicking any other
+        // empty part of the column, i.e. it does nothing here (see
+        // the outside-click handler below for what clears a selection
+        // instead).
+        var bar = e.target.closest('.loot-bar-outline, .loot-bar-fill');
+        var col = bar && bar.closest('.loot-bar-col');
         if (!col || !lastData) return;
         var idx = parseInt(col.getAttribute('data-bucket-index'), 10);
         var b = (lastData.buckets || [])[idx];
@@ -4162,6 +4176,22 @@ def render_loot_tracker(player: PlayerView) -> str:
           bucketData = null;
           loadBucketData();
         }
+        rerenderChart(lastData);
+        renderNpcRow(currentNpcs());
+        renderItemList(currentItems());
+      });
+      // Clicking anywhere that isn't an actual bar -- the empty part
+      // of a bar's own column, a different panel, blank page space,
+      // all of it -- clears a bucket selection the same way it
+      // already gets cleared by picking an NPC or a new range. Skips
+      // a click that landed on a bar itself (own handler just above
+      // already owns that case, including the toggle-off click on the
+      // already-selected bar) so the two listeners never fight over
+      // the same click as it bubbles from the bar up to document.
+      document.addEventListener('click', function (e) {
+        if (!state.selectedBucket) return;
+        if (e.target.closest('.loot-bar-outline, .loot-bar-fill')) return;
+        clearSelectedBucket();
         rerenderChart(lastData);
         renderNpcRow(currentNpcs());
         renderItemList(currentItems());
