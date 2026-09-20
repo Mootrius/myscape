@@ -36,7 +36,7 @@ from app.auth import (
     get_current_verified_player_from_session,
     get_optional_current_player_from_session,
 )
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
 from app.limiter import limiter
 from app.loot import build_loot_state, kc_counts_by_player, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
@@ -328,7 +328,19 @@ async def _styled_not_found_handler(request: Request, exc: StarletteHTTPExceptio
     by walking the raised exception's MRO, and every fastapi.HTTPException
     instance's MRO includes this base class too."""
     if exc.status_code == status.HTTP_404_NOT_FOUND and not request.url.path.startswith(("/api/", "/static/")):
-        return HTMLResponse(render_not_found(), status_code=status.HTTP_404_NOT_FOUND)
+        # Exception handlers aren't routed through FastAPI's dependency
+        # injection, so this can't just take a
+        # player: Optional[Player] = Depends(get_optional_current_player_from_session)
+        # parameter the way every other page route in this file does --
+        # open and close a DB session by hand instead, purely to get the
+        # header nav's Dashboard/Log out state right for a signed-in
+        # visitor who hits a broken link.
+        db = SessionLocal()
+        try:
+            player = get_optional_current_player_from_session(request, db)
+        finally:
+            db.close()
+        return HTMLResponse(render_not_found(player), status_code=status.HTTP_404_NOT_FOUND)
     return await _default_http_exception_handler(request, exc)
 # Session cookies back website login (see app/auth.py). `https_only` is on
 # because myscape.io is HTTPS-only in production; if that ever gets in the

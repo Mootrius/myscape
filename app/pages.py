@@ -1029,14 +1029,16 @@ def render_verify_email() -> str:
     return _shell(title="Verify email — myscape", player=None, body=body, extra_script=script)
 
 
-def render_not_found() -> str:
+def render_not_found(player: Optional[Player] = None) -> str:
     """The styled 404 page -- see the custom exception_handler in
     app/main.py for when this actually gets used instead of a raw
-    {"detail": "Not Found"} JSON body. Always renders as logged-out
-    (player=None), same simplification render_forgot_password and its
-    siblings already make -- a mistyped/broken URL isn't worth a real
-    session lookup just to get the header nav's Dashboard/Log out
-    state right."""
+    {"detail": "Not Found"} JSON body. Unlike most of this module's
+    other render_* functions, the caller here is an exception handler,
+    not a route with Depends(get_optional_current_player_from_session)
+    -- app/main.py loads the player itself with a manual DB session
+    and passes it through, so the header nav still shows Dashboard/Log
+    out for a signed-in visitor who hits a broken link instead of
+    always showing Log in/Sign up."""
     body = """
     <div class="auth-shell">
       <div class="auth-card">
@@ -1049,7 +1051,7 @@ def render_not_found() -> str:
       </div>
     </div>
     """
-    return _shell(title="Page not found — myscape", player=None, body=body)
+    return _shell(title="Page not found — myscape", player=player, body=body)
 
 
 def render_purchase_goals(player: Player) -> str:

@@ -501,10 +501,10 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 .not-found-code {
   text-align: center;
   font-size: 32px;
-  font-weight: bold;
+  font-weight: normal;
   color: var(--gold);
   letter-spacing: 0.05em;
-  margin: 0 0 16px;
+  margin: -14px 0 16px;
 }
 
 .not-found-teleport {
@@ -516,7 +516,7 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 .not-found-icon {
   width: 80px;
   height: 80px;
-  animation: not-found-wobble 2.4s ease-in-out infinite;
+  animation: not-found-sway 3.2s ease-in-out infinite;
   transition: transform 0.15s;
   transform-origin: center;
 }
@@ -527,10 +527,9 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   transform: scale(1.1) rotate(0deg);
 }
 
-@keyframes not-found-wobble {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-8deg); }
-  75% { transform: rotate(8deg); }
+@keyframes not-found-sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
 }
 
 .dash-grid {
