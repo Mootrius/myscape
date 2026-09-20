@@ -8357,7 +8357,21 @@ def render_possessions(player: Player) -> str:
       // untouched; and when a rebuild IS needed, preload the new
       // icons before swapping the HTML in so they don't pop in a beat
       // after the rows already changed.
+      //
+      // lastPmRowRefs is a big part of why the patch path stays cheap
+      // at large item counts: it's populated ONCE, right after a
+      // rebuild, with each visible row's own child elements (queried
+      // once via querySelector) -- every subsequent patch-in-place
+      // poll (which can fire every 5 seconds for as long as the
+      // visible set doesn't change) then writes straight to those
+      // cached references instead of re-running 5 querySelector calls
+      // PER ROW every single time. At a large item count with a wide
+      // filter (hundreds to low thousands of visible rows), those
+      // repeated querySelector calls were themselves a measurable,
+      // recurring cost -- re-querying the same elements over and over
+      // for numbers that usually haven't even changed.
       var lastPmKey = null;
+      var lastPmRowRefs = [];
       var pmTableRenderToken = 0;
 
       function renderTable() {
@@ -8370,6 +8384,7 @@ def render_possessions(player: Player) -> str:
           empty.textContent = 'Nothing synced yet.';
           empty.style.display = '';
           lastPmKey = null;
+          lastPmRowRefs = [];
           pmTableRenderToken++;
           return;
         }
@@ -8381,6 +8396,7 @@ def render_possessions(player: Player) -> str:
           empty.textContent = 'No items match your search/filters.';
           empty.style.display = '';
           lastPmKey = null;
+          lastPmRowRefs = [];
           pmTableRenderToken++;
           return;
         }
@@ -8416,6 +8432,24 @@ def render_possessions(player: Player) -> str:
             if (token !== pmTableRenderToken) return;
             lastPmKey = key;
             rowsEl.innerHTML = html;
+            // Cache each visible row's own child elements once here,
+            // right after the rebuild that just created them -- see
+            // lastPmRowRefs' own comment above for why the
+            // patch-in-place branch below leans on this instead of
+            // re-querying every poll. Queried by .pm-row-wrap
+            // specifically (not rowsEl.children) so the divider
+            // between pinned and unpinned rows, when present, doesn't
+            // shift the index-to-item mapping by one.
+            var rowEls = rowsEl.querySelectorAll('.pm-row-wrap');
+            lastPmRowRefs = Array.prototype.map.call(rowEls, function (row) {
+              return {
+                link: row.querySelector('.pm-row'),
+                qtyEl: row.querySelector('.pm-col-qty'),
+                geEl: row.querySelector('.pm-col-ge'),
+                haEl: row.querySelector('.pm-col-ha'),
+                badge: row.querySelector('.pm-badge'),
+              };
+            });
           });
           return;
         }
@@ -8424,27 +8458,18 @@ def render_possessions(player: Player) -> str:
         // -- reuse the existing rows (and their <img> icons) but still
         // refresh the quantity/value/tradeable text in place, since a
         // later poll can change those numbers for an item still sorted
-        // into the same slot. Queried by .pm-row-wrap specifically
-        // (not rowsEl.children) so the divider between pinned and
-        // unpinned rows, when present, doesn't shift the index-to-item
-        // mapping below by one.
-        var rows = rowsEl.querySelectorAll('.pm-row-wrap');
+        // into the same slot.
         visible.forEach(function (v, i) {
-          var row = rows[i];
-          if (!row) return;
+          var refs = lastPmRowRefs[i];
+          if (!refs) return;
           var item = v.item;
-          var link = row.querySelector('.pm-row');
-          if (link) link.title = item.name;
-          var qtyEl = row.querySelector('.pm-col-qty');
-          if (qtyEl) qtyEl.textContent = 'x' + fmtNum(v.qty);
-          var geEl = row.querySelector('.pm-col-ge');
-          if (geEl) geEl.innerHTML = valueCell(item.gePrice, v.qty, item.geDerived);
-          var haEl = row.querySelector('.pm-col-ha');
-          if (haEl) haEl.innerHTML = valueCell(item.highAlch, v.qty);
-          var badge = row.querySelector('.pm-badge');
-          if (badge) {
-            badge.className = 'pm-badge ' + (item.tradeable ? 'pm-badge-yes' : 'pm-badge-no');
-            badge.textContent = item.tradeable ? 'YES' : 'NO';
+          if (refs.link) refs.link.title = item.name;
+          if (refs.qtyEl) refs.qtyEl.textContent = 'x' + fmtNum(v.qty);
+          if (refs.geEl) refs.geEl.innerHTML = valueCell(item.gePrice, v.qty, item.geDerived);
+          if (refs.haEl) refs.haEl.innerHTML = valueCell(item.highAlch, v.qty);
+          if (refs.badge) {
+            refs.badge.className = 'pm-badge ' + (item.tradeable ? 'pm-badge-yes' : 'pm-badge-no');
+            refs.badge.textContent = item.tradeable ? 'YES' : 'NO';
           }
         });
       }

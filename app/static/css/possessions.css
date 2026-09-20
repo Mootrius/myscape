@@ -139,7 +139,23 @@
    .pm-row-wrap element) correctly does NOT get this border, so the
    divider's own rule below is the only separator there -- no doubled
    line under it. */
-.pm-row-wrap { position: relative; }
+/* content-visibility: auto tells the browser to skip layout/paint
+   work for a row entirely until it's actually near the viewport --
+   a player with a large collection (hundreds to low thousands of
+   items across every storage) can end up with that many rows in the
+   DOM at once, and laying every one of them out on every table
+   rebuild (any filter/sort/search change) was the single biggest
+   cost in the whole render path at that scale. contain-intrinsic-size
+   gives the browser a placeholder height to reserve for an
+   not-yet-laid-out row -- without it, the page's scroll height would
+   jump around as rows above the fold get measured for real -- set to
+   this row's own actual height (see .pm-row/.pm-row-header's shared
+   padding) so nothing visibly shifts once a row IS laid out. */
+.pm-row-wrap {
+  position: relative;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 46px;
+}
 .pm-row-wrap + .pm-row-wrap { border-top: 1px solid var(--border); }
 /* The gap between a pinned group and the rest of the list -- "slightly
    separated", per the feature this exists for, is a bit more margin
