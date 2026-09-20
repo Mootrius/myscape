@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from app.auth import (
     get_current_game_account_from_api_key,
     get_current_verified_game_account_from_session,
+    get_optional_current_account_from_session,
     get_optional_current_player_view_from_session,
 )
 from app.database import SessionLocal, get_db
@@ -342,10 +343,19 @@ async def _styled_not_found_handler(request: Request, exc: StarletteHTTPExceptio
         # parameter the way every other page route in this file does --
         # open and close a DB session by hand instead, purely to get the
         # header nav's Dashboard/Log out state right for a signed-in
-        # visitor who hits a broken link.
+        # visitor who hits a broken link. Calling both dependency
+        # functions directly like this means their own `account`/`db`
+        # *Depends(...)* defaults never fire -- every argument has to be
+        # passed explicitly, account included, or it comes through as
+        # the literal Depends(...) marker object instead of an Account
+        # (or None), and the get_optional_current_player_view_from_session
+        # call below blows up trying to use it (was exactly this bug,
+        # every 404 on the live site 500ing instead, before this got
+        # fixed -- see the multi-account docs for how it was caught).
         db = SessionLocal()
         try:
-            player = get_optional_current_player_view_from_session(request, db)
+            account = get_optional_current_account_from_session(request, db)
+            player = get_optional_current_player_view_from_session(request, db, account)
         finally:
             db.close()
         return HTMLResponse(render_not_found(player), status_code=status.HTTP_404_NOT_FOUND)
