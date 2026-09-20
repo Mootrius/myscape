@@ -95,6 +95,23 @@
   cursor: pointer;
 }
 .tracker-menu-item:hover { background: var(--panel-2); color: var(--gold); }
+/* Same bleed-through as .mm-menu-item.danger in mindmaps.css: Delete
+   setup's extra .danger class (for the hover color just below) also
+   matches button.danger (myscape.css), which is more specific than
+   this file's plain .tracker-menu-item on every property they both
+   set, and additionally sets width: 100%, which .tracker-menu-item
+   never sets at all -- rendering Delete setup as a full-width,
+   bigger-padding, red-bordered pill instead of a plain row the same
+   size as the other menu items. Reset back to .tracker-menu-item's
+   own values so .danger only ever does what :hover below intended. */
+.tracker-menu-item.danger {
+  width: auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  padding: 10px 14px;
+  font-size: 10.5px;
+}
 .tracker-menu-item.danger:hover { color: var(--red); }
 
 .pg-setup-form {
