@@ -26,6 +26,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -306,15 +307,26 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-@app.exception_handler(HTTPException)
-async def _styled_not_found_handler(request: Request, exc: HTTPException):
+@app.exception_handler(StarletteHTTPException)
+async def _styled_not_found_handler(request: Request, exc: StarletteHTTPException):
     """Swaps in render_not_found's styled page for a 404 hit while
     browsing the site itself -- everywhere else (every /api/* and
     /static/* response, and every non-404 status anywhere) keeps
     FastAPI's normal {"detail": ...} JSON body untouched, since the
     site's own JS (describeError() in app/pages.py) parses that JSON
     for every form's error message and would break if it got HTML
-    back instead."""
+    back instead.
+
+    Registered on Starlette's own HTTPException, not FastAPI's --
+    fastapi.HTTPException is a *subclass* of it, and a genuinely
+    unmatched route (someone hitting a URL that doesn't exist at all)
+    is raised internally by Starlette's router as the base class, not
+    the subclass. A handler registered on the subclass alone silently
+    never catches that case -- it only ever saw the fastapi.HTTPException
+    instances explicitly `raise`d elsewhere in this file. Registering on
+    the base class here still catches both: Starlette looks up handlers
+    by walking the raised exception's MRO, and every fastapi.HTTPException
+    instance's MRO includes this base class too."""
     if exc.status_code == status.HTTP_404_NOT_FOUND and not request.url.path.startswith(("/api/", "/static/")):
         return HTMLResponse(render_not_found(), status_code=status.HTTP_404_NOT_FOUND)
     return await _default_http_exception_handler(request, exc)
