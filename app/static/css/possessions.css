@@ -342,21 +342,29 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
    of letting the group wrap the way it used to.
    The six comparison symbols are set in the site's smooth system
    font, not RuneScapePlain11 (the site's pixel font, used for
-   everything else including BETWEEN below): RuneScapePlain11 has no
-   dedicated glyph for "≥"/"≤"/"≠", so those three always
-   rendered in the system-font fallback anyway, while ">"/"<"/"="
-   would render as that pixel font's own ASCII punctuation -- which
-   sits in only a sliver of its character box and reads thin/small
-   next to a normal font's glyphs. Forcing the whole symbol set onto
-   the system font keeps all six visually consistent with each other
-   without needing a pixel-font-specific size fix. BETWEEN -- the one
-   segment that's an actual word, not a symbol -- keeps the site's
-   normal pixel font and sizes to fit its own label instead of being
-   squeezed to match the fixed-width symbol segments beside it. */
+   everything else including BETWEEN below, and for the item/
+   tradeable segmented controls elsewhere on this popover):
+   RuneScapePlain11 has no dedicated glyph for "≥"/"≤"/"≠", so
+   those three always rendered in the system-font fallback anyway,
+   while ">"/"<"/"=" would render as that pixel font's own ASCII
+   punctuation -- which sits in only a sliver of its character box
+   and reads thin/small next to a normal font's glyphs. Forcing the
+   whole symbol set onto the system font keeps all six visually
+   consistent with each other. The system font's own default
+   line-height is noticeably taller than RuneScapePlain11's at the
+   same font-size (the pixel font has very tight built-in leading),
+   so line-height is set explicitly here rather than left to inherit
+   -- that's what makes this row's buttons come out exactly as tall
+   as the item/tradeable segmented controls' (7px padding, 8px line
+   box, same on both) instead of a mismatched taller row just because
+   the font changed. BETWEEN -- the one segment that's an actual
+   word, not a symbol -- keeps the site's normal pixel font and sizes
+   to fit its own label instead of being squeezed to match the
+   fixed-width symbol segments beside it. */
 .pm-segment-group[data-role="op"] .pm-segment-btn {
   flex: 0 0 36px; width: 36px; padding: 7px 2px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  font-size: 15px;
+  font-size: 12px; line-height: 8px;
 }
 .pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value="between"] {
   flex: 0 0 auto; width: auto; padding: 7px 14px;
