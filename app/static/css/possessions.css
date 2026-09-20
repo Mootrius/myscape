@@ -309,25 +309,34 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-filter-popover-label {
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
 }
-/* One button standing in for what used to be two/three side-by-side
-   options (Contains/Does Not Contain, an operator, Tradeable/
-   Untradeable) -- clicking cycles to the next option in its group
-   (see TOGGLE_OPTIONS/wirePopoverControls in the page's own script)
-   rather than picking from several buttons shown at once. Always
-   drawn gold/outlined, same as .pm-filter-btn.active elsewhere on
-   this page -- it doesn't toggle between an "on" and "off" look the
-   way that one does, since it always reads as "this is the current
-   selection, click to change it." Same pill shape/26px height as
-   before. */
-.pm-filter-toggle-btn {
-  height: 26px; padding: 0 9px; box-sizing: border-box; width: 100%;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
-  color: var(--gold);
-  background: var(--panel-2); border: 1px solid var(--gold); border-radius: var(--radius);
-  cursor: pointer;
+/* A segmented control -- every option shown at once, side by side,
+   with the current one picked out -- same visual recipe as Mindmaps'
+   own skill-goal LVL/XP switch (.mm-segment-group/.mm-segment-btn in
+   mindmaps.css), redeclared here rather than shared between the two
+   pages' stylesheets, per this project's per-page-CSS convention.
+   Divider lines between segments (and between wrapped rows) come from
+   the group's own background showing through a 1px gap, rather than
+   individual border-right/border-bottom rules -- simpler to get right
+   once flex-wrap is in play (Quantity/GE/HA's operator group is 7
+   options wide, too many to fit legibly in one row at this popover's
+   width, so it wraps to two). min-width on each segment is what
+   forces that wrap once a row can't fit every option at a readable
+   size -- a 2-option group (Contains/Does Not Contain, Tradeable/
+   Untradeable) never reaches it and just splits the full width evenly
+   between its two segments, same single-row look as Mindmaps' own
+   LVL/XP toggle. */
+.pm-segment-group {
+  display: flex; flex-wrap: wrap; gap: 1px;
+  background: var(--border); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
 }
-.pm-filter-toggle-btn:hover { background: rgba(255, 152, 31, 0.08); }
+.pm-segment-btn {
+  flex: 1 1 0; min-width: 44px; background: #100e0b; border: none;
+  color: var(--text-dim); font-family: inherit; font-size: 10.5px; letter-spacing: 0.02em;
+  padding: 7px 4px; cursor: pointer; text-align: center; text-transform: uppercase;
+}
+.pm-segment-btn:hover { color: var(--text); }
+.pm-segment-btn.active { background: var(--panel-2); color: var(--gold); }
 .pm-filter-input,
 .pm-filter-select {
   height: 28px; padding: 0 8px; box-sizing: border-box; width: 100%;

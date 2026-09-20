@@ -7774,34 +7774,28 @@ def render_possessions(player: Player) -> str:
       // number a bare "150" in the box actually means.
       var NUMERIC_PLACEHOLDERS = { qty: 'Quantity', ge: 'Value', ha: 'Value' };
 
-      // One button standing in for what would otherwise be several
-      // side-by-side options -- clicking it cycles to the next value
-      // in its group (wrapping back to the first past the last),
-      // rather than picking one of several buttons shown at once. Used
-      // for every mode/operator choice in every popover below (Item's
-      // Contains/Does Not Contain, Quantity/GE/HA's operator, and
-      // Tradeable?'s Tradeable/Untradeable) -- see
-      // .pm-filter-toggle-btn in possessions.css for why it's always
-      // drawn as the "this is the current selection" gold/outlined
-      // look rather than toggling an on/off state the way
-      // .pm-filter-btn elsewhere on this page does.
-      var TOGGLE_OPTIONS = {
-        alphaMode: { options: ['contains', 'not_contains'], labels: { contains: 'Contains', not_contains: 'Does Not Contain' } },
-        numericOp: {
-          options: ['>', '>=', '<', '<=', '=', '!=', 'between'],
-          // Escaped for the same reason the old operator <select>'s
-          // own option labels were -- a raw "<"/">" as element TEXT
-          // content (this button's own textContent, set via innerHTML
-          // below) would otherwise be parsed as the start of a tag.
-          labels: { '>': '&gt;', '>=': '&ge;', '<': '&lt;', '<=': '&le;', '=': '=', '!=': '&ne;', between: 'Between' },
-        },
-        tradeableMode: { options: ['tradeable', 'untradeable'], labels: { tradeable: 'Tradeable', untradeable: 'Untradeable' } },
-      };
+      // Every mode/operator choice in every popover below is a
+      // segmented control -- every option shown at once, side by side,
+      // with the current one picked out (same shape as Mindmaps' own
+      // skill-goal LVL/XP switch, renderSegmentedToggleHtml in this
+      // file -- .pm-segment-group/.pm-segment-btn in possessions.css
+      // are this page's own copy of that same visual recipe, per this
+      // project's per-page-CSS convention, not a shared class). Options
+      // are [value, label] pairs; a numeric operator's label is
+      // pre-escaped HTML for the same reason the old operator
+      // <select>'s own option labels were -- a raw "<"/">" as element
+      // TEXT content would otherwise be parsed as the start of a tag.
+      var TEXT_MODE_OPTIONS = [['contains', 'Contains'], ['not_contains', 'Does Not Contain']];
+      var NUMERIC_OP_OPTIONS = [['>', '&gt;'], ['>=', '&ge;'], ['<', '&lt;'], ['<=', '&le;'], ['=', '='], ['!=', '&ne;'], ['between', 'Between']];
+      var TRADEABLE_MODE_OPTIONS = [['tradeable', 'Tradeable'], ['untradeable', 'Untradeable']];
 
-      function toggleButtonHtml(groupKey, role, current) {
-        var group = TOGGLE_OPTIONS[groupKey];
-        var value = current || group.options[0];
-        return '<button type="button" class="pm-filter-toggle-btn" data-role="' + role + '" data-group="' + groupKey + '" data-value="' + value + '">' + group.labels[value] + '</button>';
+      function segmentGroupHtml(role, options, currentValue) {
+        var value = options.some(function (o) { return o[0] === currentValue; }) ? currentValue : options[0][0];
+        var buttons = options.map(function (o) {
+          var cls = 'pm-segment-btn' + (o[0] === value ? ' active' : '');
+          return '<button type="button" class="' + cls + '" data-segment-value="' + o[0] + '">' + o[1] + '</button>';
+        }).join('');
+        return '<div class="pm-segment-group" data-role="' + role + '">' + buttons + '</div>';
       }
 
       function filterPopoverHtml(col) {
@@ -7818,7 +7812,7 @@ def render_possessions(player: Player) -> str:
           var text = current ? (current.text || '') : '';
           var placeholder = mode === 'not_contains' ? 'Name does not contain...' : 'Name contains...';
           return (
-            '<div class="pm-filter-popover-row">' + toggleButtonHtml('alphaMode', 'mode', mode) + '</div>' +
+            segmentGroupHtml('mode', TEXT_MODE_OPTIONS, mode) +
             '<input type="text" class="pm-filter-input" data-role="text" placeholder="' + placeholder + '" value="' + escapeHtml(text) + '" />' +
             actions
           );
@@ -7831,7 +7825,7 @@ def render_possessions(player: Player) -> str:
           var isBetween = op === 'between';
           var placeholder = NUMERIC_PLACEHOLDERS[col] || 'Value';
           return (
-            '<div class="pm-filter-popover-row">' + toggleButtonHtml('numericOp', 'op', op) + '</div>' +
+            segmentGroupHtml('op', NUMERIC_OP_OPTIONS, op) +
             '<input type="number" class="pm-filter-input" data-role="value" placeholder="' + placeholder + '" value="' + value + '"' + (isBetween ? ' style="display:none;"' : '') + ' />' +
             '<div class="pm-filter-input-pair" data-role="between-row"' + (isBetween ? '' : ' style="display:none;"') + '>' +
             '<input type="number" class="pm-filter-input" data-role="min" placeholder="Min" value="' + min + '" />' +
@@ -7843,10 +7837,7 @@ def render_possessions(player: Player) -> str:
         }
         // tradeable
         var mode = (current && current.mode) || 'tradeable';
-        return (
-          '<div class="pm-filter-popover-row">' + toggleButtonHtml('tradeableMode', 'mode', mode) + '</div>' +
-          actions
-        );
+        return segmentGroupHtml('mode', TRADEABLE_MODE_OPTIONS, mode) + actions;
       }
 
       function numOrNull(input) {
@@ -7862,18 +7853,18 @@ def render_possessions(player: Player) -> str:
       // filter on this column" rather than an error.
       function buildFilterFromPopover(col, popoverEl) {
         var kind = FILTER_COLUMNS[col];
-        function toggleValue(role) {
-          var btn = popoverEl.querySelector('[data-role="' + role + '"].pm-filter-toggle-btn');
-          return btn ? btn.getAttribute('data-value') : null;
+        function segmentValue(role, fallback) {
+          var active = popoverEl.querySelector('[data-role="' + role + '"] .pm-segment-btn.active');
+          return active ? active.getAttribute('data-segment-value') : fallback;
         }
         if (kind === 'text') {
           var input = popoverEl.querySelector('[data-role="text"]');
           var text = input ? input.value.trim() : '';
           if (!text) return null;
-          return { mode: toggleValue('mode') || 'contains', text: text };
+          return { mode: segmentValue('mode', 'contains'), text: text };
         }
         if (kind === 'numeric') {
-          var op = toggleValue('op') || '>=';
+          var op = segmentValue('op', '>=');
           if (op === 'between') {
             var min = numOrNull(popoverEl.querySelector('[data-role="min"]'));
             var max = numOrNull(popoverEl.querySelector('[data-role="max"]'));
@@ -7885,29 +7876,35 @@ def render_possessions(player: Player) -> str:
           return { op: op, value: value };
         }
         // tradeable
-        return { mode: toggleValue('mode') || 'tradeable' };
+        return { mode: segmentValue('mode', 'tradeable') };
       }
 
       function wirePopoverControls(col, popoverEl) {
-        popoverEl.querySelectorAll('.pm-filter-toggle-btn').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            var group = TOGGLE_OPTIONS[btn.getAttribute('data-group')];
-            var idx = group.options.indexOf(btn.getAttribute('data-value'));
-            var next = group.options[(idx + 1) % group.options.length];
-            btn.setAttribute('data-value', next);
-            btn.innerHTML = group.labels[next];
+        // Same click-delegation shape as Mindmaps' own segmented-toggle
+        // handling -- clicking a segment marks IT active and clears
+        // every sibling within its own group (never across groups;
+        // the numeric popover's operator group is the only one with
+        // more than one group in scope, but there's only ever one
+        // group per popover in practice here).
+        popoverEl.querySelectorAll('.pm-segment-group').forEach(function (group) {
+          group.querySelectorAll('.pm-segment-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              group.querySelectorAll('.pm-segment-btn').forEach(function (b) { b.classList.remove('active'); });
+              btn.classList.add('active');
+              var value = btn.getAttribute('data-segment-value');
 
-            if (btn.getAttribute('data-role') === 'mode' && col === 'alpha') {
-              var textInput = popoverEl.querySelector('[data-role="text"]');
-              if (textInput) textInput.placeholder = next === 'not_contains' ? 'Name does not contain...' : 'Name contains...';
-            }
-            if (btn.getAttribute('data-role') === 'op') {
-              var valueInput = popoverEl.querySelector('[data-role="value"]');
-              var betweenRow = popoverEl.querySelector('[data-role="between-row"]');
-              var isBetween = next === 'between';
-              if (valueInput) valueInput.style.display = isBetween ? 'none' : '';
-              if (betweenRow) betweenRow.style.display = isBetween ? '' : 'none';
-            }
+              if (group.getAttribute('data-role') === 'mode' && col === 'alpha') {
+                var textInput = popoverEl.querySelector('[data-role="text"]');
+                if (textInput) textInput.placeholder = value === 'not_contains' ? 'Name does not contain...' : 'Name contains...';
+              }
+              if (group.getAttribute('data-role') === 'op') {
+                var valueInput = popoverEl.querySelector('[data-role="value"]');
+                var betweenRow = popoverEl.querySelector('[data-role="between-row"]');
+                var isBetween = value === 'between';
+                if (valueInput) valueInput.style.display = isBetween ? 'none' : '';
+                if (betweenRow) betweenRow.style.display = isBetween ? '' : 'none';
+              }
+            });
           });
         });
         var clearBtn = popoverEl.querySelector('[data-action="clear"]');
@@ -7927,9 +7924,9 @@ def render_possessions(player: Player) -> str:
           updateFilterIconStates();
           renderTable();
         });
-        // Never let a click inside the popover (the toggle button, an
-        // input, Apply/Clear) bubble up to the document-level
-        // "click outside closes it" listener in wireFilterIcons below.
+        // Never let a click inside the popover (a segment, an input,
+        // Apply/Clear) bubble up to the document-level "click outside
+        // closes it" listener in wireFilterIcons below.
         popoverEl.addEventListener('click', function (e) { e.stopPropagation(); });
       }
 
