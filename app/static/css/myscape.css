@@ -1056,15 +1056,21 @@ footer {
    what actually keeps the purchase-planner panel above it fully
    scrolled out of view once you land here -- without it, footer would
    just be its own small natural height and the panel above would
-   still show through the top of the viewport. Anchoring footer-inner
-   to the BOTTOM of that full-height footer (rather than centering it
-   in the middle of all that empty space) keeps it reading as the
-   page's actual floor, same as every other page's footer -- the CTA,
-   then a clear gap, then the same compact social/trademark block
-   every other page's footer ends in, just sitting flush with the
-   bottom of the viewport instead of floating mid-screen. Scoped to
-   body.landing only, same as every other landing-only rule here --
-   everywhere else footer keeps its ordinary compact height. */
+   still show through the top of the viewport.
+
+   The two pieces inside footer-inner want different vertical
+   treatment though: the CTA should read as this screen's own
+   centerpiece (roughly centered in the open space, the way every
+   .landing-anchor's own content is), while the social/trademark block
+   underneath it should stay exactly where it always is on every other
+   page -- flush with the bottom. .landing-cta (not footer-inner
+   itself) is what gets flex: 1 for that, below -- it absorbs all the
+   leftover vertical space and centers its own content inside it,
+   which as a side effect leaves the social/trademark block sitting
+   right where that leftover space runs out, i.e. pinned to the
+   bottom. Scoped to body.landing only, same as every other
+   landing-only rule here -- everywhere else footer keeps its ordinary
+   compact height. */
 body.landing footer {
   min-height: 100vh;
   min-height: 100svh;
@@ -1076,13 +1082,33 @@ body.landing footer {
      spanning full width, breaking .footer-inner's own text-align:
      center. column flips that: align-items' default (stretch) now
      applies on the horizontal cross axis, so footer-inner fills the
-     full width for free, and justify-content anchors it to the
-     bottom on what's now the main (vertical) axis. */
+     full width for free. */
   flex-direction: column;
-  justify-content: flex-end;
+}
+
+/* Only on the landing page: stretches footer-inner to fill the whole
+   (now full-viewport-tall) footer so .landing-cta's own flex: 1 below
+   has a real full-height column to expand inside. Every other page's
+   .footer-inner (see the plain, non-landing-scoped rule above) keeps
+   its ordinary height-auto block layout -- nothing here touches it. */
+body.landing .footer-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .landing-cta {
+  /* Grows to fill whatever vertical space footer-social/
+     footer-trademark (the flex siblings after it, sized to their own
+     content) don't need, then centers its own heading+buttons inside
+     that space on both axes -- see the body.landing footer comment
+     above for why this is what pins the social row to the bottom
+     while the CTA itself reads as centered. */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   margin-bottom: 40px;
 }
 
