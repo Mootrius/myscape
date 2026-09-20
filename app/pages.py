@@ -7786,7 +7786,7 @@ def render_possessions(player: Player) -> str:
       // <select>'s own option labels were -- a raw "<"/">" as element
       // TEXT content would otherwise be parsed as the start of a tag.
       var TEXT_MODE_OPTIONS = [['contains', 'Contains'], ['not_contains', 'Does Not Contain']];
-      var NUMERIC_OP_OPTIONS = [['>', '&gt;'], ['>=', '&gt;='], ['<', '&lt;'], ['<=', '&lt;='], ['=', '='], ['!=', '!='], ['between', 'Between']];
+      var NUMERIC_OP_OPTIONS = [['>', '&gt;'], ['>=', '&ge;'], ['<', '&lt;'], ['<=', '&le;'], ['=', '='], ['!=', '&ne;'], ['between', 'Between']];
       var TRADEABLE_MODE_OPTIONS = [['tradeable', 'Tradeable'], ['untradeable', 'Untradeable']];
 
       function segmentGroupHtml(role, options, currentValue) {

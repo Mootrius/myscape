@@ -340,25 +340,27 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 
 /* Quantity/GE/HA's 7-way operator picker -- all on one row instead
    of letting the group wrap the way it used to.
-   All six comparison symbols are plain ASCII (">=" and "<=" as two
-   characters, not the single "≥"/"≤" glyphs) so every one of
-   them renders in RuneScapePlain11 itself, the same pixel font as
-   the rest of the site, rather than some falling back to a different
-   (smooth system) font for glyphs the pixel font doesn't have --
-   that mismatch was what made ">"/"<" look like they were in a
-   different typeface once they'd been sized up on their own. Within
-   RuneScapePlain11 the ASCII punctuation glyphs only occupy a sliver
-   of their own character box (this pixel font wasn't designed to be
-   scaled past its native ~11px), so all six get the same larger
-   font-size here to read at a normal weight instead of looking thin
-   and small. BETWEEN -- the one segment that's an actual word, not a
-   symbol -- sizes to fit its own label instead of being squeezed to
-   match the fixed-width symbol segments beside it. */
+   The six comparison symbols are set in the site's smooth system
+   font, not RuneScapePlain11 (the site's pixel font, used for
+   everything else including BETWEEN below): RuneScapePlain11 has no
+   dedicated glyph for "≥"/"≤"/"≠", so those three always
+   rendered in the system-font fallback anyway, while ">"/"<"/"="
+   would render as that pixel font's own ASCII punctuation -- which
+   sits in only a sliver of its character box and reads thin/small
+   next to a normal font's glyphs. Forcing the whole symbol set onto
+   the system font keeps all six visually consistent with each other
+   without needing a pixel-font-specific size fix. BETWEEN -- the one
+   segment that's an actual word, not a symbol -- keeps the site's
+   normal pixel font and sizes to fit its own label instead of being
+   squeezed to match the fixed-width symbol segments beside it. */
 .pm-segment-group[data-role="op"] .pm-segment-btn {
-  flex: 0 0 36px; width: 36px; font-size: 24px; padding: 7px 2px;
+  flex: 0 0 36px; width: 36px; padding: 7px 2px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  font-size: 15px;
 }
 .pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value="between"] {
-  flex: 0 0 auto; width: auto; padding: 7px 14px; font-size: 10.5px;
+  flex: 0 0 auto; width: auto; padding: 7px 14px;
+  font-family: inherit; font-size: 10.5px;
 }
 
 /* No explicit width here -- .pm-filter-popover itself never sets one
