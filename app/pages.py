@@ -3165,8 +3165,8 @@ def render_loot_tracker(player: PlayerView) -> str:
         // touching the rest -- see the NPC row's click handler below.
         selectedNpcs: [], npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '',
         rangeKey: '24h', customStart: null, customEnd: null,
-        // The clicked bar's own {start, end, value, killCount} (all
-        // four captured straight off that bucket at click time), or
+        // The clicked bar's own {start, end, value, killCount, index}
+        // (all captured straight off that bucket at click time), or
         // null when no bar is selected -- mutually exclusive with
         // selectedNpcs above (picking one always clears the other,
         // see the #lootBarBars/#lootNpcRow click handlers below): a
@@ -3174,7 +3174,13 @@ def render_loot_tracker(player: PlayerView) -> str:
         // click re-scopes it to an identity, and combining both isn't
         // asked for here. See currentNpcs/currentItems and
         // renderBarChart's own selectedBucket handling for how this
-        // drives the panels/header/title once set.
+        // drives the panels/header/title once set. `index` is the
+        // selection's real identity -- start/end/value/killCount get
+        // overwritten in place by loadState on every poll (see its
+        // own comment) to whatever bucket now sits at that same
+        // index, so a rolling preset's continuous drift moves the
+        // selection's reported time/value along with it instead of
+        // leaving it pointing at a bucket that no longer exists.
         selectedBucket: null,
         // Purely local UI state, never persisted -- each panel's own
         // "show hidden" eye toggle (see .loot-hide-toggle in
@@ -3628,22 +3634,16 @@ def render_loot_tracker(player: PlayerView) -> str:
         // effect.
         var headerValue, headerKills, titleText;
         if (selectedBucket) {
-          // Prefers the freshly-polled bucket (re-found here by its
-          // own start/end) over the totals captured at the moment it
-          // was clicked, falling back to those only once it can't be
-          // found any more -- a rolling preset's buckets all drift
-          // forward a little on every 10s poll (bucket width is the
-          // range's own span divided evenly, not calendar-aligned --
-          // see _bucket_plan's own docstring in app/loot.py -- so
-          // "now" moving forward shifts every boundary with it), which
-          // can eventually leave no bucket with these exact start/end
-          // strings any more even though the clicked instant itself
-          // never moved.
-          var matchedBucket = buckets.filter(function (b) {
-            return b.start === selectedBucket.start && b.end === selectedBucket.end;
-          })[0];
-          headerValue = matchedBucket ? matchedBucket.value : selectedBucket.value;
-          headerKills = matchedBucket ? matchedBucket.killCount : selectedBucket.killCount;
+          // Reads straight off selectedBucket rather than re-finding
+          // a matching bucket here -- loadState already keeps it
+          // fresh on every 10s poll (overwriting start/end/value/
+          // killCount in place to whatever bucket now sits at its own
+          // selectedBucket.index, see state's own comment on this),
+          // so by the time a render reaches this point it's already
+          // today's true numbers for wherever that bar has drifted
+          // to, not a stale snapshot from the moment it was clicked.
+          headerValue = selectedBucket.value;
+          headerKills = selectedBucket.killCount;
           titleText = fmtBucketRangeLabel(selectedBucket.start, selectedBucket.end);
         } else {
           // With one or more NPCs selected, the header's gp/kc numbers
@@ -3741,20 +3741,22 @@ def render_loot_tracker(player: PlayerView) -> str:
           return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount.toLocaleString('en-US') + ' kc' : '');
         }
 
-        // Whether bucket b is the one state.selectedBucket points at --
-        // matched by start/end rather than index, same reasoning as
-        // the header/title lookup above (a rolling preset's own
-        // buckets drift between polls, so the index a bar was clicked
-        // at isn't a stable identity for it).
-        function isSelectedCol(b) {
-          return !!(selectedBucket && b.start === selectedBucket.start && b.end === selectedBucket.end);
+        // Whether column index i is the one state.selectedBucket
+        // points at -- matched by index rather than by the bucket's
+        // own start/end, since index is the selection's real identity
+        // now (see state's own comment on selectedBucket): a rolling
+        // preset's buckets drift forward on every poll, so chasing the
+        // exact start/end clicked would lose the highlight the moment
+        // they moved, instead of keeping it pinned to the same bar.
+        function isSelectedCol(i) {
+          return !!(selectedBucket && i === selectedBucket.index);
         }
 
         var barsEl = document.getElementById('lootBarBars');
         var existingCols = barsEl.children;
         if (existingCols.length !== buckets.length) {
           barsEl.innerHTML = buckets.map(function (b, i) {
-            return '<div class="loot-bar-col' + (isSelectedCol(b) ? ' selected' : '') + '" data-bucket-index="' + i + '" title="' + titleFor(b, i) + '">' +
+            return '<div class="loot-bar-col' + (isSelectedCol(i) ? ' selected' : '') + '" data-bucket-index="' + i + '" title="' + titleFor(b, i) + '">' +
               '<div class="loot-bar-outline' + (outlineActive(b) ? ' active' : '') + '" style="height:' + outlinePct(b) + '%;"></div>' +
               '<div class="loot-bar-fill' + (fillPct(b, i) > 0 ? ' has-value' : '') + '" style="height:' + fillPct(b, i) + '%;"></div>' +
             '</div>';
@@ -3764,7 +3766,7 @@ def render_loot_tracker(player: PlayerView) -> str:
             var col = existingCols[i];
             col.title = titleFor(b, i);
             col.setAttribute('data-bucket-index', i);
-            col.classList.toggle('selected', isSelectedCol(b));
+            col.classList.toggle('selected', isSelectedCol(i));
             var outline = col.querySelector('.loot-bar-outline');
             outline.style.height = outlinePct(b) + '%';
             outline.classList.toggle('active', outlineActive(b));
@@ -4161,7 +4163,11 @@ def render_loot_tracker(player: PlayerView) -> str:
         var idx = parseInt(col.getAttribute('data-bucket-index'), 10);
         var b = (lastData.buckets || [])[idx];
         if (!b) return;
-        var alreadySelected = state.selectedBucket && state.selectedBucket.start === b.start && state.selectedBucket.end === b.end;
+        // Toggle-off is keyed on index, not start/end -- clicking the
+        // same bar position again always deselects it, even if a poll
+        // has since drifted its start/end away from what was clicked
+        // last time (see selectedBucket's own comment on state).
+        var alreadySelected = state.selectedBucket && state.selectedBucket.index === idx;
         if (alreadySelected) {
           // Clicking the already-selected bar clears it back to the
           // whole range -- same toggle-off convention as re-clicking
@@ -4172,14 +4178,13 @@ def render_loot_tracker(player: PlayerView) -> str:
           // NPC selection first, same mutual-exclusivity as the
           // #lootNpcRow click handler above does in the other
           // direction (see selectedBucket's own comment on state).
-          // value/killCount are captured here too (not just start/end)
-          // so the header has something correct to show immediately,
-          // before loadBucketData's own fetch (kicked off below) has
-          // had a chance to resolve -- see renderBarChart's own
-          // matchedBucket fallback for why those two can keep drifting
-          // apart afterward on a rolling preset.
+          // value/killCount are captured here too (not just start/
+          // end/index) so the header has something correct to show
+          // immediately, before loadBucketData's own fetch (kicked off
+          // below) has had a chance to resolve -- loadState's own poll
+          // then keeps all four current from here on, see its comment.
           state.selectedNpcs = [];
-          state.selectedBucket = { start: b.start, end: b.end, value: b.value, killCount: b.killCount };
+          state.selectedBucket = { start: b.start, end: b.end, value: b.value, killCount: b.killCount, index: idx };
           bucketData = null;
           loadBucketData();
         }
@@ -4518,6 +4523,36 @@ def render_loot_tracker(player: PlayerView) -> str:
             var stillPresent = rangeNpcs.filter(function (n) { return n.sourceName === name; })[0];
             return stillPresent && (state.npcShowHidden || !npcEffectiveHidden(stillPresent));
           });
+
+          // A selected bar stays pinned to its own position (index)
+          // rather than the instant it was clicked -- a rolling
+          // preset's buckets all drift forward a little on every 10s
+          // poll (bucket width is the range's own span divided evenly,
+          // not calendar-aligned -- see _bucket_plan's own docstring
+          // in app/loot.py -- so "now" moving forward shifts every
+          // boundary with it), so re-reading start/end/value/killCount
+          // off whatever bucket now sits at that same index is what
+          // keeps the highlight, the title, and the header's gp/kc all
+          // showing today's true numbers for that bar instead of a
+          // frozen snapshot from the moment it was clicked. Falls back
+          // to clearing the selection on the rare case the index no
+          // longer exists at all (the bucket count itself changed --
+          // every place that can cause that already clears the
+          // selection on its own, so this is just a safety net, not
+          // the expected path).
+          if (state.selectedBucket) {
+            var freshBuckets = data.buckets || [];
+            var freshBucket = freshBuckets[state.selectedBucket.index];
+            if (freshBucket) {
+              state.selectedBucket = {
+                start: freshBucket.start, end: freshBucket.end,
+                value: freshBucket.value, killCount: freshBucket.killCount,
+                index: state.selectedBucket.index,
+              };
+            } else {
+              clearSelectedBucket();
+            }
+          }
 
           document.getElementById('lootEmptyMsg').style.display = 'none';
           document.getElementById('lootBody').style.display = '';
