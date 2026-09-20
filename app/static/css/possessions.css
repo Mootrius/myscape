@@ -440,6 +440,15 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-filter-apply-btn:hover { background: #ffab42; border-color: #ffab42; }
 .pm-filter-clear-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim); }
 .pm-filter-clear-btn:hover { border-color: var(--red); color: var(--red); }
+/* Same base look as the filter popover's own "Clear" button above
+   (they share .pm-filter-clear-btn), but this one -- the Save View
+   popover's "Cancel" -- isn't a destructive/reset action, just closes
+   the popover, so it gets the site's standard gold-outline hover
+   (same pair as .landing-cta-btn--secondary:hover/.account-logout
+   -link:hover) instead of Clear's red. Two-class selector for
+   same-or-higher specificity over .pm-filter-clear-btn:hover so this
+   doesn't depend on staying declared after it in source order. */
+.pm-filter-clear-btn.pm-view-cancel-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
 
 /* ---- Saved views strip (drag-and-drop reorderable, sits directly
    above the table headers -- see PossessionView in app/models.py and

@@ -8820,7 +8820,7 @@ def render_possessions(player: PlayerView) -> str:
           '<div class="pm-filter-popover-label">Save current filters &amp; sort as</div>' +
           '<input type="text" class="pm-filter-input" data-role="view-name" placeholder="View name" />' +
           '<div class="pm-filter-popover-actions">' +
-          '<button type="button" class="pm-filter-clear-btn" data-action="cancel">Cancel</button>' +
+          '<button type="button" class="pm-filter-clear-btn pm-view-cancel-btn" data-action="cancel">Cancel</button>' +
           '<button type="button" class="pm-filter-apply-btn" data-action="save">Save</button>' +
           '</div>'
         );
