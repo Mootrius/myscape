@@ -107,6 +107,35 @@ class VerifyEmailRequest(BaseModel):
     token: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def check_password_length(cls, value: str) -> str:
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters.")
+        return value
+
+
+class ChangeEmailRequest(BaseModel):
+    new_email: str
+    current_password: str
+
+    @field_validator("new_email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if "@" not in value or len(value) < 3:
+            raise ValueError("That doesn't look like a valid email address.")
+        return value
+
+
+class DeleteAccountRequest(BaseModel):
+    current_password: str
+
+
 class LinkStartResponse(BaseModel):
     code: str
     expires_at: datetime

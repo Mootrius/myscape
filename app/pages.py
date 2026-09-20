@@ -71,15 +71,16 @@ except OSError:
 def _nav_sides(player: Optional[Player]) -> tuple[str, str]:
     """The single link/button that goes on each side of the centered
     logo in the header (see _shell). Logged out: Log in on the left,
-    Sign up on the right. Logged in: Dashboard on the left,
-    Log out on the right -- the email address used to show here too,
-    but there's no room for it next to a centered logo without
-    crowding the nav, so it's dropped (still shown on the dashboard
-    itself)."""
+    Sign up on the right. Logged in: Dashboard on the left, Account on
+    the right (log out itself lives on that page now, alongside
+    change email/change password/delete account -- see render_account)
+    -- the email address used to show here too, but there's no room
+    for it next to a centered logo without crowding the nav, so it's
+    dropped (still shown on the dashboard itself)."""
     if player:
         return (
             '<a href="/dashboard">Dashboard</a>',
-            '<button class="link" id="logoutBtn" type="button">Log out</button>',
+            '<a href="/account">Account</a>',
         )
     return (
         '<a href="/login">Log in</a>',
@@ -660,6 +661,191 @@ def render_dashboard(player: Player) -> str:
     </div>
     """
     return _shell(title="Dashboard — myscape", player=player, body=body)
+
+
+def render_account(player: Player) -> str:
+    """The header's Account link (see _nav_sides) -- log out plus the
+    three things a player can do to their own account: change email,
+    change password, delete the account entirely (see the matching
+    /api/auth/change-email, /change-password, /delete-account
+    endpoints in app/routers/auth.py, all of which deliberately stay
+    reachable pre-verification -- see each one's own docstring for
+    why). Unlike render_verify_email et al., `player` here isn't
+    Optional -- app/main.py's account_page route already redirects a
+    logged-out visitor to /login before this ever gets called."""
+    current_email = escape(player.email or "")
+    body = f"""
+    <div class="auth-shell">
+      <div class="auth-card">
+        <h2>ACCOUNT</h2>
+
+        <div class="account-section">
+          <h3>Email</h3>
+          <p class="account-section-hint">Current: <strong>{current_email}</strong></p>
+          <div class="auth-error" id="emailError"></div>
+          <div class="auth-success" id="emailSuccess"></div>
+          <form id="emailForm">
+            <div class="field">
+              <label for="newEmail">New email</label>
+              <input type="email" id="newEmail" name="newEmail" placeholder="you@example.com" required />
+            </div>
+            <div class="field">
+              <label for="emailPassword">Current password</label>
+              <input type="password" id="emailPassword" name="emailPassword" placeholder="Confirm with your password" required />
+            </div>
+            <button class="primary" type="submit">UPDATE EMAIL</button>
+          </form>
+        </div>
+
+        <div class="account-section">
+          <h3>Password</h3>
+          <div class="auth-error" id="passwordError"></div>
+          <div class="auth-success" id="passwordSuccess"></div>
+          <form id="passwordForm">
+            <div class="field">
+              <label for="currentPassword">Current password</label>
+              <input type="password" id="currentPassword" name="currentPassword" required />
+            </div>
+            <div class="field">
+              <label for="newPassword">New password</label>
+              <input type="password" id="newPassword" name="newPassword" placeholder="At least 8 characters" required minlength="8" />
+            </div>
+            <div class="field">
+              <label for="confirmNewPassword">Confirm new password</label>
+              <input type="password" id="confirmNewPassword" name="confirmNewPassword" placeholder="Re-enter your new password" required minlength="8" />
+            </div>
+            <button class="primary" type="submit">UPDATE PASSWORD</button>
+          </form>
+        </div>
+
+        <div class="account-section">
+          <h3>Log out</h3>
+          <button class="secondary" id="logoutBtn" type="button">LOG OUT</button>
+        </div>
+
+        <div class="account-section account-section--danger">
+          <h3>Delete account</h3>
+          <p class="account-section-hint">This permanently deletes your account and everything tied to it — goals, trackers, mindmaps, and your linked RuneLite account. This cannot be undone.</p>
+          <div class="auth-error" id="deleteError"></div>
+          <form id="deleteForm">
+            <div class="field">
+              <label for="deletePassword">Current password</label>
+              <input type="password" id="deletePassword" name="deletePassword" required />
+            </div>
+            <button class="danger" type="submit">DELETE ACCOUNT</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    """
+    script = """
+    (function () {
+      const emailForm = document.getElementById('emailForm');
+      emailForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('emailError');
+        const successEl = document.getElementById('emailSuccess');
+        errorEl.classList.remove('show');
+        successEl.classList.remove('show');
+        const newEmail = document.getElementById('newEmail').value;
+        const currentPassword = document.getElementById('emailPassword').value;
+        const submitBtn = emailForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+          const res = await fetch('/api/auth/change-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_email: newEmail, current_password: currentPassword }),
+          });
+          if (res.ok) {
+            successEl.textContent = 'Email updated -- check your new inbox for a fresh verification link.';
+            successEl.classList.add('show');
+            emailForm.reset();
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          errorEl.textContent = describeError(data, 'Could not update your email.');
+          errorEl.classList.add('show');
+        } catch (err) {
+          errorEl.textContent = 'Something went wrong. Please try again.';
+          errorEl.classList.add('show');
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+
+      const passwordForm = document.getElementById('passwordForm');
+      passwordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('passwordError');
+        const successEl = document.getElementById('passwordSuccess');
+        errorEl.classList.remove('show');
+        successEl.classList.remove('show');
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+        if (newPassword !== confirmNewPassword) {
+          errorEl.textContent = 'New passwords do not match.';
+          errorEl.classList.add('show');
+          return;
+        }
+        const submitBtn = passwordForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+          const res = await fetch('/api/auth/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+          });
+          if (res.ok) {
+            successEl.textContent = 'Password updated. Every other signed-in session has been logged out.';
+            successEl.classList.add('show');
+            passwordForm.reset();
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          errorEl.textContent = describeError(data, 'Could not update your password.');
+          errorEl.classList.add('show');
+        } catch (err) {
+          errorEl.textContent = 'Something went wrong. Please try again.';
+          errorEl.classList.add('show');
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+
+      const deleteForm = document.getElementById('deleteForm');
+      deleteForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('deleteError');
+        errorEl.classList.remove('show');
+        if (!window.confirm('Permanently delete your account? This cannot be undone.')) return;
+        const currentPassword = document.getElementById('deletePassword').value;
+        const submitBtn = deleteForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+          const res = await fetch('/api/auth/delete-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: currentPassword }),
+          });
+          if (res.ok) {
+            window.location.href = '/';
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          errorEl.textContent = describeError(data, 'Could not delete your account.');
+          errorEl.classList.add('show');
+        } catch (err) {
+          errorEl.textContent = 'Something went wrong. Please try again.';
+          errorEl.classList.add('show');
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+    """
+    return _shell(title="Account — myscape", player=player, body=body, extra_script=script)
 
 
 def render_signup() -> str:

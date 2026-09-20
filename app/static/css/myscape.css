@@ -419,6 +419,41 @@ button.primary {
 button.primary:hover { background: #ffab42; }
 button.primary:disabled { opacity: 0.5; cursor: default; }
 
+/* Account page's less-loud actions (render_account, app/pages.py) --
+   Log out is a real action but not the primary one on that section,
+   so it gets an outlined button instead of button.primary's filled
+   gold. */
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 18px;
+  font-size: 16px;
+  cursor: pointer;
+  width: 100%;
+}
+
+button.secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
+button.secondary:disabled { opacity: 0.5; cursor: default; }
+
+/* Delete account -- same shape as button.secondary above, but in
+   --red so it reads as the one genuinely destructive action on the
+   page rather than just another settings button. */
+button.danger {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  padding: 13px 18px;
+  font-size: 16px;
+  cursor: pointer;
+  width: 100%;
+}
+
+button.danger:hover { background: rgba(192, 90, 76, 0.12); }
+button.danger:disabled { opacity: 0.5; cursor: default; }
+
 .auth-error {
   display: none;
   background: rgba(192, 90, 76, 0.12);
@@ -490,6 +525,40 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
    like the rest of this page's text instead. */
 #noTokenError {
   text-align: center;
+}
+
+/* Account page's stacked settings sections (render_account,
+   app/pages.py) -- email, password, log out, delete account, each
+   below the last inside the one .auth-card, separated by a thin top
+   border rather than being four separate cards. */
+.account-section {
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+  margin-top: 22px;
+}
+
+.account-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.account-section h3 {
+  font-weight: normal;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  margin: 0 0 14px;
+}
+
+/* Delete account's heading picks up --red, same as button.danger --
+   the one section on this page that isn't just an ordinary setting. */
+.account-section--danger h3 { color: var(--red); }
+
+.account-section-hint {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 16px;
 }
 
 /* The 404/teleport-icon header on render_not_found (app/pages.py) --

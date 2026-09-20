@@ -22,6 +22,9 @@ from app.models import (
     Player,
 )
 from app.schemas import (
+    ChangeEmailRequest,
+    ChangePasswordRequest,
+    DeleteAccountRequest,
     ForgotPasswordRequest,
     LoginRequest,
     PlayerOut,
@@ -265,6 +268,105 @@ def resend_verification_email(
     button to do at that point."""
     if not player.email_verified_at:
         _send_verification_email(request, db, player)
+
+
+@router.post("/change-password", response_model=PlayerOut)
+@limiter.limit("10/minute")
+def change_password(
+    request: Request,
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Base (unverified-allowed) dependency, not the verified-required
+    one -- there's no reason someone who hasn't verified their email
+    yet should be blocked from changing their password.
+
+    Same token_version bump as reset_password's own (see that
+    endpoint's docstring above) -- proving the *current* password is
+    still exactly as trustworthy a "this is really the account owner"
+    signal as a fresh reset-email token was, so this logs out every
+    *other* session the same way. log_in_player re-runs after the bump
+    so this request's own session picks up the fresh version instead
+    of invalidating itself."""
+    if not player.password_hash or not verify_password(payload.current_password, player.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect.")
+
+    player.password_hash = hash_password(payload.new_password)
+    player.token_version += 1
+    db.commit()
+
+    log_in_player(request, player)
+    return player
+
+
+@router.post("/change-email", response_model=PlayerOut)
+@limiter.limit("10/minute")
+def change_email(
+    request: Request,
+    payload: ChangeEmailRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Also base (unverified-allowed) -- deliberately reachable before
+    verification, since mistyping your own email at signup is exactly
+    the situation where you'd otherwise never be able to receive a
+    verification link at all to unblock yourself any other way.
+
+    Requires the current password (not just an active session) since
+    this is the one change on this page that can hand the account to
+    someone else entirely if a session were ever hijacked without it.
+    Resets email_verified_at back to NULL and sends a fresh
+    verification email to the new address -- same "prove you control
+    it" bar a brand new signup has to clear, not a lesser one just
+    because this account already existed. That does mean this
+    session's own access to the verified-required parts of the site
+    goes back behind /verify-email-required immediately after this
+    succeeds, same as it would for a brand new signup -- see
+    get_current_verified_player_from_session in app/auth.py."""
+    if not player.password_hash or not verify_password(payload.current_password, player.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect.")
+
+    existing = db.query(Player).filter(Player.email == payload.new_email, Player.id != player.id).first()
+    if existing is not None:
+        # Same vagueness tradeoff as signup's own 409 doesn't apply here
+        # -- signup can't say "that email is taken" without leaking
+        # which emails are registered to *someone*, but this caller is
+        # already a proven, logged-in account owner, so there's no new
+        # information handed to a stranger by being specific.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That email is already in use.")
+
+    player.email = payload.new_email
+    player.email_verified_at = None
+    db.commit()
+
+    _send_verification_email(request, db, player)
+    return player
+
+
+@router.post("/delete-account", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+def delete_account(
+    payload: DeleteAccountRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_player_from_session),
+):
+    """Base (unverified-allowed) dependency again -- an unverified
+    player should still be able to walk away from an account they
+    decided not to finish setting up. Requires the current password,
+    same reasoning as change_email above. Every row this player owns
+    (gear setups, mindmaps, loot events, every storage snapshot, the
+    RuneLite link itself, etc.) cascades on this delete -- see each
+    relationship's cascade="all, delete-orphan" on Player in
+    app/models.py -- so this one db.delete is genuinely everything,
+    not a partial wipe that leaves orphaned rows behind."""
+    if not player.password_hash or not verify_password(payload.current_password, player.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect.")
+
+    log_out_player(request)
+    db.delete(player)
+    db.commit()
 
 
 @router.get("/me", response_model=PlayerOut)

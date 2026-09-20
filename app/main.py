@@ -75,6 +75,7 @@ from app.models import (
     TackleBoxItem,
 )
 from app.pages import (
+    render_account,
     render_dashboard,
     render_forgot_password,
     render_landing,
@@ -464,6 +465,17 @@ def dashboard_page(player: Optional[Player] = Depends(get_optional_current_playe
     if not player.email_verified_at:
         return RedirectResponse("/verify-email-required", status_code=302)
     return render_dashboard(player)
+
+
+@app.get("/account", response_class=HTMLResponse)
+def account_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
+    # No email_verified_at gate here, unlike dashboard_page above --
+    # render_account's own docstring covers why (log out, and fixing a
+    # mistyped signup email in particular, both need to stay reachable
+    # before verification).
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    return render_account(player)
 
 
 @app.get("/verify-email-required", response_class=HTMLResponse)
