@@ -3475,28 +3475,35 @@ def render_loot_tracker(player: PlayerView) -> str:
         return d.getFullYear() + '-' + month + '-' + day;
       }
 
-      // A clicked bar's own date range, for the chart title once
-      // state.selectedBucket is set (see renderBarChart) -- just the
-      // calendar day(s) the bucket falls on, not its own precise
-      // time-of-day (the panels below it are still scoped to the
-      // bucket's exact instant either way -- see bucketUrl -- this is
-      // purely what the title displays). A single date when the
-      // bucket's start and (see below) end share the same day, which
-      // covers every bucket under a day wide -- by far the common
-      // case, and every daily/weekly/monthly bucket too once dates
-      // this coarse are compared day-to-day rather than to the
-      // minute. The end shown is 1 second before the bucket's real
-      // (exclusive) end boundary -- see bucketUrl's own comment for
-      // why the fetch itself does the same -- so a bucket ending
-      // exactly at midnight reads as covering the day before it, not
-      // the next one it barely touches.
+      // A clicked bar's own precise time/date range, for the chart
+      // title once state.selectedBucket is set (see renderBarChart) --
+      // the bucket's own actual start/end rather than rounding to
+      // whatever granularity produced it (see fmtBucketLabel's own
+      // comment on why bucket boundaries are never calendar-aligned in
+      // the first place). Dates use fmtIsoDateLocal's YYYY-MM-DD form
+      // rather than the locale-formatted "Sep 20" style used elsewhere
+      // on this page. The end shown is 1 second before the bucket's
+      // real (exclusive) end boundary -- see bucketUrl's own comment
+      // for why the fetch itself does the same -- so a bucket spanning
+      // 3:00:00-3:59:59 reads as "3:00 - 3:59 PM" rather than the
+      // confusingly-exact-looking "3:00 - 4:00 PM", which would look
+      // like a full extra minute shared with the next bar. Only
+      // repeats the date on the end side when it differs from the
+      // start's -- the overwhelmingly common case (any bucket under a
+      // day wide) is same-day, and repeating an identical date on both
+      // sides would just be noise.
       function fmtBucketRangeLabel(startIso, endIso) {
         var start = new Date(startIso);
         var end = new Date(new Date(endIso).getTime() - 1000);
+        var timeOpts = { hour: 'numeric', minute: '2-digit' };
         var startDateStr = fmtIsoDateLocal(start);
         var endDateStr = fmtIsoDateLocal(end);
-        if (startDateStr === endDateStr) return startDateStr;
-        return startDateStr + ' \\u2013 ' + endDateStr;
+        var startTimeStr = start.toLocaleTimeString('en-US', timeOpts);
+        var endTimeStr = end.toLocaleTimeString('en-US', timeOpts);
+        if (startDateStr === endDateStr) {
+          return startDateStr + ', ' + startTimeStr + ' \\u2013 ' + endTimeStr;
+        }
+        return startDateStr + ', ' + startTimeStr + ' \\u2013 ' + endDateStr + ', ' + endTimeStr;
       }
 
       function rangeButtonLabel() {
