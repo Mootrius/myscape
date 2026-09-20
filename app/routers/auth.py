@@ -41,19 +41,32 @@ router = APIRouter(prefix="/api/auth", tags=["website-auth"])
 _FORGOT_PASSWORD_RESPONSE = {"detail": "If that email has an account, we've sent a password reset link."}
 
 
-def _send_verification_email(request: Request, db: Session, player: Player) -> None:
-    """Shared by signup (a brand new, unverified player) and
-    resend_verification_email below (a signed-in player asking for a
-    fresh link because the first one expired or never arrived).
-    Cleans up any of this player's previous outstanding verification
+def _issue_verification_token(db: Session, player: Player) -> str:
+    """The token bookkeeping shared by every case that needs a fresh
+    verification link (signup, resend, and change-email below) --
+    cleans up any of this player's previous outstanding verification
     tokens first, same reasoning as forgot_password's own cleanup, so
-    only the most recently sent link is ever valid."""
+    only the most recently sent link is ever valid. Returns the raw
+    (unhashed) token to build the actual verify_url with -- only its
+    hash is ever stored (see hash_token's own docstring in
+    app/security.py)."""
     db.query(EmailVerificationToken).filter(EmailVerificationToken.player_id == player.id).delete()
     raw_token = generate_token()
     expires_at = datetime.now(timezone.utc) + EMAIL_VERIFICATION_TOKEN_LIFETIME
     db.add(EmailVerificationToken(player_id=player.id, token_hash=hash_token(raw_token), expires_at=expires_at))
     db.commit()
+    return raw_token
 
+
+def _send_verification_email(request: Request, db: Session, player: Player) -> None:
+    """Shared by signup (a brand new, unverified player) and
+    resend_verification_email below (a signed-in player asking for a
+    fresh link because the first one expired or never arrived) -- both
+    genuinely first-time-verification cases, hence the "Welcome"
+    copy. change_email has its own near-identical sibling below
+    (_send_email_change_verification) with copy that fits an existing
+    account moving to a new address instead."""
+    raw_token = _issue_verification_token(db, player)
     verify_url = f"{str(request.base_url).rstrip('/')}/verify-email?token={raw_token}"
     send_email(
         to=player.email,
@@ -68,6 +81,68 @@ def _send_verification_email(request: Request, db: Session, player: Player) -> N
             "finish setting up your account.\n\n"
             f"Confirm here: {verify_url}\n\n"
             "This link expires in 24 hours."
+        ),
+    )
+
+
+def _send_email_change_verification(request: Request, db: Session, player: Player) -> None:
+    """change_email's own version of _send_verification_email above --
+    same token issuing, different copy: this player already has a
+    working account, they're just moving it to a new address, so this
+    doesn't talk about "finishing setup" the way signup's welcome email
+    does."""
+    raw_token = _issue_verification_token(db, player)
+    verify_url = f"{str(request.base_url).rstrip('/')}/verify-email?token={raw_token}"
+    send_email(
+        to=player.email,
+        subject="Confirm your new myscape email address",
+        html=(
+            "<p>Your myscape account's email address was just changed to this one. "
+            "Click the link below to confirm it and finish the change.</p>"
+            f'<p><a href="{verify_url}">Confirm my new email address</a>. This link expires in 24 hours.</p>'
+            "<p>Until you confirm, you'll need to verify before using most of the site.</p>"
+        ),
+        text=(
+            "Your myscape account's email address was just changed to this one. Click the "
+            "link below to confirm it and finish the change.\n\n"
+            f"Confirm here: {verify_url}\n\n"
+            "This link expires in 24 hours. Until you confirm, you'll need to verify before "
+            "using most of the site."
+        ),
+    )
+
+
+def _send_email_change_notice(old_email: str, new_email: str) -> None:
+    """The heads-up sent to the OLD address the moment change_email
+    succeeds -- the new address already gets its own confirmation link
+    (see _send_email_change_verification above), but nothing would
+    otherwise ever tell whoever the *previous* address belonged to that
+    it happened at all. change_email doesn't bump token_version (an
+    email change alone isn't treated as the same kind of
+    account-compromise signal a password change is -- see that
+    endpoint's own docstring), so if this wasn't authorized, any other
+    session the real owner is still signed in on stays valid -- which
+    is exactly the recovery path this points them at, since this old
+    address can no longer be used with forgot-password once it's off
+    the account."""
+    send_email(
+        to=old_email,
+        subject="Your myscape email address was changed",
+        html=(
+            f"<p>The email on your myscape account was just changed from this address to <strong>{new_email}</strong>.</p>"
+            "<p>If you made this change, there's nothing else to do.</p>"
+            "<p>If you didn't, someone with your password may have access to your account. If you're still "
+            "signed in anywhere else (another browser or device), go to Account and change your password "
+            "right away -- that logs out every other session. This address has been removed from the "
+            "account, so it can no longer be used to reset the password.</p>"
+        ),
+        text=(
+            f"The email on your myscape account was just changed from this address to {new_email}.\n\n"
+            "If you made this change, there's nothing else to do.\n\n"
+            "If you didn't, someone with your password may have access to your account. If you're still "
+            "signed in anywhere else (another browser or device), go to Account and change your password "
+            "right away -- that logs out every other session. This address has been removed from the "
+            "account, so it can no longer be used to reset the password."
         ),
     )
 
@@ -336,11 +411,19 @@ def change_email(
         # information handed to a stranger by being specific.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That email is already in use.")
 
+    old_email = player.email
     player.email = payload.new_email
     player.email_verified_at = None
     db.commit()
 
-    _send_verification_email(request, db, player)
+    _send_email_change_verification(request, db, player)
+    # Best-effort heads-up to whoever the address belonged to before --
+    # only when there was one (an admin-created row can have no email
+    # at all, see Player's own docstring in app/models.py) and it's
+    # actually different from the new one (a same-email "change" is a
+    # no-op this far down, but harmless to allow).
+    if old_email and old_email != player.email:
+        _send_email_change_notice(old_email, player.email)
     return player
 
 
