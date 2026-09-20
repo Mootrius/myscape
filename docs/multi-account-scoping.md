@@ -174,3 +174,26 @@ new one. Still needs:
   then downgrade, then upgrade again -- clean round trip. Nothing
   reads from these two tables yet; `players` and every existing route
   are untouched so far.
+- [x] **Step 2 (migration `376936c4bb59`):** the actual cutover.
+  Repoints all 24 character-scoped tables' `player_id` at
+  `game_accounts` (pure schema change -- drop constraint, rename
+  column, add constraint, rename the unique constraints/indexes that
+  reference it -- no row data rewritten, since `game_accounts.id`
+  already equals the old `player_id` values), and repoints the 2
+  identity-scoped token tables' `player_id` at `accounts` as
+  `account_id` (a real value rewrite this time, via a join through
+  `game_accounts` as the bridge). Caught and handled `poh_items`'
+  irregular FK constraint name (`costume_room_items_player_id_fkey`,
+  a leftover from before that table was renamed) by introspecting the
+  real replayed schema rather than assuming a name. Verified the same
+  way as step 1 -- seeded real rows in `bank_items`, `gear_setups`,
+  `poh_items`, `possession_trackers`, and both token tables against a
+  live player, ran upgrade, confirmed every FK/constraint/index landed
+  correctly and every token pointed at the *right* account, then
+  downgrade and diffed the schema back to byte-for-byte identical
+  (including `poh_items`' irregular name), then upgrade again. Still
+  doesn't touch `players` itself, and no application code
+  (`app/main.py`, `app/auth.py`, `app/models.py`, ...) has been
+  updated yet -- the ORM models and every route still read/write the
+  old `player_id` columns, so right now the live schema and the ORM's
+  idea of the schema have diverged. That gets fixed in step 3.
