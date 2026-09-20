@@ -310,6 +310,20 @@ header {
   padding-top: 40px;
 }
 
+/* Account (app/pages.py's render_account) is the one .auth-shell page
+   that's really part of the logged-in app rather than a pre-login
+   auth flow -- .page already gives every page 32px of top padding, so
+   .auth-shell's own extra 40px on top of that was landing its card a
+   lot lower than the dashboard's own cards. 14px here (not 0) matches
+   .dash-grid's own margin-top above exactly, so account's card starts
+   at the same y-position as the dashboard's cards do, not just close
+   to it. Scoped to this page (not .auth-shell itself) since every
+   other page using that class is a pre-login auth screen where the
+   current centered-lower feel isn't a reported problem. */
+.account-shell {
+  padding-top: 14px;
+}
+
 .auth-card {
   width: 100%;
   max-width: 420px;

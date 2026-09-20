@@ -675,7 +675,7 @@ def render_account(player: Player) -> str:
     logged-out visitor to /login before this ever gets called."""
     current_email = escape(player.email or "")
     body = f"""
-    <div class="auth-shell">
+    <div class="auth-shell account-shell">
       <div class="auth-card">
         <h2>ACCOUNT</h2>
         <p class="account-email">{current_email}</p>
