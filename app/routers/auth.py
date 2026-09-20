@@ -10,7 +10,12 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_account_from_session, log_in_account, log_out_account
+from app.auth import (
+    get_current_account_from_session,
+    get_optional_current_game_account_from_session,
+    log_in_account,
+    log_out_account,
+)
 from app.database import get_db
 from app.email_client import send_email
 from app.limiter import limiter
@@ -42,19 +47,24 @@ router = APIRouter(prefix="/api/auth", tags=["website-auth"])
 _FORGOT_PASSWORD_RESPONSE = {"detail": "If that email has an account, we've sent a password reset link."}
 
 
-def _player_out_for(account: Account) -> PlayerOut:
+def _player_out_for(request: Request, db: Session, account: Account) -> PlayerOut:
     """PlayerOut mixes identity (id, email) and character
     (runescape_name, account_hash) fields -- the shape the frontend
     already expected before the multi-account split (see
     docs/multi-account-scoping.md). These endpoints only ever deal
     with the website login (an Account), so this fills in
-    runescape_name/account_hash from whichever GameAccount is this
-    Account's *first* one -- every Account has at least one, even a
-    completely unlinked one, since signup below creates it
-    immediately. Once there's a real account switcher (that doc's
-    step 7) this should use the session's actual *active* GameAccount
-    instead of always the first -- tracked there, not solved here."""
-    game_account = account.game_accounts[0] if account.game_accounts else None
+    runescape_name/account_hash from whichever GameAccount this
+    session's own active one is (see
+    get_optional_current_game_account_from_session in app/auth.py) --
+    NOT just account.game_accounts[0], which would silently ignore a
+    switch made via the account page's own Linked Accounts list (step
+    7 of docs/multi-account-scoping.md) and always show the first-ever
+    linked character instead of whichever one is actually active.
+    Tolerates a None game_account (zero linked characters, now a real
+    reachable state since that page's own Remove button can delete
+    down to it) the same way every other caller of that dependency
+    does."""
+    game_account = get_optional_current_game_account_from_session(request, db, account)
     return PlayerOut(
         id=account.id,
         email=account.email,
@@ -194,7 +204,7 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
 
     _send_verification_email(request, db, account)
     log_in_account(request, account)
-    return _player_out_for(account)
+    return _player_out_for(request, db, account)
 
 
 @router.post("/login", response_model=PlayerOut)
@@ -213,7 +223,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password.")
 
     log_in_account(request, account)
-    return _player_out_for(account)
+    return _player_out_for(request, db, account)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -323,7 +333,7 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
     db.commit()
 
     log_in_account(request, account)
-    return _player_out_for(account)
+    return _player_out_for(request, db, account)
 
 
 @router.post("/verify-email", response_model=PlayerOut)
@@ -349,7 +359,7 @@ def verify_email(request: Request, payload: VerifyEmailRequest, db: Session = De
     db.commit()
 
     log_in_account(request, account)
-    return _player_out_for(account)
+    return _player_out_for(request, db, account)
 
 
 @router.post("/resend-verification-email", status_code=status.HTTP_204_NO_CONTENT)
@@ -403,7 +413,7 @@ def change_password(
     db.commit()
 
     log_in_account(request, account)
-    return _player_out_for(account)
+    return _player_out_for(request, db, account)
 
 
 @router.post("/change-email", response_model=PlayerOut)
@@ -455,7 +465,7 @@ def change_email(
     # no-op this far down, but harmless to allow).
     if old_email and old_email != account.email:
         _send_email_change_notice(old_email, account.email)
-    return _player_out_for(account)
+    return _player_out_for(request, db, account)
 
 
 @router.post("/delete-account", status_code=status.HTTP_204_NO_CONTENT)
@@ -485,5 +495,9 @@ def delete_account(
 
 
 @router.get("/me", response_model=PlayerOut)
-def read_logged_in_account(account: Account = Depends(get_current_account_from_session)):
-    return _player_out_for(account)
+def read_logged_in_account(
+    request: Request,
+    db: Session = Depends(get_db),
+    account: Account = Depends(get_current_account_from_session),
+):
+    return _player_out_for(request, db, account)

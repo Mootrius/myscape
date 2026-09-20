@@ -338,3 +338,70 @@ verified live in production) and 7 (the "link another account"
 endpoint + account-switcher UI -- the backend substrate for it,
 `GameAccount`/`_resolve_active_game_account`, already exists; nothing
 in the UI calls it yet).
+
+## Step 7: the account switcher
+
+- [x] Four new endpoints in `app/routers/linking.py`: `GET
+  /api/link/game-accounts` (list every `GameAccount` under the
+  session's `Account`, each with `linked`/`active` flags), `POST
+  /api/link/game-accounts` (create a new, empty, unlinked
+  `GameAccount` and immediately make it the session's active one --
+  the "+ ADD ANOTHER ACCOUNT" button), `POST
+  /api/link/game-accounts/{id}/activate` (switch which one is active
+  for this session, 404 if it doesn't belong to the calling
+  `Account`), `DELETE /api/link/game-accounts/{id}` (hard-delete,
+  cascades to every row that `GameAccount` owns via the existing
+  SQLAlchemy `cascade="all, delete-orphan"` relationships -- no
+  extra cleanup code needed; allowed all the way down to zero, per
+  the "unlimited accounts, no minimum" decision above).
+- [x] Account page UI (`app/pages.py`'s `render_account`): a new
+  "LINKED ACCOUNTS" section listing every `GameAccount` with a
+  Switch button (hidden on whichever is already active) and a
+  two-step "ARE YOU SURE?" Remove button, plus the add button.
+  Adding a slot does a full page reload so the existing `_link_banner`
+  UI picks up the newly-active-but-unlinked `GameAccount` and shows
+  its GENERATE CODE flow -- deliberately reusing that flow rather
+  than building a second one.
+- [x] `GameAccountSummary` schema added to `app/schemas.py` for the
+  list endpoint's response shape.
+
+**Bug caught by end-to-end testing, fixed before this was committed**:
+`_player_out_for()` in `app/routers/auth.py` (written during steps
+4/5, see above) built its `PlayerOut` from `account.game_accounts[0]`
+-- always the *first* `GameAccount` ever linked, never the session's
+actual active one. Harmless at the time (every `Account` had at most
+one `GameAccount` until this step's own "add another account"
+endpoint existed), and the function's own docstring already flagged
+it as deferred to this step. Once a second `GameAccount` existed,
+switching to it left `/api/auth/me` (and by extension every route
+that calls `_player_out_for` -- `signup`, `login`, `reset_password`,
+`verify_email`, `change_password`, `change_email`) silently showing
+the wrong character's data. Fixed by having `_player_out_for` take
+`request`/`db` and resolve the real active `GameAccount` via the
+same `get_optional_current_game_account_from_session` dependency the
+rest of the app already uses, instead of indexing into the list.
+Caught by `smoke_test3.py`'s own assertion that `/api/auth/me`
+reflects a freshly-activated second account -- it failed on the
+first run, passed after this fix.
+
+**Verified end-to-end** against a freshly-migrated throwaway
+Postgres 16 database (all 26 migrations replayed from scratch): the
+full switcher lifecycle (list -> add second, unlinked, active -> `me`
+reflects it -> link it under a second `account_hash` -> switch back
+to the first -> `me` reflects that -> cross-account activate attempt
+404s -> delete the second, confirmed gone from the DB, not just
+unlinked -> account page still renders -> delete the *last* remaining
+one too, confirmed allowed, dashboard/account pages still render with
+zero linked characters). Then a separate broader regression pass
+against the same database: signup, email verification, login,
+`/api/link/start`+`/api/link/exchange` (the RuneLite plugin's actual
+flow), the issued API key against `/api/players/me` and a real bank
+sync, and the dashboard/loot/possessions pages and
+`/api/possessions/summary` all still 200. `configure_mappers()` and
+route registration (120 routes, up from 116 before this step's 4
+additions) both still clean. Not run against production -- only the
+throwaway local database, same as steps 4/5.
+
+**What's left**: step 6 only (drop the old `players` table, once this
+step has had time to prove stable in production). Step 7 itself is
+now complete.

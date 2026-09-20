@@ -2,16 +2,25 @@
 exchanges it for a long-lived API key. See app/models.py's module
 docstring for the full design rationale.
 """
+import uuid
 from datetime import datetime, timezone
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_game_account_from_session, get_current_verified_game_account_from_session
+from app.auth import (
+    get_current_account_from_session,
+    get_current_game_account_from_session,
+    get_current_verified_account_from_session,
+    get_current_verified_game_account_from_session,
+    get_optional_current_game_account_from_session,
+    set_active_game_account,
+)
 from app.database import get_db
 from app.limiter import limiter
-from app.models import LINK_CODE_LIFETIME, GameAccount, LinkCode, PlayerApiKey
-from app.schemas import LinkExchangeRequest, LinkExchangeResponse, LinkStartResponse
+from app.models import LINK_CODE_LIFETIME, Account, GameAccount, LinkCode, PlayerApiKey
+from app.schemas import GameAccountSummary, LinkExchangeRequest, LinkExchangeResponse, LinkStartResponse
 from app.security import generate_token, hash_token
 
 router = APIRouter(prefix="/api", tags=["account-linking"])
@@ -124,3 +133,119 @@ def exchange_link_code(
     db.commit()
 
     return LinkExchangeResponse(api_key=raw_api_key, player_id=game_account.id)
+
+
+@router.get("/link/game-accounts", response_model=List[GameAccountSummary])
+def list_game_accounts(
+    db: Session = Depends(get_db),
+    account: Account = Depends(get_current_account_from_session),
+    active_game_account: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
+):
+    """Every OSRS character linked (or slotted but not yet linked --
+    see add_game_account below) under the signed-in Account, oldest
+    first, for the account page's Linked Accounts list (step 7 of
+    docs/multi-account-scoping.md). Uses the *optional* active-game-
+    account dependency, not the required one every real feature
+    endpoint uses -- this page needs to render even for the (now
+    reachable, via delete_game_account below) zero-GameAccounts case,
+    not 409 outright."""
+    game_accounts = (
+        db.query(GameAccount)
+        .filter(GameAccount.account_id == account.id)
+        .order_by(GameAccount.created_at)
+        .all()
+    )
+    active_id = active_game_account.id if active_game_account else None
+    return [
+        GameAccountSummary(
+            id=game_account.id,
+            runescape_name=game_account.runescape_name,
+            linked=game_account.account_hash is not None,
+            active=(game_account.id == active_id),
+        )
+        for game_account in game_accounts
+    ]
+
+
+@router.post("/link/game-accounts", response_model=GameAccountSummary, status_code=status.HTTP_201_CREATED)
+def add_game_account(
+    request: Request,
+    db: Session = Depends(get_db),
+    account: Account = Depends(get_current_verified_account_from_session),
+):
+    """Creates a new, empty, unlinked GameAccount under the signed-in
+    Account and makes it the session's active one -- the entry point
+    for linking a second (or third, ...) OSRS character. No cap (see
+    docs/multi-account-scoping.md's Decisions) -- the account page's
+    own "Add another account" button is what calls this.
+
+    Requires a verified email, the same bar start_link itself already
+    gates on -- there'd be nothing useful to do with a fresh slot
+    otherwise. Deliberately does nothing beyond create-and-activate:
+    the account page just reloads after this succeeds, and the
+    existing link banner (see _link_banner in app/pages.py) takes it
+    from there exactly as it would for a brand new signup's first
+    link, since this new slot's account_hash is NULL the same way."""
+    game_account = GameAccount(account_id=account.id)
+    db.add(game_account)
+    db.commit()
+    db.refresh(game_account)
+    set_active_game_account(request, game_account)
+    return GameAccountSummary(id=game_account.id, runescape_name=None, linked=False, active=True)
+
+
+@router.post("/link/game-accounts/{game_account_id}/activate", status_code=status.HTTP_204_NO_CONTENT)
+def activate_game_account(
+    game_account_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    account: Account = Depends(get_current_account_from_session),
+):
+    """Switches which of the signed-in Account's linked GameAccounts
+    this session treats as active -- the account page's own "Switch"
+    button. Base (unverified-allowed) dependency, same reasoning as
+    unlink_via_session above: this is account management, not a
+    feature that touches game data itself."""
+    game_account = (
+        db.query(GameAccount)
+        .filter(GameAccount.id == game_account_id, GameAccount.account_id == account.id)
+        .first()
+    )
+    if game_account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game account not found.")
+    set_active_game_account(request, game_account)
+
+
+@router.delete("/link/game-accounts/{game_account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_game_account(
+    game_account_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    account: Account = Depends(get_current_account_from_session),
+):
+    """Permanently deletes this linked character and every row of game
+    data attached to it -- bank, gear setups, mindmaps, loot history,
+    everything (see GameAccount's own cascade="all, delete-orphan"
+    relationships in app/models.py). NOT the same action as Unlink
+    above, which only disconnects the RuneLite plugin and revokes its
+    API keys while keeping the GameAccount row and its data intact for
+    a later re-link -- this is the account page's "Remove" button, and
+    it does not come back.
+
+    Per docs/multi-account-scoping.md's Decisions there's no minimum:
+    deleting the Account's only remaining GameAccount is allowed and
+    leaves it with zero, the same state a brand new signup is in
+    before its first link -- see get_optional_current_game_account_from_session
+    and list_game_accounts above for how the rest of the app already
+    handles that. If the deleted GameAccount happened to be this
+    session's active one, the next request that needs one just falls
+    back to whatever's left (see _resolve_active_game_account in
+    app/auth.py) -- nothing here needs to touch the session directly."""
+    game_account = (
+        db.query(GameAccount)
+        .filter(GameAccount.id == game_account_id, GameAccount.account_id == account.id)
+        .first()
+    )
+    if game_account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game account not found.")
+    db.delete(game_account)
+    db.commit()

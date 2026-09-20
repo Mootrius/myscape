@@ -152,6 +152,19 @@ class LinkExchangeResponse(BaseModel):
     player_id: uuid.UUID
 
 
+class GameAccountSummary(BaseModel):
+    """One row in the account page's Linked Accounts list -- see
+    app/routers/linking.py's game-account endpoints (step 7 of
+    docs/multi-account-scoping.md). Deliberately leaves out
+    account_hash: nothing on the website itself needs the raw hash,
+    only whether a slot is linked at all."""
+
+    id: uuid.UUID
+    runescape_name: Optional[str] = None
+    linked: bool
+    active: bool
+
+
 class BankItemIn(BaseModel):
     item_id: int
     # Only meaningfully used for an untradeable item (see BankItem's

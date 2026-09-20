@@ -759,6 +759,14 @@ def render_account(player: PlayerView) -> str:
           </form>
         </div>
 
+        <div class="account-section">
+          <p class="account-section-title">LINKED ACCOUNTS</p>
+          <p class="account-section-hint">Every OSRS character linked to this myscape login. Switch which one you're viewing or add another -- there's no limit. Removing one permanently deletes all of its data; unlinking it from the plugin (on the dashboard) does not.</p>
+          <div class="auth-error" id="gameAccountsError"></div>
+          <div class="game-accounts-list" id="gameAccountsList"></div>
+          <button class="secondary" id="addGameAccountBtn" type="button">+ ADD ANOTHER ACCOUNT</button>
+        </div>
+
         <div class="account-section account-section--danger">
           <p class="account-section-hint">This will PERMANENTLY delete your myscape account and data attached to it. You can create a new account afterward, but you CANNOT undo this action.</p>
           <div class="auth-error" id="deleteError"></div>
@@ -911,6 +919,151 @@ def render_account(player: PlayerView) -> str:
           deleteSubmitBtn.disabled = false;
         }
       });
+
+      // Linked Accounts list (step 7 of docs/multi-account-scoping.md)
+      // -- fetched fresh on load rather than rendered server-side,
+      // same reasoning as every other JS-populated list on this site
+      // (gear setups, mindmaps, ...): it's the same data an action
+      // right here on this page (switch/remove/add) can immediately
+      // change, so there's no point building it twice.
+      const gameAccountsList = document.getElementById('gameAccountsList');
+      const gameAccountsError = document.getElementById('gameAccountsError');
+      const addGameAccountBtn = document.getElementById('addGameAccountBtn');
+
+      function renderGameAccountRow(gameAccount) {
+        const row = document.createElement('div');
+        row.className = 'game-account-row';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'game-account-name' + (gameAccount.linked ? '' : ' game-account-name--unlinked');
+        nameEl.textContent = gameAccount.linked ? gameAccount.runescape_name : 'Not yet linked';
+        row.appendChild(nameEl);
+
+        if (gameAccount.active) {
+          const badge = document.createElement('span');
+          badge.className = 'game-account-active-badge';
+          badge.textContent = 'ACTIVE';
+          nameEl.appendChild(badge);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'game-account-actions';
+
+        if (!gameAccount.active) {
+          const switchBtn = document.createElement('button');
+          switchBtn.type = 'button';
+          switchBtn.className = 'secondary';
+          switchBtn.textContent = 'SWITCH';
+          switchBtn.addEventListener('click', async () => {
+            gameAccountsError.classList.remove('show');
+            switchBtn.disabled = true;
+            try {
+              const res = await fetch(`/api/link/game-accounts/${gameAccount.id}/activate`, { method: 'POST' });
+              if (res.ok) {
+                await loadGameAccounts();
+                return;
+              }
+              const data = await res.json().catch(() => ({}));
+              gameAccountsError.textContent = describeError(data, 'Could not switch accounts.');
+              gameAccountsError.classList.add('show');
+            } catch (err) {
+              gameAccountsError.textContent = 'Something went wrong. Please try again.';
+              gameAccountsError.classList.add('show');
+            } finally {
+              switchBtn.disabled = false;
+            }
+          });
+          actions.appendChild(switchBtn);
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'danger';
+        removeBtn.textContent = 'REMOVE';
+        removeBtn.dataset.armed = 'false';
+        // Same arm-then-confirm two-step as DELETE ACCOUNT above, for
+        // the same reason -- this is also a permanent, undoable-only-
+        // by-losing-data action, just scoped to one character instead
+        // of the whole login.
+        removeBtn.addEventListener('click', async () => {
+          gameAccountsError.classList.remove('show');
+          if (removeBtn.dataset.armed !== 'true') {
+            removeBtn.dataset.armed = 'true';
+            removeBtn.textContent = 'ARE YOU SURE?';
+            return;
+          }
+          removeBtn.disabled = true;
+          try {
+            const res = await fetch(`/api/link/game-accounts/${gameAccount.id}`, { method: 'DELETE' });
+            if (res.ok) {
+              await loadGameAccounts();
+              return;
+            }
+            const data = await res.json().catch(() => ({}));
+            gameAccountsError.textContent = describeError(data, 'Could not remove this account.');
+            gameAccountsError.classList.add('show');
+            removeBtn.dataset.armed = 'false';
+            removeBtn.textContent = 'REMOVE';
+          } catch (err) {
+            gameAccountsError.textContent = 'Something went wrong. Please try again.';
+            gameAccountsError.classList.add('show');
+            removeBtn.dataset.armed = 'false';
+            removeBtn.textContent = 'REMOVE';
+          } finally {
+            removeBtn.disabled = false;
+          }
+        });
+        actions.appendChild(removeBtn);
+
+        row.appendChild(actions);
+        return row;
+      }
+
+      async function loadGameAccounts() {
+        gameAccountsError.classList.remove('show');
+        try {
+          const res = await fetch('/api/link/game-accounts');
+          if (!res.ok) {
+            gameAccountsError.textContent = 'Could not load your linked accounts.';
+            gameAccountsError.classList.add('show');
+            return;
+          }
+          const gameAccounts = await res.json();
+          gameAccountsList.innerHTML = '';
+          gameAccounts.forEach((gameAccount) => gameAccountsList.appendChild(renderGameAccountRow(gameAccount)));
+        } catch (err) {
+          gameAccountsError.textContent = 'Something went wrong. Please try again.';
+          gameAccountsError.classList.add('show');
+        }
+      }
+
+      addGameAccountBtn.addEventListener('click', async () => {
+        gameAccountsError.classList.remove('show');
+        addGameAccountBtn.disabled = true;
+        try {
+          const res = await fetch('/api/link/game-accounts', { method: 'POST' });
+          if (res.ok) {
+            // Reload rather than just re-fetching the list -- the new
+            // slot is now this session's active GameAccount, and the
+            // header's own link banner (see _link_banner in
+            // app/pages.py) needs a fresh page load to notice that and
+            // show its GENERATE CODE button for it, the same one a
+            // brand new signup sees for its first link.
+            window.location.reload();
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          gameAccountsError.textContent = describeError(data, 'Could not add another account.');
+          gameAccountsError.classList.add('show');
+        } catch (err) {
+          gameAccountsError.textContent = 'Something went wrong. Please try again.';
+          gameAccountsError.classList.add('show');
+        } finally {
+          addGameAccountBtn.disabled = false;
+        }
+      });
+
+      loadGameAccounts();
     })();
     """
     return _shell(title="Account — myscape", player=player, body=body, extra_script=script)
