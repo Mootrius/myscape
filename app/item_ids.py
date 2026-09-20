@@ -47,15 +47,56 @@ ICON_IDS_BY_FILENAME_PATH = pathlib.Path(__file__).resolve().parent / "data" / "
 _item_index: Optional[Dict[str, dict]] = None
 _icon_filename_index: Optional[Dict[str, List[int]]] = None
 
+# A small number of item_ids.json entries whose "name" is itself a
+# scrape artifact -- the wiki's own infobox markup leaked straight
+# into the name field instead of being stripped to plain text -- so
+# there's no clean display name to show a player at all, only raw
+# HTML/wikitext. Excluded here (by their exact key in the snapshot,
+# lowercased the same way get_item_index below keys everything) so
+# they never reach find_item_ids/find_item_by_exact_name/
+# search_item_names below, and therefore never surface in a search
+# dropdown anywhere on the site that ultimately calls one of those
+# three (Purchase Goals' search_items, its search_trackable_items
+# reuse in app/possessions.py, and this module's own search_item_names
+# as the final tier of each) -- reported after "Lovley[sic] jubbly
+# bib" (item id 32928) showed up, raw markup and all, in a Purchase
+# Goals item search. Applied at load time rather than edited into the
+# JSON file itself so it survives a future regeneration by
+# scripts/fetch_item_ids.py without silently reappearing -- check this
+# list again after any regeneration in case the wiki's scrape picks up
+# new ones of these.
+_BAD_ITEM_INDEX_KEYS = {
+    # "Lovley[sic] jubbly bib" -- the wiki's "[sic]" citation-note
+    # template (marking a misspelling in the item's real name as
+    # intentional, not a wiki typo) rendered as literal HTML instead of
+    # being resolved to plain text.
+    'lovley<sup class="noprint">&#91;<span class="fact-text" '
+    'title="the preceding quoted material has been reproduced '
+    'verbatim from the quoted original and is not a transcription '
+    'error.">sic</span>&#93;</sup> jubbly bib',
+    # The wiki's own "null name" placeholder template -- rendered for
+    # an entity infobox with no real name on file -- scraped as if it
+    # were the item's actual name. Shares its icon (Exploding vial) and
+    # ids with a real, ordinary item, so hiding this entry loses
+    # nothing except the unusable name.
+    'null <sup><span style="cursor:help; border-bottom:1px dotted" '
+    'title="the name of this entity is not defined in the game.">'
+    '[?]</span></sup>[[category:pages with null name]]',
+}
+
 
 def get_item_index() -> Dict[str, dict]:
     global _item_index
     if _item_index is None:
         try:
             with open(ITEM_IDS_PATH, "r", encoding="utf-8") as f:
-                _item_index = json.load(f)
+                raw = json.load(f)
         except (OSError, json.JSONDecodeError):
-            _item_index = {}
+            raw = {}
+        _item_index = {
+            key: entry for key, entry in raw.items()
+            if key not in _BAD_ITEM_INDEX_KEYS
+        }
     return _item_index
 
 
