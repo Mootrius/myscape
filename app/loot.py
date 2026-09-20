@@ -119,6 +119,33 @@ def resolve_range(range_key: Optional[str], start: Optional[datetime], end: Opti
     return now - delta, now
 
 
+def parse_loot_range_bound(value: str, *, is_end: bool) -> datetime:
+    """Parses one of GET /api/players/me/loot's ?start=/&end= query
+    params for range="custom" -- either a bare "YYYY-MM-DD" date (what
+    the range menu's own two text inputs in render_loot_tracker,
+    app/pages.py, always send) or a full ISO-8601 timestamp with an
+    explicit time component (what a clicked bar sends instead -- see
+    bucketUrl in that same script, which already knows its own
+    bucket's precise start/end down to the millisecond and would lose
+    that precision if forced through the date-only path below).
+    A bare date is widened to that whole calendar day (00:00:00 for
+    the start bound, 23:59:59.999999 for the end bound -- a single day
+    on its own names a span, not an instant) the same way this
+    function's predecessor always did; a full timestamp is trusted
+    verbatim (already tz-aware, or assumed UTC if not) since the
+    caller already means something more precise than "that whole
+    day". Raises ValueError for anything that's neither -- same as a
+    bare strptime call would have, so read_loot's own try/except in
+    app/main.py doesn't need to change."""
+    if "T" in value or ":" in value:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    if is_end:
+        dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return dt
+
+
 def _bucket_plan(start: datetime, end: datetime) -> Tuple[int, timedelta, str]:
     """Chooses how many equal-width buckets to slice [start, end] into
     for the bar chart, and what granularity label the frontend should

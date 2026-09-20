@@ -40,7 +40,7 @@ from app.auth import (
 from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
 from app.limiter import limiter
-from app.loot import build_loot_state, kc_counts_by_player, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
+from app.loot import build_loot_state, kc_counts_by_player, parse_loot_range_bound, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
 from app.item_ids import find_item_ids
 from app.npc_names import search_npc_names
 from app.quest_names import search_quest_names
@@ -1414,11 +1414,13 @@ def read_loot(
     computed fresh from this player's synced LootEvent rows. `range`
     is one of app/loot.py's RANGE_PRESETS keys ("24h", "1w", "1m",
     "3m", "6m", "1y") or "custom", in which case `start`/`end` are
-    plain "YYYY-MM-DD" dates (as the page's native date inputs send
-    them) naming the first and last calendar day to include, both
-    inclusive -- widened here to that day's full 00:00:00-23:59:59.999999
-    UTC span before being handed to resolve_range, since a bare date
-    on its own is a day, not an instant. An unrecognized/missing
+    either plain "YYYY-MM-DD" dates (as the range menu's own date
+    inputs send them, naming the first and last calendar day to
+    include, both inclusive) or full ISO-8601 timestamps (as a
+    clicked bar sends instead, naming its own bucket's exact
+    start/end -- see bucketUrl in render_loot_tracker's script) --
+    see parse_loot_range_bound in app/loot.py for how each is told
+    apart and turned into a concrete instant. An unrecognized/missing
     `range`, or a `custom` missing either date, falls back to
     resolve_range's own default (the page's original 24-hour window).
     Not pinned to a Pydantic response_model for the same reason GET
@@ -1429,13 +1431,14 @@ def read_loot(
     if range == "custom":
         try:
             if start:
-                start_dt = datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                start_dt = parse_loot_range_bound(start, is_end=False)
             if end:
-                end_dt = datetime.strptime(end, "%Y-%m-%d").replace(
-                    hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc
-                )
+                end_dt = parse_loot_range_bound(end, is_end=True)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start/end must be YYYY-MM-DD dates.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="start/end must be YYYY-MM-DD dates or ISO-8601 timestamps.",
+            )
     range_start, range_end = resolve_range(range, start_dt, end_dt)
     return build_loot_state(db, game_account, range_start, range_end)
 

@@ -3165,6 +3165,17 @@ def render_loot_tracker(player: PlayerView) -> str:
         // touching the rest -- see the NPC row's click handler below.
         selectedNpcs: [], npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '',
         rangeKey: '24h', customStart: null, customEnd: null,
+        // The clicked bar's own {start, end, value, killCount} (all
+        // four captured straight off that bucket at click time), or
+        // null when no bar is selected -- mutually exclusive with
+        // selectedNpcs above (picking one always clears the other,
+        // see the #lootBarBars/#lootNpcRow click handlers below): a
+        // bar click re-scopes everything to a time slice, an NPC box
+        // click re-scopes it to an identity, and combining both isn't
+        // asked for here. See currentNpcs/currentItems and
+        // renderBarChart's own selectedBucket handling for how this
+        // drives the panels/header/title once set.
+        selectedBucket: null,
         // Purely local UI state, never persisted -- each panel's own
         // "show hidden" eye toggle (see .loot-hide-toggle in
         // loot-tracker.css). Off by default: a hidden NPC/item starts
@@ -3173,6 +3184,23 @@ def render_loot_tracker(player: PlayerView) -> str:
         npcShowHidden: false, itemShowHidden: false,
       };
       var lastData = null;
+      // The scoped payload for state.selectedBucket, kept separate
+      // from lastData -- lastData always stays the whole selected
+      // range (the chart needs every bucket regardless of what's
+      // selected), while this is a full extra GET /api/players/me/loot
+      // fetch for just that one bucket's own precise [start, end)
+      // window -- see bucketUrl/loadBucketData below. Null both when
+      // nothing's selected and while the first fetch for a freshly
+      // clicked bar is still in flight.
+      var bucketData = null;
+      // Bumped by clearSelectedBucket and every loadBucketData call --
+      // guards an in-flight fetch the same way npcRowRenderToken/
+      // itemListRenderToken guard renderNpcRow/renderItemList's own
+      // async icon-preload below, so a slow response that's since been
+      // superseded (a different bar clicked, or the selection cleared,
+      // while it was still in flight) can never clobber the panels
+      // with stale data once it finally resolves.
+      var bucketFetchToken = 0;
 
       // Feather's own "eye"/"eye-off" outlines -- the per-tile
       // hide/unhide button baked into every NPC/item box (see
@@ -3311,13 +3339,36 @@ def render_loot_tracker(player: PlayerView) -> str:
         return order.map(function (key) { return byKey[key]; });
       }
 
+      // The By-NPC row's own source list -- a clicked bar
+      // (state.selectedBucket) wins over lastData's whole-range
+      // windowNpcs the same way it wins in currentItems below, and for
+      // the same reason (see that function's own comment). Every
+      // other NPC-row caller already goes through this rather than
+      // reading lastData.windowNpcs directly -- see the click/search/
+      // sort/hide-toggle handlers on #lootNpcRow/#lootNpcSortTabs.
+      function currentNpcs() {
+        if (state.selectedBucket) return bucketData ? (bucketData.windowNpcs || []) : [];
+        return (lastData && lastData.windowNpcs) || [];
+      }
+
       // The item panel shows every NPC's items combined when nothing's
       // selected, just the one selected NPC's own items when exactly
       // one is, or all selected NPCs' items summed together (see
       // mergedNpcItems above) once 2+ are -- see build_loot_state's
       // windowItems/npcItems in app/loot.py for how those two lists
-      // are computed.
+      // are computed. A clicked bar (state.selectedBucket) takes
+      // priority over all of that -- mutually exclusive with
+      // selectedNpcs (see that field's own comment), so this only ever
+      // needs to check the one that's actually populated -- and reads
+      // from bucketData instead of lastData, since only a fresh scoped
+      // fetch for that bucket's own [start, end) window has its
+      // items (lastData's windowItems/npcItems cover the whole
+      // selected range, not any one bucket of it). Empty while that
+      // fetch is still in flight (bucketData null) rather than
+      // falling back to the whole range's items, which would flash a
+      // wrong, too-broad answer before the real one arrives.
       function currentItems() {
+        if (state.selectedBucket) return bucketData ? (bucketData.windowItems || []) : [];
         if (!lastData) return [];
         var npcItems = lastData.npcItems || {};
         if (state.selectedNpcs.length === 1) {
@@ -3410,6 +3461,41 @@ def render_loot_tracker(player: PlayerView) -> str:
         if (!isoDate) return '';
         var d = new Date(isoDate + 'T00:00:00');
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+
+      // A clicked bar's own precise time/date range, for the chart
+      // title once state.selectedBucket is set (see renderBarChart) --
+      // deliberately NOT keyed off granularity the way fmtBucketLabel's
+      // x-axis ticks are, since bucket boundaries are never calendar-
+      // aligned in the first place (see _bucket_plan in app/loot.py:
+      // bucket width is the selected range's own span divided evenly
+      // by however many buckets it gets, not real hours/days/weeks/
+      // months), so even an "hourly" bucket can start at, say, 3:14 PM
+      // rather than the top of the hour -- this always shows the
+      // bucket's own actual start/end instead of rounding to whatever
+      // granularity produced it. The end shown is 1 second before the
+      // bucket's real (exclusive) end boundary -- see bucketUrl's own
+      // comment for why the fetch itself does the same -- so a bucket
+      // spanning 3:00:00-3:59:59 reads as "3:00 - 3:59 PM" rather than
+      // the confusingly-exact-looking "3:00 - 4:00 PM", which would
+      // look like a full extra minute shared with the next bar. Only
+      // shows the end's own date when it differs from the start's --
+      // the overwhelmingly common case (any bucket under a day wide)
+      // is same-day, and repeating an identical date on both sides
+      // would just be noise.
+      function fmtBucketRangeLabel(startIso, endIso) {
+        var start = new Date(startIso);
+        var end = new Date(new Date(endIso).getTime() - 1000);
+        var dateOpts = { month: 'short', day: 'numeric', year: 'numeric' };
+        var timeOpts = { hour: 'numeric', minute: '2-digit' };
+        var startDateStr = start.toLocaleDateString('en-US', dateOpts);
+        var startTimeStr = start.toLocaleTimeString('en-US', timeOpts);
+        var endTimeStr = end.toLocaleTimeString('en-US', timeOpts);
+        if (start.toDateString() === end.toDateString()) {
+          return startDateStr + ', ' + startTimeStr + ' \\u2013 ' + endTimeStr;
+        }
+        var endDateStr = end.toLocaleDateString('en-US', dateOpts);
+        return startDateStr + ', ' + startTimeStr + ' \\u2013 ' + endDateStr + ', ' + endTimeStr;
       }
 
       function rangeButtonLabel() {
@@ -3517,41 +3603,72 @@ def render_loot_tracker(player: PlayerView) -> str:
       // between polls instead of snapping -- a range change does
       // change the bucket count, which is exactly when a full rebuild
       // (and a fresh grow-in) is right.
-      function renderBarChart(buckets, windowValue, windowKills, npcBucketValues, selectedNpcs, windowNpcs, granularity, rangeEnd) {
+      function renderBarChart(buckets, windowValue, windowKills, npcBucketValues, selectedNpcs, windowNpcs, granularity, rangeEnd, selectedBucket) {
         buckets = buckets || [];
         npcBucketValues = npcBucketValues || {};
         selectedNpcs = selectedNpcs || [];
         granularity = granularity || 'hourly';
-        // With one or more NPCs selected, the header's gp/kc numbers
-        // switch to just their own totals (summed from each one's
-        // windowNpcs entry -- value/killCount, the same numbers its own
-        // NPC box shows) instead of the whole range's -- otherwise
-        // selecting Guard would still show every other NPC's loot
-        // summed in up top while the chart itself only fills in Guard's
-        // share, which reads as a mismatch.
-        var selectedEntries = selectedNpcs.length && windowNpcs
-          ? windowNpcs.filter(function (n) { return selectedNpcs.indexOf(n.sourceName) !== -1; })
-          : [];
-        var headerValue = selectedEntries.length ? selectedEntries.reduce(function (sum, n) { return sum + n.value; }, 0) : windowValue;
-        var headerKills = selectedEntries.length ? selectedEntries.reduce(function (sum, n) { return sum + n.killCount; }, 0) : windowKills;
+        // Three mutually-exclusive sources for the header's gp/kc and
+        // the title above it, in priority order -- a clicked bar
+        // (selectedBucket) beats an NPC-identity selection
+        // (selectedNpcs) beats the plain whole-range default. Only one
+        // of these is ever actually populated at a time (the
+        // #lootBarBars/#lootNpcRow click handlers each clear the
+        // other's selection on their way in), but the priority order
+        // still matters for the one render that lands with the OLD
+        // selection still passed in, right before that clearing takes
+        // effect.
+        var headerValue, headerKills, titleText;
+        if (selectedBucket) {
+          // Prefers the freshly-polled bucket (re-found here by its
+          // own start/end) over the totals captured at the moment it
+          // was clicked, falling back to those only once it can't be
+          // found any more -- a rolling preset's buckets all drift
+          // forward a little on every 10s poll (bucket width is the
+          // range's own span divided evenly, not calendar-aligned --
+          // see _bucket_plan's own docstring in app/loot.py -- so
+          // "now" moving forward shifts every boundary with it), which
+          // can eventually leave no bucket with these exact start/end
+          // strings any more even though the clicked instant itself
+          // never moved.
+          var matchedBucket = buckets.filter(function (b) {
+            return b.start === selectedBucket.start && b.end === selectedBucket.end;
+          })[0];
+          headerValue = matchedBucket ? matchedBucket.value : selectedBucket.value;
+          headerKills = matchedBucket ? matchedBucket.killCount : selectedBucket.killCount;
+          titleText = fmtBucketRangeLabel(selectedBucket.start, selectedBucket.end);
+        } else {
+          // With one or more NPCs selected, the header's gp/kc numbers
+          // switch to just their own totals (summed from each one's
+          // windowNpcs entry -- value/killCount, the same numbers its
+          // own NPC box shows) instead of the whole range's --
+          // otherwise selecting Guard would still show every other
+          // NPC's loot summed in up top while the chart itself only
+          // fills in Guard's share, which reads as a mismatch.
+          var selectedEntries = selectedNpcs.length && windowNpcs
+            ? windowNpcs.filter(function (n) { return selectedNpcs.indexOf(n.sourceName) !== -1; })
+            : [];
+          headerValue = selectedEntries.length ? selectedEntries.reduce(function (sum, n) { return sum + n.value; }, 0) : windowValue;
+          headerKills = selectedEntries.length ? selectedEntries.reduce(function (sum, n) { return sum + n.killCount; }, 0) : windowKills;
+          // A selected NPC's own name is shown in ALL CAPS (e.g.
+          // "ZULRAH") -- uppercased here in JS rather than via a CSS
+          // text-transform on .loot-chart-title, since that would also
+          // force the "ALL NPCs" fallback into "ALL NPCS", capitalizing
+          // the "s" it's deliberately meant to keep lowercase. With 2+
+          // selected, each name gets the same uppercasing and the whole
+          // row joins them with the same small-dot separator (·)
+          // already used in this file's own tooltips (see titleFor
+          // below) -- in selection order, so the title reads in the
+          // order NPCs were added to the group rather than re-sorting.
+          titleText = 'ALL NPCs';
+          if (selectedNpcs.length === 1) {
+            titleText = selectedNpcs[0].toUpperCase();
+          } else if (selectedNpcs.length > 1) {
+            titleText = selectedNpcs.map(function (n) { return n.toUpperCase(); }).join(' \\u00b7 ');
+          }
+        }
         document.getElementById('lootChartTotal').textContent = fmtGp(headerValue) + ' gp';
         document.getElementById('lootChartKills').textContent = (headerKills || 0).toLocaleString('en-US') + ' kc';
-        // A selected NPC's own name is shown in ALL CAPS (e.g.
-        // "ZULRAH") -- uppercased here in JS rather than via a CSS
-        // text-transform on .loot-chart-title, since that would also
-        // force the "ALL NPCs" fallback into "ALL NPCS", capitalizing
-        // the "s" it's deliberately meant to keep lowercase. With 2+
-        // selected, each name gets the same uppercasing and the whole
-        // row joins them with the same small-dot separator (·)
-        // already used in this file's own tooltips (see titleFor
-        // below) -- in selection order, so the title reads in the
-        // order NPCs were added to the group rather than re-sorting.
-        var titleText = 'ALL NPCs';
-        if (selectedNpcs.length === 1) {
-          titleText = selectedNpcs[0].toUpperCase();
-        } else if (selectedNpcs.length > 1) {
-          titleText = selectedNpcs.map(function (n) { return n.toUpperCase(); }).join(' \\u00b7 ');
-        }
         document.getElementById('lootChartTitle').textContent = titleText;
 
         // 0.8 target so the tallest bucket's bar consistently lands
@@ -3616,11 +3733,20 @@ def render_loot_tracker(player: PlayerView) -> str:
           return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount.toLocaleString('en-US') + ' kc' : '');
         }
 
+        // Whether bucket b is the one state.selectedBucket points at --
+        // matched by start/end rather than index, same reasoning as
+        // the header/title lookup above (a rolling preset's own
+        // buckets drift between polls, so the index a bar was clicked
+        // at isn't a stable identity for it).
+        function isSelectedCol(b) {
+          return !!(selectedBucket && b.start === selectedBucket.start && b.end === selectedBucket.end);
+        }
+
         var barsEl = document.getElementById('lootBarBars');
         var existingCols = barsEl.children;
         if (existingCols.length !== buckets.length) {
           barsEl.innerHTML = buckets.map(function (b, i) {
-            return '<div class="loot-bar-col" title="' + titleFor(b, i) + '">' +
+            return '<div class="loot-bar-col' + (isSelectedCol(b) ? ' selected' : '') + '" data-bucket-index="' + i + '" title="' + titleFor(b, i) + '">' +
               '<div class="loot-bar-outline' + (outlineActive(b) ? ' active' : '') + '" style="height:' + outlinePct(b) + '%;"></div>' +
               '<div class="loot-bar-fill' + (fillPct(b, i) > 0 ? ' has-value' : '') + '" style="height:' + fillPct(b, i) + '%;"></div>' +
             '</div>';
@@ -3629,6 +3755,8 @@ def render_loot_tracker(player: PlayerView) -> str:
           buckets.forEach(function (b, i) {
             var col = existingCols[i];
             col.title = titleFor(b, i);
+            col.setAttribute('data-bucket-index', i);
+            col.classList.toggle('selected', isSelectedCol(b));
             var outline = col.querySelector('.loot-bar-outline');
             outline.style.height = outlinePct(b) + '%';
             outline.classList.toggle('active', outlineActive(b));
@@ -3958,7 +4086,7 @@ def render_loot_tracker(player: PlayerView) -> str:
         renderBarChart(
           data.buckets || [], data.windowValue || 0, data.windowKills || 0,
           data.npcBucketValues || {}, state.selectedNpcs, data.windowNpcs || [],
-          data.granularity, data.rangeEnd
+          data.granularity, data.rangeEnd, state.selectedBucket
         );
       }
 
@@ -3978,6 +4106,12 @@ def render_loot_tracker(player: PlayerView) -> str:
         var btn = e.target.closest('.loot-npc-box');
         if (!btn || !lastData) return;
         var name = btn.getAttribute('data-npc');
+        // Selecting an NPC re-scopes the chart/panels by identity
+        // instead of by time -- clears any bar selection first, same
+        // mutual-exclusivity as the #lootBarBars click handler below
+        // does in the other direction (see selectedBucket's own
+        // comment on state).
+        clearSelectedBucket();
         if (e.shiftKey) {
           // Shift-click toggles this NPC in/out of the selection
           // without touching the rest of it -- works whether nothing,
@@ -3996,27 +4130,60 @@ def render_loot_tracker(player: PlayerView) -> str:
           state.selectedNpcs = wasSoleSelection ? [] : [name];
         }
         rerenderChart(lastData);
-        renderNpcRow(lastData.windowNpcs || []);
+        renderNpcRow(currentNpcs());
+        renderItemList(currentItems());
+      });
+
+      document.getElementById('lootBarBars').addEventListener('click', function (e) {
+        var col = e.target.closest('.loot-bar-col');
+        if (!col || !lastData) return;
+        var idx = parseInt(col.getAttribute('data-bucket-index'), 10);
+        var b = (lastData.buckets || [])[idx];
+        if (!b) return;
+        var alreadySelected = state.selectedBucket && state.selectedBucket.start === b.start && state.selectedBucket.end === b.end;
+        if (alreadySelected) {
+          // Clicking the already-selected bar clears it back to the
+          // whole range -- same toggle-off convention as re-clicking
+          // an already-sole-selected NPC box above.
+          clearSelectedBucket();
+        } else {
+          // Re-scoping by time instead of by identity -- clears any
+          // NPC selection first, same mutual-exclusivity as the
+          // #lootNpcRow click handler above does in the other
+          // direction (see selectedBucket's own comment on state).
+          // value/killCount are captured here too (not just start/end)
+          // so the header has something correct to show immediately,
+          // before loadBucketData's own fetch (kicked off below) has
+          // had a chance to resolve -- see renderBarChart's own
+          // matchedBucket fallback for why those two can keep drifting
+          // apart afterward on a rolling preset.
+          state.selectedNpcs = [];
+          state.selectedBucket = { start: b.start, end: b.end, value: b.value, killCount: b.killCount };
+          bucketData = null;
+          loadBucketData();
+        }
+        rerenderChart(lastData);
+        renderNpcRow(currentNpcs());
         renderItemList(currentItems());
       });
 
       document.getElementById('lootNpcSearch').addEventListener('input', function (e) {
         state.npcSearch = e.target.value;
-        if (lastData) renderNpcRow(lastData.windowNpcs || []);
+        if (lastData) renderNpcRow(currentNpcs());
       });
       document.getElementById('lootNpcSortTabs').addEventListener('click', function (e) {
         var toggleBtn = e.target.closest('.loot-hide-toggle');
         if (toggleBtn) {
           state.npcShowHidden = !state.npcShowHidden;
           toggleBtn.classList.toggle('active', state.npcShowHidden);
-          if (lastData) renderNpcRow(lastData.windowNpcs || []);
+          if (lastData) renderNpcRow(currentNpcs());
           return;
         }
         var btn = e.target.closest('.loot-sort-tab');
         if (!btn || !lastData) return;
         state.npcSort = btn.getAttribute('data-sort');
         updateSortTabs('lootNpcSortTabs', state.npcSort);
-        renderNpcRow(lastData.windowNpcs || []);
+        renderNpcRow(currentNpcs());
       });
       document.getElementById('lootItemList').addEventListener('click', function (e) {
         var eyeBtn = e.target.closest('.loot-eye-btn');
@@ -4171,6 +4338,10 @@ def render_loot_tracker(player: PlayerView) -> str:
         }
         state.rangeKey = key;
         state.selectedNpcs = [];
+        // A picked bar belongs to the range that was showing when it
+        // was clicked -- switching ranges invalidates it the same way
+        // it already invalidates an NPC selection just above.
+        clearSelectedBucket();
         closeRangeMenu();
         updateRangeMenuActive();
         loadState();
@@ -4189,6 +4360,7 @@ def render_loot_tracker(player: PlayerView) -> str:
         state.customStart = startVal;
         state.customEnd = endVal;
         state.selectedNpcs = [];
+        clearSelectedBucket();
         closeRangeMenu();
         updateRangeMenuActive();
         loadState();
@@ -4217,6 +4389,69 @@ def render_loot_tracker(player: PlayerView) -> str:
         return '/api/players/me/loot?' + params.toString();
       }
 
+      // A clicked bar's own scoped request -- same endpoint lootUrl
+      // above hits, but with range=custom and the bucket's own exact
+      // start/end sent as full ISO timestamps (parse_loot_range_bound
+      // in app/loot.py accepts those alongside the plain YYYY-MM-DD
+      // dates the range menu's date inputs send) rather than a whole
+      // calendar day, so this gets exactly that bucket's own NPCs/
+      // items back, no wider. bucket.end is the *next* bucket's own
+      // start (exclusive -- see build_loot_state in app/loot.py), but
+      // this endpoint's own end bound is inclusive (same contract its
+      // YYYY-MM-DD path has always had) -- backed off by 1ms so an
+      // event landing exactly on the boundary can't get counted in
+      // both this bucket and the next one.
+      function bucketUrl(bucket) {
+        var params = new URLSearchParams();
+        params.set('range', 'custom');
+        params.set('start', bucket.start);
+        params.set('end', new Date(new Date(bucket.end).getTime() - 1).toISOString());
+        return '/api/players/me/loot?' + params.toString();
+      }
+
+      // Fetches bucketData for the currently-selected bucket -- called
+      // once right after a bar click sets state.selectedBucket, and
+      // again on every loadState poll tick to keep it fresh (a
+      // selected bucket that includes "now" can still pick up new
+      // kills). Fails quietly rather than showing lootError the way
+      // loadState's own initial fetch does -- this is a background
+      // refinement of a page that's already showing something
+      // (either the previous bucket's data, or nothing yet), the same
+      // "don't interrupt over a poll the player didn't explicitly ask
+      // for" reasoning as every other quiet background poll on this
+      // site (see e.g. refreshSyncStatusInBackground in the
+      // Mootrius/myscape-plugin repo for the same pattern elsewhere).
+      async function loadBucketData() {
+        if (!state.selectedBucket) return;
+        var token = ++bucketFetchToken;
+        try {
+          var res = await fetch(bucketUrl(state.selectedBucket));
+          if (!res.ok || token !== bucketFetchToken) return;
+          var data = await res.json();
+          // A newer click, or a deselect, could have landed while this
+          // was in flight -- discard rather than clobber whatever's
+          // now actually selected.
+          if (token !== bucketFetchToken) return;
+          bucketData = data;
+          renderNpcRow(currentNpcs());
+          renderItemList(currentItems());
+        } catch (err) {
+          // Quiet -- see this function's own doc comment above.
+        }
+      }
+
+      // Clears a bucket selection back to the whole selected range --
+      // shared by the #lootBarBars click handler's own toggle-off (re-
+      // clicking the already-selected bar) and every place that
+      // changes scope out from under it (a new NPC selected, a new
+      // range/CUSTOM applied) the same way state.selectedNpcs = [] is
+      // reset in each of those same spots.
+      function clearSelectedBucket() {
+        state.selectedBucket = null;
+        bucketData = null;
+        bucketFetchToken++;
+      }
+
       async function loadState() {
         var errorEl = document.getElementById('lootError');
         try {
@@ -4241,17 +4476,21 @@ def render_loot_tracker(player: PlayerView) -> str:
           // toggle off: its tile just vanished from the row, same as
           // aging out, so there's no way left to click back to it
           // either.
-          var npcs = data.windowNpcs || [];
+          var rangeNpcs = data.windowNpcs || [];
           state.selectedNpcs = state.selectedNpcs.filter(function (name) {
-            var stillPresent = npcs.filter(function (n) { return n.sourceName === name; })[0];
+            var stillPresent = rangeNpcs.filter(function (n) { return n.sourceName === name; })[0];
             return stillPresent && (state.npcShowHidden || !npcEffectiveHidden(stillPresent));
           });
 
           document.getElementById('lootEmptyMsg').style.display = 'none';
           document.getElementById('lootBody').style.display = '';
           rerenderChart(data);
-          renderNpcRow(npcs);
+          renderNpcRow(currentNpcs());
           renderItemList(currentItems());
+          // Keeps the selected bucket's own panel data on the same
+          // 10s cadence as everything else -- see loadBucketData's
+          // own doc comment for why this stays quiet on failure.
+          if (state.selectedBucket) loadBucketData();
         } catch (err) {
           errorEl.textContent = 'Something went wrong loading your loot.';
           errorEl.classList.add('show');
