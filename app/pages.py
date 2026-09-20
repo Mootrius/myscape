@@ -1250,13 +1250,18 @@ def render_not_found(player: Optional[Player] = None) -> str:
     -- app/main.py loads the player itself with a manual DB session
     and passes it through, so the header nav still shows Dashboard/Log
     out for a signed-in visitor who hits a broken link instead of
-    always showing Log in/Sign up."""
-    body = """
+    always showing Log in/Sign up. The same player check also picks
+    where the home-teleport icon itself goes -- straight to /dashboard
+    for a signed-in visitor (the landing page has nothing for them
+    they don't already see there), and to / (the landing page) for
+    everyone else, same as the header's own logo link right above it."""
+    teleport_href = "/dashboard" if player else "/"
+    body = f"""
     <div class="auth-shell">
       <div class="auth-card">
         <h2>PAGE NOT FOUND</h2>
         <div class="not-found-code">404</div>
-        <a href="/" class="not-found-teleport" title="Cast Home Teleport">
+        <a href="{teleport_href}" class="not-found-teleport" title="Cast Home Teleport">
           <img class="not-found-icon" src="/static/img/icon-home-teleport.png" alt="Home Teleport icon" />
         </a>
         <p class="verify-email-message">You must be lost, friend.<br>Try casting your home teleport.</p>
