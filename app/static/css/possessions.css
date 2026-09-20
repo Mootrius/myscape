@@ -383,6 +383,25 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-segment-group[data-role="op"] {
   align-self: flex-start;
 }
+
+/* GE/HA's Stack/Single toggle -- sits to the left of the Value field
+   itself rather than above it, so it never costs the popover its own
+   row. Sized to the input's own 28px height (rather than reusing the
+   22px item/tradeable/operator segmented-control height elsewhere in
+   this popover) so the two line up cleanly as one visual row; flex
+   centering on each segment button is what gets an exact 28px match
+   regardless of this button's own font metrics, the same problem the
+   operator row's explicit line-height solved a different way. */
+.pm-filter-value-row { display: flex; align-items: center; gap: 6px; }
+.pm-filter-value-row .pm-filter-input { flex: 1 1 auto; min-width: 0; }
+.pm-filter-value-row .pm-segment-group {
+  flex: 0 0 auto; height: 28px; box-sizing: border-box;
+}
+.pm-filter-value-row .pm-segment-group .pm-segment-btn {
+  flex: 0 0 auto; height: 100%; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 10px; font-size: 10.5px;
+}
 .pm-filter-input,
 .pm-filter-select {
   height: 28px; padding: 0 8px; box-sizing: border-box; width: 100%;
@@ -431,6 +450,7 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-view-chip.dragging { opacity: 0.4; cursor: grabbing; }
 .pm-view-chip-name {
   max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-transform: uppercase;
 }
 .pm-view-delete {
   display: inline-flex; align-items: center; justify-content: center;

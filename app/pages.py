@@ -7769,9 +7769,15 @@ def render_possessions(player: Player) -> str:
 
       var FILTER_COLUMNS = { alpha: 'text', qty: 'numeric', ge: 'numeric', ha: 'numeric', tradeable: 'tradeable' };
       // Quantity/GE Value/HA Value all share the exact same numeric
-      // filter (see numericMatch below) -- only the number field's
-      // own placeholder differs, so a player always knows which
-      // number a bare "150" in the box actually means.
+      // filter shape (see numericMatch below) -- only the number
+      // field's own placeholder differs, so a player always knows
+      // which number a bare "150" in the box actually means. GE/HA
+      // additionally get their own Stack/Single segmented control
+      // (STACK_MODE_OPTIONS below) since those two columns' own
+      // primary number is a stack total (price * quantity), and a
+      // player may want to filter by the single/per-unit price
+      // instead -- Quantity has no such distinction, so it never gets
+      // that control.
       var NUMERIC_PLACEHOLDERS = { qty: 'Quantity', ge: 'Value', ha: 'Value' };
 
       // Every mode/operator choice in every popover below is a
@@ -7788,6 +7794,7 @@ def render_possessions(player: Player) -> str:
       var TEXT_MODE_OPTIONS = [['contains', 'Contains'], ['not_contains', 'Does Not Contain']];
       var NUMERIC_OP_OPTIONS = [['>', '&gt;'], ['>=', '&ge;'], ['<', '&lt;'], ['<=', '&le;'], ['=', '='], ['!=', '&ne;'], ['between', 'Between']];
       var TRADEABLE_MODE_OPTIONS = [['tradeable', 'Tradeable'], ['untradeable', 'Untradeable']];
+      var STACK_MODE_OPTIONS = [['stack', 'Stack'], ['single', 'Single']];
 
       function segmentGroupHtml(role, options, currentValue) {
         var value = options.some(function (o) { return o[0] === currentValue; }) ? currentValue : options[0][0];
@@ -7824,13 +7831,30 @@ def render_possessions(player: Player) -> str:
           var max = current && typeof current.max === 'number' ? current.max : '';
           var isBetween = op === 'between';
           var placeholder = NUMERIC_PLACEHOLDERS[col] || 'Value';
+          // GE/HA only -- lets a player filter by either the stack
+          // total (price * quantity, this column's own default/
+          // displayed number) or the single per-unit price. Sits
+          // beside the Value field rather than above it so it never
+          // costs its own row, and stays visible even while Between
+          // is selected and the Value field itself is hidden (it's a
+          // flex sibling of that input, not nested inside it), since
+          // Stack/Single still governs what the Min/Max fields below
+          // are being compared against either way.
+          var showStackToggle = (col === 'ge' || col === 'ha');
+          var valueMode = showStackToggle ? ((current && current.valueMode) || 'stack') : null;
+          var valueRow = (
+            '<div class="pm-filter-value-row">' +
+            (showStackToggle ? segmentGroupHtml('stackMode', STACK_MODE_OPTIONS, valueMode) : '') +
+            '<input type="text" inputmode="decimal" class="pm-filter-input" data-role="value" placeholder="' + placeholder + '" value="' + value + '"' + (isBetween ? ' style="display:none;"' : '') + ' />' +
+            '</div>'
+          );
           return (
             segmentGroupHtml('op', NUMERIC_OP_OPTIONS, op) +
-            '<input type="number" class="pm-filter-input" data-role="value" placeholder="' + placeholder + '" value="' + value + '"' + (isBetween ? ' style="display:none;"' : '') + ' />' +
+            valueRow +
             '<div class="pm-filter-input-pair" data-role="between-row"' + (isBetween ? '' : ' style="display:none;"') + '>' +
-            '<input type="number" class="pm-filter-input" data-role="min" placeholder="Min" value="' + min + '" />' +
+            '<input type="text" inputmode="decimal" class="pm-filter-input" data-role="min" placeholder="Min" value="' + min + '" />' +
             '<span class="pm-filter-input-pair-sep">&ndash;</span>' +
-            '<input type="number" class="pm-filter-input" data-role="max" placeholder="Max" value="' + max + '" />' +
+            '<input type="text" inputmode="decimal" class="pm-filter-input" data-role="max" placeholder="Max" value="' + max + '" />' +
             '</div>' +
             actions
           );
@@ -7840,10 +7864,40 @@ def render_possessions(player: Player) -> str:
         return segmentGroupHtml('mode', TRADEABLE_MODE_OPTIONS, mode) + actions;
       }
 
+      // Every numeric filter field (Quantity, GE/HA Value, and the
+      // Between row's Min/Max) accepts k/m/b shorthand -- "1.5m",
+      // "50k", "3b" -- and comma-grouped digits -- "2,500,000" --
+      // alongside a plain number, so a player never has to count out
+      // zeros by hand. These are plain type="text" inputs rather than
+      // type="number" specifically because a number input rejects
+      // letters and commas outright, which would make shorthand
+      // impossible to even type. sanitizeAmountChars strips anything
+      // outside digits/commas/periods/k/m/b as the player types (see
+      // its 'input' listener in wirePopoverControls below); parseAmount
+      // is the matching parser that turns whatever's left into an
+      // actual number, used everywhere a numeric field used to just
+      // get parseFloat'd.
+      function sanitizeAmountChars(raw) {
+        return (raw || '').replace(/[^0-9.,kmbKMB]/g, '');
+      }
+
+      function parseAmount(raw) {
+        if (raw === null || raw === undefined) return null;
+        var s = String(raw).trim();
+        if (!s) return null;
+        var match = /^([0-9]*\.?[0-9]+|[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)\s*([kKmMbB])?$/.exec(s);
+        if (!match) return null;
+        var numPart = match[1].replace(/,/g, '');
+        var n = parseFloat(numPart);
+        if (isNaN(n)) return null;
+        var suffix = match[2] ? match[2].toLowerCase() : '';
+        var multiplier = suffix === 'k' ? 1e3 : suffix === 'm' ? 1e6 : suffix === 'b' ? 1e9 : 1;
+        return n * multiplier;
+      }
+
       function numOrNull(input) {
         if (!input) return null;
-        var n = parseFloat(input.value);
-        return isNaN(n) ? null : n;
+        return parseAmount(input.value);
       }
 
       // Reads whatever's currently selected/typed in an open popover
@@ -7865,15 +7919,20 @@ def render_possessions(player: Player) -> str:
         }
         if (kind === 'numeric') {
           var op = segmentValue('op', '>=');
+          var valueMode = (col === 'ge' || col === 'ha') ? segmentValue('stackMode', 'stack') : null;
           if (op === 'between') {
             var min = numOrNull(popoverEl.querySelector('[data-role="min"]'));
             var max = numOrNull(popoverEl.querySelector('[data-role="max"]'));
             if (min === null || max === null) return null;
-            return { op: 'between', min: min, max: max };
+            var betweenFilter = { op: 'between', min: min, max: max };
+            if (valueMode) betweenFilter.valueMode = valueMode;
+            return betweenFilter;
           }
           var value = numOrNull(popoverEl.querySelector('[data-role="value"]'));
           if (value === null) return null;
-          return { op: op, value: value };
+          var valueFilter = { op: op, value: value };
+          if (valueMode) valueFilter.valueMode = valueMode;
+          return valueFilter;
         }
         // tradeable
         return { mode: segmentValue('mode', 'tradeable') };
@@ -7905,6 +7964,18 @@ def render_possessions(player: Player) -> str:
                 if (betweenRow) betweenRow.style.display = isBetween ? '' : 'none';
               }
             });
+          });
+        });
+        // Value/Min/Max accept k/m/b shorthand and comma grouping
+        // (see parseAmount above) -- this is what actually enforces
+        // "only digits, commas, periods, and k/m/b" as the player
+        // types, stripping anything else on every keystroke (and on
+        // paste, since 'input' fires for that too) rather than just
+        // at Apply time.
+        popoverEl.querySelectorAll('[data-role="value"], [data-role="min"], [data-role="max"]').forEach(function (input) {
+          input.addEventListener('input', function () {
+            var cleaned = sanitizeAmountChars(input.value);
+            if (cleaned !== input.value) input.value = cleaned;
           });
         });
         var clearBtn = popoverEl.querySelector('[data-action="clear"]');
@@ -8129,8 +8200,20 @@ def render_possessions(player: Player) -> str:
           if (!hit) return false;
         }
         if (f.qty && !numericMatch(qty, f.qty)) return false;
-        if (f.ge && !numericMatch((item.gePrice || 0) * qty, f.ge)) return false;
-        if (f.ha && !numericMatch((item.highAlch || 0) * qty, f.ha)) return false;
+        // GE/HA compare against either the stack total (default,
+        // matches what the column itself displays/sorts by) or the
+        // single per-unit price, per that filter's own Stack/Single
+        // toggle -- valueMode is absent on any filter saved before
+        // that toggle existed, which the "!== 'single'" check treats
+        // the same as an explicit 'stack'.
+        if (f.ge) {
+          var geValue = f.ge.valueMode === 'single' ? (item.gePrice || 0) : (item.gePrice || 0) * qty;
+          if (!numericMatch(geValue, f.ge)) return false;
+        }
+        if (f.ha) {
+          var haValue = f.ha.valueMode === 'single' ? (item.highAlch || 0) : (item.highAlch || 0) * qty;
+          if (!numericMatch(haValue, f.ha)) return false;
+        }
         if (f.tradeable) {
           var wantTradeable = f.tradeable.mode === 'tradeable';
           if (!!item.tradeable !== wantTradeable) return false;
