@@ -897,5 +897,5 @@ footer {
    .landing-anchor img above. Same specificity (one class + img), so
    source order is what makes this win over the shared rule. */
 .landing-anchor--intro img {
-  width: min(560px, 66vw);
+  width: min(450px, 55vw);
 }
