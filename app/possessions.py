@@ -43,6 +43,7 @@ from app.models import (
     Player,
     PohItem,
     PossessionTracker,
+    PossessionView,
     PotionStorageItem,
     RunePouchItem,
     SeedBoxItem,
@@ -563,3 +564,36 @@ def next_sort_order(db: Session, player: Player, kind: str) -> float:
         .first()
     )
     return (highest.sort_order + 1.0) if highest else 0.0
+
+
+def _view_out(view: PossessionView) -> dict:
+    return {"id": str(view.id), "name": view.name, "config": view.config or {}}
+
+
+def build_possession_views(db: Session, player: Player) -> List[dict]:
+    """Every saved Storages Viewer view this player has, in their own
+    reorder-strip order (nulls-last, same convention as GearSetup's
+    own sort_order -- a freshly-created view without one yet, if that
+    ever happens, would otherwise sort unpredictably against Postgres'
+    own NULL ordering)."""
+    views = (
+        db.query(PossessionView)
+        .filter(PossessionView.player_id == player.id)
+        .order_by(PossessionView.sort_order.is_(None), PossessionView.sort_order, PossessionView.created_at)
+        .all()
+    )
+    return [_view_out(v) for v in views]
+
+
+def next_possession_view_sort_order(db: Session, player: Player) -> float:
+    """Same "append past the current max" approach as next_sort_order
+    above, over this player's saved views instead of their trackers."""
+    highest = (
+        db.query(PossessionView)
+        .filter(PossessionView.player_id == player.id)
+        .order_by(PossessionView.sort_order.desc())
+        .first()
+    )
+    if highest and highest.sort_order is not None:
+        return highest.sort_order + 1.0
+    return 0.0

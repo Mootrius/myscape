@@ -183,6 +183,7 @@ class Player(Base):
     pinned_possession_items = relationship("PinnedPossessionItem", back_populates="player", cascade="all, delete-orphan")
     hidden_loot_entries = relationship("HiddenLootEntry", back_populates="player", cascade="all, delete-orphan")
     hidden_possession_storages = relationship("HiddenPossessionStorage", back_populates="player", cascade="all, delete-orphan")
+    possession_views = relationship("PossessionView", back_populates="player", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -1153,3 +1154,39 @@ class HiddenPossessionStorage(Base):
     __table_args__ = (
         UniqueConstraint("player_id", "storage_key", name="uq_hidden_possession_storages_player_key"),
     )
+
+
+class PossessionView(Base):
+    """A named, saved filter+sort configuration for Storages Viewer's
+    full raw list (section 3 -- see build_possession_views/
+    build_possessions_summary in app/possessions.py, and the saved-
+    views strip above the table headers in render_possessions,
+    app/pages.py) -- lets a player switch between several different
+    ways of looking at the same underlying item list (e.g. "high value
+    junk to sell" vs. "untradeables I'm hoarding") without re-setting
+    up the same column filters and sort by hand every time.
+
+    `config` is one opaque JSON blob -- {"sortKey", "sortDir",
+    "filters": {...}} -- rather than a column per filterable field,
+    same reasoning as GearSetup's own equipment/inventory columns (see
+    that model's docstring): the exact filter shape is owned and
+    interpreted entirely by render_possessions' own script, which is
+    still evolving, and the server only ever stores and returns this
+    blob whole, never reads inside it.
+
+    sort_order works exactly like GearSetup's own list-reorder column
+    (see that model's docstring for the fuller writeup) -- nullable,
+    rewritten to plain integer positions (0, 1, 2, ...) on every
+    reorder (see PUT /api/possessions/views/order in app/main.py)
+    rather than fractional single-row inserts."""
+
+    __tablename__ = "possession_views"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id = Column(UUID(as_uuid=True), ForeignKey("players.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    config = Column(JSONB, nullable=False, default=dict)
+    sort_order = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+
+    player = relationship("Player", back_populates="possession_views")

@@ -211,43 +211,186 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
      otherwise win over the earlier, lower-specificity ".pm-row {
      padding-left: 26px; }" rule (same specificity, later in the
      cascade) and misalign ITEM against the icon/name column below it
-     -- restated explicitly here rather than reordering the rules. */
-  padding: 0 6px 8px 26px;
-  font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint);
+     -- restated explicitly here rather than reordering the rules.
+     font-size bumped from 10.5px so the filter funnel icon beside
+     each header (see .pm-filter-icon-btn below) reads clearly next to
+     the label rather than dwarfing it. */
+  padding: 0 6px 10px 26px;
+  font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint);
 }
 .pm-row-header .pm-col-qty,
 .pm-row-header .pm-col-ge,
 .pm-row-header .pm-col-ha,
 .pm-row-header .pm-col-tradeable { text-align: center; }
 
+/* Each header cell now holds two independent controls side by side --
+   the sort button (.pm-sort-header, unchanged click-to-sort behavior)
+   and its own separate filter funnel button (.pm-filter-icon-btn) --
+   so a click on one never also triggers the other. This wrapper is
+   now the actual CSS Grid item carrying the .pm-col-* width class
+   .pm-row's own grid-template-columns keys off, not .pm-sort-header
+   itself any more (see the header row's own markup in
+   render_possessions, app/pages.py). */
+.pm-header-cell { display: flex; align-items: center; gap: 4px; min-width: 0; position: relative; }
+.pm-header-cell.pm-col-qty,
+.pm-header-cell.pm-col-ge,
+.pm-header-cell.pm-col-ha,
+.pm-header-cell.pm-col-tradeable { justify-content: center; }
+
 /* Every header doubles as a sort control -- a plain <button> reset
    back down to this row's own text styling (rather than default
-   button chrome). All headers share the same size regardless of
-   which one is active; the active column is called out in gold
-   (text + arrow together), same as .pm-filter-btn.active elsewhere
-   on this page. */
+   button chrome). No longer width: 100% now that it shares its cell
+   with the filter button beside it -- it hugs its own text/arrow
+   instead of stretching to fill the whole column. All headers share
+   the same size regardless of which one is active; the active column
+   is called out in gold (text + arrow together), same as
+   .pm-filter-btn.active elsewhere on this page. */
 .pm-sort-header {
   background: none; border: none; padding: 0; margin: 0; font: inherit;
   color: inherit; letter-spacing: inherit; text-transform: inherit;
-  cursor: pointer; width: 100%;
+  cursor: pointer;
 }
 .pm-sort-header:hover { color: var(--text); }
 .pm-sort-header.active { color: var(--gold); }
 .pm-sort-arrow { display: inline-block; }
 
-/* Shared by the ITEM header button (.pm-col-image.pm-sort-header) and
+/* The funnel filter icon beside each header's text -- opens that
+   column's own filter popover (see .pm-filter-popover further down)
+   on click, entirely independent of the sort button beside it (a
+   separate element with its own click target and its own
+   stopPropagation in the page's own script, so filtering ITEM never
+   also re-sorts by it -- see wireFilterPopovers). Gray at rest, same
+   "you can act on this" affordance as every other icon-only control
+   on this page (compare .pm-pin-btn's unpinned state); gold once that
+   column has an active filter applied or while its popover is open,
+   same .active convention as everything else here. */
+.pm-filter-icon-btn {
+  flex: 0 0 auto; width: 15px; height: 15px; padding: 0; margin: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; border-radius: 3px;
+  color: var(--text-faint); cursor: pointer;
+}
+.pm-filter-icon-btn svg { display: block; }
+.pm-filter-icon-btn:hover { color: var(--text); }
+.pm-filter-icon-btn.active { color: var(--gold); }
+
+/* Shared by the ITEM header cell (.pm-col-image.pm-header-cell) and
    each data row's own icon+name cell -- a plain <div> now, not its own
    link (see a.pm-row above: the whole row is the link, so this cell
    doesn't need or get its own hover affordance -- no underline, no
    separate highlight, just the row's shared background lighting up). */
 .pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; }
-/* The ITEM header text itself sits flush-left in its button by default,
-   lining up with the left edge of the 26px icon below it rather than
-   that icon's center. Nudge it right just enough to read as centered
-   over the icon column -- scoped to the header button specifically
-   (both classes together) so the data rows' own icon+name cells above
-   are untouched. */
-.pm-col-image.pm-sort-header { padding-left: 6px; }
+/* The ITEM header cell sits flush-left by default, lining up with the
+   left edge of the 26px icon below it rather than that icon's center.
+   Nudge it right just enough to read as centered over the icon
+   column -- scoped to the header cell specifically (both classes
+   together) so the data rows' own icon+name cells above are
+   untouched. */
+.pm-col-image.pm-header-cell { padding-left: 6px; }
+
+/* ---- Per-column filter popovers ------------------------------------ */
+/* Anchored under whichever header cell's funnel button opened it --
+   same trigger/menu panel recipe as .pm-settings-menu above
+   (background/border/radius), just anchored under its own header cell
+   instead of the control row's far right edge, and right- rather than
+   left-anchored on the three right-hand columns so it never spills
+   off the table's own right edge. */
+.pm-filter-popover {
+  position: absolute; top: 22px; left: 0; z-index: 6;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  min-width: 210px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  text-transform: none; letter-spacing: normal;
+}
+.pm-col-ge .pm-filter-popover,
+.pm-col-ha .pm-filter-popover,
+.pm-col-tradeable .pm-filter-popover { left: auto; right: 0; }
+.pm-filter-popover-row { display: flex; align-items: center; gap: 6px; }
+.pm-filter-popover-label {
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
+}
+/* Two/three-option mode toggle inside a popover -- same pill-button
+   look as .pm-filter-btn elsewhere on this page, sized down slightly
+   (26px vs. that one's 32px) to fit a narrower popover and read as
+   secondary to the location filters above the table. */
+.pm-filter-mode-btn {
+  height: 26px; padding: 0 9px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; flex: 1 1 auto;
+}
+.pm-filter-mode-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pm-filter-mode-btn.active { border-color: var(--gold); color: var(--gold); }
+.pm-filter-input,
+.pm-filter-select {
+  height: 28px; padding: 0 8px; box-sizing: border-box; width: 100%;
+  font-size: 13px; color: var(--text); font-family: inherit;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.pm-filter-input:focus,
+.pm-filter-select:focus { outline: none; border-color: var(--gold-dim); }
+.pm-filter-input-pair { display: flex; align-items: center; gap: 6px; }
+.pm-filter-input-pair .pm-filter-input { flex: 1 1 0; min-width: 0; }
+.pm-filter-input-pair-sep { color: var(--text-faint); font-size: 11px; flex: 0 0 auto; }
+.pm-filter-popover-actions { display: flex; gap: 8px; margin-top: 2px; }
+.pm-filter-popover-actions button {
+  flex: 1 1 auto; height: 28px; box-sizing: border-box;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  border-radius: var(--radius); cursor: pointer;
+}
+/* Same fill/hover recipe as button.primary in myscape.css. */
+.pm-filter-apply-btn { background: var(--gold); border: 1px solid var(--gold); color: #221c10; }
+.pm-filter-apply-btn:hover { background: #ffab42; border-color: #ffab42; }
+.pm-filter-clear-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim); }
+.pm-filter-clear-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* ---- Saved views strip (drag-and-drop reorderable, sits directly
+   above the table headers -- see PossessionView in app/models.py and
+   the saved-views section of render_possessions' own script) -------- */
+.pm-views-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-bottom: 14px; position: relative;
+}
+/* Same FLIP-preview/live-DOM-order/full-replacement drag-and-drop
+   shape as Purchase Goals' own .tracker-icon-btn row (see
+   wireSetupIconDrag in app/pages.py, reused here as wireViewChipDrag)
+   -- always draggable, no separate "custom mode" gate, same reasoning
+   as that row: reordering a short named list is never anything other
+   than a drag. */
+.pm-view-chip {
+  height: 30px; padding: 0 6px 0 10px; box-sizing: border-box;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: grab;
+}
+.pm-view-chip:hover { border-color: var(--gold-dim); color: var(--text); }
+.pm-view-chip.active { border-color: var(--gold); color: var(--gold); }
+.pm-view-chip.dragging { opacity: 0.4; cursor: grabbing; }
+.pm-view-chip-name {
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pm-view-delete {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; padding: 0; margin: 0;
+  background: none; border: none; color: var(--text-faint); cursor: pointer;
+  font-size: 13px; line-height: 1;
+}
+.pm-view-delete:hover { color: var(--red); }
+.pm-view-add-btn {
+  height: 30px; padding: 0 10px; box-sizing: border-box;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--text-dim);
+  background: none; border: 1px dashed var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.pm-view-add-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+.pm-view-save-popover {
+  position: absolute; top: 36px; left: 0; z-index: 6;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  min-width: 220px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+}
 /* Bumped from 26px, plus a small translate to recenter -- these are
    real item icons off RuneLite's own CDN, which draws on a fixed
    canvas with built-in padding down the right side for the in-game

@@ -903,6 +903,58 @@ class PossessionTrackerOut(BaseModel):
     owned_quantity: int = 0
 
 
+class PossessionViewSaveRequest(BaseModel):
+    """POST body for saving the current Storages Viewer filter/sort
+    setup as a new named view (see render_possessions' own saved-views
+    strip in app/pages.py) -- config is an opaque blob the page's own
+    script builds and reads back, never validated field-by-field here
+    (see PossessionView's own docstring in app/models.py for why)."""
+    name: str
+    config: dict
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("name must not be empty.")
+        return value
+
+
+class PossessionViewUpdateRequest(BaseModel):
+    """PATCH body for an existing saved view -- rename it, replace its
+    stored config with the page's current filter/sort setup, or both
+    at once. At least one of the two must be present; a request with
+    neither is rejected rather than silently doing nothing."""
+    name: Optional[str] = None
+    config: Optional[dict] = None
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("name must not be empty.")
+        return value
+
+    @model_validator(mode="after")
+    def check_something_present(self):
+        if self.name is None and self.config is None:
+            raise ValueError("Provide a name, a config, or both.")
+        return self
+
+
+class SetPossessionViewOrderRequest(BaseModel):
+    """The full new order of a player's saved Storages Viewer views
+    after a drag-and-drop reorder -- always the complete list of view
+    ids as currently displayed, not a delta, same full-replacement
+    convention SetGearSetupOrderRequest above follows. See sort_order
+    on PossessionView in app/models.py."""
+    order: List[str]
+
+
 # -- Skills/quests/diaries: unlike every item source above, each of
 # these is always exactly one whole snapshot (one level+xp per skill,
 # one completed-quest list, one highest tier per diary area) rather

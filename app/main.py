@@ -68,6 +68,7 @@ from app.models import (
     Player,
     PohItem,
     PossessionTracker,
+    PossessionView,
     PotionStorageItem,
     RunePouchItem,
     SeedBoxItem,
@@ -91,9 +92,11 @@ from app.pages import (
     render_verify_email_required,
 )
 from app.possessions import (
+    build_possession_views,
     build_possessions_summary,
     build_trackers_state,
     hidden_storage_keys,
+    next_possession_view_sort_order,
     next_sort_order,
     pinned_item_ids,
     resolve_item_display,
@@ -167,6 +170,8 @@ from app.schemas import (
     POSSESSION_STORAGE_KEYS,
     PossessionTrackerIn,
     PossessionTrackerUpdate,
+    PossessionViewSaveRequest,
+    PossessionViewUpdateRequest,
     PotionStorageOut,
     PotionStorageItemOut,
     PotionStorageSyncRequest,
@@ -192,6 +197,7 @@ from app.schemas import (
     SetGearSetupIconRequest,
     SetGearSetupOrderRequest,
     SetGearSlotRequest,
+    SetPossessionViewOrderRequest,
     SetStillToPurchaseOrderRequest,
     SetStillToPurchaseSortRequest,
     SetMindMapNodeGoalRequest,
@@ -1641,6 +1647,108 @@ def unhide_possession_storage(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown storage.")
     set_storage_hidden(db, player, storage_key, False)
     return {"hiddenStorageKeys": sorted(hidden_storage_keys(db, player))}
+
+
+@app.get("/api/possessions/views")
+def list_possession_views(db: Session = Depends(get_db), player: Player = Depends(get_current_verified_player_from_session)):
+    """Every saved Storages Viewer view this player has (see
+    build_possession_views in app/possessions.py), in their own
+    reorder-strip order."""
+    return {"views": build_possession_views(db, player)}
+
+
+@app.post("/api/possessions/views", status_code=status.HTTP_201_CREATED)
+def create_possession_view(
+    payload: PossessionViewSaveRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_verified_player_from_session),
+):
+    """Saves the page's current filter/sort setup as a new named view
+    -- always appended past the end of the player's existing views
+    (see next_possession_view_sort_order), never merged into an
+    existing one even if the name matches -- renaming/overwriting an
+    existing view is what PATCH .../{view_id} is for."""
+    db.add(PossessionView(
+        player_id=player.id,
+        name=payload.name,
+        config=payload.config,
+        sort_order=next_possession_view_sort_order(db, player),
+    ))
+    db.commit()
+    return {"views": build_possession_views(db, player)}
+
+
+@app.put("/api/possessions/views/order")
+def set_possession_view_order(
+    payload: SetPossessionViewOrderRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_verified_player_from_session),
+):
+    """Saves a drag-and-drop reorder of the saved-views strip -- same
+    full-replacement convention as set_gear_setup_order above:
+    payload.order is the complete list of view ids in their new order,
+    not a delta. Every view this player owns gets a fresh sort_order
+    (its plain 0-based position in payload.order) in one pass; a
+    stale/omitted id keeps its existing sort_order rather than
+    erroring the whole request out, and an id in payload.order that
+    isn't one of the player's own views is silently ignored -- same
+    defensive stance as set_gear_setup_order."""
+    owned_views = {
+        str(v.id): v
+        for v in db.query(PossessionView).filter(PossessionView.player_id == player.id).all()
+    }
+    for index, view_id in enumerate(payload.order):
+        view = owned_views.get(view_id)
+        if view is not None:
+            view.sort_order = float(index)
+    db.commit()
+    return {"views": build_possession_views(db, player)}
+
+
+def _get_owned_possession_view(db: Session, player: Player, view_id: str) -> PossessionView:
+    try:
+        view_uuid = uuid.UUID(view_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found.")
+    view = (
+        db.query(PossessionView)
+        .filter(PossessionView.id == view_uuid, PossessionView.player_id == player.id)
+        .first()
+    )
+    if view is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found.")
+    return view
+
+
+@app.patch("/api/possessions/views/{view_id}")
+def update_possession_view(
+    view_id: str,
+    payload: PossessionViewUpdateRequest,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_verified_player_from_session),
+):
+    """Renames an existing saved view, replaces its stored config with
+    the page's current filter/sort setup, or both at once -- see
+    PossessionViewUpdateRequest's own docstring in app/schemas.py."""
+    view = _get_owned_possession_view(db, player, view_id)
+    if payload.name is not None:
+        view.name = payload.name
+    if payload.config is not None:
+        view.config = payload.config
+    db.commit()
+    return {"views": build_possession_views(db, player)}
+
+
+@app.delete("/api/possessions/views/{view_id}")
+def delete_possession_view(
+    view_id: str,
+    db: Session = Depends(get_db),
+    player: Player = Depends(get_current_verified_player_from_session),
+):
+    view = _get_owned_possession_view(db, player, view_id)
+    db.delete(view)
+    db.commit()
+    return {"views": build_possession_views(db, player)}
 
 
 @app.get("/api/gear-setups")

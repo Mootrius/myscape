@@ -7516,6 +7516,18 @@ def render_possessions(player: Player) -> str:
         for key, label in sorted(_POSSESSION_STORAGE_LABELS.items(), key=lambda kv: kv[1].lower())
     )
 
+    # The per-column filter trigger (see .pm-filter-icon-btn in
+    # possessions.css, and wireFilterIcons in the script below) --
+    # Feather Icons' own "filter" glyph (a funnel outline), same
+    # stroke-icon family as PIN_GLYPH/the settings gear further down
+    # -- one constant reused across all five header cells rather than
+    # rebuilt per column, since it never varies.
+    funnel_glyph = (
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>'
+    )
+
     body = f"""
     <h2 class="page-title">Storages Viewer</h2>
     <div class="auth-error" id="pmError"></div>
@@ -7541,13 +7553,30 @@ def render_possessions(player: Player) -> str:
 
       <p class="pg-empty" id="pmEmpty" style="display:none;">Nothing synced yet.</p>
 
+      <div class="pm-views-row" id="pmViewsRow"></div>
+
       <div class="pm-table" id="pmTable" style="display:none;">
         <div class="pm-row pm-row-header">
-          <button type="button" class="pm-col pm-col-image pm-sort-header" data-sort-key="alpha">Item<span class="pm-sort-arrow"></span></button>
-          <button type="button" class="pm-col pm-col-qty pm-sort-header" data-sort-key="qty">Quantity<span class="pm-sort-arrow"></span></button>
-          <button type="button" class="pm-col pm-col-ge pm-sort-header" data-sort-key="ge">GE Value<span class="pm-sort-arrow"></span></button>
-          <button type="button" class="pm-col pm-col-ha pm-sort-header" data-sort-key="ha">HA Value<span class="pm-sort-arrow"></span></button>
-          <button type="button" class="pm-col pm-col-tradeable pm-sort-header" data-sort-key="tradeable">Tradeable?<span class="pm-sort-arrow"></span></button>
+          <div class="pm-col pm-col-image pm-header-cell">
+            <button type="button" class="pm-sort-header" data-sort-key="alpha">Item<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="alpha" title="Filter Item" aria-label="Filter Item">{funnel_glyph}</button>
+          </div>
+          <div class="pm-col pm-col-qty pm-header-cell">
+            <button type="button" class="pm-sort-header" data-sort-key="qty">Quantity<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="qty" title="Filter Quantity" aria-label="Filter Quantity">{funnel_glyph}</button>
+          </div>
+          <div class="pm-col pm-col-ge pm-header-cell">
+            <button type="button" class="pm-sort-header" data-sort-key="ge">GE Value<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="ge" title="Filter GE Value" aria-label="Filter GE Value">{funnel_glyph}</button>
+          </div>
+          <div class="pm-col pm-col-ha pm-header-cell">
+            <button type="button" class="pm-sort-header" data-sort-key="ha">HA Value<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="ha" title="Filter HA Value" aria-label="Filter HA Value">{funnel_glyph}</button>
+          </div>
+          <div class="pm-col pm-col-tradeable pm-header-cell">
+            <button type="button" class="pm-sort-header" data-sort-key="tradeable">Tradeable?<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="tradeable" title="Filter Tradeable?" aria-label="Filter Tradeable?">{funnel_glyph}</button>
+          </div>
         </div>
         <div id="pmRows"></div>
       </div>
@@ -7592,6 +7621,23 @@ def render_possessions(player: Player) -> str:
         // which syncs it (and every settings-menu checkbox) from
         // whatever loadSummary's own poll last saw.
         enabledStorages: { bank: true, potion_storage: true, seed_vault: true, poh: true, boat_cargo: true, equipment: true, inventory: true, looting_bag: true, rune_pouch: true, tackle_box: true, forestry_kit: true, master_scroll_book: true, seed_box: true, huntsmans_kit: true },
+        // Per-column filters (see matchesFilters below) -- keyed by
+        // column ('alpha'/'qty'/'ge'/'ha'/'tradeable'), each either
+        // absent/null (no filter on that column) or one of the filter
+        // shapes buildFilterFromPopover produces. Persisted server-side
+        // only as part of a saved view's own config (PossessionView,
+        // app/models.py) -- like `search` above, this itself resets on
+        // reload unless a saved view is applied.
+        filters: {},
+        // Every saved view this player has (PossessionView,
+        // app/models.py), in their own reorder-strip order -- see
+        // loadViews/renderViewsRow. activeViewId is which one (if any)
+        // currently matches state.sortKey/sortDir/filters -- cleared
+        // the instant any of those three change by hand (see
+        // clearActiveViewHighlight), so the highlighted chip never
+        // lies about what's actually being shown.
+        views: [],
+        activeViewId: null,
       };
 
       function showError(msg) {
@@ -7710,9 +7756,225 @@ def render_possessions(player: Player) -> str:
             state.sortDir = SORT_DEFAULT_DIR[key] || 'desc';
           }
           updateSortHeaders();
+          clearActiveViewHighlight();
           renderTable();
         });
       });
+
+      // ---- Per-column filter popovers (funnel icon beside each header
+      // -- a separate element from .pm-sort-header above, with its own
+      // click target and its own stopPropagation everywhere, so
+      // opening/using a filter never also re-sorts the column it's
+      // attached to) --------------------------------------------------
+
+      var FILTER_COLUMNS = { alpha: 'text', qty: 'simple', ge: 'rich', ha: 'rich', tradeable: 'tradeable' };
+
+      function filterPopoverHtml(col) {
+        var kind = FILTER_COLUMNS[col];
+        var current = state.filters[col] || null;
+        var actions = (
+          '<div class="pm-filter-popover-actions">' +
+          '<button type="button" class="pm-filter-clear-btn" data-action="clear">Clear</button>' +
+          '<button type="button" class="pm-filter-apply-btn" data-action="apply">Apply</button>' +
+          '</div>'
+        );
+        function modeBtn(attr, value, label, activeValue) {
+          var cls = 'pm-filter-mode-btn' + (value === activeValue ? ' active' : '');
+          return '<button type="button" class="' + cls + '" data-' + attr + '="' + value + '">' + label + '</button>';
+        }
+        if (kind === 'text') {
+          var mode = (current && current.mode) || 'contains';
+          var text = current ? (current.text || '') : '';
+          return (
+            '<div class="pm-filter-popover-row">' +
+            modeBtn('mode', 'contains', 'Contains', mode) +
+            modeBtn('mode', 'not_contains', 'Does Not Contain', mode) +
+            '</div>' +
+            '<input type="text" class="pm-filter-input" data-role="text" placeholder="Item name contains..." value="' + escapeHtml(text) + '" />' +
+            actions
+          );
+        }
+        if (kind === 'simple') {
+          var mode = (current && current.mode) || 'include';
+          var cmp = (current && current.cmp) || 'above';
+          var value = current && typeof current.value === 'number' ? current.value : '';
+          return (
+            '<div class="pm-filter-popover-row">' +
+            modeBtn('mode', 'include', 'Include', mode) +
+            modeBtn('mode', 'exclude', 'Exclude', mode) +
+            '</div>' +
+            '<div class="pm-filter-popover-row">' +
+            modeBtn('cmp', 'above', 'Above', cmp) +
+            modeBtn('cmp', 'below', 'Below', cmp) +
+            '</div>' +
+            '<input type="number" class="pm-filter-input" data-role="value" placeholder="Quantity" value="' + value + '" />' +
+            actions
+          );
+        }
+        if (kind === 'rich') {
+          var mode = (current && current.mode) || 'include';
+          var rkind = (current && current.kind) || 'operator';
+          var op = (current && current.op) || '>=';
+          var value = current && typeof current.value === 'number' ? current.value : '';
+          var min = current && typeof current.min === 'number' ? current.min : '';
+          var max = current && typeof current.max === 'number' ? current.max : '';
+          var opDisplay = rkind === 'operator' ? '' : ' style="display:none;"';
+          var betweenDisplay = rkind === 'between' ? '' : ' style="display:none;"';
+          return (
+            '<div class="pm-filter-popover-row">' +
+            modeBtn('mode', 'include', 'Include', mode) +
+            modeBtn('mode', 'exclude', 'Exclude', mode) +
+            '</div>' +
+            '<div class="pm-filter-popover-row">' +
+            modeBtn('kind', 'operator', 'Operator', rkind) +
+            modeBtn('kind', 'between', 'Between', rkind) +
+            '</div>' +
+            '<div class="pm-filter-popover-row" data-role="operator-row"' + opDisplay + '>' +
+            '<select class="pm-filter-select" data-role="op">' +
+            ['>', '>=', '<', '<=', '=', '!='].map(function (o) {
+              // Display label is HTML-escaped (a raw "<" as element
+              // TEXT content, unlike inside the value="..." attribute
+              // below, would otherwise be parsed as the start of a new
+              // tag) -- the stored/compared value itself stays the
+              // plain operator string, never the escaped label.
+              var label = o === '<' ? '&lt;' : o === '<=' ? '&le;' : o === '>=' ? '&ge;' : o === '!=' ? '&ne;' : o;
+              return '<option value="' + o + '"' + (o === op ? ' selected' : '') + '>' + label + '</option>';
+            }).join('') +
+            '</select>' +
+            '<input type="number" class="pm-filter-input" data-role="value" placeholder="Value" value="' + value + '" />' +
+            '</div>' +
+            '<div class="pm-filter-input-pair" data-role="between-row"' + betweenDisplay + '>' +
+            '<input type="number" class="pm-filter-input" data-role="min" placeholder="Min" value="' + min + '" />' +
+            '<span class="pm-filter-input-pair-sep">&ndash;</span>' +
+            '<input type="number" class="pm-filter-input" data-role="max" placeholder="Max" value="' + max + '" />' +
+            '</div>' +
+            actions
+          );
+        }
+        // tradeable
+        var mode = (current && current.mode) || 'tradeable';
+        return (
+          '<div class="pm-filter-popover-row">' +
+          modeBtn('mode', 'tradeable', 'Tradeable', mode) +
+          modeBtn('mode', 'untradeable', 'Untradeable', mode) +
+          '</div>' +
+          actions
+        );
+      }
+
+      function numOrNull(input) {
+        if (!input) return null;
+        var n = parseFloat(input.value);
+        return isNaN(n) ? null : n;
+      }
+
+      // Reads whatever's currently selected/typed in an open popover
+      // and turns it into the filter object matchesFilters expects --
+      // null when there's nothing usable to apply (an empty text box,
+      // an empty/non-numeric number field), which Apply treats as "no
+      // filter on this column" rather than an error.
+      function buildFilterFromPopover(col, popoverEl) {
+        var kind = FILTER_COLUMNS[col];
+        function activeAttr(attr, fallback) {
+          var btn = popoverEl.querySelector('[data-' + attr + '].pm-filter-mode-btn.active');
+          return btn ? btn.getAttribute('data-' + attr) : fallback;
+        }
+        if (kind === 'text') {
+          var input = popoverEl.querySelector('[data-role="text"]');
+          var text = input ? input.value.trim() : '';
+          if (!text) return null;
+          return { mode: activeAttr('mode', 'contains'), text: text };
+        }
+        if (kind === 'simple') {
+          var value = numOrNull(popoverEl.querySelector('[data-role="value"]'));
+          if (value === null) return null;
+          return { mode: activeAttr('mode', 'include'), cmp: activeAttr('cmp', 'above'), value: value };
+        }
+        if (kind === 'rich') {
+          var mode = activeAttr('mode', 'include');
+          var rkind = activeAttr('kind', 'operator');
+          if (rkind === 'between') {
+            var min = numOrNull(popoverEl.querySelector('[data-role="min"]'));
+            var max = numOrNull(popoverEl.querySelector('[data-role="max"]'));
+            if (min === null || max === null) return null;
+            return { mode: mode, kind: 'between', min: min, max: max };
+          }
+          var op = popoverEl.querySelector('[data-role="op"]').value;
+          var value = numOrNull(popoverEl.querySelector('[data-role="value"]'));
+          if (value === null) return null;
+          return { mode: mode, kind: 'operator', op: op, value: value };
+        }
+        // tradeable
+        return { mode: activeAttr('mode', 'tradeable') };
+      }
+
+      function wirePopoverControls(col, popoverEl) {
+        popoverEl.querySelectorAll('.pm-filter-mode-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var row = btn.parentElement;
+            row.querySelectorAll('.pm-filter-mode-btn').forEach(function (sib) { sib.classList.remove('active'); });
+            btn.classList.add('active');
+            if (btn.hasAttribute('data-kind')) {
+              var operatorRow = popoverEl.querySelector('[data-role="operator-row"]');
+              var betweenRow = popoverEl.querySelector('[data-role="between-row"]');
+              var isBetween = btn.getAttribute('data-kind') === 'between';
+              if (operatorRow) operatorRow.style.display = isBetween ? 'none' : '';
+              if (betweenRow) betweenRow.style.display = isBetween ? '' : 'none';
+            }
+          });
+        });
+        var clearBtn = popoverEl.querySelector('[data-action="clear"]');
+        if (clearBtn) clearBtn.addEventListener('click', function () {
+          delete state.filters[col];
+          closeAllFilterPopovers();
+          clearActiveViewHighlight();
+          updateFilterIconStates();
+          renderTable();
+        });
+        var applyBtn = popoverEl.querySelector('[data-action="apply"]');
+        if (applyBtn) applyBtn.addEventListener('click', function () {
+          var filter = buildFilterFromPopover(col, popoverEl);
+          if (filter) { state.filters[col] = filter; } else { delete state.filters[col]; }
+          closeAllFilterPopovers();
+          clearActiveViewHighlight();
+          updateFilterIconStates();
+          renderTable();
+        });
+        // Never let a click inside the popover (a mode button, an
+        // input, Apply/Clear) bubble up to the document-level
+        // "click outside closes it" listener in wireFilterIcons below.
+        popoverEl.addEventListener('click', function (e) { e.stopPropagation(); });
+      }
+
+      function closeAllFilterPopovers() {
+        document.querySelectorAll('.pm-filter-popover').forEach(function (el) { el.remove(); });
+      }
+
+      function updateFilterIconStates() {
+        document.querySelectorAll('.pm-filter-icon-btn').forEach(function (btn) {
+          btn.classList.toggle('active', !!state.filters[btn.getAttribute('data-filter-col')]);
+        });
+      }
+
+      function wireFilterIcons() {
+        document.querySelectorAll('.pm-filter-icon-btn').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var col = btn.getAttribute('data-filter-col');
+            var cell = btn.closest('.pm-header-cell');
+            var alreadyOpenHere = cell.querySelector('.pm-filter-popover');
+            closeAllFilterPopovers();
+            if (alreadyOpenHere) return; // this button's own popover was the one open -- treat as a toggle-off
+            var popover = document.createElement('div');
+            popover.className = 'pm-filter-popover';
+            popover.innerHTML = filterPopoverHtml(col);
+            cell.appendChild(popover);
+            wirePopoverControls(col, popover);
+          });
+        });
+        document.addEventListener('click', function () { closeAllFilterPopovers(); });
+      }
+      wireFilterIcons();
 
       // ---- Locations (multi-select groups, all on by default) ----------
       // Each button covers a GROUP of raw storage keys (data-locations is
@@ -7841,6 +8103,70 @@ def render_possessions(player: Player) -> str:
         return total;
       }
 
+      // ---- Per-column filters (funnel icon beside each header, see
+      // wireFilterIcons) ---------------------------------------------
+
+      // Quantity's own filter -- deliberately simpler than GE/HA
+      // Value's below (no operator dropdown, no between-two-values),
+      // exactly as asked for: include/exclude plus above/below one
+      // typed number.
+      function simpleNumericMatch(value, filter) {
+        var hit = filter.cmp === 'above' ? value > filter.value : value < filter.value;
+        return filter.mode === 'exclude' ? !hit : hit;
+      }
+
+      // GE Value/HA Value's one unified control -- either an operator
+      // (>, >=, <, <=, =, !=) against one value, or a between-two-
+      // values range, either way wrapped in one include/exclude
+      // toggle that flips whichever match is chosen. Applied against
+      // the STACK total (price * qty), matching both what the column
+      // itself displays as its primary line and what sorting by this
+      // same column already ranks by (see visibleRows' own sort
+      // below) -- never the per-unit price alone.
+      function richNumericMatch(value, filter) {
+        var hit;
+        if (filter.kind === 'between') {
+          var lo = Math.min(filter.min, filter.max);
+          var hi = Math.max(filter.min, filter.max);
+          hit = value >= lo && value <= hi;
+        } else {
+          switch (filter.op) {
+            case '>': hit = value > filter.value; break;
+            case '>=': hit = value >= filter.value; break;
+            case '<': hit = value < filter.value; break;
+            case '<=': hit = value <= filter.value; break;
+            case '=': hit = value === filter.value; break;
+            case '!=': hit = value !== filter.value; break;
+            default: hit = true;
+          }
+        }
+        return filter.mode === 'exclude' ? !hit : hit;
+      }
+
+      // One combined check across every active column filter -- a row
+      // has to pass ALL of them (not any), same "every active filter
+      // narrows the list further" convention as the search box and
+      // location buttons already sitting alongside these. A column
+      // with no filter set (state.filters[col] is undefined/null) is
+      // simply skipped, same as every other still-default column.
+      function matchesFilters(item, qty) {
+        var f = state.filters;
+        if (f.alpha) {
+          var needle = (f.alpha.text || '').toLowerCase();
+          var hit = needle ? item.name.toLowerCase().indexOf(needle) !== -1 : true;
+          if (f.alpha.mode === 'not_contains') hit = !hit;
+          if (!hit) return false;
+        }
+        if (f.qty && !simpleNumericMatch(qty, f.qty)) return false;
+        if (f.ge && !richNumericMatch((item.gePrice || 0) * qty, f.ge)) return false;
+        if (f.ha && !richNumericMatch((item.highAlch || 0) * qty, f.ha)) return false;
+        if (f.tradeable) {
+          var wantTradeable = f.tradeable.mode === 'tradeable';
+          if (!!item.tradeable !== wantTradeable) return false;
+        }
+        return true;
+      }
+
       function visibleRows() {
         var q = state.search.toLowerCase();
         var out = [];
@@ -7849,6 +8175,7 @@ def render_possessions(player: Player) -> str:
           var qty = shownQuantity(item);
           if (qty <= 0) continue;
           if (q && item.name.toLowerCase().indexOf(q) === -1) continue;
+          if (!matchesFilters(item, qty)) continue;
           out.push({ item: item, qty: qty });
         }
         out.sort(function (a, b) {
@@ -7997,7 +8324,7 @@ def render_possessions(player: Player) -> str:
         var visible = groups.pinned.concat(groups.rest);
         if (!visible.length) {
           table.style.display = 'none';
-          empty.textContent = 'No items match your search/location filters.';
+          empty.textContent = 'No items match your search/filters.';
           empty.style.display = '';
           lastPmKey = null;
           pmTableRenderToken++;
@@ -8016,7 +8343,14 @@ def render_possessions(player: Player) -> str:
         // which group a row is in (and so whether the divider shows)
         // can only change there.
         var pinnedKey = groups.pinned.map(function (v) { return v.item.itemId; }).join(',');
-        var key = state.sortKey + '\\u0001' + state.sortDir + '\\u0001' + state.search + '\\u0001' + activeLocations + '\\u0001' + pinnedKey + '\\u0001' +
+        // filterKey -- same reasoning as pinnedKey above: a filter
+        // change can narrow/widen the visible set without necessarily
+        // changing the sorted id sequence of what's STILL visible
+        // (e.g. tightening an already-active filter that removes
+        // nothing currently shown), so it has to be part of the key
+        // in its own right rather than relying on the id list alone.
+        var filterKey = JSON.stringify(state.filters);
+        var key = state.sortKey + '\\u0001' + state.sortDir + '\\u0001' + state.search + '\\u0001' + activeLocations + '\\u0001' + pinnedKey + '\\u0001' + filterKey + '\\u0001' +
           visible.map(function (v) { return v.item.itemId; }).join('|');
 
         if (key !== lastPmKey) {
@@ -8102,8 +8436,234 @@ def render_possessions(player: Player) -> str:
         setPinned(itemId, !currentlyPinned);
       });
 
+      // ---- Saved views (named, reorderable, server-persisted -- see
+      // PossessionView in app/models.py) -- lets a player switch
+      // between several different filter/sort setups without
+      // re-building each one by hand every time. Unlike gear setups'
+      // OWN icon row (Purchase Goals, wireSetupIconDrag), a view isn't
+      // "active" just by existing -- state.activeViewId only reflects
+      // one that was actually just applied (or saved), and is dropped
+      // the moment the player changes sort/filters by hand (see
+      // clearActiveViewHighlight, called from the sort header click
+      // handler above and every filter Apply/Clear above).
+
+      var viewDragSuppressClick = false;
+
+      function currentConfigSnapshot() {
+        return { sortKey: state.sortKey, sortDir: state.sortDir, filters: state.filters };
+      }
+
+      function clearActiveViewHighlight() {
+        if (state.activeViewId === null) return;
+        state.activeViewId = null;
+        renderViewsRow();
+      }
+
+      function applyView(view) {
+        var config = view.config || {};
+        state.sortKey = config.sortKey || 'ge';
+        state.sortDir = config.sortDir || 'desc';
+        state.filters = config.filters || {};
+        state.activeViewId = view.id;
+        updateSortHeaders();
+        updateFilterIconStates();
+        renderViewsRow();
+        renderTable();
+      }
+
+      function openSaveViewPopover() {
+        closeAllFilterPopovers();
+        var row = document.getElementById('pmViewsRow');
+        var existing = row.querySelector('.pm-view-save-popover');
+        if (existing) { existing.remove(); return; }
+        var popover = document.createElement('div');
+        popover.className = 'pm-view-save-popover';
+        popover.innerHTML = (
+          '<div class="pm-filter-popover-label">Save current filters &amp; sort as</div>' +
+          '<input type="text" class="pm-filter-input" data-role="view-name" placeholder="View name" />' +
+          '<div class="pm-filter-popover-actions">' +
+          '<button type="button" class="pm-filter-clear-btn" data-action="cancel">Cancel</button>' +
+          '<button type="button" class="pm-filter-apply-btn" data-action="save">Save</button>' +
+          '</div>'
+        );
+        row.appendChild(popover);
+        popover.addEventListener('click', function (e) { e.stopPropagation(); });
+        var input = popover.querySelector('[data-role="view-name"]');
+        input.focus();
+        popover.querySelector('[data-action="cancel"]').addEventListener('click', function () { popover.remove(); });
+        popover.querySelector('[data-action="save"]').addEventListener('click', async function () {
+          var name = input.value.trim();
+          if (!name) { input.focus(); return; }
+          var data = await apiCall('/api/possessions/views', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, config: currentConfigSnapshot() }),
+          });
+          popover.remove();
+          if (!data) return;
+          state.views = data.views || [];
+          // A brand new view always lands past the end of the player's
+          // existing ones (see next_possession_view_sort_order in
+          // app/possessions.py), so the array's own last entry IS the
+          // one just created -- no id round-tripped back explicitly.
+          var saved = state.views[state.views.length - 1];
+          if (saved) state.activeViewId = saved.id;
+          renderViewsRow();
+        });
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') popover.querySelector('[data-action="save"]').click();
+        });
+      }
+      document.addEventListener('click', function () {
+        var existing = document.querySelector('.pm-view-save-popover');
+        if (existing) existing.remove();
+      });
+
+      function renderViewsRow() {
+        var row = document.getElementById('pmViewsRow');
+        row.innerHTML = state.views.map(function (v) {
+          var active = v.id === state.activeViewId ? ' active' : '';
+          return (
+            '<button type="button" class="pm-view-chip' + active + '" data-view-id="' + v.id + '" draggable="true" title="' + escapeHtml(v.name) + '">' +
+            '<span class="pm-view-chip-name">' + escapeHtml(v.name) + '</span>' +
+            '<span class="pm-view-delete" data-view-delete="' + v.id + '" title="Delete this view" aria-label="Delete this view">&times;</span>' +
+            '</button>'
+          );
+        }).join('') + '<button type="button" class="pm-view-add-btn" id="pmViewAddBtn">+ Save View</button>';
+
+        row.querySelectorAll('.pm-view-chip').forEach(function (chip) {
+          chip.addEventListener('click', function (e) {
+            if (e.target.closest('.pm-view-delete')) return;
+            if (viewDragSuppressClick) { viewDragSuppressClick = false; return; }
+            var id = chip.getAttribute('data-view-id');
+            if (id === state.activeViewId) {
+              // Clicking the already-active chip again deselects it --
+              // back to the page's own plain defaults, same as a fresh
+              // load with no view applied.
+              state.sortKey = 'ge'; state.sortDir = 'desc'; state.filters = {}; state.activeViewId = null;
+              updateSortHeaders(); updateFilterIconStates(); renderViewsRow(); renderTable();
+              return;
+            }
+            var view = state.views.filter(function (v) { return v.id === id; })[0];
+            if (view) applyView(view);
+          });
+        });
+        row.querySelectorAll('[data-view-delete]').forEach(function (btn) {
+          btn.addEventListener('click', async function (e) {
+            e.stopPropagation();
+            var id = btn.getAttribute('data-view-delete');
+            var data = await apiCall('/api/possessions/views/' + id, { method: 'DELETE' });
+            if (!data) return;
+            state.views = data.views || [];
+            if (state.activeViewId === id) state.activeViewId = null;
+            renderViewsRow();
+          });
+        });
+        var addBtn = document.getElementById('pmViewAddBtn');
+        if (addBtn) addBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openSaveViewPopover();
+        });
+
+        wireViewChipDrag(row);
+      }
+
+      // Drag-and-drop reordering for the saved-views strip -- same
+      // FLIP-preview/live-DOM-order/full-replacement shape as Purchase
+      // Goals' own wireSetupIconDrag (app/pages.py), reused here over
+      // data-view-id chips instead of data-setup-id ones. Unlike that
+      // row, nothing else on this page polls/rebuilds #pmViewsRow out
+      // from under an in-flight drag (loadSummary's own 5s poll only
+      // ever touches state.items/#pmRows), so this doesn't need that
+      // function's own PG.dragging guard flag.
+      function wireViewChipDrag(row) {
+        var draggedEl = null;
+        var dropped = false;
+
+        function chipKey(btn) { return btn.getAttribute('data-view-id'); }
+
+        function animateReorder(mutate) {
+          var chips = Array.prototype.slice.call(row.querySelectorAll('.pm-view-chip'));
+          var firstRects = {};
+          chips.forEach(function (c) { firstRects[chipKey(c)] = c.getBoundingClientRect(); });
+
+          mutate();
+
+          chips.forEach(function (c) {
+            if (c === draggedEl) return;
+            var first = firstRects[chipKey(c)];
+            var last = c.getBoundingClientRect();
+            var dx = first.left - last.left;
+            var dy = first.top - last.top;
+            if (!dx && !dy) return;
+            c.style.transition = 'none';
+            c.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+            c.getBoundingClientRect();
+            c.style.transition = 'transform 150ms ease';
+            c.style.transform = '';
+            c.addEventListener('transitionend', function handler() {
+              c.style.transition = '';
+              c.removeEventListener('transitionend', handler);
+            });
+          });
+        }
+
+        async function commitDomOrder() {
+          var order = Array.prototype.slice.call(row.querySelectorAll('.pm-view-chip')).map(function (c) {
+            return c.getAttribute('data-view-id');
+          });
+          var data = await apiCall('/api/possessions/views/order', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: order }),
+          });
+          if (data) { state.views = data.views || []; renderViewsRow(); }
+        }
+
+        row.querySelectorAll('.pm-view-chip').forEach(function (chip) {
+          chip.addEventListener('dragstart', function (e) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', chip.getAttribute('data-view-id'));
+            draggedEl = chip;
+            dropped = false;
+            chip.classList.add('dragging');
+          });
+          chip.addEventListener('dragend', function () {
+            chip.classList.remove('dragging');
+            draggedEl = null;
+            viewDragSuppressClick = true;
+            if (!dropped) renderViewsRow();
+          });
+          chip.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (!draggedEl || draggedEl === chip) return;
+            var rect = chip.getBoundingClientRect();
+            var before = e.clientX < rect.left + rect.width / 2;
+            var alreadyBefore = chip.previousElementSibling === draggedEl;
+            var alreadyAfter = chip.nextElementSibling === draggedEl;
+            if (before ? alreadyBefore : alreadyAfter) return;
+            animateReorder(function () {
+              row.insertBefore(draggedEl, before ? chip : chip.nextSibling);
+            });
+          });
+          chip.addEventListener('drop', function (e) {
+            e.preventDefault();
+            dropped = true;
+            commitDomOrder();
+          });
+        });
+      }
+
+      async function loadViews() {
+        var data = await apiCall('/api/possessions/views');
+        if (!data) return;
+        state.views = data.views || [];
+        renderViewsRow();
+      }
+
       updateSortHeaders();
+      updateFilterIconStates();
       loadSummary();
+      loadViews();
       // Re-poll the same way Purchase Goals does (see PG.pollTimer
       // above in this file) -- a plugin sync (moving something from
       // the bank into inventory/equipment, say) should show up here on
