@@ -479,13 +479,20 @@ def verify_email_required_page(player: Optional[Player] = Depends(get_optional_c
 
 @app.get("/verify-email", response_class=HTMLResponse)
 def verify_email_page(player: Optional[Player] = Depends(get_optional_current_player_from_session)):
-    # No redirect-if-already-verified or redirect-if-logged-out here,
-    # same reasoning as reset_password_page's own comment -- the token
-    # itself is read client-side from the URL's query string (see
-    # render_verify_email's own script), and someone clicking a
-    # confirmation link from their email isn't necessarily still in the
-    # same browser session (or any session at all) that signed up.
-    return render_verify_email()
+    if player and player.email_verified_at:
+        # Already verified in this session -- most likely they followed
+        # a bookmarked/stale link, or already verified in another tab.
+        # Nothing left for this page to do.
+        return RedirectResponse("/dashboard", status_code=302)
+    # No redirect-if-logged-out here, same reasoning as reset_password_page's
+    # own comment -- the token itself is read client-side from the URL's
+    # query string (see render_verify_email's own script), and someone
+    # clicking a confirmation link from their email isn't necessarily still
+    # in the same browser session (or any session at all) that signed up.
+    # `player` is still passed through though (logged-in-but-unverified is
+    # exactly the state this page is usually reached in), so the header nav
+    # shows Dashboard/Log out rather than Log in/Sign up when applicable.
+    return render_verify_email(player)
 
 
 @app.get("/api/health")

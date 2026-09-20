@@ -973,7 +973,7 @@ def render_verify_email_required(player: Player) -> str:
     return _shell(title="Verify your email — myscape", player=player, body=body, extra_script=script)
 
 
-def render_verify_email() -> str:
+def render_verify_email(player: Optional[Player] = None) -> str:
     body = """
     <div class="auth-shell">
       <div class="auth-card">
@@ -1026,7 +1026,7 @@ def render_verify_email() -> str:
       })();
     })();
     """
-    return _shell(title="Verify email — myscape", player=None, body=body, extra_script=script)
+    return _shell(title="Verify email — myscape", player=player, body=body, extra_script=script)
 
 
 def render_not_found(player: Optional[Player] = None) -> str:
