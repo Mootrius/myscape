@@ -20,9 +20,9 @@ logging.basicConfig(level=logging.INFO)
 
 from alembic import command
 from alembic.config import Config
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.exception_handlers import http_exception_handler as _default_http_exception_handler
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -77,6 +77,7 @@ from app.models import (
     TackleBoxItem,
 )
 from app.pages import (
+    _SITE_URL,
     PlayerView,
     render_account,
     render_dashboard,
@@ -441,6 +442,60 @@ def root(player: Optional[PlayerView] = Depends(get_optional_current_player_view
     # its own docstring) specifically so it can render properly either
     # way now.
     return render_landing(player)
+
+
+# The disallowed paths here are every page _shell() itself renders
+# noindex by default (see that function's own comment in app/pages.py)
+# -- kept as an explicit list rather than trying to derive one from the
+# route table at import time, since a robots.txt a crawler can't parse
+# is worse than one that's occasionally one route behind if a new page
+# is ever added without updating both places. /dashboard alone covers
+# every /dashboard/* tool page (Purchase Goals, Loot Tracker, Mindmaps,
+# Storages Viewer) as a prefix match, same as the other entries here
+# cover their own sub-paths. /api/ is blocked outright -- none of it is
+# a page a crawler could render anyway, and there's no reason to spend
+# a crawl budget probing it.
+_ROBOTS_TXT = """User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /account
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /verify-email-required
+Disallow: /api/
+
+Sitemap: """ + _SITE_URL + """/sitemap.xml
+"""
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    return _ROBOTS_TXT
+
+
+# One entry -- the landing page is the only URL on the whole site
+# _shell() ever renders indexable (see its own noindex/canonical_path
+# comment), so it's also the only one worth listing here. A sitemap
+# full of noindexed pages wouldn't help those pages get indexed (the
+# noindex tag itself always wins) and would just be one more thing to
+# keep in sync with the route table for no benefit.
+_SITEMAP_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>""" + _SITE_URL + """/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
+"""
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    return Response(content=_SITEMAP_XML, media_type="application/xml")
 
 
 @app.get("/signup", response_class=HTMLResponse)

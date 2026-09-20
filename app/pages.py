@@ -215,7 +215,42 @@ def _footer(player: Optional[PlayerView], extra: str = "") -> str:
     """
 
 
-def _shell(*, title: str, player: Optional[PlayerView], body: str, extra_script: str = "", extra_head: str = "", body_class: str = "", footer_extra: str = "") -> str:
+# The canonical production domain -- used to build absolute URLs for
+# og:url/og:image/twitter:image and the landing page's <link
+# rel="canonical">, regardless of which environment actually renders
+# the page (local dev included). That's deliberate: these tags exist
+# for search engines and link-preview crawlers hitting the live site,
+# so they should always point at the one real place this content
+# lives, not wherever it happened to be generated from.
+_SITE_URL = "https://myscape.io"
+
+# The site-wide fallback for <meta name="description">/og:description/
+# twitter:description -- every _shell() call gets this unless a page
+# passes its own via meta_description (nothing currently does; the
+# landing page's own pitch already covers what a search result or a
+# shared link should say, so the other pages -- login, signup, the
+# dashboard tools -- just inherit it rather than needing their own).
+_DEFAULT_META_DESCRIPTION = (
+    "myscape is a free companion site for Old School RuneScape -- track loot from "
+    "every NPC you kill, plan Grand Exchange purchases against your real bank, map "
+    "out your goals, and see everything you own across every storage, all synced "
+    "straight from RuneLite."
+)
+
+
+def _shell(
+    *,
+    title: str,
+    player: Optional[PlayerView],
+    body: str,
+    extra_script: str = "",
+    extra_head: str = "",
+    body_class: str = "",
+    footer_extra: str = "",
+    meta_description: str = _DEFAULT_META_DESCRIPTION,
+    canonical_path: Optional[str] = None,
+    noindex: bool = True,
+) -> str:
     nav_left, nav_right = _nav_sides(player)
     shared_script = """
     // See myscape.css's own `user-select: none` for the text-selection
@@ -316,6 +351,45 @@ def _shell(*, title: str, player: Optional[PlayerView], body: str, extra_script:
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{escape(title)}</title>
+  <meta name="description" content="{escape(meta_description)}" />
+  <!-- Everything on this site except the landing page is either
+       behind a login (dashboard and its four tools, account) or a
+       thin auth-flow utility page (signup/login/forgot-reset-verify)
+       -- none of that is content worth a search result of its own,
+       and letting Google index e.g. a logged-out "please log in"
+       shell under /dashboard/loot would just dilute the one page
+       that's actually meant to be found. noindex defaults to True in
+       _shell()'s own signature above for exactly that reason -- the
+       landing page's own render_landing() is the one call site that
+       opts back in. nofollow alongside it since a crawler that
+       respects noindex has no reason to be crawling a noindexed
+       page's own links for more URLs to discover either. -->
+  {'<meta name="robots" content="noindex, nofollow" />' if noindex else ""}
+  {f'<link rel="canonical" href="{escape(_SITE_URL + canonical_path)}" />' if canonical_path else ""}
+  <!-- Open Graph + Twitter Card -- what a link to this page previews
+       as in Discord/Twitter/Slack/etc. Rendered on every page (not
+       just the indexable landing one) since a player might still
+       paste e.g. a dashboard link to themselves or a friend even
+       though it requires login -- there's no reason that should
+       preview as a bare, description-less URL when the branded
+       fallback costs nothing. og-image.jpg is a 1200x630 render of
+       the same wordmark the landing page's own intro anchor uses,
+       composited onto the site's real background color (matching
+       myscape.css's --bg) rather than left as the source PNG's
+       transparency, since a transparent image previews against an
+       unpredictable -- often white -- background on most platforms. -->
+  <meta property="og:site_name" content="myscape" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="{escape(title)}" />
+  <meta property="og:description" content="{escape(meta_description)}" />
+  <meta property="og:image" content="{escape(_SITE_URL + '/static/img/og-image.jpg')}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  {f'<meta property="og:url" content="{escape(_SITE_URL + canonical_path)}" />' if canonical_path else ""}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{escape(title)}" />
+  <meta name="twitter:description" content="{escape(meta_description)}" />
+  <meta name="twitter:image" content="{escape(_SITE_URL + '/static/img/og-image.jpg')}" />
   <!-- Preloaded as early as possible in <head>, ahead of the
        stylesheet that actually declares @font-face for it (see
        myscape.css) -- the site's whole look rides on this one pixel
@@ -566,7 +640,19 @@ def render_landing(player: Optional[PlayerView]) -> str:
     # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
     # every other page keeps its ordinary, un-snapped scrolling.
-    return _shell(title="myscape", player=player, body=body, extra_script=script, body_class="landing", footer_extra=landing_cta)
+    return _shell(
+        title="myscape",
+        player=player,
+        body=body,
+        extra_script=script,
+        body_class="landing",
+        footer_extra=landing_cta,
+        # The one page on the whole site actually meant to be found --
+        # see _shell()'s own noindex/canonical_path comment for why
+        # every other page stays noindexed by default.
+        canonical_path="/",
+        noindex=False,
+    )
 
 
 # Icons for the dashboard cards below -- each a real OSRS item that's a
