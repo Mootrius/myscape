@@ -678,10 +678,10 @@ def render_account(player: Player) -> str:
     <div class="auth-shell">
       <div class="auth-card">
         <h2>ACCOUNT</h2>
+        <p class="account-email">{current_email}</p>
+        <button class="account-logout-link" id="logoutBtn" type="button">LOG OUT</button>
 
         <div class="account-section">
-          <h3>Email</h3>
-          <p class="account-section-hint">Current: <strong>{current_email}</strong></p>
           <div class="auth-error" id="emailError"></div>
           <div class="auth-success" id="emailSuccess"></div>
           <form id="emailForm">
@@ -690,21 +690,20 @@ def render_account(player: Player) -> str:
               <input type="email" id="newEmail" name="newEmail" placeholder="you@example.com" required />
             </div>
             <div class="field">
-              <label for="emailPassword">Current password</label>
-              <input type="password" id="emailPassword" name="emailPassword" placeholder="Confirm with your password" required />
+              <label for="emailPassword">Password</label>
+              <input type="password" id="emailPassword" name="emailPassword" placeholder="Your password" required />
             </div>
             <button class="primary" type="submit">UPDATE EMAIL</button>
           </form>
         </div>
 
         <div class="account-section">
-          <h3>Password</h3>
           <div class="auth-error" id="passwordError"></div>
           <div class="auth-success" id="passwordSuccess"></div>
           <form id="passwordForm">
             <div class="field">
               <label for="currentPassword">Current password</label>
-              <input type="password" id="currentPassword" name="currentPassword" required />
+              <input type="password" id="currentPassword" name="currentPassword" placeholder="Current password" required />
             </div>
             <div class="field">
               <label for="newPassword">New password</label>
@@ -718,21 +717,15 @@ def render_account(player: Player) -> str:
           </form>
         </div>
 
-        <div class="account-section">
-          <h3>Log out</h3>
-          <button class="secondary" id="logoutBtn" type="button">LOG OUT</button>
-        </div>
-
         <div class="account-section account-section--danger">
-          <h3>Delete account</h3>
-          <p class="account-section-hint">This permanently deletes your account and everything tied to it — goals, trackers, mindmaps, and your linked RuneLite account. This cannot be undone.</p>
+          <p class="account-section-hint">This will PERMANENTLY delete your myscape account and data attached to it. You can create a new account afterward, but you CANNOT undo this action.</p>
           <div class="auth-error" id="deleteError"></div>
           <form id="deleteForm">
             <div class="field">
-              <label for="deletePassword">Current password</label>
-              <input type="password" id="deletePassword" name="deletePassword" required />
+              <label for="deletePassword">Password</label>
+              <input type="password" id="deletePassword" name="deletePassword" placeholder="Your password" required />
             </div>
-            <button class="danger" type="submit">DELETE ACCOUNT</button>
+            <button class="danger" type="submit" id="deleteSubmitBtn" data-armed="false">DELETE ACCOUNT</button>
           </form>
         </div>
       </div>
@@ -815,14 +808,40 @@ def render_account(player: Player) -> str:
       });
 
       const deleteForm = document.getElementById('deleteForm');
+      const deleteSubmitBtn = document.getElementById('deleteSubmitBtn');
+      const deletePasswordInput = document.getElementById('deletePassword');
+
+      // Editing the password after arming the confirm step re-disarms
+      // it -- otherwise a changed-their-mind retype could land on a
+      // stale "ARE YOU SURE?" that actually deletes on the very next
+      // click.
+      deletePasswordInput.addEventListener('input', () => {
+        if (deleteSubmitBtn.dataset.armed === 'true') {
+          deleteSubmitBtn.dataset.armed = 'false';
+          deleteSubmitBtn.textContent = 'DELETE ACCOUNT';
+        }
+      });
+
       deleteForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const errorEl = document.getElementById('deleteError');
         errorEl.classList.remove('show');
-        if (!window.confirm('Permanently delete your account? This cannot be undone.')) return;
-        const currentPassword = document.getElementById('deletePassword').value;
-        const submitBtn = deleteForm.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
+
+        if (deleteSubmitBtn.dataset.armed !== 'true') {
+          // First press -- just arm the real confirm step below rather
+          // than deleting immediately (the required attribute on the
+          // password field already means this can't fire on an empty
+          // one).
+          deleteSubmitBtn.dataset.armed = 'true';
+          deleteSubmitBtn.textContent = 'ARE YOU SURE?';
+          return;
+        }
+
+        // Second press -- actually delete. The server still checks the
+        // password itself (see /api/auth/delete-account) -- this step
+        // is a confirm, not a client-side password check.
+        const currentPassword = deletePasswordInput.value;
+        deleteSubmitBtn.disabled = true;
         try {
           const res = await fetch('/api/auth/delete-account', {
             method: 'POST',
@@ -836,11 +855,18 @@ def render_account(player: Player) -> str:
           const data = await res.json().catch(() => ({}));
           errorEl.textContent = describeError(data, 'Could not delete your account.');
           errorEl.classList.add('show');
+          // Back to the first step -- a failed attempt (wrong password,
+          // most likely) shouldn't leave it armed to delete on the very
+          // next click once they've fixed it.
+          deleteSubmitBtn.dataset.armed = 'false';
+          deleteSubmitBtn.textContent = 'DELETE ACCOUNT';
         } catch (err) {
           errorEl.textContent = 'Something went wrong. Please try again.';
           errorEl.classList.add('show');
+          deleteSubmitBtn.dataset.armed = 'false';
+          deleteSubmitBtn.textContent = 'DELETE ACCOUNT';
         } finally {
-          submitBtn.disabled = false;
+          deleteSubmitBtn.disabled = false;
         }
       });
     })();

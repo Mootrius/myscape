@@ -543,23 +543,38 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   margin-top: 0;
 }
 
-.account-section h3 {
-  font-weight: normal;
-  font-size: 16px;
-  letter-spacing: 0.02em;
-  margin: 0 0 14px;
-}
-
-/* Delete account's heading picks up --red, same as button.danger --
-   the one section on this page that isn't just an ordinary setting. */
-.account-section--danger h3 { color: var(--red); }
-
 .account-section-hint {
   color: var(--text-dim);
   font-size: 14px;
   line-height: 1.5;
   margin: 0 0 16px;
 }
+
+/* The signed-in player's own email, centered under the ACCOUNT
+   heading, and the LOG OUT text directly beneath it -- see
+   render_account in app/pages.py. Neither needs an .account-section
+   of its own; they sit above the first one instead. */
+.account-email {
+  text-align: center;
+  font-weight: normal;
+  color: var(--text-dim);
+  font-size: 14.5px;
+  margin: -10px 0 8px;
+}
+
+.account-logout-link {
+  display: block;
+  margin: 0 auto 24px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--gold-dim);
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
+.account-logout-link:hover { color: var(--gold); text-decoration: underline; }
 
 /* The 404/teleport-icon header on render_not_found (app/pages.py) --
    the 404 number sits plain (not a link) right under the heading, and
