@@ -492,35 +492,46 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
   text-align: center;
 }
 
-/* The teleport-icon/404 header on render_not_found (app/pages.py) --
-   a clickable home-teleport icon standing in for the usual text
-   "back to home" link, with the 404 number stacked underneath it in
-   the same gold used for primary actions elsewhere on the site. */
+/* The 404/teleport-icon header on render_not_found (app/pages.py) --
+   the 404 number sits plain (not a link) right under the heading, and
+   only the home-teleport icon below it is clickable, standing in for
+   the usual text "back to home" link. The icon wobbles gently on a
+   loop as a hint that it's the thing to click, and holds still (and
+   scales up slightly) on hover/focus instead. */
+.not-found-code {
+  text-align: center;
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+  margin: 0 0 16px;
+}
+
 .not-found-teleport {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-decoration: none;
+  justify-content: center;
   margin-bottom: 20px;
 }
 
 .not-found-icon {
   width: 80px;
   height: 80px;
+  animation: not-found-wobble 2.4s ease-in-out infinite;
   transition: transform 0.15s;
+  transform-origin: center;
 }
 
-.not-found-teleport:hover .not-found-icon { transform: scale(1.08); }
-
-.not-found-code {
-  font-size: 32px;
-  font-weight: bold;
-  color: var(--gold);
-  letter-spacing: 0.05em;
-  margin-top: 10px;
+.not-found-teleport:hover .not-found-icon,
+.not-found-teleport:focus-visible .not-found-icon {
+  animation-play-state: paused;
+  transform: scale(1.1) rotate(0deg);
 }
 
-.not-found-teleport:hover .not-found-code { color: #ffab42; }
+@keyframes not-found-wobble {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg); }
+  75% { transform: rotate(8deg); }
+}
 
 .dash-grid {
   display: grid;
