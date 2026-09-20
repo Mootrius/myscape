@@ -405,3 +405,38 @@ throwaway local database, same as steps 4/5.
 **What's left**: step 6 only (drop the old `players` table, once this
 step has had time to prove stable in production). Step 7 itself is
 now complete.
+
+## Step 6: drop the old `players` table
+
+- [x] Migration `f3a8c1d92b74` (`drop the old players table`,
+  revises `376936c4bb59`) drops it outright. Confirmed directly
+  against a real migrated database, not just inferred from reading
+  the earlier migrations' docstrings, that it had zero foreign-key
+  dependents in either direction -- steps 1/2 already backfilled
+  everything out of it and repointed every dependent table away from
+  it, and no model or app code has referenced it since the step 4/5
+  rewrite (`grep`-confirmed: no `class Player`, no
+  `__tablename__ = "players"`, no other reference anywhere in
+  `app/`).
+- [x] Verified against a freshly-migrated throwaway Postgres 16
+  database: all 27 migrations replay cleanly end to end, the app
+  imports and `configure_mappers()` passes with the table gone,
+  `smoke_test3.py`'s full multi-account-switcher suite (signup,
+  link, add/list/activate/delete game accounts, cross-account 404,
+  hard-delete down to zero) passes unchanged against the post-drop
+  schema, and `alembic downgrade -1` recreates the table's exact
+  final column set (schema only -- a downgrade cannot bring back
+  deleted rows, noted in the migration's own docstring) before
+  re-upgrading cleanly back to head.
+
+This is the one genuinely irreversible step in the whole plan --
+every earlier migration only moved, duplicated, or repointed data;
+this one deletes a table outright. **Back up the production database
+before running `alembic upgrade head` for this one**, the same as
+before any `DROP TABLE`.
+
+**The multi-account split is now fully complete** -- all 7 steps
+done. `Player` no longer exists anywhere, as a model, a table, or a
+concept in the running app; every login is an `Account`, every OSRS
+character is a `GameAccount`, and an `Account` can have any number of
+linked `GameAccount`s.
