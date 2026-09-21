@@ -351,7 +351,13 @@
   white-space: nowrap;
 }
 
-.gt-goal-sub { color: var(--text-faint); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; margin-top: 1px; }
+.gt-goal-sub { color: var(--text-faint); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+/* Now doubles as the progress readout (current/target, in the goal's
+   own unit -- see goalProgressLabel in the script), so it picks up
+   the same done-state green .gt-goal-progress used to carry on its
+   own before that separate column was folded into this line. */
+.gt-goal-done .gt-goal-sub { color: var(--green); }
 
 .gt-goal-bar {
   width: 100%;
@@ -368,30 +374,43 @@
    reaches target_value (see .gt-goal-done above, set in goalRowHtml). */
 .gt-goal-done .gt-goal-bar-fill { background: var(--green); }
 
-.gt-goal-progress {
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  white-space: nowrap;
-  flex: 0 0 auto;
-  text-align: right;
-  min-width: 110px;
-}
-
-.gt-goal-done .gt-goal-progress { color: var(--green); }
-
 .gt-goal-delete {
   background: none;
-  border: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
   color: var(--text-faint);
-  font-size: 20px;
   line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .gt-goal-delete:hover { color: var(--red); }
+
+.gt-goal-delete-icon { display: block; }
+
+/* Hidden until the button is armed (see the delegated click handler
+   in the script) -- the same element swaps from trash-icon to this
+   confirm label rather than the row growing a second control. */
+.gt-goal-delete-confirm {
+  display: none;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.gt-goal-delete--confirm {
+  color: var(--red);
+  border-color: var(--red);
+  padding: 4px 10px;
+}
+
+.gt-goal-delete--confirm .gt-goal-delete-icon { display: none; }
+.gt-goal-delete--confirm .gt-goal-delete-confirm { display: block; }
 
 @media (max-width: 720px) {
   /* Fields and stage 1's type cards stay in a row even here -- a
@@ -402,5 +421,4 @@
   .gt-wizard-row .gt-field-target { flex-basis: 96px; }
   .gt-wizard-row .gt-field-metric { flex-basis: 92px; }
   .gt-wizard-type-btn { padding: 16px 6px; }
-  .gt-goal-progress { min-width: 0; }
 }

@@ -9446,7 +9446,6 @@ def render_goal_tracking(player: PlayerView) -> str:
     </div>
 
     <div class="gt-card gt-list-card">
-      <h3 class="gt-card-title">Your goals</h3>
       <p class="gt-empty" id="gtEmpty" style="display:none;">No goals yet -- add one above to start tracking.</p>
       <div class="gt-goal-list" id="gtGoalList"></div>
     </div>
@@ -9961,10 +9960,21 @@ def render_goal_tracking(player: PlayerView) -> str:
         return g.target_name;
       }
 
-      function goalSubtitle(g) {
-        if (g.goal_type === 'kc') return 'Boss kill count';
-        if (g.goal_type === 'skill') return (g.metric === 'xp') ? 'Experience' : 'Level';
-        return 'Item quantity';
+      // Replaces the old static "Boss kill count"/"Level"/etc. subtitle
+      // with the live current/target progress itself, in the goal's own
+      // unit: "LVL" prefixed for a level goal, "XP"/"KC" suffixed for an
+      // xp/kc goal, no unit at all for an item goal (its quantity speaks
+      // for itself). This is also the only place that progress reads
+      // now -- see goalRowHtml below, which no longer has its own
+      // separate current/target column.
+      function goalProgressLabel(g) {
+        var cur = fmtNum(g.current_value);
+        var tgt = fmtNum(g.target_value);
+        if (g.goal_type === 'kc') return cur + ' / ' + tgt + ' KC';
+        if (g.goal_type === 'skill') {
+          return (g.metric === 'xp') ? (cur + ' / ' + tgt + ' XP') : ('LVL ' + cur + ' / ' + tgt);
+        }
+        return cur + ' / ' + tgt;
       }
 
       // A kc goal's icon is its real boss sprite (app/static/boss-icons,
@@ -9996,6 +10006,12 @@ def render_goal_tracking(player: PlayerView) -> str:
         return TYPE_ICON[g.goal_type];
       }
 
+      // The delete button starts as a plain trash icon; its first click
+      // (wired via the delegated click listener on #gtGoalList below,
+      // not here -- this only renders markup) just swaps it to an
+      // "Are you sure?" confirm state via the gt-goal-delete--confirm
+      // class rather than deleting anything, and only a second click
+      // while in that state actually calls deleteGoal.
       function goalRowHtml(g) {
         var pct = g.target_value > 0 ? Math.max(0, Math.min(100, (g.current_value / g.target_value) * 100)) : 0;
         var done = g.current_value >= g.target_value;
@@ -10004,11 +10020,19 @@ def render_goal_tracking(player: PlayerView) -> str:
           '  <img class="gt-goal-icon" src="' + goalIconSrc(g) + '" alt="" />' +
           '  <div class="gt-goal-info">' +
           '    <div class="gt-goal-name">' + escapeHtml(goalName(g)) + '</div>' +
-          '    <div class="gt-goal-sub">' + goalSubtitle(g) + '</div>' +
+          '    <div class="gt-goal-sub">' + goalProgressLabel(g) + '</div>' +
           '    <div class="gt-goal-bar"><div class="gt-goal-bar-fill" style="width:' + pct + '%"></div></div>' +
           '  </div>' +
-          '  <div class="gt-goal-progress">' + fmtNum(g.current_value) + ' / ' + g.target_display + '</div>' +
-          '  <button type="button" class="gt-goal-delete" data-goal-id="' + g.id + '" title="Delete goal" aria-label="Delete goal">&times;</button>' +
+          '  <button type="button" class="gt-goal-delete" data-goal-id="' + g.id + '" title="Delete goal" aria-label="Delete goal">' +
+          '    <svg class="gt-goal-delete-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+          '      <path d="M2 4H14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+          '      <path d="M6 4V2.5C6 2.22386 6.22386 2 6.5 2H9.5C9.77614 2 10 2.22386 10 2.5V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+          '      <path d="M3.5 4L4.1 13.2C4.13 13.66 4.51 14 4.97 14H11.03C11.49 14 11.87 13.66 11.9 13.2L12.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+          '      <path d="M6.5 6.5V11.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+          '      <path d="M9.5 6.5V11.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' +
+          '    </svg>' +
+          '    <span class="gt-goal-delete-confirm">Are you sure?</span>' +
+          '  </button>' +
           '</div>';
       }
 
@@ -10026,10 +10050,37 @@ def render_goal_tracking(player: PlayerView) -> str:
           return goalName(a).toLowerCase().localeCompare(goalName(b).toLowerCase());
         });
         listEl.innerHTML = sorted.map(goalRowHtml).join('');
-        listEl.querySelectorAll('.gt-goal-delete').forEach(function (btn) {
-          btn.addEventListener('click', function () { deleteGoal(btn.getAttribute('data-goal-id')); });
-        });
       }
+
+      // Delegated on the list container itself (not per-button, since
+      // renderGoalList rebuilds the whole list's innerHTML every poll --
+      // a container-level listener survives that; per-button ones
+      // wouldn't need rewiring either way, but this is simpler and it's
+      // the same delegation pattern already used elsewhere on this
+      // page). First click on a delete button just arms it (shows "Are
+      // you sure?"); a second click while armed actually deletes.
+      // Clicking anywhere else disarms whatever button was armed, and
+      // a click on a different delete button disarms the previous one
+      // too, so only one row is ever mid-confirm at a time.
+      document.getElementById('gtGoalList').addEventListener('click', function (e) {
+        var btn = e.target.closest('.gt-goal-delete');
+        if (!btn) return;
+        if (btn.classList.contains('gt-goal-delete--confirm')) {
+          deleteGoal(btn.getAttribute('data-goal-id'));
+          return;
+        }
+        document.querySelectorAll('.gt-goal-delete--confirm').forEach(function (b) {
+          b.classList.remove('gt-goal-delete--confirm');
+        });
+        btn.classList.add('gt-goal-delete--confirm');
+      });
+
+      document.addEventListener('click', function (e) {
+        if (e.target.closest('.gt-goal-delete')) return;
+        document.querySelectorAll('.gt-goal-delete--confirm').forEach(function (b) {
+          b.classList.remove('gt-goal-delete--confirm');
+        });
+      });
 
       async function deleteGoal(goalId) {
         var data = await apiCall('/api/goals/' + encodeURIComponent(goalId), { method: 'DELETE' });
