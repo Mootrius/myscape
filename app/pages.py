@@ -4251,6 +4251,22 @@ def render_loot_tracker(player: PlayerView) -> str:
         renderNpcRow(currentNpcs());
         renderItemList(currentItems());
       });
+      // Same outside-click convention as the bucket one just above, for
+      // an NPC selection (one or several) instead of a time-range one:
+      // anything that isn't an actual .loot-npc-box -- the eye button
+      // next to it, a different panel, blank page space -- clears it.
+      // Skips a click on the box itself so this never fights the
+      // #lootNpcRow handler above, which already owns setting/toggling/
+      // toggle-off for that click (plain click, shift-click, or
+      // re-clicking the sole-selected box).
+      document.addEventListener('click', function (e) {
+        if (!state.selectedNpcs.length) return;
+        if (e.target.closest('.loot-npc-box')) return;
+        state.selectedNpcs = [];
+        rerenderChart(lastData);
+        renderNpcRow(currentNpcs());
+        renderItemList(currentItems());
+      });
 
       document.getElementById('lootNpcSearch').addEventListener('input', function (e) {
         state.npcSearch = e.target.value;
