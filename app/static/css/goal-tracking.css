@@ -101,15 +101,24 @@
   gap: 12px;
 }
 
-.gt-wizard-stage1-cancel {
+/* Wraps Cancel alone on stage 1 (one-time/recurring) or Back + Cancel
+   together on stage 2 (the type picker) -- centered as its own group
+   under the type-card row above it, same as a lone Cancel always was
+   before Back existed here. */
+.gt-wizard-stage1-actions {
+  display: flex;
+  gap: 8px;
   align-self: center;
-  min-width: 100px;
   /* Explicit, not left to justify-content: space-between's own
      leftover-space math alone -- the type cards got shorter but so
      did the fixed box (see .gt-wizard-expanded), so there wasn't
-     always enough leftover space to keep Cancel from sitting flush
-     against the row above it. This guarantees a real gap either way. */
+     always enough leftover space to keep this row from sitting flush
+     against the cards above it. This guarantees a real gap either way. */
   margin-top: 14px;
+}
+
+.gt-wizard-stage1-cancel {
+  min-width: 100px;
 }
 
 /* Compound selector (two classes) so this beats the plain
@@ -143,6 +152,16 @@
 }
 
 .gt-wizard-type-btn img { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; }
+
+/* The one-time/recurring cards' own icons (ONE_TIME_ICON_SVG/
+   RECURRING_ICON_SVG in the script) -- inline SVGs rather than the
+   PNG badges every other type card uses, so they can be colored via
+   currentColor instead of needing their own pre-colored asset. Always
+   gold, not just on hover (unlike the card's own border/text, which
+   only picks up gold on :hover below) -- these two are the one card
+   style on this page whose icon is a deliberate color accent rather
+   than a neutral badge. */
+.gt-wizard-type-btn svg.gt-recur-icon { width: 32px; height: 32px; color: var(--gold); flex: none; }
 
 .gt-wizard-type-btn span {
   font-size: 11px;
@@ -254,6 +273,49 @@
 .gt-metric-btn:hover { color: var(--text); }
 
 .gt-metric-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+
+/* Stage 4 (recurring goals only) -- the interval field and its
+   HOUR/DAY/WEEK/MONTH/YEAR toggle grouped as one block (see
+   wizardStageCadenceHtml) so .gt-wizard-stage2's own space-between
+   still only ever splits leftover room 3 ways (this block, the error
+   line, the actions row), same as stage 3's field row/error/actions
+   already do. */
+.gt-wizard-recur-fields { display: flex; flex-direction: column; gap: 12px; }
+
+/* Narrower than a full-width field on purpose -- this is a plain "how
+   many" count, not something that needs the row's whole width the way
+   the search/target fields on stage 3 do. */
+.gt-recur-interval-input { width: 140px; height: 34px; padding: 0 12px; align-self: flex-start; }
+
+/* Same segmented-toggle idea as .gt-metric-toggle above, generalized
+   to 5 buttons instead of 2 -- rather than that rule's own
+   first-child-border hack (which only ever has one seam to manage),
+   this overlaps borders with a uniform -1px margin-left and lifts
+   whichever button is active/hovered a layer up (z-index) so its own
+   full border always shows unbroken, however many neighbors it has on
+   either side. */
+.gt-recur-unit-toggle { display: flex; height: 34px; }
+
+.gt-recur-unit-btn {
+  flex: 1 1 20%;
+  height: 100%;
+  margin-left: -1px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0;
+  cursor: pointer;
+}
+
+.gt-recur-unit-btn:first-child { margin-left: 0; }
+
+.gt-recur-unit-btn:hover { color: var(--text); position: relative; z-index: 1; }
+
+.gt-recur-unit-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); position: relative; z-index: 1; }
 
 .gt-field-target-search { position: relative; }
 

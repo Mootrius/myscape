@@ -1604,6 +1604,17 @@ class GoalCreateRequest(BaseModel):
     # missing or mismatched value just costs the goal its real icon,
     # nothing about progress tracking depends on it.
     item_id: Optional[int] = None
+    # A recurring goal ("kc"/"skill" only -- see
+    # app.goals.RECURRING_GOAL_TYPES) repeats every recur_interval
+    # recur_unit instead of tracking one lifetime total forever --
+    # app.goals.clean_new_goal does the real validation (recur_unit one
+    # of app.goals.RECUR_UNITS, recur_interval in range); this schema
+    # only shapes the request. recur_interval/recur_unit are ignored
+    # when is_recurring is false, same tolerance metric/item_id above
+    # already get for a goal_type that doesn't use them.
+    is_recurring: bool = False
+    recur_interval: Optional[int] = None
+    recur_unit: Optional[str] = None
 
 
 class GoalOut(BaseModel):
@@ -1614,7 +1625,16 @@ class GoalOut(BaseModel):
     app already takes. item_icon is the same kind of always-derived
     value, computed from the stored item_id via item_icon_url
     (app/purchase_goals.py) rather than stored itself, so an icon CDN
-    change never needs a backfill."""
+    change never needs a backfill.
+
+    current_value is already the RIGHT number for a recurring goal too
+    -- how much has been gained since its current period started, not
+    a lifetime total (see app.goals.current_value) -- so the UI never
+    needs to know is_recurring to render the progress bar/text
+    correctly; is_recurring/recur_interval/recur_unit are exposed
+    purely so the goal list can show its own cadence tag (e.g. "EVERY 2
+    WEEKS") next to it. recur_period_start/recur_baseline_value stay
+    server-side -- nothing in the UI needs either one directly."""
 
     id: uuid.UUID
     goal_type: str
@@ -1624,6 +1644,9 @@ class GoalOut(BaseModel):
     current_value: int
     target_display: str
     item_icon: Optional[str] = None
+    is_recurring: bool
+    recur_interval: Optional[int] = None
+    recur_unit: Optional[str] = None
     created_at: datetime
 
 

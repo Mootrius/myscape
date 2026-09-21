@@ -29,7 +29,7 @@ account inherit history that isn't theirs.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -1063,9 +1063,31 @@ class Goal(Base):
     (item_icon_url, app/purchase_goals.py) instead of the generic
     item-goal badge. Play no part in progress computation at all --
     that still resolves entirely from target_name (see
-    app.goals.current_value) -- so it's fine for this to be null (a
+    app.goals.absolute_value) -- so it's fine for this to be null (a
     goal predating this column, or a free-text name that never matched
-    a search result)."""
+    a search result).
+
+    is_recurring/recur_interval/recur_unit/recur_period_start/
+    recur_baseline_value together make a "kc" or "skill" goal (the
+    wizard never offers this for "item") repeat every
+    recur_interval*recur_unit (e.g. every 1 WEEK) instead of tracking
+    one lifetime total forever -- see app.goals.current_value/
+    maybe_roll_recurring_period for the actual rollover logic. Every
+    OTHER goal field above keeps its exact same meaning either way
+    (target_value is still the number to reach -- just per-period
+    instead of lifetime-total for a recurring goal); these five columns
+    are additive, not a parallel goal shape.
+
+    recur_period_start/recur_baseline_value are the only two of this
+    group a recurring goal ever has written back to it after creation
+    (see maybe_roll_recurring_period) -- recur_period_start is when the
+    CURRENT period began, and recur_baseline_value is this goal's own
+    absolute_value() reading at that moment, so the period's own
+    progress is always just "absolute_value() now minus that baseline"
+    rather than a lifetime total. Both null for a non-recurring goal,
+    and both set once at creation time (recur_period_start to "now",
+    recur_baseline_value to the goal's starting absolute_value()) for a
+    recurring one -- see create_goal in app/main.py."""
 
     __tablename__ = "goals"
 
@@ -1076,6 +1098,11 @@ class Goal(Base):
     metric = Column(String, nullable=True)
     target_value = Column(Integer, nullable=False)
     item_id = Column(Integer, nullable=True)
+    is_recurring = Column(Boolean, nullable=False, default=False)
+    recur_interval = Column(Integer, nullable=True)
+    recur_unit = Column(String, nullable=True)
+    recur_period_start = Column(DateTime(timezone=True), nullable=True)
+    recur_baseline_value = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     game_account = relationship("GameAccount", back_populates="goals")

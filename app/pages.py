@@ -9708,10 +9708,18 @@ def render_goal_tracking(player: PlayerView) -> str:
 
       var GT = {
         goals: [],
-        wizardStage: 0, // 0 = collapsed (just the + box), 1 = pick a type, 2 = pick a target + value
+        // 0 = collapsed (just the + box), 1 = pick one-time/recurring,
+        // 2 = pick a type, 3 = pick a target + value, 4 = pick a
+        // recurring goal's own cadence (recurring only -- a one-time
+        // goal saves straight from stage 3 instead of ever reaching
+        // this one).
+        wizardStage: 0,
+        recurring: null, // null | 'one_time' | 'recurring' -- picked in stage 1
         type: null,
         skillMetric: 'level',
         itemId: null, // the chosen search result's real item id, if any -- see Goal.item_id's own docstring in app/models.py
+        recurInterval: '', // stage 4's own text field, kept here so re-rendering that stage (e.g. after Back then forward again) doesn't lose it
+        recurUnit: 'day', // stage 4's own segmented-control selection
       };
       // Cached once rather than recomputed on every keystroke -- both
       // are small (71/24 entries) fixed lists, not endpoints, so the
@@ -9763,28 +9771,41 @@ def render_goal_tracking(player: PlayerView) -> str:
       // ---- Add-goal wizard ----------------------------------------------
       //
       // Collapsed by default -- just the + box right under the page
-      // title. Clicking it expands the SAME box into a two-"page" flow:
-      // stage 1 picks a goal type (item/kc/skill), stage 2 picks the
-      // actual target (a search box for all three types now, not just
-      // item -- click a suggestion or type free text, same tolerance
-      // app.goals.clean_new_goal already gives an item goal's name) and
-      // its target value, then submits. The x (or a successful add)
-      // collapses back to stage 0, ready for the next goal.
+      // title. Clicking it expands the SAME box into a flow of up to 4
+      // "pages": stage 1 picks one-time vs recurring, stage 2 picks a
+      // goal type (item/kc/skill for one-time; recurring drops item --
+      // see wizardStageTypeHtml, RECURRING_GOAL_TYPES' own reasoning in
+      // app/goals.py), stage 3 picks the actual target (a search box
+      // for all three types, not just item -- click a suggestion or
+      // type free text, same tolerance app.goals.clean_new_goal already
+      // gives an item goal's name) and its target value, then either
+      // submits right away (one-time -- stage 3's button reads Save) or
+      // moves on to stage 4 to pick the recurring cadence itself
+      // (recurring -- stage 3's button reads Next instead). The x (or a
+      // successful add) collapses back to stage 0, ready for the next
+      // goal.
 
       var wizardExpanded = document.getElementById('gtWizardExpanded');
       var wizardStageEl = document.getElementById('gtWizardStage');
-      // The stage-2 target actually picked so far this visit -- reset
-      // every time stage 2 (re)renders (see wireWizardStage). name is
+      // The stage-3 target actually picked so far this visit -- reset
+      // every time stage 3 (re)renders (see wireWizardStage). name is
       // whatever's in the search box, whether from a clicked suggestion
       // or typed free text; itemId only ever gets set for an item goal,
-      // from the id a clicked item-search suggestion carried.
-      var wizardTarget = { name: '', itemId: null };
+      // from the id a clicked item-search suggestion carried; value is
+      // the parsed target number, captured once stage 3's own Save/Next
+      // button is clicked (see wireWizardStage) so wizardAddGoal can
+      // still read it from here after stage 4 has replaced stage 3's
+      // own #gtTargetValue field in the DOM.
+      var wizardTarget = { name: '', itemId: null, value: null };
 
       function openWizard() {
         GT.wizardStage = 1;
+        GT.recurring = null;
         GT.type = null;
         GT.skillMetric = 'level';
         GT.itemId = null;
+        GT.recurInterval = '';
+        GT.recurUnit = 'day';
         renderWizard();
       }
 
@@ -9793,23 +9814,45 @@ def render_goal_tracking(player: PlayerView) -> str:
         renderWizard();
       }
 
-      function wizardPickType(type) {
-        GT.type = type;
+      function wizardPickRecurrence(recurring) {
+        GT.recurring = recurring;
         GT.wizardStage = 2;
         renderWizard();
       }
 
+      function wizardPickType(type) {
+        GT.type = type;
+        GT.wizardStage = 3;
+        renderWizard();
+      }
+
+      // Stage-aware -- Back means something different depending on
+      // which stage it's leaving, same as each stage's own forward
+      // step resets exactly the state that stage owns (see
+      // wizardPickRecurrence/wizardPickType above). Only resets what
+      // the stage being left back INTO doesn't already own, so e.g.
+      // backing out of stage 4 (cadence) straight to stage 3 keeps
+      // GT.type/wizardTarget/GT.skillMetric intact -- there's nothing
+      // wrong with them, stage 3 just wants to be exactly as the
+      // player left it.
       function wizardBack() {
-        GT.wizardStage = 1;
-        GT.type = null;
-        GT.skillMetric = 'level';
-        GT.itemId = null;
+        if (GT.wizardStage === 4) {
+          GT.wizardStage = 3;
+        } else if (GT.wizardStage === 3) {
+          GT.wizardStage = 2;
+          GT.type = null;
+          GT.skillMetric = 'level';
+          GT.itemId = null;
+        } else if (GT.wizardStage === 2) {
+          GT.wizardStage = 1;
+          GT.recurring = null;
+        }
         renderWizard();
       }
 
       document.getElementById('gtWizardAddBtn').addEventListener('click', openWizard);
       // One listener for the whole page, not re-added per render (stage
-      // 2's own suggestions box gets rebuilt every time it renders) --
+      // 3's own suggestions box gets rebuilt every time it renders) --
       // looks the elements up fresh on each click instead, so this
       // harmlessly no-ops on any stage where they don't exist.
       document.addEventListener('click', function (e) {
@@ -9829,56 +9872,133 @@ def render_goal_tracking(player: PlayerView) -> str:
         }
         addBtn.style.display = 'none';
         wizardExpanded.style.display = '';
-        wizardStageEl.innerHTML = (GT.wizardStage === 1) ? wizardStage1Html() : wizardStage2Html();
+        var stageHtml = {
+          1: wizardStageRecurrenceHtml,
+          2: wizardStageTypeHtml,
+          3: wizardStageTargetHtml,
+          4: wizardStageCadenceHtml,
+        }[GT.wizardStage];
+        wizardStageEl.innerHTML = stageHtml();
         wireWizardStage();
       }
 
-      // Stage 1's own wrapper -- the 3 type cards on top (shorter now
-      // that there's no top-right x to make room for -- see
-      // goal-tracking.css) and a small centered Cancel underneath,
-      // pinned to the bottom of the SAME fixed-height box stage 2
-      // uses via justify-content: space-between, same technique as
-      // .gt-wizard-stage2 itself.
-      function wizardStage1Html() {
+      // Gold, line-drawn (stroke, not fill -- same weight/style as the
+      // goal list's own trash-can icon) so both read as UI marks
+      // rather than art, and both fit the same 32px slot
+      // .gt-wizard-type-btn img already sizes a type card's icon to
+      // (see the svg sizing rule alongside that one in
+      // goal-tracking.css). ONE_TIME is a plain "1x" mark; RECURRING
+      // is a small calendar with a repeat-arrows loop inside it, same
+      // idea as a typical "recurring event" glyph.
+      var ONE_TIME_ICON_SVG =
+        '<svg class="gt-recur-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" ' +
+        'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M8.5 7L11.5 5V19"/>' +
+        '<path d="M8 19H15"/>' +
+        '<path d="M15.5 13L20 17.5"/>' +
+        '<path d="M20 13L15.5 17.5"/>' +
+        '</svg>';
+      var RECURRING_ICON_SVG =
+        '<svg class="gt-recur-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" ' +
+        'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<rect x="3.5" y="5.5" width="17" height="15" rx="2"/>' +
+        '<path d="M8 3V7"/>' +
+        '<path d="M16 3V7"/>' +
+        '<path d="M9.3 13.6a3.3 3.3 0 0 1 5.9-2" stroke-width="1.4"/>' +
+        '<path d="M15.6 10.3L15.9 12.4L13.8 12.2"/>' +
+        '<path d="M14.7 15.4a3.3 3.3 0 0 1-5.9 2" stroke-width="1.4"/>' +
+        '<path d="M8.4 18.7L8.1 16.6L10.2 16.8"/>' +
+        '</svg>';
+
+      // Stage 1: one-time vs recurring -- the wizard's very first
+      // "page" now, reusing the exact same type-card/Cancel wrapper
+      // stage 2's own type picker below uses (same fixed-size box,
+      // same centered-as-a-group layout), just with 2 cards instead of
+      // 3 and an SVG icon (gold, see ONE_TIME_ICON_SVG/
+      // RECURRING_ICON_SVG above) in place of each card's usual <img>.
+      function wizardStageRecurrenceHtml() {
         return '' +
           '<div class="gt-wizard-stage1-wrap">' +
           '  <div class="gt-wizard-stage1">' +
-          '    <button type="button" class="gt-wizard-type-btn" data-type="item">' +
-          '      <img src="/static/img/icon-goal-item.png" alt="" /><span>Item Qty</span></button>' +
-          '    <button type="button" class="gt-wizard-type-btn" data-type="kc">' +
-          '      <img src="/static/img/icon-goal-kc.png" alt="" /><span>Boss KC</span></button>' +
-          '    <button type="button" class="gt-wizard-type-btn" data-type="skill">' +
-          '      <img src="/static/img/icon-goal-skill.png" alt="" /><span>Skill Lvl/Xp</span></button>' +
+          '    <button type="button" class="gt-wizard-type-btn" data-recur="one_time">' +
+                 ONE_TIME_ICON_SVG + '<span>One-Time</span></button>' +
+          '    <button type="button" class="gt-wizard-type-btn" data-recur="recurring">' +
+                 RECURRING_ICON_SVG + '<span>Recurring</span></button>' +
           '  </div>' +
-          '  <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel gt-wizard-stage1-cancel" id="gtWizardCancel">Cancel</button>' +
+          '  <div class="gt-wizard-stage1-actions">' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel gt-wizard-stage1-cancel" id="gtWizardCancel">Cancel</button>' +
+          '  </div>' +
+          '</div>';
+      }
+
+      // Stage 2: the type picker -- item/kc/skill for a one-time goal,
+      // same 3 cards this stage always showed before recurrence
+      // existed; kc/skill only for a recurring one (see
+      // RECURRING_GOAL_TYPES' own reasoning in app/goals.py -- an item
+      // goal's owned quantity isn't a monotonic lifetime total, so
+      // "gained since the last period" wouldn't mean the same thing
+      // for it). Shorter now that there's no top-right x to make room
+      // for -- see goal-tracking.css -- with a small centered Back +
+      // Cancel underneath, pinned to the bottom of the SAME
+      // fixed-height box stage 3 uses via justify-content:
+      // space-between, same technique as .gt-wizard-stage2 itself.
+      // Back exists here (stage 1 itself has none -- there's nothing
+      // before it to go back to) because this is no longer the
+      // wizard's first page now that stage 1 (one-time/recurring)
+      // exists ahead of it.
+      var GOAL_TYPE_OPTIONS = [
+        { type: 'item', icon: '/static/img/icon-goal-item.png', label: 'Item Qty' },
+        { type: 'kc', icon: '/static/img/icon-goal-kc.png', label: 'Boss KC' },
+        { type: 'skill', icon: '/static/img/icon-goal-skill.png', label: 'Skill Lvl/Xp' },
+      ];
+
+      function wizardStageTypeHtml() {
+        var options = (GT.recurring === 'recurring')
+          ? GOAL_TYPE_OPTIONS.filter(function (o) { return o.type !== 'item'; })
+          : GOAL_TYPE_OPTIONS;
+        var cards = options.map(function (o) {
+          return '<button type="button" class="gt-wizard-type-btn" data-type="' + o.type + '">' +
+            '<img src="' + o.icon + '" alt="" /><span>' + o.label + '</span></button>';
+        }).join('');
+        return '' +
+          '<div class="gt-wizard-stage1-wrap">' +
+          '  <div class="gt-wizard-stage1">' + cards + '</div>' +
+          '  <div class="gt-wizard-stage1-actions">' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-stage1-cancel" id="gtWizardBack">Back</button>' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel gt-wizard-stage1-cancel" id="gtWizardCancel">Cancel</button>' +
+          '  </div>' +
           '</div>';
       }
 
       var WIZARD_SEARCH_PLACEHOLDER = { item: 'Search for an item', kc: 'Search for a boss', skill: 'Search for a skill' };
 
       // The target field's placeholder -- doubles as this field's only
-      // label now (see wizardStage2Html/updateWizardTargetField below,
-      // which is what keeps it current whenever the skill goal's own
-      // Lvl/Xp toggle switches).
+      // label now (see wizardStageTargetHtml/updateWizardTargetField
+      // below, which is what keeps it current whenever the skill
+      // goal's own Lvl/Xp toggle switches).
       function wizardTargetPlaceholder() {
         if (GT.type === 'kc') return 'Target kc';
         if (GT.type === 'skill') return (GT.skillMetric === 'xp') ? 'Target experience' : 'Target level';
         return 'Target quantity';
       }
 
-      // Stage 2 -- one box, same fixed size as stage 1 (see the
+      // Stage 3 -- one box, same fixed size as stage 2 (see the
       // .gt-wizard-expanded/#gtWizardStage height rules in
       // goal-tracking.css): the search field (+ the skill goal's own
       // lvl/xp toggle) and its target-value field share a single row
-      // near the top, and Back/Cancel/Save sit in their own row
-      // pinned to the bottom via justify-content: space-between on
+      // near the top, and Back/Cancel/Save-or-Next sit in their own
+      // row pinned to the bottom via justify-content: space-between on
       // .gt-wizard-stage2 -- nothing about this stage's own markup
       // grows the box the way the old top Back link + stacked fields
       // used to. Neither field carries its own <label> any more --
       // placeholder text (WIZARD_SEARCH_PLACEHOLDER/
       // wizardTargetPlaceholder) does that job instead, so there's no
       // label row above the inputs to keep in sync any more either.
-      function wizardStage2Html() {
+      // The last button reads Next instead of Save for a recurring
+      // goal -- there's one more page (stage 4's own cadence picker)
+      // before this actually submits, see wireWizardStage's own click
+      // handler for the id="gtWizardSave" button below.
+      function wizardStageTargetHtml() {
         var metricToggle = (GT.type !== 'skill') ? '' : (
           '<div class="gt-field gt-field-metric">' +
           '  <div class="gt-metric-toggle" id="gtMetricToggle">' +
@@ -9887,6 +10007,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           '  </div>' +
           '</div>'
         );
+        var saveLabel = (GT.recurring === 'recurring') ? 'Next' : 'Save';
         return '' +
           '<div class="gt-wizard-stage2">' +
           '  <div class="gt-wizard-row">' +
@@ -9902,6 +10023,48 @@ def render_goal_tracking(player: PlayerView) -> str:
           '    </div>' +
           '  </div>' +
           '  <div class="gt-field-error" id="gtTargetError"></div>' +
+          '  <div class="gt-wizard-actions">' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
+          '    <button type="button" class="gt-add-btn" id="gtWizardSave">' + saveLabel + '</button>' +
+          '  </div>' +
+          '</div>';
+      }
+
+      // Recurring only -- HOUR/DAY/WEEK/MONTH/YEAR, in the same order
+      // app.goals.RECUR_UNITS lists them server-side (that's what
+      // actually validates recur_unit; this is purely display order).
+      var RECUR_UNIT_OPTIONS = [
+        { unit: 'hour', label: 'Hour' },
+        { unit: 'day', label: 'Day' },
+        { unit: 'week', label: 'Week' },
+        { unit: 'month', label: 'Month' },
+        { unit: 'year', label: 'Year' },
+      ];
+      // Mirrors app.goals.MAX_RECUR_INTERVAL -- server re-validates
+      // against its own copy regardless (see validateRecurField).
+      var MAX_RECUR_INTERVAL = 999;
+
+      // Stage 4 -- recurring goals only, reached from stage 3's own
+      // Next button. Same fixed-size box (.gt-wizard-stage2, reused
+      // rather than a third near-identical class) as stages 2/3, with
+      // the interval field + unit toggle grouped as one block up top
+      // (see .gt-wizard-recur-fields in goal-tracking.css) so
+      // space-between still only ever splits leftover room into the
+      // same "content block, error line, actions row" three-way split
+      // stage 3 already uses -- not a fourth top-level child that
+      // would spread everything out further than intended.
+      function wizardStageCadenceHtml() {
+        var unitButtons = RECUR_UNIT_OPTIONS.map(function (o) {
+          return '<button type="button" class="gt-recur-unit-btn' + (o.unit === GT.recurUnit ? ' active' : '') + '" data-unit="' + o.unit + '">' + o.label + '</button>';
+        }).join('');
+        return '' +
+          '<div class="gt-wizard-stage2">' +
+          '  <div class="gt-wizard-recur-fields">' +
+          '    <input type="text" inputmode="numeric" class="gt-recur-interval-input" id="gtRecurInterval" placeholder="Every" autocomplete="off" maxlength="4" value="' + escapeHtml(GT.recurInterval || '') + '" />' +
+          '    <div class="gt-recur-unit-toggle" id="gtRecurUnitToggle">' + unitButtons + '</div>' +
+          '  </div>' +
+          '  <div class="gt-field-error" id="gtRecurError"></div>' +
           '  <div class="gt-wizard-actions">' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
@@ -9921,13 +10084,27 @@ def render_goal_tracking(player: PlayerView) -> str:
       function wireWizardStage() {
         if (GT.wizardStage === 1) {
           document.querySelectorAll('.gt-wizard-type-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () { wizardPickType(btn.getAttribute('data-type')); });
+            btn.addEventListener('click', function () { wizardPickRecurrence(btn.getAttribute('data-recur')); });
           });
           document.getElementById('gtWizardCancel').addEventListener('click', closeWizard);
           return;
         }
 
-        wizardTarget = { name: '', itemId: null };
+        if (GT.wizardStage === 2) {
+          document.querySelectorAll('.gt-wizard-type-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () { wizardPickType(btn.getAttribute('data-type')); });
+          });
+          document.getElementById('gtWizardBack').addEventListener('click', wizardBack);
+          document.getElementById('gtWizardCancel').addEventListener('click', closeWizard);
+          return;
+        }
+
+        if (GT.wizardStage === 4) {
+          wireCadenceStage();
+          return;
+        }
+
+        wizardTarget = { name: '', itemId: null, value: null };
         document.getElementById('gtWizardBack').addEventListener('click', wizardBack);
         document.getElementById('gtWizardCancel').addEventListener('click', closeWizard);
 
@@ -10036,7 +10213,79 @@ def render_goal_tracking(player: PlayerView) -> str:
         });
 
         updateWizardTargetField();
+        // One-time saves straight from here, same as this button
+        // always has; recurring instead captures the name/value picked
+        // on this stage into wizardTarget (stage 4 replaces this
+        // stage's own DOM, including #gtTargetValue, so wizardAddGoal
+        // can't re-read it live by the time IT runs) and moves on to
+        // stage 4 to pick the cadence -- see wizardStageTargetHtml's
+        // own Save/Next label switch just above.
+        document.getElementById('gtWizardSave').addEventListener('click', function () {
+          var targetName = wizardTarget.name.trim();
+          if (!targetName) { showError('Pick a target first.'); return; }
+          if (!validateTargetField()) { showError('Enter a valid target value.'); return; }
+          wizardTarget.value = Number(parseMoneySuffix(document.getElementById('gtTargetValue').value.trim()));
+          showError(null);
+          if (GT.recurring === 'recurring') {
+            GT.wizardStage = 4;
+            renderWizard();
+          } else {
+            wizardAddGoal();
+          }
+        });
+      }
+
+      function wireCadenceStage() {
+        document.getElementById('gtWizardBack').addEventListener('click', wizardBack);
+        document.getElementById('gtWizardCancel').addEventListener('click', closeWizard);
+
+        var intervalInput = document.getElementById('gtRecurInterval');
+        intervalInput.addEventListener('input', function () {
+          // Digits only -- there's no k/m/b shorthand or decimal point
+          // to allow here the way the target-value field's own
+          // filterNumericSuffixInput does, this is just a plain "how
+          // many" count.
+          var cursor = intervalInput.selectionStart;
+          var cleaned = intervalInput.value.replace(/[^0-9]/g, '');
+          if (cleaned !== intervalInput.value) {
+            var keptBeforeCursor = intervalInput.value.slice(0, cursor).replace(/[^0-9]/g, '').length;
+            intervalInput.value = cleaned;
+            intervalInput.setSelectionRange(keptBeforeCursor, keptBeforeCursor);
+          }
+          GT.recurInterval = intervalInput.value;
+          validateRecurField();
+        });
+
+        document.querySelectorAll('.gt-recur-unit-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            GT.recurUnit = btn.getAttribute('data-unit');
+            document.querySelectorAll('.gt-recur-unit-btn').forEach(function (b) {
+              b.classList.toggle('active', b === btn);
+            });
+          });
+        });
+
         document.getElementById('gtWizardSave').addEventListener('click', wizardAddGoal);
+      }
+
+      // Same shape as validateTargetField below, just against the
+      // cadence field's own 1..MAX_RECUR_INTERVAL range instead of a
+      // goal-type-dependent one.
+      function validateRecurField() {
+        var input = document.getElementById('gtRecurInterval');
+        var errEl = document.getElementById('gtRecurError');
+        if (!input || !errEl) return false;
+        var raw = input.value.trim();
+        if (raw === '') { errEl.textContent = ''; errEl.classList.remove('show'); return false; }
+        var n = Number(raw);
+        if (!Number.isInteger(n) || n < 1 || n > MAX_RECUR_INTERVAL) {
+          errEl.textContent = 'Must be between 1 and ' + fmtNum(MAX_RECUR_INTERVAL) + '.';
+          errEl.classList.add('show');
+          return false;
+        }
+        errEl.textContent = '';
+        errEl.classList.remove('show');
+        return true;
       }
 
       function currentTargetBounds() {
@@ -10077,15 +10326,23 @@ def render_goal_tracking(player: PlayerView) -> str:
         return true;
       }
 
+      // The name/target-value fields validated and captured back on
+      // stage 3 (wizardTarget.name/value -- see that stage's own
+      // Save/Next click handler in wireWizardStage) are already good
+      // by the time this runs, whether it's called straight from
+      // there (one-time) or from stage 4's own Save button afterward
+      // (recurring) -- this only still needs to validate/collect the
+      // cadence field for the recurring case.
       async function wizardAddGoal() {
-        var targetName = wizardTarget.name.trim();
-        if (!targetName) { showError('Pick a target first.'); return; }
-        if (!validateTargetField()) { showError('Enter a valid target value.'); return; }
-
-        var targetValue = Number(parseMoneySuffix(document.getElementById('gtTargetValue').value.trim()));
-        var payload = { goal_type: GT.type, target_name: targetName, target_value: targetValue };
+        var payload = { goal_type: GT.type, target_name: wizardTarget.name, target_value: wizardTarget.value };
         if (GT.type === 'skill') { payload.metric = GT.skillMetric; }
         if (GT.type === 'item' && wizardTarget.itemId) { payload.item_id = wizardTarget.itemId; }
+        if (GT.recurring === 'recurring') {
+          if (!validateRecurField()) { showError('Enter a valid recurrence interval.'); return; }
+          payload.is_recurring = true;
+          payload.recur_interval = Number(document.getElementById('gtRecurInterval').value.trim());
+          payload.recur_unit = GT.recurUnit;
+        }
 
         var data = await apiCall('/api/goals', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -10109,15 +10366,37 @@ def render_goal_tracking(player: PlayerView) -> str:
       // xp/kc goal, no unit at all for an item goal (its quantity speaks
       // for itself). This is also the only place that progress reads
       // now -- see goalRowHtml below, which no longer has its own
-      // separate current/target column.
+      // separate current/target column. A recurring goal's own cadence
+      // (see recurCadenceLabel) tags along on the same line rather than
+      // growing the row a whole new one -- g.current_value is already
+      // this PERIOD's progress, not a lifetime total, for a recurring
+      // goal (see app.goals.current_value), so the number above reads
+      // correctly either way without this function needing to know or
+      // care which kind of goal it's showing.
       function goalProgressLabel(g) {
         var cur = fmtNum(g.current_value);
         var tgt = fmtNum(g.target_value);
-        if (g.goal_type === 'kc') return cur + ' / ' + tgt + ' KC';
-        if (g.goal_type === 'skill') {
-          return (g.metric === 'xp') ? (cur + ' / ' + tgt + ' XP') : ('LVL ' + cur + ' / ' + tgt);
-        }
-        return cur + ' / ' + tgt;
+        var base;
+        if (g.goal_type === 'kc') base = cur + ' / ' + tgt + ' KC';
+        else if (g.goal_type === 'skill') base = (g.metric === 'xp') ? (cur + ' / ' + tgt + ' XP') : ('LVL ' + cur + ' / ' + tgt);
+        else base = cur + ' / ' + tgt;
+        var cadence = recurCadenceLabel(g);
+        return cadence ? (base + ' · ' + cadence) : base;
+      }
+
+      // "EVERY WEEK" for an interval of 1, "EVERY 2 WEEKS" otherwise --
+      // RECUR_UNIT_OPTIONS' own labels pluralized rather than a second
+      // lookup table, since they're already exactly the singular noun
+      // this needs. Empty string (not shown) for a non-recurring goal.
+      // Written already-uppercase to match every other unit suffix
+      // goalProgressLabel builds (KC/XP/LVL), though .gt-goal-sub's own
+      // text-transform: uppercase would render it that way regardless.
+      var RECUR_UNIT_LABEL = { hour: 'HOUR', day: 'DAY', week: 'WEEK', month: 'MONTH', year: 'YEAR' };
+      function recurCadenceLabel(g) {
+        if (!g.is_recurring) return '';
+        var unit = RECUR_UNIT_LABEL[g.recur_unit] || String(g.recur_unit || '').toUpperCase();
+        if (g.recur_interval === 1) return 'EVERY ' + unit;
+        return 'EVERY ' + fmtNum(g.recur_interval) + ' ' + unit + 'S';
       }
 
       // A kc goal's icon is its real boss sprite (app/static/boss-icons,

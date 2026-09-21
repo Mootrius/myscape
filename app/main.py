@@ -80,6 +80,7 @@ from app.models import (
     SeedBoxItem,
     SeedVaultItem,
     TackleBoxItem,
+    _utcnow,
 )
 from app.pages import (
     _SITE_URL,
@@ -2494,6 +2495,9 @@ def _goal_out(goal: Goal, context: dict) -> GoalOut:
         current_value=goals_module.current_value(goal, context),
         target_display=goals_module.target_display(goal),
         item_icon=item_icon_url(goal.item_id),
+        is_recurring=goal.is_recurring,
+        recur_interval=goal.recur_interval,
+        recur_unit=goal.recur_unit,
         created_at=goal.created_at,
     )
 
@@ -2510,9 +2514,24 @@ def list_goals(
     Tracking's own page polls (see render_goal_tracking's script in
     app/pages.py) so a boss kill/skill xp drop/item pickup shows up in
     a goal's progress bar without a manual refresh, same pattern as the
-    live KC column before this redesign."""
+    live KC column before this redesign.
+
+    Also where a recurring goal's own period actually rolls forward
+    (goals_module.maybe_roll_recurring_period) -- every poll of this
+    same endpoint, before its progress is read, so recur_period_start/
+    recur_baseline_value are never more than one request stale for
+    whichever goals actually crossed a period boundary since the last
+    poll. Committed once for the whole batch, only when at least one
+    goal actually rolled -- the common case (nobody's cadence has
+    elapsed since 5 seconds ago) touches the database not at all."""
     goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
     context = goals_module.build_progress_context(db, game_account)
+    rolled = False
+    for goal in goals:
+        if goals_module.maybe_roll_recurring_period(goal, context):
+            rolled = True
+    if rolled:
+        db.commit()
     return GoalsResponse(goals=[_goal_out(goal, context) for goal in goals])
 
 
@@ -2528,18 +2547,35 @@ def create_goal(
     skill/metric/target must be a real skill and a legal level/xp
     range, an item goal just needs a non-empty name -- see its own
     docstring for why item names aren't validated against a real item
-    at creation time)."""
+    at creation time; a recurring goal's own interval/unit get the same
+    treatment, and is only allowed at all for goal_type "kc"/"skill").
+
+    A recurring goal's very first period starts right now, baselined
+    against its own current absolute_value() (see app/goals.py) so it
+    opens at 0/target_value exactly like a fresh non-recurring goal
+    does -- computed from the SAME context this already needs to build
+    the response below, not a second query."""
     try:
         cleaned = goals_module.clean_new_goal(
-            payload.goal_type, payload.target_name, payload.metric, payload.target_value, payload.item_id
+            payload.goal_type,
+            payload.target_name,
+            payload.metric,
+            payload.target_value,
+            payload.item_id,
+            payload.is_recurring,
+            payload.recur_interval,
+            payload.recur_unit,
         )
     except goals_module.GoalValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    context = goals_module.build_progress_context(db, game_account)
     goal = Goal(game_account_id=game_account.id, **cleaned)
+    if goal.is_recurring:
+        goal.recur_period_start = _utcnow()
+        goal.recur_baseline_value = goals_module.absolute_value(goal, context)
     db.add(goal)
     db.commit()
     db.refresh(goal)
-    context = goals_module.build_progress_context(db, game_account)
     return _goal_out(goal, context)
 
 
