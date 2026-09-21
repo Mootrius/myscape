@@ -1579,3 +1579,40 @@ class MindMapsState(BaseModel):
 
     class Config:
         extra = "allow"
+
+
+# -- Goal Tracking's own flat goal list -- see app/goals.py for the
+# validation/progress logic these wrap, and Goal's own docstring in
+# app/models.py for why this is a normal table (one row per goal)
+# rather than following Mindmaps' single-JSONB-blob shape. -----------
+
+class GoalCreateRequest(BaseModel):
+    goal_type: str
+    target_name: str
+    # Only meaningful (and required) for goal_type "skill" -- see
+    # app.goals.clean_new_goal, which does the real validation; this
+    # schema only shapes the request, it doesn't enforce per-type
+    # rules itself.
+    metric: Optional[str] = None
+    target_value: int
+
+
+class GoalOut(BaseModel):
+    """current_value/target_display are never stored -- computed fresh
+    by app.goals.current_value/target_display every time a GoalOut is
+    built (both on creation and on every list read), same "always
+    derive it live" stance every other live-progress number in this
+    app already takes."""
+
+    id: uuid.UUID
+    goal_type: str
+    target_name: str
+    metric: Optional[str] = None
+    target_value: int
+    current_value: int
+    target_display: str
+    created_at: datetime
+
+
+class GoalsResponse(BaseModel):
+    goals: List[GoalOut]

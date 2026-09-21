@@ -268,6 +268,7 @@ class GameAccount(Base):
     hidden_loot_entries = relationship("HiddenLootEntry", back_populates="game_account", cascade="all, delete-orphan")
     hidden_possession_storages = relationship("HiddenPossessionStorage", back_populates="game_account", cascade="all, delete-orphan")
     possession_views = relationship("PossessionView", back_populates="game_account", cascade="all, delete-orphan")
+    goals = relationship("Goal", back_populates="game_account", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -1015,6 +1016,57 @@ class MindMap(Base):
     nodes = Column(JSONB, nullable=False, default=list)
 
     game_account = relationship("GameAccount", back_populates="mindmaps")
+
+
+class Goal(Base):
+    """The redesigned Goal Tracking page's own goal list -- a flat set
+    of targets a player is actively working toward, each one a boss
+    kill count, a skill level/xp, or an item quantity. Deliberately
+    NOT built on MindMap's `nodes` JSONB blob above, even though
+    app/mindmaps.py already implements six goal types (this feature's
+    three plus gp/quest/diary) inside a node's own `goal` dict: unlike
+    a mindmap (always read/written as a whole tree, see MindMap's own
+    docstring for why THAT earns a blob), a goal here is created and
+    deleted independently of any others -- there's a real "just this
+    one row" access pattern a blob wouldn't serve as well, so this is
+    a normal one-row-per-goal table instead. See app/goals.py for the
+    validation and live progress-computation logic (nothing here is
+    ever pre-computed or cached).
+
+    goal_type is one of "kc" (a boss kill count), "skill" (a skill
+    level or xp target), or "item" (an owned quantity of some item) --
+    see app.goals.GOAL_TYPES. target_name means something different
+    per type: the exact OSRS-hiscores boss display name (matching
+    app.bosses.HISCORE_BOSSES) for "kc", the lowercase skill name
+    (app.mindmaps.SKILL_NAMES) for "skill", or a free-text item name
+    for "item" (resolved to a real item at read time via
+    app.item_ids.find_item_ids, same as Purchase Goals and Mindmaps'
+    own item goals already do -- not resolved/validated to a real item
+    at creation time, since a name that doesn't resolve to an id can
+    still match app.purchase_goals.build_owned_pools' name-keyed pool).
+
+    metric is ONLY meaningful for a "skill" goal ("level" or "xp"; null
+    for "kc"/"item") -- same "only this one type actually uses this
+    column" shape hiscores_account_type and a few other nullable
+    columns elsewhere in this file already have. A "kc" goal's real
+    lifetime progress is read straight from
+    GameAccount.boss_kill_counts (the hiscores-seeded, chatbox-kept-
+    live column -- see app/hiscores.py) -- deliberately NOT
+    app.mindmaps' own "kc" goal machinery, which counts raw LootEvent
+    occurrences instead (see app/goals.py's own module docstring for
+    why that's the wrong number for a lifetime-total goal)."""
+
+    __tablename__ = "goals"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    game_account_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False)
+    goal_type = Column(String, nullable=False)
+    target_name = Column(String, nullable=False)
+    metric = Column(String, nullable=True)
+    target_value = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    game_account = relationship("GameAccount", back_populates="goals")
 
 
 class LootEvent(Base):

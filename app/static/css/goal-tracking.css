@@ -1,116 +1,255 @@
-/* Goal Tracking -- for now this page is just a reference table of
-   every boss the OSRS hiscores tracks, each paired with its RuneLite
-   sprite icon (see render_goal_tracking in app/pages.py for how that
-   pairing was built). Kept deliberately small/plain since the actual
-   goal-setting UI hasn't been built yet -- this table is scaffolding
-   to build that against, not a finished feature page. */
+/* Goal Tracking -- a player-built list of targets (a boss kill count,
+   a skill level/xp, or an item quantity), each tracked toward
+   completion with live progress (see render_goal_tracking in
+   app/pages.py). Two cards: an add-goal form up top, and the goal
+   list itself below it. */
 
-.gt-intro {
-  color: var(--text-muted);
-  max-width: 640px;
-  margin: 0 0 20px;
-}
-
-/* Same translucent-panel/border/radius language as .loot-chart-card
-   (loot-tracker.css) and .gear-summary (purchase-goals.css) -- every
-   page's top-level "frame" card looks the same, this is just another
-   one of them. */
 .gt-card {
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px 24px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
 }
 
-.gt-boss-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.gt-boss-table th {
-  text-align: left;
+.gt-card-title {
+  margin: 0 0 16px;
+  font-size: 13px;
   font-weight: normal;
-  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-faint);
-  padding: 14px 10px;
-  border-bottom: 1px solid var(--border);
 }
 
-.gt-boss-table td {
+.gt-link-note { color: var(--text-muted); margin: 0; }
+
+/* ---- Add-goal form --------------------------------------------------- */
+
+/* The three goal-type buttons (Item/KC/Skill -- alphabetical, same
+   convention this redesign applies to the dashboard's own card order)
+   -- same icon assets Mindmaps' own goal-type picker already uses
+   (GOAL_TYPE_PICKER in app/pages.py's mindmaps script), so a KC/ITEM/
+   SKILL badge means the same thing on both pages. */
+.gt-type-picker {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.gt-type-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-family: inherit;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.gt-type-btn img { width: 20px; height: 20px; object-fit: contain; image-rendering: pixelated; }
+
+.gt-type-btn span {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gt-type-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+
+.gt-type-btn.active {
+  border-color: var(--gold);
+  color: var(--text);
+  background: var(--panel);
+}
+
+.gt-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.gt-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 200px; min-width: 160px; }
+
+.gt-field label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.gt-field select, .gt-field input[type="number"] { width: 100%; height: 34px; padding: 0 12px; }
+
+.gt-field-target { flex: 0 1 160px; min-width: 130px; }
+
+/* Level/XP toggle beside the skill <select> -- same segmented-pair
+   look as Purchase Goals'/Mindmaps' own .btn-secondary pairs, just a
+   two-up toggle rather than a single button. */
+.gt-metric-toggle { display: flex; gap: 0; margin-top: 4px; }
+
+.gt-metric-btn {
+  flex: 1 1 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.gt-metric-btn:first-child { border-right: none; }
+
+.gt-metric-btn:hover { color: var(--text); }
+
+.gt-metric-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+
+.gt-field-item-search { position: relative; }
+
+.gt-search-box { position: relative; }
+
+.gt-search-box input[type="text"] { width: 100%; height: 34px; padding: 0 12px; }
+
+/* Same dropdown-suggestion look as Purchase Goals' own .suggestions/
+   .suggestion (purchase-goals.css) -- kept as its own local copy
+   rather than a shared class, same "each page owns its own CSS file"
+   convention every page here already follows. */
+.gt-suggestions {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+.gt-suggestions.show { display: block; }
+
+.gt-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
 }
 
-.gt-boss-table tr:last-child td { border-bottom: none; }
+.gt-suggestion:hover { background: var(--panel-2); }
 
-/* Faint row highlight on hover -- same rgb(51,51,54) target every
-   other hoverable row on the site uses (.dash-card, .loot-npc-box,
-   .pm-row -- see their own comments), so this reads as consistent
-   with the rest of the site even though this row itself isn't
-   clickable yet. */
-.gt-boss-table tr:hover td { background-color: rgb(51, 51, 54); }
-
-.gt-boss-icon-cell { width: 44px; }
-
-/* Same pixelated upscale as .dash-card-icon img (myscape.css) -- these
-   are tiny hand-pixelled game sprites, so let them stay crisp rather
-   than blurring smooth when scaled up. */
-.gt-boss-icon {
-  display: block;
-  width: 32px;
-  height: 32px;
+.gt-suggestion img {
+  width: 24px;
+  height: 24px;
   object-fit: contain;
   image-rendering: pixelated;
 }
 
-/* The handful of very recent hiscores bosses (see render_goal_tracking's
-   own docstring) RuneLite hasn't catalogued a sprite for yet -- a
-   plain dim placeholder square rather than a broken <img>, so a
-   missing icon reads as "not available yet" instead of looking like
-   something's wrong with the page. */
-.gt-boss-icon-missing {
+.gt-add-btn {
+  background: var(--gold);
+  color: #221c10;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  height: 34px;
+  padding: 0 20px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.gt-add-btn:hover { background: #ffab42; }
+
+/* ---- Goal list --------------------------------------------------- */
+
+.gt-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 30px 10px; }
+
+.gt-goal-list { display: flex; flex-direction: column; }
+
+.gt-goal-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+  gap: 14px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gt-goal-list .gt-goal-row:last-child { border-bottom: none; }
+
+.gt-goal-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+.gt-goal-info { flex: 1 1 auto; min-width: 0; }
+
+.gt-goal-name {
+  color: var(--text);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gt-goal-sub { color: var(--text-faint); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; margin-top: 1px; }
+
+.gt-goal-bar {
+  width: 100%;
+  height: 5px;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  color: var(--text-faint);
-  font-size: 16px;
+  margin-top: 6px;
 }
 
-.gt-boss-name { color: var(--text-dim); }
+.gt-goal-bar-fill { height: 100%; background: var(--gold); }
 
-.gt-boss-name-missing-note {
-  display: block;
-  color: var(--text-faint);
-  font-size: 12px;
-  margin-top: 2px;
-}
+/* A completed goal's bar and progress number read green instead of
+   gold/dim -- a plain at-a-glance "done" signal once current_value
+   reaches target_value (see .gt-goal-done above, set in goalRowHtml). */
+.gt-goal-done .gt-goal-bar-fill { background: var(--green); }
 
-.gt-boss-kc-head, .gt-boss-kc {
+.gt-goal-progress {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  white-space: nowrap;
+  flex: 0 0 auto;
   text-align: right;
-  width: 90px;
+  min-width: 110px;
 }
 
-.gt-boss-kc { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.gt-goal-done .gt-goal-progress { color: var(--green); }
 
-/* The sync status line above the table -- just a note, no button:
-   kill counts are seeded once from the hiscores at link/relink time
-   and kept live after that by the plugin's own chatbox-parsed updates
-   (see exchange_link_code in app/routers/linking.py and
-   apply_kill_count_updates in app/hiscores.py), so there's nothing
-   for a button here to trigger any more. */
-.gt-sync-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  margin-bottom: 16px;
+.gt-goal-delete {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+  flex: 0 0 auto;
 }
 
-.gt-sync-note { color: var(--text-faint); font-size: 14px; }
+.gt-goal-delete:hover { color: var(--red); }
+
+@media (max-width: 720px) {
+  .gt-add-form { flex-direction: column; align-items: stretch; }
+  .gt-field, .gt-field-target { flex: 1 1 auto; min-width: 0; }
+  .gt-add-btn { width: 100%; }
+  .gt-goal-progress { min-width: 0; }
+}

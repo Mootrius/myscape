@@ -13,6 +13,7 @@ from html import escape
 from typing import TYPE_CHECKING, Optional
 
 from app.bosses import HISCORE_BOSSES
+from app.mindmaps import SKILL_NAMES
 from app.purchase_goals import item_icon_url
 
 if TYPE_CHECKING:
@@ -788,13 +789,20 @@ def render_dashboard(player: PlayerView) -> str:
         + "</a>"
     )
 
+    # Alphabetical by each card's own displayed title (Goal Tracking,
+    # Loot Tracker, Mindmaps, Purchase Goals, Storages Viewer) -- NOT
+    # by feature/route name, since "Storages Viewer" is what a player
+    # scanning this grid actually reads, not "Possessions". Keep this
+    # order alphabetical going forward: a new card's *_card variable
+    # slots into the list below wherever its own <h3> title falls
+    # alphabetically, same as every card here already does.
     body = f"""
     <div class="dash-grid">
+      {goal_tracking_card}
       {loot_tracker_card}
       {mindmaps_card}
-      {possessions_card}
       {purchase_goals_card}
-      {goal_tracking_card}
+      {possessions_card}
     </div>
     """
     return _shell(title="Dashboard — myscape", player=player, body=body)
@@ -9366,147 +9374,354 @@ def render_possessions(player: PlayerView) -> str:
 
 
 def render_goal_tracking(player: PlayerView) -> str:
-    """The Goal Tracking page -- not a real feature yet, just the
-    research this app's actual goal-setting UI (time-based quotas for
-    XP gained/NPCs killed/clue scrolls completed/items gained, etc.,
-    see the dashboard card's own copy) will eventually get built
-    against. For now its content is the reference table (every boss the
-    OSRS hiscores tracks, app.bosses.HISCORE_BOSSES, paired with its
-    RuneLite sprite icon) plus a real, working piece ahead of that UI:
-    a KC column that's always already live by the time this renders.
+    """The Goal Tracking page -- a plain, player-built list of targets
+    (a boss kill count, a skill level/xp, or an item quantity), each
+    tracked toward completion with live progress that's always already
+    current by the time this renders (no stale "as of my last visit"
+    numbers). Superseded the old 71-boss reference table this page used
+    to be (see git history) once app/goals.py's own CRUD endpoints
+    existed to build a real goal-creation form against instead.
 
-    No button, no client-side fetch on the INITIAL render, and no sync
-    of any kind triggered from here -- player.boss_kill_counts is
-    simply read as-is for the first paint. game_account.boss_kill_counts
-    is seeded once, the moment a character links or re-links
-    (exchange_link_code in app/routers/linking.py pulls the real OSRS
-    hiscores right then), and kept current after that by the plugin
-    itself, live, the instant it parses a kill count out of the chatbox
-    (POST /api/players/me/kill-counts -- see app.hiscores.
-    apply_kill_count_updates). That also means this table can be
-    PARTIAL in an ordinary, expected way: a boss the player has killed
-    since linking shows its confirmed number, while a boss they simply
-    haven't fought yet keeps whatever the hiscores baseline said (0, if
-    they'd genuinely never killed it either) -- there's no all-71-
-    bosses-or-nothing gate the way a single hiscores snapshot used to
-    imply.
+    Deliberately NOT server-rendered with the player's actual goal list
+    -- PlayerView (this file's per-request "everything render_* needs"
+    struct, built once in app/auth.py) has no goals field of its own,
+    and adding one just for this page's first paint would mean a fresh
+    query on every request whether or not Goal Tracking is even the
+    page being loaded. Instead this follows the exact same shape
+    Purchase Goals and Possessions already use (see render_purchase_goals/
+    render_possessions): an empty shell on load, filled in by GET
+    /api/goals the instant the page's own script runs, then kept
+    current after that by polling the very same endpoint every 5
+    seconds -- one endpoint serves both the initial paint and the live
+    refresh, so a kill/xp drop/item pickup made mid-session shows up in
+    a goal's progress bar within a few seconds, without a reload,
+    exactly like every other page on this site that stays live.
 
-    The server-side write is already live the instant the plugin POSTs
-    it -- what used to be missing was the BROWSER ever finding out
-    without a manual refresh. So, when linked, a small poll (GET
-    /api/players/me/kill-counts every 5s, same interval and pattern
-    Purchase Goals and Possessions already use -- see PG.pollTimer in
-    render_purchase_goals and the setInterval(loadSummary, ...) call in
-    render_possessions) patches each `.gt-boss-kc` cell in place by its
-    `data-boss` attribute, so a kill made mid-session shows up here
-    within a few seconds of the plugin reporting it, same as every
-    other page on this site that stays current without a reload.
-
-    Not linked (player.account_hash is None) shows the table with every
-    KC cell blank -- there's no RuneLite character to look up yet, same
-    as every other page's linking story -- and the poll doesn't start
-    at all, since there's nothing for it to fetch.
+    Not linked (player.account_hash is None) skips the add-goal form
+    and goal list entirely and shows a one-line prompt to link instead
+    -- GET/POST/DELETE /api/goals all require a verified, linked
+    GameAccount (see get_current_verified_game_account_from_session in
+    app/main.py), so there's nothing this page could usefully show or
+    let an unlinked visitor do yet.
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
     is_linked = player.account_hash is not None
-    kc_by_boss = player.boss_kill_counts
-    has_synced = bool(kc_by_boss)
 
-    def _boss_row(slug: str, name: str, has_icon: bool) -> str:
-        if has_icon:
-            icon_cell = (
-                f'<img class="gt-boss-icon" src="/static/boss-icons/{slug}.png" '
-                f'alt="{escape(name)}" />'
-            )
-            name_cell = f'<span class="gt-boss-name">{escape(name)}</span>'
-        else:
-            icon_cell = '<div class="gt-boss-icon-missing" title="No RuneLite sprite yet">?</div>'
-            name_cell = (
-                f'<span class="gt-boss-name">{escape(name)}</span>'
-                '<span class="gt-boss-name-missing-note">No icon yet</span>'
-            )
-        kc = kc_by_boss.get(name)
-        kc_text = f"{kc:,}" if isinstance(kc, int) else "—"
-        return (
-            f'<tr><td class="gt-boss-icon-cell">{icon_cell}</td><td>{name_cell}</td>'
-            f'<td class="gt-boss-kc" data-boss="{escape(name)}">{kc_text}</td></tr>'
-        )
+    if not is_linked:
+        body = """
+        <h2 class="page-title">Goal Tracking</h2>
+        <div class="gt-card">
+          <p class="gt-link-note">Link your RuneLite account to start tracking goals.</p>
+        </div>
+        """
+        return _shell(title="Goal Tracking — myscape", player=player, body=body, extra_head=extra_head)
 
-    rows_html = "".join(
-        _boss_row(slug, name, has_icon) for slug, name, has_icon in HISCORE_BOSSES
+    # HISCORE_BOSSES is already alphabetical by display name (see its
+    # own module docstring in app/bosses.py) -- nothing to sort here.
+    # SKILL_NAMES (app/mindmaps.py) is OSRS's own skills-tab order, not
+    # alphabetical, so it's re-sorted for this dropdown -- same
+    # alphabetize-it convention this redesign is applying to the
+    # dashboard's own card order, applied here too since a long <select>
+    # is exactly the kind of list a player hunts through by name.
+    boss_options = "".join(
+        f'<option value="{escape(name)}">{escape(name)}</option>' for _slug, name, _has_icon in HISCORE_BOSSES
     )
-
-    if is_linked:
-        sync_note = (
-            '<span id="gtSyncNote" class="gt-sync-note">Kept up to date automatically as you play.</span>'
-            if has_synced
-            else '<span id="gtSyncNote" class="gt-sync-note">No hiscores data yet -- check back soon.</span>'
-        )
-        sync_controls = f'<div class="gt-sync-row">{sync_note}</div>'
-    else:
-        sync_controls = (
-            '<div class="gt-sync-row">'
-            '<span class="gt-sync-note">Link your RuneLite account to see kill counts here.</span>'
-            "</div>"
-        )
+    skill_options = "".join(
+        f'<option value="{skill}">{escape(skill.title())}</option>' for skill in sorted(SKILL_NAMES)
+    )
 
     body = f"""
     <h2 class="page-title">Goal Tracking</h2>
-    <p class="gt-intro">
-      Scaffolding for now -- every boss the OSRS hiscores tracks, matched up
-      with its icon, ready for the actual goal-setting UI (time-based quotas
-      for XP gained, NPCs killed, clue scrolls completed, items gained, and
-      whatever else gets added) to be built against. Kill counts are seeded
-      from the official OSRS Hiscores the moment you link your account, then
-      kept live from there as the plugin reads your own kill count messages
-      straight out of the chatbox.
-    </p>
-    {sync_controls}
-    <div class="gt-card">
-      <table class="gt-boss-table">
-        <thead>
-          <tr><th></th><th>Boss</th><th class="gt-boss-kc-head">KC</th></tr>
-        </thead>
-        <tbody>
-          {rows_html}
-        </tbody>
-      </table>
+    <div class="auth-error" id="gtError"></div>
+
+    <div class="gt-card gt-add-card">
+      <h3 class="gt-card-title">Add a goal</h3>
+      <div class="gt-type-picker" id="gtTypePicker">
+        <button type="button" class="gt-type-btn" data-type="item">
+          <img src="/static/img/icon-goal-item.png" alt="" /><span>Item</span>
+        </button>
+        <button type="button" class="gt-type-btn" data-type="kc">
+          <img src="/static/img/icon-goal-kc.png" alt="" /><span>KC</span>
+        </button>
+        <button type="button" class="gt-type-btn" data-type="skill">
+          <img src="/static/img/icon-goal-skill.png" alt="" /><span>Skill</span>
+        </button>
+      </div>
+      <div class="gt-add-form">
+        <div class="gt-field" data-type-field="kc">
+          <label for="gtKcBoss">Boss</label>
+          <select id="gtKcBoss">{boss_options}</select>
+        </div>
+        <div class="gt-field" data-type-field="skill">
+          <label for="gtSkillName">Skill</label>
+          <select id="gtSkillName">{skill_options}</select>
+          <div class="gt-metric-toggle" id="gtMetricToggle">
+            <button type="button" class="gt-metric-btn" data-metric="level">Level</button>
+            <button type="button" class="gt-metric-btn" data-metric="xp">XP</button>
+          </div>
+        </div>
+        <div class="gt-field gt-field-item-search" data-type-field="item">
+          <label for="gtItemInput">Item</label>
+          <div class="gt-search-box">
+            <input type="text" id="gtItemInput" placeholder="Search for an item" autocomplete="off" />
+            <div class="gt-suggestions" id="gtItemSuggestions"></div>
+          </div>
+        </div>
+        <div class="gt-field gt-field-target">
+          <label for="gtTargetValue" id="gtTargetLabel">Target quantity</label>
+          <input type="number" id="gtTargetValue" min="1" />
+        </div>
+        <button type="button" class="gt-add-btn" id="gtAddBtn">Add goal</button>
+      </div>
+    </div>
+
+    <div class="gt-card gt-list-card">
+      <h3 class="gt-card-title">Your goals</h3>
+      <p class="gt-empty" id="gtEmpty" style="display:none;">No goals yet -- add one above to start tracking.</p>
+      <div class="gt-goal-list" id="gtGoalList"></div>
     </div>
     """
-    # Only linked accounts have anything worth polling for -- an
-    # unlinked one has no game_account.boss_kill_counts of its own and
-    # GET /api/players/me/kill-counts would just hand back {} on every
-    # request forever, so the poll doesn't start at all in that case
-    # (same "nothing to fetch yet" reasoning the sync_controls branch
-    # above already applies to the note itself).
-    script = (
-        """
-      async function gtRefreshKillCounts() {
+
+    script = """
+    (function () {
+      var TYPE_ICON = {
+        kc: '/static/img/icon-goal-kc.png',
+        skill: '/static/img/icon-goal-skill.png',
+        item: '/static/img/icon-goal-item.png',
+      };
+      // Bounds mirror app.mindmaps' own MIN/MAX_SKILL_LEVEL and
+      // MIN/MAX_SKILL_XP (see app/goals.py's own import of them) --
+      // just for the number input's min/max attributes, so an
+      // obviously-out-of-range target gets caught before a round trip;
+      // the server re-validates against the same bounds regardless.
+      var TARGET_BOUNDS = {
+        kc: { min: 1, max: 2000000000 },
+        item: { min: 1, max: 2000000000 },
+        skill_level: { min: 1, max: 126 },
+        skill_xp: { min: 0, max: 200000000 },
+      };
+
+      var GT = { goals: [], type: 'item', skillMetric: 'level' };
+
+      function showError(msg) {
+        var el = document.getElementById('gtError');
+        if (!msg) { el.classList.remove('show'); el.textContent = ''; return; }
+        el.textContent = msg;
+        el.classList.add('show');
+      }
+
+      async function apiCall(url, options) {
         try {
-          var res = await fetch('/api/players/me/kill-counts');
-          if (!res.ok) return;
-          var data = await res.json();
-          var counts = (data && data.boss_kill_counts) || {};
-          document.querySelectorAll('.gt-boss-kc').forEach(function (cell) {
-            var kc = counts[cell.getAttribute('data-boss')];
-            cell.textContent = (typeof kc === 'number') ? kc.toLocaleString('en-US') : '—';
-          });
-          var noteEl = document.getElementById('gtSyncNote');
-          if (noteEl && Object.keys(counts).length > 0) {
-            noteEl.textContent = 'Kept up to date automatically as you play.';
+          var res = await fetch(url, options);
+          var data = await res.json().catch(function () { return {}; });
+          if (!res.ok) {
+            showError((data && data.detail) || 'Something went wrong. Please try again.');
+            return null;
           }
+          showError(null);
+          return data;
         } catch (err) {
-          // Ignored, same as every other background poll on this site
-          // (see PG.pollTimer in render_purchase_goals) -- a dropped
-          // poll just means this one tick didn't refresh; the next one
-          // in 5s tries again on its own.
+          showError('Something went wrong. Please try again.');
+          return null;
         }
       }
-      setInterval(gtRefreshKillCounts, 5000);
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      function fmtNum(n) { return Math.round(n || 0).toLocaleString('en-US'); }
+
+      function debounce(fn, wait) {
+        var t = null;
+        return function () {
+          var args = arguments;
+          clearTimeout(t);
+          t = setTimeout(function () { fn.apply(null, args); }, wait);
+        };
+      }
+
+      // ---- Type picker / target field -------------------------------------
+
+      function selectType(type) {
+        GT.type = type;
+        document.querySelectorAll('.gt-type-btn').forEach(function (btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-type') === type);
+        });
+        document.querySelectorAll('[data-type-field]').forEach(function (field) {
+          field.style.display = (field.getAttribute('data-type-field') === type) ? '' : 'none';
+        });
+        updateTargetField();
+      }
+
+      function selectMetric(metric) {
+        GT.skillMetric = metric;
+        document.querySelectorAll('.gt-metric-btn').forEach(function (btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-metric') === metric);
+        });
+        updateTargetField();
+      }
+
+      function updateTargetField() {
+        var label = document.getElementById('gtTargetLabel');
+        var input = document.getElementById('gtTargetValue');
+        var bounds;
+        if (GT.type === 'kc') { label.textContent = 'Target KC'; bounds = TARGET_BOUNDS.kc; }
+        else if (GT.type === 'skill') {
+          label.textContent = (GT.skillMetric === 'xp') ? 'Target XP' : 'Target level';
+          bounds = (GT.skillMetric === 'xp') ? TARGET_BOUNDS.skill_xp : TARGET_BOUNDS.skill_level;
+        } else { label.textContent = 'Target quantity'; bounds = TARGET_BOUNDS.item; }
+        input.min = bounds.min;
+        input.max = bounds.max;
+      }
+
+      document.querySelectorAll('.gt-type-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () { selectType(btn.getAttribute('data-type')); });
+      });
+      document.querySelectorAll('.gt-metric-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () { selectMetric(btn.getAttribute('data-metric')); });
+      });
+      selectType('item');
+      selectMetric('level');
+
+      // ---- Item search typeahead (mirrors PG's own runSearch/renderIconSuggestions,
+      // app/pages.py's render_purchase_goals) ------------------------------
+
+      var itemInput = document.getElementById('gtItemInput');
+      var itemSuggestions = document.getElementById('gtItemSuggestions');
+
+      async function runItemSearch(query) {
+        query = (query || '').trim();
+        if (!query) { renderItemSuggestions([]); return; }
+        var data = await apiCall('/api/items/search?q=' + encodeURIComponent(query));
+        renderItemSuggestions(data ? data.results : []);
+      }
+
+      function renderItemSuggestions(results) {
+        if (!results.length) { itemSuggestions.classList.remove('show'); itemSuggestions.innerHTML = ''; return; }
+        itemSuggestions.innerHTML = results.map(function (r) {
+          return '<div class="gt-suggestion" data-item-name="' + escapeHtml(r.name) + '">' +
+            (r.icon ? '<img src="' + escapeHtml(r.icon) + '" alt="" />' : '') +
+            '<span>' + escapeHtml(r.name) + '</span></div>';
+        }).join('');
+        itemSuggestions.classList.add('show');
+        itemSuggestions.querySelectorAll('.gt-suggestion').forEach(function (row) {
+          row.addEventListener('click', function () {
+            itemInput.value = row.getAttribute('data-item-name');
+            itemSuggestions.classList.remove('show');
+            itemSuggestions.innerHTML = '';
+          });
+        });
+      }
+
+      itemInput.addEventListener('input', debounce(function () { runItemSearch(itemInput.value); }, 200));
+      document.addEventListener('click', function (e) {
+        if (!itemSuggestions.contains(e.target) && e.target !== itemInput) {
+          itemSuggestions.classList.remove('show');
+        }
+      });
+
+      // ---- Add goal ---------------------------------------------------------
+
+      async function addGoal() {
+        var targetInput = document.getElementById('gtTargetValue');
+        var targetValue = parseInt(targetInput.value, 10);
+        var payload = { goal_type: GT.type, target_value: targetValue };
+        if (GT.type === 'kc') {
+          payload.target_name = document.getElementById('gtKcBoss').value;
+        } else if (GT.type === 'skill') {
+          payload.target_name = document.getElementById('gtSkillName').value;
+          payload.metric = GT.skillMetric;
+        } else {
+          payload.target_name = itemInput.value.trim();
+        }
+        if (!payload.target_name) { showError('Pick a target first.'); return; }
+        if (!targetValue || targetValue < 1) { showError('Enter a target value.'); return; }
+
+        var data = await apiCall('/api/goals', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        if (!data) return;
+        GT.goals.push(data);
+        renderGoalList();
+        targetInput.value = '';
+        if (GT.type === 'item') { itemInput.value = ''; }
+      }
+
+      document.getElementById('gtAddBtn').addEventListener('click', addGoal);
+
+      // ---- Goal list ----------------------------------------------------
+
+      function goalName(g) {
+        if (g.goal_type === 'skill') return g.target_name.charAt(0).toUpperCase() + g.target_name.slice(1);
+        return g.target_name;
+      }
+
+      function goalSubtitle(g) {
+        if (g.goal_type === 'kc') return 'Boss kill count';
+        if (g.goal_type === 'skill') return (g.metric === 'xp') ? 'Experience' : 'Level';
+        return 'Item quantity';
+      }
+
+      function goalRowHtml(g) {
+        var pct = g.target_value > 0 ? Math.max(0, Math.min(100, (g.current_value / g.target_value) * 100)) : 0;
+        var done = g.current_value >= g.target_value;
+        return '' +
+          '<div class="gt-goal-row' + (done ? ' gt-goal-done' : '') + '">' +
+          '  <img class="gt-goal-icon" src="' + TYPE_ICON[g.goal_type] + '" alt="" />' +
+          '  <div class="gt-goal-info">' +
+          '    <div class="gt-goal-name">' + escapeHtml(goalName(g)) + '</div>' +
+          '    <div class="gt-goal-sub">' + goalSubtitle(g) + '</div>' +
+          '    <div class="gt-goal-bar"><div class="gt-goal-bar-fill" style="width:' + pct + '%"></div></div>' +
+          '  </div>' +
+          '  <div class="gt-goal-progress">' + fmtNum(g.current_value) + ' / ' + g.target_display + '</div>' +
+          '  <button type="button" class="gt-goal-delete" data-goal-id="' + g.id + '" title="Delete goal" aria-label="Delete goal">&times;</button>' +
+          '</div>';
+      }
+
+      // Alphabetical by target name, case-insensitive, regardless of
+      // goal type -- the same alphabetize-it convention this redesign
+      // applies to the dashboard's own card order, applied here too so
+      // a growing goal list stays easy to scan rather than just
+      // reading back in creation order.
+      function renderGoalList() {
+        var listEl = document.getElementById('gtGoalList');
+        var emptyEl = document.getElementById('gtEmpty');
+        if (!GT.goals.length) { listEl.innerHTML = ''; emptyEl.style.display = ''; return; }
+        emptyEl.style.display = 'none';
+        var sorted = GT.goals.slice().sort(function (a, b) {
+          return goalName(a).toLowerCase().localeCompare(goalName(b).toLowerCase());
+        });
+        listEl.innerHTML = sorted.map(goalRowHtml).join('');
+        listEl.querySelectorAll('.gt-goal-delete').forEach(function (btn) {
+          btn.addEventListener('click', function () { deleteGoal(btn.getAttribute('data-goal-id')); });
+        });
+      }
+
+      async function deleteGoal(goalId) {
+        var data = await apiCall('/api/goals/' + encodeURIComponent(goalId), { method: 'DELETE' });
+        if (data === null) return;
+        GT.goals = GT.goals.filter(function (g) { return g.id !== goalId; });
+        renderGoalList();
+      }
+
+      // ---- Load + poll (same 5s cadence as PG.pollTimer/loadSummary,
+      // render_purchase_goals/render_possessions) -- one endpoint
+      // serves both the initial paint and every refresh after it. -----
+
+      async function loadGoals() {
+        var data = await apiCall('/api/goals');
+        if (!data) return;
+        GT.goals = data.goals || [];
+        renderGoalList();
+      }
+
+      loadGoals();
+      setInterval(loadGoals, 5000);
+    })();
     """
-        if is_linked
-        else ""
-    )
     return _shell(
         title="Goal Tracking — myscape",
         player=player,

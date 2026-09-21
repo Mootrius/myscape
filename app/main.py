@@ -38,6 +38,7 @@ from app.auth import (
     get_optional_current_game_account_from_session,
     get_optional_current_player_view_from_session,
 )
+from app import goals as goals_module
 from app import hiscores as sync_hiscores_module
 from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
@@ -64,6 +65,7 @@ from app.models import (
     ForestryKitItem,
     GameAccount,
     GearSetup,
+    Goal,
     HuntsmansKitItem,
     InventoryItem,
     LootingBagItem,
@@ -146,6 +148,9 @@ from app.schemas import (
     ForestryKitSyncRequest,
     ForestryKitSyncResponse,
     GEAR_SETUP_EQUIPMENT_SLOTS,
+    GoalCreateRequest,
+    GoalOut,
+    GoalsResponse,
     HideLootItemRequest,
     HideLootNpcRequest,
     HuntsmansKitOut,
@@ -1444,17 +1449,6 @@ def sync_kill_counts(
     return KillCountSyncResponse(applied_count=applied_count)
 
 
-@app.get("/api/players/me/kill-counts")
-def read_kill_counts(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The website's own read of the live kill-count snapshot --
-    session-authenticated like every other GET here, unlike the POST
-    right above it. Goal Tracking's own page polls this (see
-    render_goal_tracking's own script in app/pages.py) so a chatbox-
-    parsed kill count the plugin just posted shows up there within a
-    few seconds, without the player having to manually refresh."""
-    return {"boss_kill_counts": game_account.boss_kill_counts or {}}
-
-
 @app.post("/api/players/me/loot", response_model=LootSyncResponse)
 def sync_loot(
     payload: LootSyncRequest,
@@ -2487,3 +2481,82 @@ def delete_mindmap_node(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
     return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
+
+
+def _goal_out(goal: Goal, context: dict) -> GoalOut:
+    return GoalOut(
+        id=goal.id,
+        goal_type=goal.goal_type,
+        target_name=goal.target_name,
+        metric=goal.metric,
+        target_value=goal.target_value,
+        current_value=goals_module.current_value(goal, context),
+        target_display=goals_module.target_display(goal),
+        created_at=goal.created_at,
+    )
+
+
+@app.get("/api/goals", response_model=GoalsResponse)
+def list_goals(
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Every goal this account has created, oldest first, each with its
+    live progress computed fresh (see app/goals.py) -- nothing here is
+    ever pre-stored or cached, same "always derive it live" stance
+    Mindmaps' own goal nodes already take. This is also what Goal
+    Tracking's own page polls (see render_goal_tracking's script in
+    app/pages.py) so a boss kill/skill xp drop/item pickup shows up in
+    a goal's progress bar without a manual refresh, same pattern as the
+    live KC column before this redesign."""
+    goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
+    context = goals_module.build_progress_context(db, game_account)
+    return GoalsResponse(goals=[_goal_out(goal, context) for goal in goals])
+
+
+@app.post("/api/goals", response_model=GoalOut, status_code=status.HTTP_201_CREATED)
+def create_goal(
+    payload: GoalCreateRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Adds one goal to this account's list -- see
+    app.goals.clean_new_goal for the real per-type validation (a kc
+    goal's boss must be a real OSRS-hiscores boss, a skill goal's
+    skill/metric/target must be a real skill and a legal level/xp
+    range, an item goal just needs a non-empty name -- see its own
+    docstring for why item names aren't validated against a real item
+    at creation time)."""
+    try:
+        cleaned = goals_module.clean_new_goal(
+            payload.goal_type, payload.target_name, payload.metric, payload.target_value
+        )
+    except goals_module.GoalValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    goal = Goal(game_account_id=game_account.id, **cleaned)
+    db.add(goal)
+    db.commit()
+    db.refresh(goal)
+    context = goals_module.build_progress_context(db, game_account)
+    return _goal_out(goal, context)
+
+
+@app.delete("/api/goals/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_goal(
+    goal_id: str,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    try:
+        goal_uuid = uuid.UUID(goal_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found.")
+    goal = (
+        db.query(Goal)
+        .filter(Goal.id == goal_uuid, Goal.game_account_id == game_account.id)
+        .first()
+    )
+    if goal is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found.")
+    db.delete(goal)
+    db.commit()
