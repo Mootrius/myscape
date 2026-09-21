@@ -386,6 +386,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Pinned to the row's top edge (by .gt-goal-row's own align-items:
+     center, this would otherwise sit vertically centered across the
+     whole row -- icon/name/sub/bar stacked -- which puts it right
+     next to the progress bar underneath, and doubly so once it's
+     armed and widens into the "Are you sure?" label). This keeps it
+     up by the goal name instead, clear of the bar, whichever state
+     it's in. */
+  align-self: flex-start;
+  margin-top: -2px;
 }
 
 .gt-goal-delete:hover { color: var(--red); }
