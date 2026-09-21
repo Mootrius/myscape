@@ -100,10 +100,11 @@
 .gt-boss-kc { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
 /* The sync status line above the table -- just a note, no button:
-   the hiscores sync (and its loot-tracker top-up) both happen
-   automatically, server-side, on every page load (see
-   goal_tracking_page in app/main.py and display_boss_kill_counts in
-   app/hiscores.py). */
+   kill counts are seeded once from the hiscores at link/relink time
+   and kept live after that by the plugin's own chatbox-parsed updates
+   (see exchange_link_code in app/routers/linking.py and
+   apply_kill_count_updates in app/hiscores.py), so there's nothing
+   for a button here to trigger any more. */
 .gt-sync-row {
   display: flex;
   align-items: center;

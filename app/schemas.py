@@ -1357,6 +1357,50 @@ class LootSyncResponse(BaseModel):
     added_count: int
 
 
+# -- Goal Tracking's live kill-count feed: one chatbox-parsed reading at
+# a time from the RuneLite plugin (POST /api/players/me/kill-counts),
+# same shape family as the loot sync models just above -- see
+# apply_kill_count_updates's own docstring in app/hiscores.py for the
+# full picture (a hiscores pull only ever seeds a baseline on link/
+# relink now; this is the live source of truth after that). ----------
+
+class KillCountUpdateIn(BaseModel):
+    # Exactly as RuneLite's own chatbox worded it (see
+    # KILLCOUNT_PATTERN's own comment in MyscapePlugin.java) --
+    # matched case-insensitively against app.bosses.CHAT_NAME_TO_DISPLAY_NAME
+    # server-side, not normalized here.
+    boss_name: str
+    kill_count: int
+
+    @field_validator("boss_name")
+    @classmethod
+    def check_boss_name(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("boss_name must not be empty.")
+        return value
+
+    @field_validator("kill_count")
+    @classmethod
+    def check_kill_count(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("kill_count must not be negative.")
+        return value
+
+
+class KillCountSyncRequest(BaseModel):
+    updates: List[KillCountUpdateIn]
+
+
+class KillCountSyncResponse(BaseModel):
+    # How many of the updates in this request matched a known boss and
+    # were actually applied -- fewer than len(updates) is normal and not
+    # an error (see apply_kill_count_updates's own docstring), same
+    # "partial success as a count" contract LootSyncResponse.added_count
+    # already uses.
+    applied_count: int
+
+
 class HideLootNpcRequest(BaseModel):
     """POST/DELETE /api/players/me/loot/hidden-npcs -- see the eye
     button on each NPC tile in render_loot_tracker, app/pages.py. name

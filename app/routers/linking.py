@@ -9,6 +9,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app import hiscores as sync_hiscores_module
 from app.auth import (
     get_current_account_from_session,
     get_current_game_account_from_session,
@@ -131,6 +132,24 @@ def exchange_link_code(
     api_key = PlayerApiKey(game_account_id=game_account.id, key_hash=hash_token(raw_api_key))
     db.add(api_key)
     db.commit()
+
+    # Seeds Goal Tracking's KC column with this character's real
+    # lifetime totals right as the link is established -- see
+    # app/hiscores.py's own top-of-file comment for the full design:
+    # this is now the ONLY place a hiscores pull fires on a first-time
+    # link (a re-link through this same endpoint gets the same
+    # treatment for free, re-anchoring to the real hiscores number
+    # rather than trusting whatever chat-parsed data happened to be on
+    # file from before the account was unlinked). Best-effort and
+    # non-blocking: a Jagex hiccup (or this account simply not being
+    # rankable yet) here should never fail the link itself -- the
+    # plugin still gets its API key either way, and the manual
+    # /api/players/me/hiscores/sync endpoint (or the player's next
+    # relink) can seed the baseline later.
+    try:
+        sync_hiscores_module.sync_hiscores(db, game_account)
+    except sync_hiscores_module.HiscoresSyncError:
+        pass
 
     return LinkExchangeResponse(api_key=raw_api_key, player_id=game_account.id)
 

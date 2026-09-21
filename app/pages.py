@@ -9365,7 +9365,7 @@ def render_possessions(player: PlayerView) -> str:
     )
 
 
-def render_goal_tracking(player: PlayerView, boss_kill_counts: Optional[dict] = None) -> str:
+def render_goal_tracking(player: PlayerView) -> str:
     """The Goal Tracking page -- not a real feature yet, just the
     research this app's actual goal-setting UI (time-based quotas for
     XP gained/NPCs killed/clue scrolls completed/items gained, etc.,
@@ -9373,22 +9373,23 @@ def render_goal_tracking(player: PlayerView, boss_kill_counts: Optional[dict] = 
     against. For now its content is the reference table (every boss the
     OSRS hiscores tracks, app.bosses.HISCORE_BOSSES, paired with its
     RuneLite sprite icon) plus a real, working piece ahead of that UI:
-    a KC column sourced from the official OSRS Hiscores
-    (app/hiscores.py), so a future "kill count" goal type has both a
-    ready-made icon and a real starting number to seed a goal against
-    for whichever boss a player picks.
+    a KC column that's always already live by the time this renders.
 
-    No button, no client-side fetch -- goal_tracking_page (app/main.py)
-    already opportunistically re-synced the hiscores server-side, and
-    already topped the result up with anything the Loot Tracker has
-    caught since (see app.hiscores.display_boss_kill_counts) before
-    ever calling this function, so `boss_kill_counts` -- when given --
-    is already the exact number to print, no further merging needed
-    here. Falls back to player.boss_kill_counts (the raw last-synced
-    snapshot, no loot top-up) when the caller doesn't have a live
-    Session handy to compute that with, which only ever happens in
-    contexts without real game data to look up anyway (see
-    PlayerView's own docstring).
+    No button, no client-side fetch, and no sync of any kind triggered
+    from here -- player.boss_kill_counts is simply read as-is.
+    game_account.boss_kill_counts is seeded once, the moment a
+    character links or re-links (exchange_link_code in
+    app/routers/linking.py pulls the real OSRS hiscores right then),
+    and kept current after that by the plugin itself, live, the instant
+    it parses a kill count out of the chatbox (POST
+    /api/players/me/kill-counts -- see app.hiscores.
+    apply_kill_count_updates). That also means this table can be
+    PARTIAL in an ordinary, expected way: a boss the player has killed
+    since linking shows its confirmed number, while a boss they simply
+    haven't fought yet keeps whatever the hiscores baseline said (0, if
+    they'd genuinely never killed it either) -- there's no all-71-
+    bosses-or-nothing gate the way a single hiscores snapshot used to
+    imply.
 
     Not linked (player.account_hash is None) shows the table with every
     KC cell blank -- there's no RuneLite character to look up yet, same
@@ -9396,7 +9397,7 @@ def render_goal_tracking(player: PlayerView, boss_kill_counts: Optional[dict] = 
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
     is_linked = player.account_hash is not None
-    kc_by_boss = player.boss_kill_counts if boss_kill_counts is None else boss_kill_counts
+    kc_by_boss = player.boss_kill_counts
     has_synced = bool(kc_by_boss)
 
     def _boss_row(slug: str, name: str, has_icon: bool) -> str:
@@ -9425,9 +9426,9 @@ def render_goal_tracking(player: PlayerView, boss_kill_counts: Optional[dict] = 
 
     if is_linked:
         sync_note = (
-            '<span id="gtSyncNote" class="gt-sync-note"></span>'
+            '<span class="gt-sync-note">Kept up to date automatically as you play.</span>'
             if has_synced
-            else '<span id="gtSyncNote" class="gt-sync-note">No hiscores data yet -- check back soon.</span>'
+            else '<span class="gt-sync-note">No hiscores data yet -- check back soon.</span>'
         )
         sync_controls = f'<div class="gt-sync-row">{sync_note}</div>'
     else:
@@ -9443,9 +9444,10 @@ def render_goal_tracking(player: PlayerView, boss_kill_counts: Optional[dict] = 
       Scaffolding for now -- every boss the OSRS hiscores tracks, matched up
       with its icon, ready for the actual goal-setting UI (time-based quotas
       for XP gained, NPCs killed, clue scrolls completed, items gained, and
-      whatever else gets added) to be built against. Kill counts sync
-      automatically from the official OSRS Hiscores, topped up with anything
-      your loot tracker has caught since the last sync.
+      whatever else gets added) to be built against. Kill counts are seeded
+      from the official OSRS Hiscores the moment you link your account, then
+      kept live from there as the plugin reads your own kill count messages
+      straight out of the chatbox.
     </p>
     {sync_controls}
     <div class="gt-card">
@@ -9459,30 +9461,9 @@ def render_goal_tracking(player: PlayerView, boss_kill_counts: Optional[dict] = 
       </table>
     </div>
     """
-    script = f"""
-      var gtSyncedAtIso = {json.dumps(player.hiscores_synced_at.isoformat() if player.hiscores_synced_at else None)};
-
-      function gtFormatSyncedAt(iso) {{
-        if (!iso) return 'No hiscores data yet -- check back soon.';
-        var seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-        if (seconds < 60) return 'Synced just now.';
-        var minutes = Math.round(seconds / 60);
-        if (minutes < 60) return 'Synced ' + minutes + 'm ago.';
-        var hours = Math.round(minutes / 60);
-        if (hours < 24) return 'Synced ' + hours + 'h ago.';
-        var days = Math.round(hours / 24);
-        return 'Synced ' + days + 'd ago.';
-      }}
-
-      var gtSyncNoteEl = document.getElementById('gtSyncNote');
-      if (gtSyncNoteEl && gtSyncedAtIso) {{
-        gtSyncNoteEl.textContent = gtFormatSyncedAt(gtSyncedAtIso);
-      }}
-    """
     return _shell(
         title="Goal Tracking — myscape",
         player=player,
         body=body,
-        extra_script=script,
         extra_head=extra_head,
     )

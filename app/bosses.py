@@ -128,3 +128,27 @@ NAME_TO_SLUG = {
 HISCORES_NAME_TO_DISPLAY_NAME = {
     HISCORES_NAME_OVERRIDES.get(name, name): name for slug, name, _has_icon in HISCORE_BOSSES
 }
+
+# Same idea as HISCORES_NAME_OVERRIDES above, but for the raw text
+# RuneLite's own chatbox uses in a "Your <boss> kill count is: <n>."
+# style message (see app/hiscores.py::apply_kill_count_updates), which
+# doesn't always match the hiscores' own activities[].name string
+# either. Confirmed against RuneLite's own KILLCOUNT_RENAMES table
+# (runelite-client's chatcommands/ChatCommandsPlugin.java, which reuses
+# this same regex for its own !kc command) -- Barrows is the one
+# concrete case that table records: the chatbox reports the plain,
+# singular "Barrows chest", not our "Barrows Chests". Expected to grow
+# as real players hit more mismatches RuneLite's own table already
+# knows about but this one hasn't been seeded with yet.
+CHAT_NAME_OVERRIDES = {
+    "Barrows Chests": "Barrows chest",
+}
+
+# app/hiscores.py's own reverse lookup for chat-parsed updates: the
+# chatbox's exact wording -> our display_name, matched
+# case-insensitively there (chat capitalization isn't as reliably
+# consistent as the hiscores API's own JSON), built once at import time
+# the same way HISCORES_NAME_TO_DISPLAY_NAME is.
+CHAT_NAME_TO_DISPLAY_NAME = {
+    CHAT_NAME_OVERRIDES.get(name, name): name for slug, name, _has_icon in HISCORE_BOSSES
+}

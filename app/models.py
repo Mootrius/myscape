@@ -187,44 +187,44 @@ class GameAccount(Base):
 
     # Cached boss-kill-count snapshot from the official OSRS Hiscores
     # (see app/hiscores.py) -- {<boss name, matching
-    # app.bosses.HISCORE_BOSSES>: <kill count>}. Unlike skills/
-    # completed_quests/diary_tiers above, the plugin never writes this
-    # -- it's populated by a server-side sync that runs automatically
-    # whenever Goal Tracking is loaded (see goal_tracking_page in
-    # app/main.py), which is why it lives here as its own website-owned
-    # snapshot rather than folded into a plugin-synced column. Every
-    # boss the hiscores currently track is a key once synced at least
-    # once (0 for "never killed it", not omitted -- see
-    # _parse_boss_kill_counts in app/hiscores.py), so an empty dict
-    # unambiguously means "never synced" rather than "synced, ranked
-    # for nothing". This is the raw hiscores baseline, not what the
-    # page actually displays -- see display_boss_kill_counts in
-    # app/hiscores.py, which tops it up with anything the Loot Tracker
-    # has caught since boss_kill_counts_updated_at below.
+    # app.bosses.HISCORE_BOSSES>: <kill count>}. This IS what Goal
+    # Tracking's KC column displays directly (render_goal_tracking in
+    # app/pages.py reads player.boss_kill_counts as-is, no further
+    # merging) -- unlike skills/completed_quests/diary_tiers above, it's
+    # written from two different places rather than one: seeded by a
+    # one-time hiscores pull the moment this account links or re-links
+    # (exchange_link_code in app/routers/linking.py, via
+    # app.hiscores.sync_hiscores), then kept current from there by the
+    # plugin's own live chatbox-parsed updates (POST
+    # /api/players/me/kill-counts, via
+    # app.hiscores.apply_kill_count_updates, the instant it reads a
+    # "Your <boss> kill count is: <n>." style message). Every boss the
+    # hiscores currently track is a key once the first sync has run (0
+    # for "never killed it", not omitted -- see _parse_boss_kill_counts
+    # in app/hiscores.py), so an empty dict unambiguously means "never
+    # linked/synced" rather than "synced, ranked for nothing"; once
+    # populated, a boss with no chatbox update yet just keeps whatever
+    # the hiscores baseline said, which is why the table can look
+    # "partially fresh" in perfectly ordinary use.
     #
-    # A given boss's value here only ever moves when a fresh hiscores
-    # pull actually reports a DIFFERENT number for it (see
-    # sync_hiscores's own per-boss diff) -- never just because a pull
-    # happened. The official hiscores themselves only get recomputed
-    # when the character logs out, so a pull made while still logged
-    # in just returns the same numbers as last time; if this column
-    # were overwritten unconditionally on every pull, the KC column
-    # would visibly drop back down to that stale number every
-    # _MIN_ACCOUNT_REFRESH_SECONDS, erasing whatever the loot tracker
-    # had already topped it up with client-side. Diffing per boss
-    # instead of trusting every pull is what avoids that regression.
+    # No interval polling writes this any more, and there's
+    # deliberately no diffing against a previous value either: a
+    # hiscores pull only ever fires at a moment (link/relink, or the
+    # manual /api/players/me/hiscores/sync escape hatch) where trusting
+    # it outright is correct, and a chatbox update IS the ground truth
+    # the instant the game reports it -- see app/hiscores.py's own
+    # top-of-file comment for the fuller design discussion, including
+    # the one real tradeoff this accepts (a dropped chat message has no
+    # self-correction until the next hiscores pull).
     boss_kill_counts = Column(JSONB, nullable=False, default=dict)
     # {<boss name>: <ISO timestamp>} -- when boss_kill_counts[name]
-    # above last ACTUALLY changed value (not merely when it was last
-    # re-fetched and happened to match), one entry per boss once that
-    # boss has been seen at least once. This -- not hiscores_synced_at
-    # below -- is what display_boss_kill_counts anchors its "count
-    # loot_events after this point" window to, per boss: since a
-    # boss's own hiscores number only moves on a real Jagex-side
-    # update, only THAT counts as "the loot tracker's job to fill in
-    # after," and a pull that changed nothing must leave this alone so
-    # already-topped-up progress isn't lost (see boss_kill_counts's own
-    # comment above for the failure this prevents).
+    # above was last written, whether by the link-time hiscores
+    # baseline or a live chatbox update, one entry per boss once that
+    # boss has been seen at least once. Purely informational for now
+    # (no reader depends on it the way the interval-polling design's
+    # display_boss_kill_counts once did) -- kept as a per-boss "as of
+    # when is this number good" record, e.g. for a future goal-progress
+    # UI that wants to say how fresh a given boss's count is.
     boss_kill_counts_updated_at = Column(JSONB, nullable=False, default=dict)
     # Which hiscores game-mode endpoint actually resolved this account
     # (one of app.hiscores.GAMEMODES' first elements) -- cached after
@@ -232,13 +232,14 @@ class GameAccount(Base):
     # endpoint directly instead of probing every game mode again. Null
     # until the first successful sync.
     hiscores_account_type = Column(String, nullable=True)
-    # When the hiscores were last successfully FETCHED -- not when
-    # boss_kill_counts above last actually changed (see
-    # boss_kill_counts_updated_at for that). Advances on every real
-    # pull regardless of whether the payload turned out identical to
-    # last time, since this is purely "did we talk to Jagex," which is
-    # what the "synced Xm ago" note on Goal Tracking and this same
-    # per-account refresh-interval check both actually mean.
+    # When the hiscores were last successfully FETCHED via
+    # app.hiscores.sync_hiscores -- link/relink time, or a manual
+    # /api/players/me/hiscores/sync call; NOT touched by a live chatbox
+    # update (see apply_kill_count_updates, which only ever writes
+    # boss_kill_counts/boss_kill_counts_updated_at above). Mostly
+    # relevant to sync_hiscores's own short anti-rapid-fire cooldown
+    # now (_MIN_ACCOUNT_REFRESH_SECONDS) rather than anything Goal
+    # Tracking's UI reads directly any more.
     hiscores_synced_at = Column(DateTime(timezone=True), nullable=True)
 
     account = relationship("Account", back_populates="game_accounts")

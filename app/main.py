@@ -158,6 +158,8 @@ from app.schemas import (
     InventorySyncRequest,
     InventorySyncResponse,
     ItemSearchResponse,
+    KillCountSyncRequest,
+    KillCountSyncResponse,
     LootingBagOut,
     LootingBagItemOut,
     LootingBagSyncRequest,
@@ -307,6 +309,10 @@ MAX_DIARY_AREAS_PER_SYNC = 12
 # trying to batch an unreasonable number into one request, not a real
 # expected size.
 MAX_LOOT_EVENTS_PER_SYNC = 50
+# Same story as MAX_LOOT_EVENTS_PER_SYNC above -- the plugin syncs one
+# kill-count update immediately as it's parsed out of the chatbox (see
+# MyscapePlugin#onChatMessage), so a real sync is always exactly 1.
+MAX_KILL_COUNT_UPDATES_PER_SYNC = 20
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
 if not SESSION_SECRET_KEY:
@@ -1388,16 +1394,20 @@ def sync_hiscores(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """A manual resync, kept around for direct API use even though
-    Goal Tracking itself no longer calls this -- that page re-syncs
-    automatically, server-side, on every visit instead (see
-    goal_tracking_page above). Session-authenticated, unlike every
-    POST /api/players/me/* endpoint around it, since boss kill counts
-    come from the official OSRS Hiscores rather than anything RuneLite
-    itself reports -- there's nothing for the plugin to push here. See
-    app/hiscores.py for the actual fetch, its rate-limit posture, and
-    why a fetch failure doesn't necessarily become an error response
-    here (a prior snapshot is served instead)."""
+    """A manual resync -- the one deliberate drift-correction escape
+    hatch this design keeps (see app/hiscores.py's own top-of-file
+    comment): every OTHER hiscores pull now only ever fires at
+    link/relink time (see exchange_link_code in
+    app/routers/linking.py), with live kill counts coming from the
+    chatbox the rest of the time (POST /api/players/me/kill-counts,
+    below) rather than any further pulls from here. Session-
+    authenticated, unlike every POST /api/players/me/* endpoint around
+    it, since boss kill counts come from the official OSRS Hiscores
+    rather than anything RuneLite itself reports -- there's nothing for
+    the plugin to push here. See app/hiscores.py for the actual fetch,
+    its rate-limit posture, and why a fetch failure doesn't necessarily
+    become an error response here (a prior snapshot is served
+    instead)."""
     try:
         result = sync_hiscores_module.sync_hiscores(db, game_account)
     except sync_hiscores_module.NotLinkedError as exc:
@@ -1409,6 +1419,29 @@ def sync_hiscores(
         "synced_at": result.synced_at.isoformat() if result.synced_at else None,
         "from_cache": result.from_cache,
     }
+
+
+@app.post("/api/players/me/kill-counts", response_model=KillCountSyncResponse)
+def sync_kill_counts(
+    payload: KillCountSyncRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
+):
+    """Goal Tracking's live kill-count feed -- one chatbox-parsed
+    reading at a time from the plugin (see MyscapePlugin#onChatMessage
+    in the Mootrius/myscape-plugin repo, which posts here the instant
+    it parses a "Your <boss> kill count is: <n>." style message), API-
+    key-authenticated like every other plugin-pushed sync. Delegates
+    straight to apply_kill_count_updates in app/hiscores.py -- see its
+    own docstring for the case-insensitive name matching and why an
+    unrecognized boss name is silently skipped rather than a 4xx."""
+    if len(payload.updates) > MAX_KILL_COUNT_UPDATES_PER_SYNC:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many updates in one sync (max {MAX_KILL_COUNT_UPDATES_PER_SYNC}).",
+        )
+    applied_count = sync_hiscores_module.apply_kill_count_updates(db, game_account, payload.updates)
+    return KillCountSyncResponse(applied_count=applied_count)
 
 
 @app.post("/api/players/me/loot", response_model=LootSyncResponse)
@@ -1575,39 +1608,23 @@ def possessions_page(player: Optional[PlayerView] = Depends(get_optional_current
 
 
 @app.get("/dashboard/goal-tracking", response_class=HTMLResponse)
-def goal_tracking_page(
-    db: Session = Depends(get_db),
-    account: Optional[Account] = Depends(get_optional_current_account_from_session),
-    game_account: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
-):
-    """No "Sync from Hiscores" button any more -- every real visit to
-    this page is itself the sync trigger, right here, before the page
-    ever renders (see sync_hiscores's own rate-limit posture in
-    app/hiscores.py for why re-syncing on every single page load is
-    safe rather than spammy: most visits inside the account's own
-    refresh window cost zero network calls). A failure here (never
-    linked, or a genuine hiscores fetch failure) is swallowed rather
-    than surfaced -- see sync_hiscores's own docstring for why this
-    never turns an already-working page into an error page, same as
-    the button it replaced used to guarantee. display_boss_kill_counts
-    then tops that snapshot up with anything the Loot Tracker has
-    caught since, so the KC column is never more than a few seconds
-    stale even though the hiscores themselves were possibly asked
-    long ago."""
-    if not account:
+def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
+    """No sync trigger of any kind on page load any more -- KC data is
+    always already live by the time this renders, seeded once at
+    link/relink time and kept current from then on by the plugin's own
+    chatbox-parsed updates (see exchange_link_code in
+    app/routers/linking.py and POST /api/players/me/kill-counts above).
+    game_account.boss_kill_counts is simply read as-is; there's no
+    separate "display" view to build any more (compare this to the
+    interval-polling design this replaced, which had to top a stale
+    snapshot up with the Loot Tracker on every load -- see the git
+    history on app/hiscores.py's display_boss_kill_counts, now
+    removed, for that prior approach)."""
+    if not player:
         return RedirectResponse("/login", status_code=302)
-    if not account.email_verified_at:
+    if not player.email_verified_at:
         return RedirectResponse("/verify-email-required", status_code=302)
-    if game_account is not None:
-        try:
-            sync_hiscores_module.sync_hiscores(db, game_account)
-        except sync_hiscores_module.HiscoresSyncError:
-            pass
-    boss_kill_counts = (
-        sync_hiscores_module.display_boss_kill_counts(db, game_account) if game_account is not None else {}
-    )
-    player = build_player_view(account, game_account)
-    return render_goal_tracking(player, boss_kill_counts)
+    return render_goal_tracking(player)
 
 
 @app.get("/api/possessions/search-items", response_model=ItemSearchResponse)
