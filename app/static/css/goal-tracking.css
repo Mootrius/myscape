@@ -86,13 +86,20 @@
    so a KC/ITEM/SKILL badge means the same thing on both pages, plus
    a small centered Cancel underneath (there's no top-right x any
    more -- see wizardStage1Html). The wrap fills the full fixed
-   height (same technique .gt-wizard-stage2 uses), with the type-card
-   row at the top and Cancel pinned to the bottom. */
+   height (same technique .gt-wizard-stage2 uses); the type-card row
+   and Cancel are centered as a single group within it, rather than
+   pinned to the top/bottom edges, so shrinking Cancel doesn't leave
+   lopsided empty space below it. */
 .gt-wizard-stage1-wrap {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  justify-content: space-between;
+  /* Flex items default to min-height: auto, which floors this at its
+     own content size and stops it from ever actually occupying (and
+     therefore centering within) the parent's available space -- same
+     fix #gtWizardStage already applies to itself for the same reason. */
+  min-height: 0;
+  justify-content: center;
 }
 
 .gt-wizard-stage1 {
