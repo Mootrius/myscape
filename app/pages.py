@@ -9470,17 +9470,100 @@ def render_goal_tracking(player: PlayerView) -> str:
         skill: '/static/img/icon-goal-skill.png',
         item: '/static/img/icon-goal-item.png',
       };
-      // Bounds mirror app.mindmaps' own MIN/MAX_SKILL_LEVEL and
-      // MIN/MAX_SKILL_XP (see app/goals.py's own import of them) --
-      // just for the number input's min/max attributes, so an
-      // obviously-out-of-range target gets caught before a round trip;
-      // the server re-validates against the same bounds regardless.
+      // Bounds mirror app.mindmaps' own MIN/MAX_SKILL_LEVEL, just for
+      // this field's own live validation (see validateTargetField
+      // below) -- the server re-validates against its own copy of
+      // these regardless. The skill xp floor is 1 here rather than
+      // Mindmaps' own 0 -- this wizard has no "level 1 is always
+      // already met" carve-out to accommodate, so a plain "at least
+      // 1" reads more naturally for a fresh goal.
       var TARGET_BOUNDS = {
         kc: { min: 1, max: 2000000000 },
         item: { min: 1, max: 2000000000 },
         skill_level: { min: 1, max: 126 },
-        skill_xp: { min: 0, max: 200000000 },
+        skill_xp: { min: 1, max: 200000000 },
       };
+
+      // ---- Target-field input masking + the skill lvl/xp table ----------
+      //
+      // Ported from Mindmaps' own copy of this exact same machinery
+      // (parseMoneySuffix/filterNumericSuffixInput/SKILL_XP_TABLE/
+      // xpForLevel/levelForXp -- see render_mindmaps' script, same
+      // file) rather than shared, since each page here is its own
+      // self-contained script with no module shared between them.
+
+      // Lets the quantity/kc/xp-or-lvl target field be typed as a
+      // shorthand -- "140k", "2.5m", "1b" -- and resolves it to the
+      // plain integer actually sent to the server. Commas are always
+      // stripped first (filterNumericSuffixInput lets a player type
+      // them in purely for readability), so "2,500k" and "2500k"
+      // resolve identically. Anything that isn't a number immediately
+      // followed by k/m/b (case-insensitive) passes through untouched.
+      function parseMoneySuffix(raw) {
+        var s = (raw || '').trim().replace(/,/g, '');
+        var m = /^([0-9]*\.?[0-9]+)\s*([kKmMbB])$/.exec(s);
+        if (!m) return s;
+        var mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2].toLowerCase()];
+        return String(Math.round(parseFloat(m[1]) * mult));
+      }
+
+      // Restricts what actually lands in the target field to exactly
+      // the characters that could ever be valid there: digits, commas
+      // (typing-time thousands separator), a decimal point (only
+      // meaningful with a k/m/b suffix, harmless alone), and k/m/b
+      // themselves. Anything else typed/pasted/dropped in is silently
+      // dropped -- hence this being type="text" inputmode="decimal"
+      // rather than type="number" (a real number input could never be
+      // made to accept the K/M/B shorthand too).
+      var NUMERIC_SUFFIX_DISALLOWED_RE = /[^0-9,.kKmMbB]/g;
+
+      function filterNumericSuffixInput(input) {
+        var cleaned = input.value.replace(NUMERIC_SUFFIX_DISALLOWED_RE, '');
+        if (cleaned === input.value) return;
+        var cursor = input.selectionStart;
+        var keptBeforeCursor = input.value.slice(0, cursor).replace(NUMERIC_SUFFIX_DISALLOWED_RE, '').length;
+        input.value = cleaned;
+        input.setSelectionRange(keptBeforeCursor, keptBeforeCursor);
+      }
+
+      // The OSRS xp-per-level curve (levels 1-126, including the
+      // "virtual" levels above the real level-99 cap) -- see
+      // https://oldschool.runescape.wiki/w/Experience for the formula
+      // this implements exactly: xp(L) = floor(1/4 * sum[l=1..L-1] of
+      // floor(l + 300*2^(l/7))). Built once off TARGET_BOUNDS.skill_level.max
+      // rather than hardcoded, so it can never drift from whatever the
+      // level cap above says. SKILL_XP_TABLE[L] is the total xp needed
+      // for level L; index 0 is unused (levels are 1-indexed) and
+      // SKILL_XP_TABLE[1] is always 0.
+      var SKILL_XP_TABLE = (function () {
+        var maxLevel = TARGET_BOUNDS.skill_level.max;
+        var table = [0, 0];
+        var cumulative = 0;
+        for (var l = 1; l < maxLevel; l++) {
+          cumulative += Math.floor(l + 300 * Math.pow(2, l / 7));
+          table[l + 1] = Math.floor(cumulative / 4);
+        }
+        return table;
+      })();
+      // The xp SKILL_XP_TABLE says a level needs, clamped into range --
+      // used when the metric toggle switches from LVL to XP.
+      function xpForLevel(level) {
+        var b = TARGET_BOUNDS.skill_level;
+        level = Math.max(b.min, Math.min(b.max, Math.round(level)));
+        return SKILL_XP_TABLE[level];
+      }
+      // The level a given amount of xp has actually reached -- the
+      // LARGEST level whose own requirement is at or below it (5,750
+      // xp sits between level 22's 5,624 and level 23's 6,291, so this
+      // reads as 22, same as the in-game skills tab would show) --
+      // used when the metric toggle switches from XP to LVL.
+      function levelForXp(xp) {
+        var b = TARGET_BOUNDS.skill_level;
+        for (var l = b.max; l >= b.min; l--) {
+          if (xp >= SKILL_XP_TABLE[l]) return l;
+        }
+        return b.min;
+      }
 
       var GT = {
         goals: [],
@@ -9599,6 +9682,7 @@ def render_goal_tracking(player: PlayerView) -> str:
 
       function renderWizard() {
         var plusBtn = document.getElementById('gtWizardPlus');
+        var closeBtn = document.getElementById('gtWizardClose');
         if (GT.wizardStage === 0) {
           plusBtn.style.display = '';
           wizardExpanded.style.display = 'none';
@@ -9606,6 +9690,11 @@ def render_goal_tracking(player: PlayerView) -> str:
         }
         plusBtn.style.display = 'none';
         wizardExpanded.style.display = '';
+        // The top-right x is stage 1's own close control; stage 2 gets
+        // its own Back/Cancel/Save row down by the fields instead (see
+        // wizardStage2Html), so the top x is redundant with (and would
+        // sit oddly above) that row once there.
+        closeBtn.style.display = (GT.wizardStage === 2) ? 'none' : '';
         wizardStageEl.innerHTML = (GT.wizardStage === 1) ? wizardStage1Html() : wizardStage2Html();
         wireWizardStage();
       }
@@ -9625,29 +9714,47 @@ def render_goal_tracking(player: PlayerView) -> str:
       var WIZARD_SEARCH_LABEL = { item: 'Item', kc: 'Boss', skill: 'Skill' };
       var WIZARD_SEARCH_PLACEHOLDER = { item: 'Search for an item', kc: 'Search for a boss', skill: 'Search for a skill' };
 
+      // Stage 2 -- one box, same fixed size as stage 1 (see the
+      // .gt-wizard-expanded/#gtWizardStage height rules in
+      // goal-tracking.css): the search field (+ the skill goal's own
+      // lvl/xp toggle) and its target-value field share a single row
+      // near the top, and Back/Cancel/Save sit in their own row
+      // pinned to the bottom via justify-content: space-between on
+      // .gt-wizard-stage2 -- nothing about this stage's own markup
+      // grows the box the way the old top Back link + stacked fields
+      // used to.
       function wizardStage2Html() {
         var metricToggle = (GT.type !== 'skill') ? '' : (
-          '<div class="gt-metric-toggle" id="gtMetricToggle">' +
-          '  <button type="button" class="gt-metric-btn" data-metric="level">Level</button>' +
-          '  <button type="button" class="gt-metric-btn" data-metric="xp">XP</button>' +
+          '<div class="gt-field gt-field-metric">' +
+          '  <label>&nbsp;</label>' +
+          '  <div class="gt-metric-toggle" id="gtMetricToggle">' +
+          '    <button type="button" class="gt-metric-btn" data-metric="level">Level</button>' +
+          '    <button type="button" class="gt-metric-btn" data-metric="xp">XP</button>' +
+          '  </div>' +
           '</div>'
         );
         return '' +
           '<div class="gt-wizard-stage2">' +
-          '  <button type="button" class="gt-wizard-back" id="gtWizardBack" aria-label="Back">&larr; Back</button>' +
-          '  <div class="gt-field gt-field-target-search">' +
-          '    <label for="gtWizardSearchInput">' + WIZARD_SEARCH_LABEL[GT.type] + '</label>' +
-          '    <div class="gt-search-box">' +
-          '      <input type="text" id="gtWizardSearchInput" placeholder="' + WIZARD_SEARCH_PLACEHOLDER[GT.type] + '" autocomplete="off" />' +
-          '      <div class="gt-suggestions" id="gtWizardSuggestions"></div>' +
+          '  <div class="gt-wizard-row">' +
+          '    <div class="gt-field gt-field-target-search">' +
+          '      <label for="gtWizardSearchInput">' + WIZARD_SEARCH_LABEL[GT.type] + '</label>' +
+          '      <div class="gt-search-box">' +
+          '        <input type="text" id="gtWizardSearchInput" placeholder="' + WIZARD_SEARCH_PLACEHOLDER[GT.type] + '" autocomplete="off" />' +
+          '        <div class="gt-suggestions" id="gtWizardSuggestions"></div>' +
+          '      </div>' +
           '    </div>' +
           metricToggle +
+          '    <div class="gt-field gt-field-target">' +
+          '      <label for="gtTargetValue" id="gtTargetLabel"></label>' +
+          '      <input type="text" inputmode="decimal" id="gtTargetValue" autocomplete="off" />' +
+          '    </div>' +
           '  </div>' +
-          '  <div class="gt-field gt-field-target">' +
-          '    <label for="gtTargetValue" id="gtTargetLabel"></label>' +
-          '    <input type="number" id="gtTargetValue" min="1" />' +
+          '  <div class="gt-field-error" id="gtTargetError"></div>' +
+          '  <div class="gt-wizard-actions">' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
+          '    <button type="button" class="gt-add-btn" id="gtWizardSave">Save</button>' +
           '  </div>' +
-          '  <button type="button" class="gt-add-btn" id="gtAddBtn">Add goal</button>' +
           '</div>';
       }
 
@@ -9669,6 +9776,7 @@ def render_goal_tracking(player: PlayerView) -> str:
 
         wizardTarget = { name: '', itemId: null };
         document.getElementById('gtWizardBack').addEventListener('click', wizardBack);
+        document.getElementById('gtWizardCancel').addEventListener('click', closeWizard);
 
         var searchInput = document.getElementById('gtWizardSearchInput');
         var suggestions = document.getElementById('gtWizardSuggestions');
@@ -9739,39 +9847,92 @@ def render_goal_tracking(player: PlayerView) -> str:
           document.querySelectorAll('.gt-metric-btn').forEach(function (btn) {
             btn.classList.toggle('active', btn.getAttribute('data-metric') === GT.skillMetric);
             btn.addEventListener('click', function () {
-              GT.skillMetric = btn.getAttribute('data-metric');
+              var newMetric = btn.getAttribute('data-metric');
+              if (newMetric !== GT.skillMetric) {
+                // Carries whatever number's already in the field across
+                // the switch (5,750 xp becomes level 22, and back
+                // again) via xpForLevel/levelForXp, rather than leaving
+                // a now-wrong-unit number sitting in the box for the
+                // player to redo by hand -- same behavior as Mindmaps'
+                // own skill-goal metric toggle.
+                var targetInputForSwitch = document.getElementById('gtTargetValue');
+                var rawForSwitch = targetInputForSwitch.value.trim();
+                if (rawForSwitch !== '') {
+                  var nForSwitch = Number(parseMoneySuffix(rawForSwitch));
+                  if (Number.isInteger(nForSwitch)) {
+                    targetInputForSwitch.value = String(
+                      newMetric === 'xp' ? xpForLevel(nForSwitch) : levelForXp(nForSwitch)
+                    );
+                  }
+                }
+                GT.skillMetric = newMetric;
+              }
               document.querySelectorAll('.gt-metric-btn').forEach(function (b) {
                 b.classList.toggle('active', b === btn);
               });
               updateWizardTargetField();
+              validateTargetField();
             });
           });
         }
 
+        var targetInput = document.getElementById('gtTargetValue');
+        targetInput.addEventListener('input', function () {
+          filterNumericSuffixInput(targetInput);
+          validateTargetField();
+        });
+
         updateWizardTargetField();
-        document.getElementById('gtAddBtn').addEventListener('click', wizardAddGoal);
+        document.getElementById('gtWizardSave').addEventListener('click', wizardAddGoal);
+      }
+
+      function currentTargetBounds() {
+        if (GT.type === 'kc') return TARGET_BOUNDS.kc;
+        if (GT.type === 'skill') return (GT.skillMetric === 'xp') ? TARGET_BOUNDS.skill_xp : TARGET_BOUNDS.skill_level;
+        return TARGET_BOUNDS.item;
       }
 
       function updateWizardTargetField() {
         var label = document.getElementById('gtTargetLabel');
+        if (GT.type === 'kc') { label.textContent = 'KC'; }
+        else if (GT.type === 'skill') { label.textContent = (GT.skillMetric === 'xp') ? 'XP' : 'Level'; }
+        else { label.textContent = 'Quantity'; }
+      }
+
+      // Live, as-you-type range check for the target field -- mirrors
+      // Mindmaps' own validateSkillTarget, generalized to all three
+      // goal types via currentTargetBounds (the server re-validates
+      // against its own copy of these bounds regardless). Resolves
+      // through parseMoneySuffix first so a still-being-typed "150k"
+      // doesn't flash an out-of-range error before it's finished.
+      // Writes into the small error line under the field
+      // (#gtTargetError) and returns whether the field is currently
+      // valid, so wizardAddGoal can reuse it as its own save-time
+      // check rather than duplicating the range logic.
+      function validateTargetField() {
         var input = document.getElementById('gtTargetValue');
-        var bounds;
-        if (GT.type === 'kc') { label.textContent = 'Target KC'; bounds = TARGET_BOUNDS.kc; }
-        else if (GT.type === 'skill') {
-          label.textContent = (GT.skillMetric === 'xp') ? 'Target XP' : 'Target level';
-          bounds = (GT.skillMetric === 'xp') ? TARGET_BOUNDS.skill_xp : TARGET_BOUNDS.skill_level;
-        } else { label.textContent = 'Target quantity'; bounds = TARGET_BOUNDS.item; }
-        input.min = bounds.min;
-        input.max = bounds.max;
+        var errEl = document.getElementById('gtTargetError');
+        if (!input || !errEl) return false;
+        var raw = input.value.trim();
+        if (raw === '') { errEl.textContent = ''; errEl.classList.remove('show'); return false; }
+        var n = Number(parseMoneySuffix(raw));
+        var bounds = currentTargetBounds();
+        if (!Number.isInteger(n) || n < bounds.min || n > bounds.max) {
+          errEl.textContent = 'Must be between ' + fmtNum(bounds.min) + ' and ' + fmtNum(bounds.max) + '.';
+          errEl.classList.add('show');
+          return false;
+        }
+        errEl.textContent = '';
+        errEl.classList.remove('show');
+        return true;
       }
 
       async function wizardAddGoal() {
-        var targetInput = document.getElementById('gtTargetValue');
-        var targetValue = parseInt(targetInput.value, 10);
         var targetName = wizardTarget.name.trim();
         if (!targetName) { showError('Pick a target first.'); return; }
-        if (!targetValue || targetValue < 1) { showError('Enter a target value.'); return; }
+        if (!validateTargetField()) { showError('Enter a valid target value.'); return; }
 
+        var targetValue = Number(parseMoneySuffix(document.getElementById('gtTargetValue').value.trim()));
         var payload = { goal_type: GT.type, target_name: targetName, target_value: targetValue };
         if (GT.type === 'skill') { payload.metric = GT.skillMetric; }
         if (GT.type === 'item' && wizardTarget.itemId) { payload.item_id = wizardTarget.itemId; }
