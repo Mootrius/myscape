@@ -4869,6 +4869,50 @@ def render_mindmaps(player: PlayerView) -> str:
       };
       var DIARY_TIERS = ['easy', 'medium', 'hard', 'elite'];
       function titleCase(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+      // Each diary area's icon is its own elite-tier "main reward" item
+      // (per https://oldschool.runescape.wiki/w/Achievement_Diary's
+      // "List of diaries" table, 4th sub-column under "Main reward") --
+      // "Ardougne cloak 4", "Rada's blessing 4", etc. Hardcoded RuneLite
+      // CDN URLs (same static.runelite.net/cache/item/icon/<id>.png
+      // scheme item_icon_url in app/purchase_goals.py already serves
+      // every OTHER item icon from) rather than resolved through the
+      // item search endpoint at render time -- these 12 are fixed and
+      // already known, so there's nothing to look up live.
+      var DIARY_AREA_ICON = {
+        ardougne: 'https://static.runelite.net/cache/item/icon/13124.png',
+        desert: 'https://static.runelite.net/cache/item/icon/13136.png',
+        falador: 'https://static.runelite.net/cache/item/icon/13120.png',
+        fremennik: 'https://static.runelite.net/cache/item/icon/13132.png',
+        kandarin: 'https://static.runelite.net/cache/item/icon/13140.png',
+        karamja: 'https://static.runelite.net/cache/item/icon/13103.png',
+        kourend_kebos: 'https://static.runelite.net/cache/item/icon/22947.png',
+        lumbridge_draynor: 'https://static.runelite.net/cache/item/icon/13128.png',
+        morytania: 'https://static.runelite.net/cache/item/icon/13115.png',
+        varrock: 'https://static.runelite.net/cache/item/icon/13107.png',
+        western_provinces: 'https://static.runelite.net/cache/item/icon/13144.png',
+        wilderness: 'https://static.runelite.net/cache/item/icon/13111.png',
+      };
+      // Backs the skill/diary goal fields' search boxes (see
+      // renderLocalSearchFieldHtml) -- unlike the KC/ITEM/QUEST fields
+      // (GOAL_SEARCH_ENDPOINTS), there's no server round-trip for
+      // these: SKILL_NAMES/DIARY_AREAS are already the complete,
+      // already-in-memory list, so runGoalSearch just filters one of
+      // these two arrays client-side instead. Each entry's `value` is
+      // what actually gets saved (a skill's lowercase key, a diary's
+      // area slug -- exactly what the old <select>'s own option value
+      // was); `label` is what the player types/sees/picks by (a
+      // skill's title-cased name, a diary's real in-game name). Sorted
+      // by label, same alphabetize-it convention used elsewhere on
+      // this redesign (e.g. Goal Tracking's own skill/boss search
+      // lists), rather than DIARY_AREAS' own slug order.
+      var LOCAL_SEARCH_POOLS = {
+        skill: SKILL_NAMES.map(function (key) {
+          return { value: key, label: titleCase(key), icon: '/static/skill-icons/' + key + '.png' };
+        }).sort(function (a, b) { return a.label.localeCompare(b.label); }),
+        diary: DIARY_AREAS.map(function (area) {
+          return { value: area, label: DIARY_AREA_LABELS[area], icon: DIARY_AREA_ICON[area] };
+        }).sort(function (a, b) { return a.label.localeCompare(b.label); }),
+      };
 
       var MM = {
         data: null,
@@ -6165,14 +6209,6 @@ def render_mindmaps(player: PlayerView) -> str:
         var noteInput = e.target.closest('[data-role="node-note-input"]');
         if (noteInput) clampNoteInput(noteInput);
       });
-      // Backstop for the skill/diary <select> fields -- 'input' fires
-      // for a <select> in every current browser, but 'change' is the
-      // one guaranteed everywhere a <select> has ever fired something,
-      // so this just makes sure a picked option clears the error even
-      // somewhere that doesn't.
-      document.getElementById('mmNodesLayer').addEventListener('change', function (e) {
-        if (e.target.closest('[data-role="goal-fields"]')) showGoalSaveError(null);
-      });
       document.getElementById('mmNodesLayer').addEventListener('keydown', function (e) {
         var label = e.target.closest('[data-role="label"]');
         if (!label) return;
@@ -6378,7 +6414,21 @@ def render_mindmaps(player: PlayerView) -> str:
           floatingSuggestionsEl.addEventListener('click', function (e) {
             var suggestionEl = e.target.closest('.mm-suggestion');
             if (!suggestionEl || !activeSearchInput) return;
-            activeSearchInput.value = suggestionEl.getAttribute('data-value');
+            var value = suggestionEl.getAttribute('data-value');
+            var label = suggestionEl.getAttribute('data-label');
+            // The KC/ITEM/QUEST fields' own persisted value IS the
+            // typed/picked name (label === value for those -- see
+            // normalizeSearchResults), so this covers them exactly as
+            // before. The skill/diary fields (see
+            // renderLocalSearchFieldHtml) differ: what's shown/typed
+            // (a title-cased skill name, a diary's real in-game name)
+            // isn't what's saved (a skill's lowercase key, a diary's
+            // area slug) -- hiddenTargetFor finds their companion
+            // hidden field and that's what actually gets the real
+            // value; this visible input only ever shows the label.
+            activeSearchInput.value = (label != null) ? label : value;
+            var hidden = hiddenTargetFor(activeSearchInput);
+            if (hidden) hidden.value = value;
             hideFloatingSuggestions();
             showGoalSaveError(null);
           });
@@ -6408,15 +6458,64 @@ def render_mindmaps(player: PlayerView) -> str:
         activeSearchInput = null;
       }
 
-      // Runs a goal search field's query against whichever endpoint
-      // its data-search-kind picks (see GOAL_SEARCH_ENDPOINTS) and
-      // renders the result into the shared floating suggestions box --
-      // shared by the KC/ITEM/QUEST fields (see renderSearchFieldHtml),
-      // called debounced off the 'input' delegation above.
+      // The skill/diary search fields' visible input isn't itself the
+      // saved field (see renderLocalSearchFieldHtml) -- this finds
+      // their companion hidden [data-goal-field] input, off the
+      // data-goal-field-target attribute the visible input carries.
+      // null for the KC/ITEM/QUEST fields, which have no such
+      // attribute (they ARE their own [data-goal-field] directly).
+      function hiddenTargetFor(input) {
+        var targetFieldName = input.getAttribute('data-goal-field-target');
+        if (!targetFieldName) return null;
+        var wrap = input.closest('.mm-search-wrap');
+        return wrap && wrap.querySelector('[data-goal-field="' + targetFieldName + '"]');
+      }
+
+      // Runs a goal search field's query against whichever endpoint its
+      // data-search-kind picks (see GOAL_SEARCH_ENDPOINTS), OR filters
+      // LOCAL_SEARCH_POOLS[kind] client-side for the skill/diary fields
+      // (nothing to look up server-side there -- see that constant's
+      // own comment) -- renders either way into the shared floating
+      // suggestions box, called debounced off the 'input' delegation
+      // above.
       async function runGoalSearch(input) {
         var query = input.value.trim();
-        if (!query) { if (activeSearchInput === input) hideFloatingSuggestions(); return; }
+        var hidden = hiddenTargetFor(input);
+        if (!query) {
+          // An emptied search field means "nothing picked" for the
+          // skill/diary fields too, same as it always has for the
+          // KC/ITEM/QUEST ones (their own value -- typed directly into
+          // the one input they have -- is just as empty).
+          if (hidden) hidden.value = '';
+          if (activeSearchInput === input) hideFloatingSuggestions();
+          return;
+        }
         var kind = input.getAttribute('data-search-kind');
+        var localPool = LOCAL_SEARCH_POOLS[kind];
+        if (localPool) {
+          if (!document.body.contains(input) || document.activeElement !== input) return;
+          activeSearchInput = input;
+          var q = query.toLowerCase();
+          // Keeps the hidden field in sync with whatever the typed text
+          // CURRENTLY resolves to exactly (or clears it otherwise) on
+          // every keystroke -- not just on a suggestion click -- so
+          // typing a full exact name and hitting Save without ever
+          // clicking the dropdown still works, and, just as
+          // importantly, so backspacing/editing away from a previously
+          // clicked selection can't silently leave the stale old value
+          // behind once the visible text no longer says that. An
+          // unresolved partial ("Rune") clears it, same as it would if
+          // the player had typed unmatched free text into a KC/ITEM/
+          // QUEST field and hit Save -- clean_goal in app/mindmaps.py
+          // rejects that the same way either way.
+          if (hidden) {
+            var exact = localPool.filter(function (item) { return item.label.toLowerCase() === q; })[0];
+            hidden.value = exact ? exact.value : '';
+          }
+          var matches = localPool.filter(function (item) { return item.label.toLowerCase().indexOf(q) !== -1; });
+          renderGoalSuggestions(getFloatingSuggestionsEl(), kind, matches);
+          return;
+        }
         var endpoint = GOAL_SEARCH_ENDPOINTS[kind];
         if (!endpoint) return;
         var data = await apiCall(endpoint + '?q=' + encodeURIComponent(query));
@@ -6436,22 +6535,32 @@ def render_mindmaps(player: PlayerView) -> str:
         renderGoalSuggestions(getFloatingSuggestionsEl(), kind, data ? data.results : []);
       }
 
-      // Renders one search field's suggestion dropdown. Item results
-      // are {name, icon, ...} objects (see /api/items/search); NPC and
-      // quest results are plain name strings (see /api/npcs/search,
-      // /api/quests/search) -- both end up as the same shape of row,
-      // just with or without an icon.
-      function renderGoalSuggestions(box, kind, results) {
+      // Normalizes every search kind's raw result shape into one
+      // uniform {value, label, icon} row for renderGoalSuggestions:
+      // item results are {name, icon, ...} objects (/api/items/search);
+      // NPC/quest results are plain name strings (/api/npcs/search,
+      // /api/quests/search); skill/diary results are already
+      // {value, label, icon} (LOCAL_SEARCH_POOLS). value === label for
+      // every kind except skill/diary, where what's typed/shown isn't
+      // what's saved (see renderLocalSearchFieldHtml).
+      function normalizeSearchResults(kind, raw) {
+        if (kind === 'skill' || kind === 'diary') return raw;
+        if (kind === 'item') return raw.map(function (r) { return { value: r.name, label: r.name, icon: r.icon }; });
+        return raw.map(function (name) { return { value: name, label: name, icon: null }; });
+      }
+
+      // Renders one search field's suggestion dropdown.
+      function renderGoalSuggestions(box, kind, rawResults) {
+        var results = normalizeSearchResults(kind, rawResults);
         if (!results.length) {
-          var emptyLabel = kind === 'npc' ? 'No NPCs found' : kind === 'quest' ? 'No quests found' : 'No items found';
+          var emptyLabel = kind === 'npc' ? 'No NPCs found' : kind === 'quest' ? 'No quests found' :
+            kind === 'skill' ? 'No skills found' : kind === 'diary' ? 'No diaries found' : 'No items found';
           box.innerHTML = '<div class="mm-suggestion-empty">' + esc(emptyLabel) + '</div>';
         } else {
           box.innerHTML = results.map(function (r) {
-            var name = kind === 'item' ? r.name : r;
-            var icon = kind === 'item' ? r.icon : null;
-            return '<div class="mm-suggestion" data-value="' + esc(name) + '">' +
-              (icon ? '<img src="' + esc(icon) + '" alt="">' : '') +
-              '<span>' + esc(name) + '</span></div>';
+            return '<div class="mm-suggestion" data-kind="' + esc(kind) + '" data-value="' + esc(r.value) + '" data-label="' + esc(r.label) + '">' +
+              (r.icon ? '<img src="' + esc(r.icon) + '" alt="">' : '') +
+              '<span>' + esc(r.label) + '</span></div>';
           }).join('');
         }
         box.classList.add('show');
@@ -7198,6 +7307,32 @@ def render_mindmaps(player: PlayerView) -> str:
           '</div>';
       }
 
+      // Same idea as renderSearchFieldHtml above, but backed by
+      // LOCAL_SEARCH_POOLS (a fixed, already-in-memory list -- no
+      // server round-trip) AND for a field whose saved value isn't the
+      // same as what the player types/sees, unlike KC/ITEM/QUEST: a
+      // skill's real value is its lowercase key ("runecraft"), not its
+      // title-cased display name ("Runecraft"); a diary's real value is
+      // its area slug ("kourend_kebos"), not its in-game name
+      // ("Kourend & Kebos"). So the visible input here carries no
+      // data-goal-field of its own -- it's pure display/search, tagged
+      // data-goal-field-target instead, pointing at a companion hidden
+      // input right beside it that DOES carry the real
+      // data-goal-field="<fieldName>" (same hidden-input-carries-the-
+      // real-value pattern renderSegmentedToggleHtml already uses for
+      // the metric/tier toggles) -- see hiddenTargetFor/runGoalSearch/
+      // the floating-suggestions click handler for how the two stay in
+      // sync.
+      function renderLocalSearchFieldHtml(fieldName, searchKind, placeholder, currentValue, labelFor) {
+        var displayValue = currentValue ? labelFor(currentValue) : '';
+        return '<div class="mm-search-wrap">' +
+          '<input class="mm-goal-input mm-search-input" type="text" autocomplete="off" ' +
+          'data-goal-field-target="' + fieldName + '" data-search-kind="' + searchKind + '" ' +
+          'placeholder="' + esc(placeholder) + '" maxlength="80" value="' + esc(displayValue) + '">' +
+          '<input type="hidden" data-goal-field="' + fieldName + '" value="' + esc(currentValue || '') + '">' +
+          '</div>';
+      }
+
       // Renders a segmented multi-choice button group backed by a
       // hidden `data-goal-field="<fieldName>"` input carrying whichever
       // option is currently active -- the skill goal's level/experience
@@ -7329,11 +7464,7 @@ def render_mindmaps(player: PlayerView) -> str:
           // by swapping input types on every toggle click.
           fields =
             '<div class="mm-goal-skill-row">' +
-              '<select class="mm-goal-input" data-goal-field="skill">' +
-                SKILL_NAMES.slice().sort().map(function (sk) {
-                  return '<option value="' + sk + '"' + (goal.skill === sk ? ' selected' : '') + '>' + esc(titleCase(sk)) + '</option>';
-                }).join('') +
-              '</select>' +
+              renderLocalSearchFieldHtml('skill', 'skill', 'Search for a skill', goal.skill, titleCase) +
               renderSegmentedToggleHtml('metric', [['level', 'LVL'], ['xp', 'XP']], goal.metric) +
             '</div>' +
             '<div class="mm-goal-target-wrap">' +
@@ -7344,11 +7475,7 @@ def render_mindmaps(player: PlayerView) -> str:
           fields = renderSearchFieldHtml('questName', 'quest', 'Search for a quest or miniquest', goal.questName);
         } else if (type === 'diary') {
           fields =
-            '<select class="mm-goal-input" data-goal-field="area">' +
-              DIARY_AREAS.map(function (a) {
-                return '<option value="' + a + '"' + (goal.area === a ? ' selected' : '') + '>' + esc(DIARY_AREA_LABELS[a]) + '</option>';
-              }).join('') +
-            '</select>' +
+            renderLocalSearchFieldHtml('area', 'diary', 'Search for a diary', goal.area, function (a) { return DIARY_AREA_LABELS[a] || a; }) +
             renderSegmentedToggleHtml('tier', DIARY_TIERS.map(function (t) { return [t, titleCase(t)]; }), goal.tier);
         }
         return '<div class="mm-goal-fields" data-role="goal-fields">' + fields + '</div>';

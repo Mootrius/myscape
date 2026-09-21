@@ -809,19 +809,17 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 }
 /* Overrides myscape.css's own input[type=text/number] sizing (16px
    font, 12px/14px padding -- sized for full-width page forms) down to
-   something that actually fits this compact popover, and adds
-   matching theming for <select>, which myscape.css doesn't style at
-   all anywhere else on the site. */
-.mm-goal-fields input.mm-goal-input,
-.mm-goal-fields select.mm-goal-input {
+   something that actually fits this compact popover. No <select>
+   left to theme any more -- the skill/diary fields' own dropdowns
+   were the last two (see renderLocalSearchFieldHtml/LOCAL_SEARCH_POOLS
+   in the page script), now search boxes like KC/ITEM/QUEST. */
+.mm-goal-fields input.mm-goal-input {
   width: 100%; box-sizing: border-box;
   background: #100e0b; border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--text); font-family: inherit; font-size: 11.5px;
   padding: 7px 8px; height: 30px;
 }
-.mm-goal-fields select.mm-goal-input { cursor: pointer; }
-.mm-goal-fields input.mm-goal-input:focus,
-.mm-goal-fields select.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
+.mm-goal-fields input.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-goal-fields input.mm-goal-input::placeholder { color: var(--text-faint); }
 /* .mm-goal-save-btn itself is sized/laid out by .mm-popover-actions
    above (it now sits there, not inside .mm-goal-fields). */
@@ -908,16 +906,23 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   color: var(--text); cursor: pointer; text-transform: none;
 }
 .mm-suggestion:hover { background: var(--panel-2); }
-/* Bumped from 18px, plus a small translate to recenter -- these are
-   real item icons off RuneLite's own CDN (see renderGoalSuggestions'
-   own comment above: an icon only ever renders here for an item
-   result, never an NPC/quest one), which draw on a fixed canvas with
-   built-in padding down the right side for the in-game stack-count
-   badge -- see .loot-item-box-icon's own comment in loot-tracker.css
-   for the full empirical writeup behind both the size bump and this
-   exact translate. */
+/* Bumped from 18px -- shared base size for every kind's icon (item,
+   diary, skill). */
 .mm-suggestion img {
   width: 20px; height: 20px; object-fit: contain; image-rendering: pixelated; flex: none;
+}
+/* Plus a small translate to recenter, item/diary results only -- both
+   are real item icons off RuneLite's own CDN (a diary's is its
+   elite-tier reward item's icon, see DIARY_AREA_ICON's own comment;
+   an icon never renders for an NPC/quest result), which draw on a
+   fixed canvas with built-in padding down the right side for the
+   in-game stack-count badge -- see .loot-item-box-icon's own comment
+   in loot-tracker.css for the full empirical writeup behind both the
+   size bump above and this exact translate. A skill result's icon is
+   a different, locally-hosted asset (app/static/skill-icons) with no
+   such padding, so it's left at dead center. */
+.mm-suggestion[data-kind="item"] img,
+.mm-suggestion[data-kind="diary"] img {
   transform: translate(5.5%, -1%);
 }
 .mm-suggestion-empty {
@@ -949,12 +954,12 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-segment-btn:hover { color: var(--text); }
 .mm-segment-btn.active { background: var(--panel-2); color: var(--gold); }
 
-/* The skill goal's own row -- the skill <select> and its LVL/XP
+/* The skill goal's own row -- the skill search box and its LVL/XP
    segmented toggle sit side by side here (rather than the toggle
-   stacked on its own full-width line below), the select taking
+   stacked on its own full-width line below), the search box taking
    whatever room the toggle doesn't need. */
 .mm-goal-skill-row { display: flex; flex-direction: row; gap: 6px; width: 100%; align-items: stretch; }
-.mm-goal-skill-row select.mm-goal-input { flex: 1 1 auto; width: auto; min-width: 0; }
+.mm-goal-skill-row .mm-search-wrap { flex: 1 1 auto; width: auto; min-width: 0; }
 .mm-goal-skill-row .mm-segment-group { flex: 0 0 auto; width: auto; }
 .mm-goal-skill-row .mm-segment-btn { flex: 0 0 auto; padding: 7px 10px; }
 
