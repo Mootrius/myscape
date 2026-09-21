@@ -209,11 +209,13 @@
 .gt-wizard-row .gt-field-target { flex: 0 0 118px; min-width: 0; }
 .gt-wizard-row .gt-field-metric { flex: 0 0 108px; min-width: 0; }
 
-/* The little "must be between X and Y" line under the field row --
-   same shape as Mindmaps' own .mm-field-error (mindmaps.css),
-   hidden until JS adds .show (see validateTargetField). */
-.gt-field-error { display: none; font-size: 10.5px; color: var(--red); line-height: 1.3; }
-.gt-field-error.show { display: block; margin-top: 6px; }
+/* Site-wide standard: a missing/out-of-range field just gets a red
+   border, no message anywhere (see validateTargetField/
+   validateRecurField and the search-input .invalid toggles in the
+   script). The actual rule lives at the bottom of this file, after
+   every other rule that sets one of these fields' border-color, so
+   it wins on source order without needing a higher-specificity
+   selector for each of them individually. */
 
 /* Back/Cancel/Save (or Next) -- Back and Cancel share the same plain
    secondary look as every other page's own .btn-secondary
@@ -537,6 +539,17 @@ input.gt-recur-interval-input { width: 140px; height: 34px; padding: 0 12px; ali
 
 .gt-goal-delete--confirm .gt-goal-delete-icon { display: none; }
 .gt-goal-delete--confirm .gt-goal-delete-confirm { display: block; }
+
+/* The one rule behind the comment up in .gt-field-error's old spot --
+   covers #gtWizardSearchInput (.gt-field/.gt-search-box), #gtTargetValue
+   (.gt-field), and #gtRecurInterval (.gt-recur-interval-input) all at
+   once, since they're all plain <input type="text">. Specificity
+   (0,2,1) ties every one of those fields' own width/padding rules
+   above (also (0,2,1), or (0,1,1) for .gt-recur-interval-input, which
+   this beats outright) -- placed last in the file so it wins any tie
+   on source order instead of needing a bespoke higher-specificity
+   selector per field. */
+input[type="text"].invalid { border-color: var(--red); }
 
 @media (max-width: 720px) {
   /* Fields and stage 1's type cards stay in a row even here -- a

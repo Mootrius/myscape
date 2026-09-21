@@ -118,6 +118,12 @@
   display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 18px;
 }
 .pg-setup-form input[type="text"] { flex: 1 1 280px; max-width: 360px; }
+/* Site-wide standard: a required-field miss (e.g. saving with no name
+   typed) is shown as a red border only, never a popup or inline message.
+   Needs the .pg-setup-form ancestor + [type="text"] compound to outrank
+   this file's own rule above (and myscape.css's shared input[type="text"]
+   rule) on specificity, same trick used for .invalid elsewhere on the site. */
+.pg-setup-form input[type="text"].invalid { border-color: var(--red); }
 /* button.primary (myscape.css) defaults to width: 100% for full-width
    auth-form submit buttons -- wrong here, where it sits beside an input
    and a Cancel button in one row rather than stacked alone, and at 100%

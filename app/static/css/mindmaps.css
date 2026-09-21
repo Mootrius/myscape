@@ -85,6 +85,13 @@
    stylesheet reason as .mm-menu above. */
 .mm-name-form { display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 14px; }
 .mm-name-form input[type="text"] { flex: 1 1 280px; max-width: 360px; }
+/* Site-wide standard: a required-field miss (saving with no name
+   typed) is a red border only, never a popup or inline message. The
+   .mm-name-form ancestor + [type="text"] compound outranks this
+   file's own rule above (and myscape.css's shared input[type="text"]
+   rule) on specificity -- same trick as .pg-setup-form's own .invalid
+   rule (purchase-goals.css). */
+.mm-name-form input[type="text"].invalid { border-color: var(--red); }
 button.primary#mmNameSave, .mm-name-form-save {
   width: auto; flex: 0 0 auto;
   padding: 0 22px; height: 32px; margin-top: 0;
@@ -834,6 +841,16 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 }
 .mm-goal-fields input.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-goal-fields input.mm-goal-input::placeholder { color: var(--text-faint); }
+/* Site-wide standard: a missing/out-of-range field is a red border
+   only, no message anywhere -- see validateGoalFieldsForSave,
+   validateSkillTarget and validateNodeText in the page script, which
+   are what actually toggle this. One rule at this ancestor covers
+   every field in the popover (plain targets, the KC/ITEM/QUEST search
+   boxes, the skill/area local-search boxes, the manual node's own
+   name field, and the kc goal's optional sinceDate below) since
+   they're all a plain <input class="mm-goal-input">, however deeply
+   nested under .mm-goal-fields their own wrapper div sits them. */
+.mm-goal-fields input.mm-goal-input.invalid { border-color: var(--red); }
 /* .mm-goal-save-btn itself is sized/laid out by .mm-popover-actions
    above (it now sits there, not inside .mm-goal-fields). */
 
@@ -994,11 +1011,11 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
    "Start"/"End"-style label can't. color-scheme: dark asks the
    browser to draw the input's own text-selection/caret UI in its dark
    variant, same reason .loot-range-custom-field's own input rule sets
-   it; .invalid is the same red-border flag that page's fields get on
-   an unparseable date. */
+   it; an unparseable date gets the same .mm-goal-fields input.mm-
+   goal-input.invalid red border every other field in this popover
+   does (see that rule, above). */
 .mm-goal-date-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; }
 .mm-goal-date-wrap input.mm-goal-input { color-scheme: dark; }
-.mm-goal-date-wrap input.mm-goal-input.invalid { border-color: var(--red); }
 .mm-goal-hint { font-size: 10.5px; color: var(--text-faint); line-height: 1.3; }
 
 /* ---- Note field (renderNoteFieldHtml) --------------------------------

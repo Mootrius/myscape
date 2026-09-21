@@ -2994,16 +2994,28 @@ def render_purchase_goals(player: PlayerView) -> str:
         var input = document.getElementById('pgNameInput');
         form.style.display = 'flex';
         input.value = initialValue || '';
+        input.classList.remove('invalid');
         input.focus();
       }
 
+      // Site-wide standard: a required-field miss just gets a red border
+      // on the field itself, no popup/inline text anywhere -- clear it
+      // as soon as the person starts typing so it never lingers past the
+      // moment it's fixed.
+      document.getElementById('pgNameInput').addEventListener('input', function () {
+        this.classList.remove('invalid');
+      });
+
       document.getElementById('pgNameCancel').addEventListener('click', function () {
         document.getElementById('pgNameForm').style.display = 'none';
+        document.getElementById('pgNameInput').classList.remove('invalid');
         PG.nameFormMode = null;
       });
       document.getElementById('pgNameSave').addEventListener('click', async function () {
-        var name = (document.getElementById('pgNameInput').value || '').trim();
-        if (!name) { showError('A setup name is required.'); return; }
+        var nameInput = document.getElementById('pgNameInput');
+        var name = (nameInput.value || '').trim();
+        if (!name) { nameInput.classList.add('invalid'); return; }
+        nameInput.classList.remove('invalid');
         var mode = PG.nameFormMode;
         document.getElementById('pgNameForm').style.display = 'none';
         PG.nameFormMode = null;
@@ -4819,6 +4831,15 @@ def render_mindmaps(player: PlayerView) -> str:
       // would immediately show as out of range.
       var MIN_SKILL_LEVEL = 1, MAX_SKILL_LEVEL = 126;
       var MIN_SKILL_XP = 0, MAX_SKILL_XP = 200000000;
+      // Mirrors MAX_KC_TARGET/MAX_ITEM_QTY_TARGET/MAX_GP_TARGET in
+      // app/mindmaps.py -- used only for this popover's own client-side
+      // required/range check before a save request is even sent (see
+      // validateGoalFieldsForSave below); the server re-validates
+      // against its own copies regardless. All three share the same
+      // min of 1 as their server-side counterparts.
+      var MAX_KC_TARGET = 1000000;
+      var MAX_ITEM_QTY_TARGET = 2000000000;
+      var MAX_GP_TARGET = 100000000000;
       // The OSRS xp-per-level curve (levels 1-126, including the
       // "virtual" levels above the real level-99 cap -- see
       // https://oldschool.runescape.wiki/w/Experience for the formula
@@ -6073,26 +6094,21 @@ def render_mindmaps(player: PlayerView) -> str:
           // be saved -- unlike every other type, it has no goal
           // criteria of its own to fall back on, so a blank one is
           // just an empty box with a checkbox next to it, not a real
-          // goal -- so a blank attempt is refused outright (same
-          // "Must be between..." red line under the field the skill
-          // target uses, just for this instead -- see
-          // validateNodeText's own comment for why this is the only
-          // place that ever shows it) rather than silently doing
-          // anything with it. Unchanged from what's already saved
-          // still just closes the popover without a request, same
-          // "nothing worth sending" guard commitNodeTextFromLabel used
-          // to apply for the old inline-editable version of this same
-          // rename.
+          // goal -- so a blank attempt is refused outright (a plain
+          // red border on the field, same site-wide standard as every
+          // other required field -- see validateNodeText's own comment
+          // for the live-typing side of this) rather than silently
+          // doing anything with it. Unchanged from what's already
+          // saved still just closes the popover without a request,
+          // same "nothing worth sending" guard commitNodeTextFromLabel
+          // used to apply for the old inline-editable version of this
+          // same rename.
           var nodeForSave = selectedNode();
           if (nodeForSave && GOAL_TYPE_BY_COLOR[nodeForSave.color] === 'manual') {
             var textInput = fieldsWrap.querySelector('[data-role="node-text-input"]');
             var textVal = textInput ? textInput.value.trim() : '';
             if (!textVal) {
-              var textErrEl = textInput && textInput.parentElement && textInput.parentElement.querySelector('[data-role="node-text-error"]');
-              if (textErrEl) {
-                textErrEl.textContent = 'Type something.';
-                textErrEl.classList.add('show');
-              }
+              if (textInput) textInput.classList.add('invalid');
               return;
             }
             var noteChangedForManual = noteValForSave !== (nodeForSave.note || '');
@@ -6127,6 +6143,15 @@ def render_mindmaps(player: PlayerView) -> str:
               return;
             }
           }
+          // Every other required/range rule this goal type's fields
+          // need (see validateGoalFieldsForSave and the two tables
+          // above it) -- checked client-side, on the spot, before ever
+          // building a request, so an incomplete goal never round-trips
+          // to the server just to bounce back as a showGoalSaveError
+          // message (still there afterward as a fallback for anything
+          // this doesn't catch).
+          var typeForSave = GOAL_TYPE_BY_COLOR[nodeForSave.color];
+          if (!validateGoalFieldsForSave(fieldsWrap, typeForSave)) return;
           var goal = {};
           fieldsWrap.querySelectorAll('[data-goal-field]').forEach(function (input) {
             var val = (input.value || '').trim();
@@ -6202,6 +6227,17 @@ def render_mindmaps(player: PlayerView) -> str:
         // just for the trackable-type one instead (see
         // showGoalSaveError/saveNodeGoal).
         if (e.target.closest('[data-role="goal-fields"]')) showGoalSaveError(null);
+        // Site-wide standard: clear a field's own red border the
+        // moment there's something worth trying again in it, on every
+        // keystroke -- same idea as showGoalSaveError(null) just
+        // above, just per-field instead of for the whole popover.
+        // Covers every plain/search field (data-goal-field) and a
+        // local-search field's own visible input (data-goal-field-
+        // target, e.g. skill/area -- see renderLocalSearchFieldHtml)
+        // in one place, since validateGoalFieldsForSave is what
+        // actually adds .invalid to any of them.
+        var goalFieldInput = e.target.closest('[data-goal-field], [data-goal-field-target]');
+        if (goalFieldInput) goalFieldInput.classList.remove('invalid');
         var searchInput = e.target.closest('.mm-search-input');
         if (searchInput) {
           clearTimeout(searchDebounceTimers.get(searchInput));
@@ -6443,6 +6479,7 @@ def render_mindmaps(player: PlayerView) -> str:
             // hidden field and that's what actually gets the real
             // value; this visible input only ever shows the label.
             activeSearchInput.value = (label != null) ? label : value;
+            activeSearchInput.classList.remove('invalid');
             var hidden = hiddenTargetFor(activeSearchInput);
             if (hidden) hidden.value = value;
             hideFloatingSuggestions();
@@ -6589,23 +6626,22 @@ def render_mindmaps(player: PlayerView) -> str:
       // Live, as-you-type range check for the skill goal's target
       // field -- mirrors MIN_SKILL_LEVEL/MAX_SKILL_LEVEL/MIN_SKILL_XP/
       // MAX_SKILL_XP exactly (the server re-validates against its own
-      // copy of these regardless -- see clean_goal in
-      // app/mindmaps.py). Writes straight into the little error line
-      // right under the field (see the .mm-goal-target-wrap markup in
-      // renderGoalFieldsHtml) rather than the page's global error
-      // banner, and clears itself the instant the value's back in
-      // range -- called on every keystroke in the field itself, and
-      // again whenever the level/experience toggle changes (see the
-      // segmented-toggle click delegation above), since the valid
-      // range depends on which one's picked.
-      function validateSkillTarget(input) {
-        var errEl = input.parentElement && input.parentElement.querySelector('[data-role="target-error"]');
-        if (!errEl) return;
+      // copy of these regardless -- see clean_goal in app/mindmaps.py).
+      //
+      // Site-wide standard: invalid is a red border on the field
+      // itself, nothing else. Same showEmptyAsInvalid split as Goal
+      // Tracking's validateTargetField (goal-tracking.css's own copy
+      // of this same idea) -- quiet while the field's simply not been
+      // typed into yet (every live call below, and the metric-toggle
+      // switch handler, both omit it), red the moment Save is clicked
+      // on an empty one (validateGoalFieldsForSave passes true).
+      // Returns whether the field is currently valid either way.
+      function validateSkillTarget(input, showEmptyAsInvalid) {
         var fieldsWrap = input.closest('[data-role="goal-fields"]');
         var metricHidden = fieldsWrap && fieldsWrap.querySelector('[data-goal-field="metric"]');
         var metric = (metricHidden && metricHidden.value === 'xp') ? 'xp' : 'level';
         var raw = input.value.trim();
-        if (raw === '') { errEl.textContent = ''; errEl.classList.remove('show'); return; }
+        if (raw === '') { input.classList.toggle('invalid', !!showEmptyAsInvalid); return false; }
         // Resolved through parseMoneySuffix either way -- both to
         // strip a thousands-separator comma (filterNumericSuffixInput
         // lets a player type one into this field regardless of metric)
@@ -6620,30 +6656,97 @@ def render_mindmaps(player: PlayerView) -> str:
         var n = Number(parseMoneySuffix(raw));
         var min = metric === 'xp' ? MIN_SKILL_XP : MIN_SKILL_LEVEL;
         var max = metric === 'xp' ? MAX_SKILL_XP : MAX_SKILL_LEVEL;
-        if (!Number.isInteger(n) || n < min || n > max) {
-          errEl.textContent = 'Must be between ' + fmtNum(min) + ' and ' + fmtNum(max) + '.';
-          errEl.classList.add('show');
-        } else {
-          errEl.textContent = '';
-          errEl.classList.remove('show');
-        }
+        var ok = Number.isInteger(n) && n >= min && n <= max;
+        input.classList.toggle('invalid', !ok);
+        return ok;
       }
 
-      // Live "clear the error as you type" companion to the goal-save
-      // click delegation's own blank-text check below -- THAT is what
-      // actually shows this error, only once the player attempts a
-      // Save with nothing typed (not the instant a fresh popover opens
-      // empty -- nobody's tried to save anything wrong yet at that
-      // point, so nothing to flag). This just hides it again the
+      // Live "clear the red border as you type" companion to the
+      // goal-save click delegation's own blank-text check below --
+      // THAT is what actually flags it, only once the player attempts
+      // a Save with nothing typed (not the instant a fresh popover
+      // opens empty -- nobody's tried to save anything wrong yet at
+      // that point, so nothing to flag). This just clears it again the
       // moment there's something in the box worth saving, on every
       // keystroke, same trigger as validateSkillTarget above.
       function validateNodeText(input) {
-        var errEl = input.parentElement && input.parentElement.querySelector('[data-role="node-text-error"]');
-        if (!errEl) return;
-        if (input.value.trim() !== '') {
-          errEl.textContent = '';
-          errEl.classList.remove('show');
+        if (input.value.trim() !== '') input.classList.remove('invalid');
+      }
+
+      // Client-side mirror of clean_goal's own per-type required-field
+      // list (app/mindmaps.py) -- metric/tier are deliberately absent
+      // from every list below, since renderSegmentedToggleHtml always
+      // defaults to its first option, so those two fields are
+      // structurally never missing the way a text/search field can be.
+      // activityType (kc) is likewise absent -- it's a hidden field
+      // that's always "npc" now (see renderGoalFieldsHtml's kc
+      // branch), never actually empty either.
+      var REQUIRED_GOAL_FIELDS = {
+        kc: ['sourceName'],
+        item: ['itemName'],
+        gp: [],
+        skill: ['skill'],
+        quest: ['questName'],
+        diary: ['area'],
+      };
+      // Mirrors clean_goal's own numeric-target bounds (app/mindmaps.py)
+      // for every goal type EXCEPT skill, whose target bounds depend on
+      // the level/xp toggle and are already handled by
+      // validateSkillTarget above.
+      var NUMERIC_TARGET_FIELD = {
+        kc: { field: 'targetCount', min: 1, max: MAX_KC_TARGET },
+        item: { field: 'targetQty', min: 1, max: MAX_ITEM_QTY_TARGET },
+        gp: { field: 'targetGp', min: 1, max: MAX_GP_TARGET },
+      };
+
+      // Finds the element a red border actually belongs on for a given
+      // data-goal-field name -- the field itself for a plain or
+      // search field, or its visible companion
+      // (data-goal-field-target) for a local-search field like
+      // skill/area, whose own [data-goal-field] element is a hidden
+      // input the player never sees (see renderLocalSearchFieldHtml).
+      function visibleGoalFieldEl(fieldsWrap, name) {
+        return fieldsWrap.querySelector('[data-goal-field-target="' + name + '"]') ||
+          fieldsWrap.querySelector('[data-goal-field="' + name + '"]');
+      }
+
+      // Client-side mirror of clean_goal's required+range checks (see
+      // the two tables above), run right before the Save button's own
+      // [data-goal-field] collection loop in the goal-save click
+      // delegation -- catches a missing or out-of-range field with a
+      // plain red border on the spot, rather than letting an
+      // incomplete goal round-trip to the server just to bounce back
+      // as a popover-level showGoalSaveError message (still there as a
+      // fallback for anything this misses, e.g. a genuinely unexpected
+      // server rejection). Toggles .invalid on each field's own
+      // visible element along the way -- on for anything missing or
+      // out of range, off for anything that's fine -- and returns
+      // whether every field this goal type needs is currently valid.
+      function validateGoalFieldsForSave(fieldsWrap, type) {
+        var ok = true;
+        (REQUIRED_GOAL_FIELDS[type] || []).forEach(function (name) {
+          var visible = visibleGoalFieldEl(fieldsWrap, name);
+          var real = fieldsWrap.querySelector('[data-goal-field="' + name + '"]');
+          var filled = real && real.value.trim() !== '';
+          if (visible) visible.classList.toggle('invalid', !filled);
+          if (!filled) ok = false;
+        });
+        var numericSpec = NUMERIC_TARGET_FIELD[type];
+        if (numericSpec) {
+          var input = fieldsWrap.querySelector('[data-goal-field="' + numericSpec.field + '"]');
+          if (input) {
+            var raw = input.value.trim();
+            var n = Number(parseMoneySuffix(raw));
+            var fieldOk = raw !== '' && Number.isInteger(n) && n >= numericSpec.min && n <= numericSpec.max;
+            input.classList.toggle('invalid', !fieldOk);
+            if (!fieldOk) ok = false;
+          }
         }
+        if (type === 'skill') {
+          var targetInput = fieldsWrap.querySelector('[data-goal-field="target"]');
+          if (targetInput && !validateSkillTarget(targetInput, true)) ok = false;
+        }
+        return ok;
       }
 
       // Shows (or, with a falsy msg, clears) a trackable node's own
@@ -7402,7 +7505,6 @@ def render_mindmaps(player: PlayerView) -> str:
           return '<div class="mm-goal-fields" data-role="goal-fields">' +
             '<div class="mm-goal-target-wrap">' +
               '<input class="mm-goal-input" type="text" data-role="node-text-input" placeholder="Type something" maxlength="120" value="' + esc(node.text || '') + '">' +
-              '<div class="mm-field-error" data-role="node-text-error"></div>' +
             '</div>' +
             '</div>';
         }
@@ -7485,7 +7587,6 @@ def render_mindmaps(player: PlayerView) -> str:
             '</div>' +
             '<div class="mm-goal-target-wrap">' +
               '<input class="mm-goal-input" type="text" inputmode="decimal" data-goal-field="target" placeholder="' + esc(targetPlaceholder) + '" value="' + esc(goal.target != null ? goal.target : '') + '">' +
-              '<div class="mm-field-error" data-role="target-error"></div>' +
             '</div>';
         } else if (type === 'quest') {
           fields = renderSearchFieldHtml('questName', 'quest', 'Search for a quest or miniquest', goal.questName);
@@ -7631,16 +7732,27 @@ def render_mindmaps(player: PlayerView) -> str:
         var input = document.getElementById('mmNameInput');
         form.style.display = 'flex';
         input.value = initialValue || '';
+        input.classList.remove('invalid');
         input.focus();
       }
       document.getElementById('mmCreateFirstBtn').addEventListener('click', function () { openNameForm('new', ''); });
+      // Site-wide standard: a required-field miss just gets a red border
+      // on the field, no popup/inline text -- cleared as soon as the
+      // person starts typing so it never lingers past the moment it's
+      // fixed.
+      document.getElementById('mmNameInput').addEventListener('input', function () {
+        this.classList.remove('invalid');
+      });
       document.getElementById('mmNameCancel').addEventListener('click', function () {
         document.getElementById('mmNameForm').style.display = 'none';
+        document.getElementById('mmNameInput').classList.remove('invalid');
         MM.nameFormMode = null;
       });
       document.getElementById('mmNameSave').addEventListener('click', async function () {
-        var name = (document.getElementById('mmNameInput').value || '').trim();
-        if (!name) { showError('A mindmap name is required.'); return; }
+        var nameInput = document.getElementById('mmNameInput');
+        var name = (nameInput.value || '').trim();
+        if (!name) { nameInput.classList.add('invalid'); return; }
+        nameInput.classList.remove('invalid');
         var mode = MM.nameFormMode;
         document.getElementById('mmNameForm').style.display = 'none';
         MM.nameFormMode = null;
@@ -10040,7 +10152,6 @@ def render_goal_tracking(player: PlayerView) -> str:
           '      <input type="text" inputmode="decimal" id="gtTargetValue" placeholder="' + wizardTargetPlaceholder() + '" autocomplete="off" />' +
           '    </div>' +
           '  </div>' +
-          '  <div class="gt-field-error" id="gtTargetError"></div>' +
           '  <div class="gt-wizard-actions">' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
@@ -10080,10 +10191,10 @@ def render_goal_tracking(player: PlayerView) -> str:
       // rather than a third near-identical class) as stages 2/3, with
       // the interval field + unit toggle grouped as one block up top
       // (see .gt-wizard-recur-fields in goal-tracking.css) so
-      // space-between still only ever splits leftover room into the
-      // same "content block, error line, actions row" three-way split
-      // stage 3 already uses -- not a fourth top-level child that
-      // would spread everything out further than intended.
+      // space-between still only ever splits leftover room between the
+      // same "content block, actions row" two children stage 3 already
+      // uses -- not a third top-level child that would spread things
+      // out further than intended.
       function wizardStageCadenceHtml() {
         var unitButtons = RECUR_UNIT_OPTIONS.map(function (o) {
           return '<button type="button" class="gt-recur-unit-btn' + (o.unit === GT.recurUnit ? ' active' : '') + '" data-unit="' + o.unit + '">' + o.label + '</button>';
@@ -10094,7 +10205,6 @@ def render_goal_tracking(player: PlayerView) -> str:
           '    <input type="text" inputmode="numeric" class="gt-recur-interval-input" id="gtRecurInterval" placeholder="' + recurIntervalPlaceholder() + '" autocomplete="off" maxlength="4" value="' + escapeHtml(GT.recurInterval || '') + '" />' +
           '    <div class="gt-recur-unit-toggle" id="gtRecurUnitToggle">' + unitButtons + '</div>' +
           '  </div>' +
-          '  <div class="gt-field-error" id="gtRecurError"></div>' +
           '  <div class="gt-wizard-actions">' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
@@ -10172,6 +10282,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           if (!row) return;
           var label = row.getAttribute('data-label');
           searchInput.value = label;
+          searchInput.classList.remove('invalid');
           wizardTarget.name = row.getAttribute('data-raw');
           var itemId = row.getAttribute('data-item-id');
           wizardTarget.itemId = (GT.type === 'item' && itemId) ? parseInt(itemId, 10) : null;
@@ -10181,6 +10292,7 @@ def render_goal_tracking(player: PlayerView) -> str:
 
         if (GT.type === 'item') {
           searchInput.addEventListener('input', debounce(async function () {
+            searchInput.classList.remove('invalid');
             wizardTarget.name = searchInput.value.trim();
             wizardTarget.itemId = null;
             var q = wizardTarget.name;
@@ -10194,6 +10306,7 @@ def render_goal_tracking(player: PlayerView) -> str:
             ? function (raw) { return '/static/boss-icons/' + BOSS_SLUG_BY_NAME[raw] + '.png'; }
             : function (raw) { return '/static/skill-icons/' + raw + '.png'; };
           searchInput.addEventListener('input', debounce(function () {
+            searchInput.classList.remove('invalid');
             wizardTarget.name = searchInput.value.trim();
             var q = wizardTarget.name.toLowerCase();
             var matches = !q ? [] : pool.filter(function (raw) {
@@ -10252,10 +10365,10 @@ def render_goal_tracking(player: PlayerView) -> str:
         // own Save/Next label switch just above.
         document.getElementById('gtWizardSave').addEventListener('click', function () {
           var targetName = wizardTarget.name.trim();
-          if (!targetName) { showError('Pick a target first.'); return; }
-          if (!validateTargetField()) { showError('Enter a valid target value.'); return; }
+          searchInput.classList.toggle('invalid', !targetName);
+          var valueOk = validateTargetField(true);
+          if (!targetName || !valueOk) return;
           wizardTarget.value = Number(parseMoneySuffix(document.getElementById('gtTargetValue').value.trim()));
-          showError(null);
           if (GT.recurring === 'recurring') {
             GT.wizardStage = 4;
             renderWizard();
@@ -10304,24 +10417,19 @@ def render_goal_tracking(player: PlayerView) -> str:
         document.getElementById('gtWizardSave').addEventListener('click', wizardAddGoal);
       }
 
-      // Same shape as validateTargetField below, just against the
+      // Same shape as validateTargetField above, just against the
       // cadence field's own 1..MAX_RECUR_INTERVAL range instead of a
-      // goal-type-dependent one.
-      function validateRecurField() {
+      // goal-type-dependent one, and the same showEmptyAsInvalid
+      // quiet-while-typing/loud-at-save split.
+      function validateRecurField(showEmptyAsInvalid) {
         var input = document.getElementById('gtRecurInterval');
-        var errEl = document.getElementById('gtRecurError');
-        if (!input || !errEl) return false;
+        if (!input) return false;
         var raw = input.value.trim();
-        if (raw === '') { errEl.textContent = ''; errEl.classList.remove('show'); return false; }
+        if (raw === '') { input.classList.toggle('invalid', !!showEmptyAsInvalid); return false; }
         var n = Number(raw);
-        if (!Number.isInteger(n) || n < 1 || n > MAX_RECUR_INTERVAL) {
-          errEl.textContent = 'Must be between 1 and ' + fmtNum(MAX_RECUR_INTERVAL) + '.';
-          errEl.classList.add('show');
-          return false;
-        }
-        errEl.textContent = '';
-        errEl.classList.remove('show');
-        return true;
+        var ok = Number.isInteger(n) && n >= 1 && n <= MAX_RECUR_INTERVAL;
+        input.classList.toggle('invalid', !ok);
+        return ok;
       }
 
       function currentTargetBounds() {
@@ -10340,26 +10448,28 @@ def render_goal_tracking(player: PlayerView) -> str:
       // against its own copy of these bounds regardless). Resolves
       // through parseMoneySuffix first so a still-being-typed "150k"
       // doesn't flash an out-of-range error before it's finished.
-      // Writes into the small error line under the field
-      // (#gtTargetError) and returns whether the field is currently
-      // valid, so wizardAddGoal can reuse it as its own save-time
-      // check rather than duplicating the range logic.
-      function validateTargetField() {
+      //
+      // Site-wide standard: invalid just means a red border on the
+      // field, no message anywhere. An empty field is a special case --
+      // while the person is still typing (live 'input' calls, below)
+      // it should stay neutral rather than flash red the instant the
+      // box is cleared, but Save clicking through an empty field should
+      // still show something's wrong. showEmptyAsInvalid (defaulted off
+      // for the live-typing call sites) is what tells the two cases
+      // apart; the Save handler below is the one call site that passes
+      // true. Returns whether the field is currently valid either way,
+      // so wizardAddGoal/the Save handler can reuse it as their own
+      // save-time check rather than duplicating the range logic.
+      function validateTargetField(showEmptyAsInvalid) {
         var input = document.getElementById('gtTargetValue');
-        var errEl = document.getElementById('gtTargetError');
-        if (!input || !errEl) return false;
+        if (!input) return false;
         var raw = input.value.trim();
-        if (raw === '') { errEl.textContent = ''; errEl.classList.remove('show'); return false; }
+        if (raw === '') { input.classList.toggle('invalid', !!showEmptyAsInvalid); return false; }
         var n = Number(parseMoneySuffix(raw));
         var bounds = currentTargetBounds();
-        if (!Number.isInteger(n) || n < bounds.min || n > bounds.max) {
-          errEl.textContent = 'Must be between ' + fmtNum(bounds.min) + ' and ' + fmtNum(bounds.max) + '.';
-          errEl.classList.add('show');
-          return false;
-        }
-        errEl.textContent = '';
-        errEl.classList.remove('show');
-        return true;
+        var ok = Number.isInteger(n) && n >= bounds.min && n <= bounds.max;
+        input.classList.toggle('invalid', !ok);
+        return ok;
       }
 
       // The name/target-value fields validated and captured back on
@@ -10374,7 +10484,7 @@ def render_goal_tracking(player: PlayerView) -> str:
         if (GT.type === 'skill') { payload.metric = GT.skillMetric; }
         if (GT.type === 'item' && wizardTarget.itemId) { payload.item_id = wizardTarget.itemId; }
         if (GT.recurring === 'recurring') {
-          if (!validateRecurField()) { showError('Enter a valid recurrence interval.'); return; }
+          if (!validateRecurField(true)) return;
           payload.is_recurring = true;
           payload.recur_interval = Number(document.getElementById('gtRecurInterval').value.trim());
           payload.recur_unit = GT.recurUnit;
