@@ -189,15 +189,18 @@ class GameAccount(Base):
     # (see app/hiscores.py) -- {<boss name, matching
     # app.bosses.HISCORE_BOSSES>: <kill count>}. Unlike skills/
     # completed_quests/diary_tiers above, the plugin never writes this
-    # -- it's populated by the website's own POST
-    # /api/players/me/hiscores/sync (Goal Tracking's "Sync from
-    # Hiscores" button), which is why it lives here as its own
-    # website-owned snapshot rather than folded into a plugin-synced
-    # column. Every boss the hiscores currently track is a key once
-    # synced at least once (0 for "never killed it", not omitted --
-    # see _parse_boss_kill_counts in app/hiscores.py), so an empty dict
+    # -- it's populated by a server-side sync that runs automatically
+    # whenever Goal Tracking is loaded (see goal_tracking_page in
+    # app/main.py), which is why it lives here as its own website-owned
+    # snapshot rather than folded into a plugin-synced column. Every
+    # boss the hiscores currently track is a key once synced at least
+    # once (0 for "never killed it", not omitted -- see
+    # _parse_boss_kill_counts in app/hiscores.py), so an empty dict
     # unambiguously means "never synced" rather than "synced, ranked
-    # for nothing".
+    # for nothing". This is the raw hiscores baseline, not what the
+    # page actually displays -- see display_boss_kill_counts in
+    # app/hiscores.py, which tops it up with anything the Loot Tracker
+    # has caught since hiscores_synced_at below.
     boss_kill_counts = Column(JSONB, nullable=False, default=dict)
     # Which hiscores game-mode endpoint actually resolved this account
     # (one of app.hiscores.GAMEMODES' first elements) -- cached after

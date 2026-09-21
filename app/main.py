@@ -35,6 +35,7 @@ from app.auth import (
     get_current_game_account_from_api_key,
     get_current_verified_game_account_from_session,
     get_optional_current_account_from_session,
+    get_optional_current_game_account_from_session,
     get_optional_current_player_view_from_session,
 )
 from app import hiscores as sync_hiscores_module
@@ -56,6 +57,7 @@ from app.mindmaps import (
     update_node,
 )
 from app.models import (
+    Account,
     BankItem,
     BoatCargoItem,
     EquipmentItem,
@@ -80,6 +82,7 @@ from app.models import (
 from app.pages import (
     _SITE_URL,
     PlayerView,
+    build_player_view,
     render_account,
     render_dashboard,
     render_forgot_password,
@@ -1385,14 +1388,16 @@ def sync_hiscores(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Goal Tracking's "Sync from Hiscores" button (render_goal_tracking,
-    app/pages.py) -- session-authenticated, unlike every POST /api/
-    players/me/* endpoint around it: this one is triggered by the
-    website itself clicking a button, never the plugin, since boss kill
-    counts come from the official OSRS Hiscores rather than anything
-    RuneLite reports. See app/hiscores.py for the actual fetch, its
-    rate-limit posture, and why a fetch failure doesn't necessarily
-    become an error response here (a prior snapshot is served instead)."""
+    """A manual resync, kept around for direct API use even though
+    Goal Tracking itself no longer calls this -- that page re-syncs
+    automatically, server-side, on every visit instead (see
+    goal_tracking_page above). Session-authenticated, unlike every
+    POST /api/players/me/* endpoint around it, since boss kill counts
+    come from the official OSRS Hiscores rather than anything RuneLite
+    itself reports -- there's nothing for the plugin to push here. See
+    app/hiscores.py for the actual fetch, its rate-limit posture, and
+    why a fetch failure doesn't necessarily become an error response
+    here (a prior snapshot is served instead)."""
     try:
         result = sync_hiscores_module.sync_hiscores(db, game_account)
     except sync_hiscores_module.NotLinkedError as exc:
@@ -1570,12 +1575,39 @@ def possessions_page(player: Optional[PlayerView] = Depends(get_optional_current
 
 
 @app.get("/dashboard/goal-tracking", response_class=HTMLResponse)
-def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
-    if not player:
+def goal_tracking_page(
+    db: Session = Depends(get_db),
+    account: Optional[Account] = Depends(get_optional_current_account_from_session),
+    game_account: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
+):
+    """No "Sync from Hiscores" button any more -- every real visit to
+    this page is itself the sync trigger, right here, before the page
+    ever renders (see sync_hiscores's own rate-limit posture in
+    app/hiscores.py for why re-syncing on every single page load is
+    safe rather than spammy: most visits inside the account's own
+    refresh window cost zero network calls). A failure here (never
+    linked, or a genuine hiscores fetch failure) is swallowed rather
+    than surfaced -- see sync_hiscores's own docstring for why this
+    never turns an already-working page into an error page, same as
+    the button it replaced used to guarantee. display_boss_kill_counts
+    then tops that snapshot up with anything the Loot Tracker has
+    caught since, so the KC column is never more than a few seconds
+    stale even though the hiscores themselves were possibly asked
+    long ago."""
+    if not account:
         return RedirectResponse("/login", status_code=302)
-    if not player.email_verified_at:
+    if not account.email_verified_at:
         return RedirectResponse("/verify-email-required", status_code=302)
-    return render_goal_tracking(player)
+    if game_account is not None:
+        try:
+            sync_hiscores_module.sync_hiscores(db, game_account)
+        except sync_hiscores_module.HiscoresSyncError:
+            pass
+    boss_kill_counts = (
+        sync_hiscores_module.display_boss_kill_counts(db, game_account) if game_account is not None else {}
+    )
+    player = build_player_view(account, game_account)
+    return render_goal_tracking(player, boss_kill_counts)
 
 
 @app.get("/api/possessions/search-items", response_model=ItemSearchResponse)

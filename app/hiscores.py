@@ -1,7 +1,17 @@
 """Boss kill counts from the official OSRS Hiscores -- the plumbing
-behind Goal Tracking's "Sync from Hiscores" button (POST
-/api/players/me/hiscores/sync in app/main.py, render_goal_tracking in
-app/pages.py).
+behind Goal Tracking's KC column (render_goal_tracking in
+app/pages.py). Synced automatically, server-side, whenever that page
+is loaded (see goal_tracking_page in app/main.py) -- no button, no
+client-side fetch; the page just always shows the freshest numbers
+this module's own rate-limit posture below allows. POST
+/api/players/me/hiscores/sync still exists for a manual/API-triggered
+resync, but the page itself no longer depends on it.
+
+display_boss_kill_counts below is the other half of the picture: what
+the page actually displays is this snapshot topped up with whatever
+the Loot Tracker has caught since it was taken, so a boss killed 30
+seconds ago shows up immediately even though the hiscores themselves
+won't be asked again for another _MIN_ACCOUNT_REFRESH_SECONDS.
 
 Deliberately the *official* Jagex endpoint, not Wise Old Man or any
 other third party: it's the same primary source WOM itself mirrors, so
@@ -71,6 +81,7 @@ from typing import Dict, Optional
 from uuid import UUID
 
 from app.bosses import HISCORES_NAME_TO_DISPLAY_NAME
+from app.loot import kc_counts_by_player, npc_hide_key
 
 USER_AGENT = "myscape.io/1.0 (Goal Tracking; contact: chandler@myscape.io)"
 BASE_URL = "https://secure.runescape.com/m=hiscore_oldschool{suffix}/index_lite.json"
@@ -300,3 +311,52 @@ def sync_hiscores(db, game_account) -> HiscoresSyncResult:
     db.commit()
 
     return HiscoresSyncResult(boss_kill_counts=boss_kill_counts, synced_at=synced_at, from_cache=False)
+
+
+def display_boss_kill_counts(db, game_account) -> Dict[str, int]:
+    """What Goal Tracking's KC column actually shows -- not always
+    exactly game_account.boss_kill_counts (the last real hiscores
+    snapshot) verbatim, but that snapshot topped up with whatever this
+    account's Loot Tracker has caught since the snapshot was taken.
+    The hiscores themselves only ever get re-asked every
+    _MIN_ACCOUNT_REFRESH_SECONDS (see sync_hiscores), but the plugin
+    reports a real kill the moment it happens, so this closes the gap
+    between real syncs with data that's already on file for free --
+    exactly the tradeoff the session that built this feature discussed
+    (see this module's own docstring): loot_events alone can't give a
+    lifetime total, but once the hiscores have seeded one, loot_events
+    is a perfectly good way to keep it current between syncs.
+
+    Reuses app.loot.kc_counts_by_player -- the same all-time
+    per-source occurrence list app/mindmaps.py's own "kc" goal type
+    already checks a player-typed NPC name against -- filtered here to
+    just the occurrences after game_account.hiscores_synced_at, per
+    boss. Matches a LootEvent's source_name against our boss
+    display_name the same normalized (trimmed, lowercased) way that
+    existing "kc" goal matching already does (app.loot.npc_hide_key);
+    there's no separate "hiscores name -> in-game NPC name" table for
+    this because the in-game name is what our display_name was BUILT
+    from in the first place (see app/bosses.py's own docstring) --
+    the hiscores' own small set of divergent names
+    (HISCORES_NAME_OVERRIDES) is a different, unrelated mismatch that
+    only ever matters when talking to Jagex, not here.
+
+    Returns {} for an account that's never completed a single hiscores
+    sync (nothing to top up yet -- render_goal_tracking shows blank KC
+    cells for that, same as an unlinked account), otherwise every key
+    sync_hiscores itself always sets on a real sync (every current
+    hiscores boss, 0 or otherwise)."""
+    baseline = game_account.boss_kill_counts or {}
+    if not baseline:
+        return {}
+    since = game_account.hiscores_synced_at
+    kc_counts = kc_counts_by_player(db, game_account)
+    result = dict(baseline)
+    for name, kc in baseline.items():
+        if not isinstance(kc, int):
+            continue
+        occurrences = kc_counts.get(("npc", npc_hide_key(name)), [])
+        delta = sum(1 for ts in occurrences if ts and since is not None and ts > since)
+        if delta:
+            result[name] = kc + delta
+    return result

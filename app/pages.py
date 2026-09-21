@@ -9365,7 +9365,7 @@ def render_possessions(player: PlayerView) -> str:
     )
 
 
-def render_goal_tracking(player: PlayerView) -> str:
+def render_goal_tracking(player: PlayerView, boss_kill_counts: Optional[dict] = None) -> str:
     """The Goal Tracking page -- not a real feature yet, just the
     research this app's actual goal-setting UI (time-based quotas for
     XP gained/NPCs killed/clue scrolls completed/items gained, etc.,
@@ -9374,18 +9374,30 @@ def render_goal_tracking(player: PlayerView) -> str:
     OSRS hiscores tracks, app.bosses.HISCORE_BOSSES, paired with its
     RuneLite sprite icon) plus a real, working piece ahead of that UI:
     a KC column sourced from the official OSRS Hiscores
-    (app/hiscores.py) and a "Sync from Hiscores" button to refresh it,
-    so a future "kill count" goal type has both a ready-made icon and a
-    real starting number to seed a goal against for whichever boss a
-    player picks.
+    (app/hiscores.py), so a future "kill count" goal type has both a
+    ready-made icon and a real starting number to seed a goal against
+    for whichever boss a player picks.
+
+    No button, no client-side fetch -- goal_tracking_page (app/main.py)
+    already opportunistically re-synced the hiscores server-side, and
+    already topped the result up with anything the Loot Tracker has
+    caught since (see app.hiscores.display_boss_kill_counts) before
+    ever calling this function, so `boss_kill_counts` -- when given --
+    is already the exact number to print, no further merging needed
+    here. Falls back to player.boss_kill_counts (the raw last-synced
+    snapshot, no loot top-up) when the caller doesn't have a live
+    Session handy to compute that with, which only ever happens in
+    contexts without real game data to look up anyway (see
+    PlayerView's own docstring).
 
     Not linked (player.account_hash is None) shows the table with every
-    KC cell blank and no button -- there's no RuneLite character to
-    look up yet, same as every other page's linking story.
+    KC cell blank -- there's no RuneLite character to look up yet, same
+    as every other page's linking story.
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
     is_linked = player.account_hash is not None
-    has_synced = bool(player.boss_kill_counts)
+    kc_by_boss = player.boss_kill_counts if boss_kill_counts is None else boss_kill_counts
+    has_synced = bool(kc_by_boss)
 
     def _boss_row(slug: str, name: str, has_icon: bool) -> str:
         if has_icon:
@@ -9400,7 +9412,7 @@ def render_goal_tracking(player: PlayerView) -> str:
                 f'<span class="gt-boss-name">{escape(name)}</span>'
                 '<span class="gt-boss-name-missing-note">No icon yet</span>'
             )
-        kc = player.boss_kill_counts.get(name)
+        kc = kc_by_boss.get(name)
         kc_text = f"{kc:,}" if isinstance(kc, int) else "—"
         return (
             f'<tr><td class="gt-boss-icon-cell">{icon_cell}</td><td>{name_cell}</td>'
@@ -9415,19 +9427,13 @@ def render_goal_tracking(player: PlayerView) -> str:
         sync_note = (
             '<span id="gtSyncNote" class="gt-sync-note"></span>'
             if has_synced
-            else '<span id="gtSyncNote" class="gt-sync-note">Not synced yet.</span>'
+            else '<span id="gtSyncNote" class="gt-sync-note">No hiscores data yet -- check back soon.</span>'
         )
-        sync_controls = f"""
-        <div class="gt-sync-row">
-          <button type="button" id="gtSyncBtn" class="gt-sync-btn">Sync from Hiscores</button>
-          {sync_note}
-          <span id="gtSyncError" class="gt-sync-error"></span>
-        </div>
-        """
+        sync_controls = f'<div class="gt-sync-row">{sync_note}</div>'
     else:
         sync_controls = (
             '<div class="gt-sync-row">'
-            '<span class="gt-sync-note">Link your RuneLite account to sync kill counts.</span>'
+            '<span class="gt-sync-note">Link your RuneLite account to see kill counts here.</span>'
             "</div>"
         )
 
@@ -9437,8 +9443,9 @@ def render_goal_tracking(player: PlayerView) -> str:
       Scaffolding for now -- every boss the OSRS hiscores tracks, matched up
       with its icon, ready for the actual goal-setting UI (time-based quotas
       for XP gained, NPCs killed, clue scrolls completed, items gained, and
-      whatever else gets added) to be built against. Kill counts come
-      straight from the official OSRS Hiscores.
+      whatever else gets added) to be built against. Kill counts sync
+      automatically from the official OSRS Hiscores, topped up with anything
+      your loot tracker has caught since the last sync.
     </p>
     {sync_controls}
     <div class="gt-card">
@@ -9456,7 +9463,7 @@ def render_goal_tracking(player: PlayerView) -> str:
       var gtSyncedAtIso = {json.dumps(player.hiscores_synced_at.isoformat() if player.hiscores_synced_at else None)};
 
       function gtFormatSyncedAt(iso) {{
-        if (!iso) return 'Not synced yet.';
+        if (!iso) return 'No hiscores data yet -- check back soon.';
         var seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
         if (seconds < 60) return 'Synced just now.';
         var minutes = Math.round(seconds / 60);
@@ -9468,47 +9475,8 @@ def render_goal_tracking(player: PlayerView) -> str:
       }}
 
       var gtSyncNoteEl = document.getElementById('gtSyncNote');
-      if (gtSyncNoteEl) {{
+      if (gtSyncNoteEl && gtSyncedAtIso) {{
         gtSyncNoteEl.textContent = gtFormatSyncedAt(gtSyncedAtIso);
-      }}
-
-      var gtSyncBtn = document.getElementById('gtSyncBtn');
-      if (gtSyncBtn) {{
-        gtSyncBtn.addEventListener('click', async function () {{
-          var errorEl = document.getElementById('gtSyncError');
-          errorEl.textContent = '';
-          errorEl.classList.remove('show');
-          gtSyncBtn.disabled = true;
-          var originalLabel = gtSyncBtn.textContent;
-          gtSyncBtn.textContent = 'Syncing…';
-          try {{
-            var res = await fetch('/api/players/me/hiscores/sync', {{ method: 'POST' }});
-            var data = await res.json().catch(function () {{ return {{}}; }});
-            if (!res.ok) {{
-              var msg = (data && data.detail) ? data.detail : 'Could not sync from the hiscores. Please try again.';
-              errorEl.textContent = msg;
-              errorEl.classList.add('show');
-              return;
-            }}
-            var kcByBoss = data.boss_kill_counts || {{}};
-            document.querySelectorAll('.gt-boss-kc').forEach(function (cell) {{
-              var boss = cell.getAttribute('data-boss');
-              if (Object.prototype.hasOwnProperty.call(kcByBoss, boss)) {{
-                cell.textContent = kcByBoss[boss].toLocaleString('en-US');
-              }}
-            }});
-            gtSyncedAtIso = data.synced_at || gtSyncedAtIso;
-            if (gtSyncNoteEl) {{
-              gtSyncNoteEl.textContent = gtFormatSyncedAt(gtSyncedAtIso);
-            }}
-          }} catch (err) {{
-            errorEl.textContent = 'Something went wrong. Please try again.';
-            errorEl.classList.add('show');
-          }} finally {{
-            gtSyncBtn.disabled = false;
-            gtSyncBtn.textContent = originalLabel;
-          }}
-        }});
       }}
     """
     return _shell(
