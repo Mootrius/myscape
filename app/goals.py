@@ -43,8 +43,6 @@ from typing import Dict, List, Optional, Tuple
 from app.bosses import HISCORE_BOSSES
 from app.item_ids import find_item_ids
 from app.mindmaps import (
-    MAX_ITEM_QTY_TARGET,
-    MAX_KC_TARGET,
     MAX_SKILL_LEVEL,
     MAX_SKILL_XP,
     MIN_SKILL_LEVEL,
@@ -60,6 +58,17 @@ from app.purchase_goals import build_owned_pools
 GOAL_TYPES = ("kc", "skill", "item")
 SKILL_METRICS = ("level", "xp")
 MAX_ITEM_NAME_LENGTH = 80
+# Goal Tracking's own kc/item target ceiling -- INT32_MAX, the widest
+# a signed 32-bit integer column can hold. Deliberately NOT
+# app.mindmaps' own MAX_KC_TARGET/MAX_ITEM_QTY_TARGET: Mindmaps' kc
+# goal counts a completely different, much smaller number (loot-
+# tracker-witnessed kills -- see this file's own top docstring on why
+# Goal Tracking's kc goal was never borrowed from Mindmaps to begin
+# with), so tying Goal Tracking's own ceiling to a constant that
+# exists for that unrelated purpose would just be an accident waiting
+# to diverge later.
+MAX_KC_TARGET = 2_147_483_647
+MAX_ITEM_QTY_TARGET = 2_147_483_647
 
 # app.bosses.HISCORE_BOSSES' display names, keyed lowercase, so a goal
 # submitted with any casing still resolves -- the real UI always

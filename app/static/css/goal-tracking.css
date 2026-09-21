@@ -1,8 +1,9 @@
 /* Goal Tracking -- a player-built list of targets (a boss kill count,
    a skill level/xp, or an item quantity), each tracked toward
    completion with live progress (see render_goal_tracking in
-   app/pages.py). The add-goal wizard up top (collapsed to a plain +
-   box until clicked), and the goal list itself below it. */
+   app/pages.py). The add-goal wizard up top (collapsed to a single
+   "Add goal" button until clicked), and the goal list itself below
+   it. */
 
 .gt-card {
   background: var(--panel-translucent);
@@ -24,7 +25,7 @@
 .gt-link-note { color: var(--text-muted); margin: 0; }
 
 /* ---- Add-goal wizard --------------------------------------------------
-   Two states: collapsed (.gt-wizard-plus alone, centered under the
+   Two states: collapsed (.gt-wizard-add-btn alone, centered under the
    page title) and expanded (.gt-wizard-expanded, a 2-"page" flow --
    see wizardStage1Html/wizardStage2Html in the script). Only one of
    the two is ever visible at once (see renderWizard). */
@@ -35,23 +36,21 @@
   margin-bottom: 20px;
 }
 
-.gt-wizard-plus {
-  width: 60px;
-  height: 60px;
-  background: var(--panel-translucent);
-  border: 1px dashed var(--border);
+.gt-wizard-add-btn {
+  background: var(--gold);
+  color: #221c10;
+  border: none;
   border-radius: var(--radius);
-  color: var(--text-faint);
   font-family: inherit;
-  font-size: 30px;
-  line-height: 1;
+  height: 38px;
+  padding: 0 28px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.gt-wizard-plus:hover { border-color: var(--gold); border-style: solid; color: var(--gold); }
+.gt-wizard-add-btn:hover { background: #ffab42; }
 
 /* A fixed size across every stage -- not "however tall this stage's
    own content is" -- so the box never grows/shrinks/jumps as the
@@ -81,29 +80,29 @@
   to { opacity: 1; transform: scale(1); }
 }
 
-.gt-wizard-close {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  background: none;
-  border: none;
-  color: var(--text-faint);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 4px 8px;
-}
-
-.gt-wizard-close:hover { color: var(--red); }
-
-/* Stage 1: the type picker -- three big tappable options (the wizard's
+/* Stage 1: the type picker -- three tappable options (the wizard's
    own "page 1"), same icon assets Mindmaps' own goal-type picker
    already uses (GOAL_TYPE_PICKER in app/pages.py's mindmaps script),
-   so a KC/ITEM/SKILL badge means the same thing on both pages. */
+   so a KC/ITEM/SKILL badge means the same thing on both pages, plus
+   a small centered Cancel underneath (there's no top-right x any
+   more -- see wizardStage1Html). The wrap fills the full fixed
+   height (same technique .gt-wizard-stage2 uses), with the type-card
+   row at the top and Cancel pinned to the bottom. */
+.gt-wizard-stage1-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+
 .gt-wizard-stage1 {
   display: flex;
   gap: 12px;
-  flex: 1 1 auto;
+}
+
+.gt-wizard-stage1-cancel {
+  align-self: center;
+  min-width: 100px;
 }
 
 .gt-wizard-type-btn {
@@ -111,14 +110,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   flex: 1 1 0;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-muted);
   font-family: inherit;
-  padding: 22px 12px;
+  padding: 14px 12px;
   cursor: pointer;
 }
 
@@ -223,7 +222,11 @@
   cursor: pointer;
 }
 
-.gt-metric-btn:first-child { border-right: none; }
+/* Only suppressed when NOT active -- keeping it unconditional (the
+   original bug) meant the active Lvl button's right edge never got
+   its own gold border back, so the gold outline looked broken on
+   that one side while the other three sides highlighted normally. */
+.gt-metric-btn:first-child:not(.active) { border-right: none; }
 
 .gt-metric-btn:hover { color: var(--text); }
 

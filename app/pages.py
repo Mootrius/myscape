@@ -9439,9 +9439,8 @@ def render_goal_tracking(player: PlayerView) -> str:
     <div class="auth-error" id="gtError"></div>
 
     <div class="gt-wizard" id="gtWizard">
-      <button type="button" class="gt-wizard-plus" id="gtWizardPlus" aria-label="Add a goal" title="Add a goal">+</button>
+      <button type="button" class="gt-wizard-add-btn" id="gtWizardAddBtn">Add goal</button>
       <div class="gt-wizard-expanded" id="gtWizardExpanded" style="display:none;">
-        <button type="button" class="gt-wizard-close" id="gtWizardClose" aria-label="Close" title="Close">&times;</button>
         <div id="gtWizardStage"></div>
       </div>
     </div>
@@ -9478,8 +9477,8 @@ def render_goal_tracking(player: PlayerView) -> str:
       // already met" carve-out to accommodate, so a plain "at least
       // 1" reads more naturally for a fresh goal.
       var TARGET_BOUNDS = {
-        kc: { min: 1, max: 2000000000 },
-        item: { min: 1, max: 2000000000 },
+        kc: { min: 1, max: 2147483647 },
+        item: { min: 1, max: 2147483647 },
         skill_level: { min: 1, max: 126 },
         skill_xp: { min: 1, max: 200000000 },
       };
@@ -9666,8 +9665,7 @@ def render_goal_tracking(player: PlayerView) -> str:
         renderWizard();
       }
 
-      document.getElementById('gtWizardPlus').addEventListener('click', openWizard);
-      document.getElementById('gtWizardClose').addEventListener('click', closeWizard);
+      document.getElementById('gtWizardAddBtn').addEventListener('click', openWizard);
       // One listener for the whole page, not re-added per render (stage
       // 2's own suggestions box gets rebuilt every time it renders) --
       // looks the elements up fresh on each click instead, so this
@@ -9681,33 +9679,36 @@ def render_goal_tracking(player: PlayerView) -> str:
       });
 
       function renderWizard() {
-        var plusBtn = document.getElementById('gtWizardPlus');
-        var closeBtn = document.getElementById('gtWizardClose');
+        var addBtn = document.getElementById('gtWizardAddBtn');
         if (GT.wizardStage === 0) {
-          plusBtn.style.display = '';
+          addBtn.style.display = '';
           wizardExpanded.style.display = 'none';
           return;
         }
-        plusBtn.style.display = 'none';
+        addBtn.style.display = 'none';
         wizardExpanded.style.display = '';
-        // The top-right x is stage 1's own close control; stage 2 gets
-        // its own Back/Cancel/Save row down by the fields instead (see
-        // wizardStage2Html), so the top x is redundant with (and would
-        // sit oddly above) that row once there.
-        closeBtn.style.display = (GT.wizardStage === 2) ? 'none' : '';
         wizardStageEl.innerHTML = (GT.wizardStage === 1) ? wizardStage1Html() : wizardStage2Html();
         wireWizardStage();
       }
 
+      // Stage 1's own wrapper -- the 3 type cards on top (shorter now
+      // that there's no top-right x to make room for -- see
+      // goal-tracking.css) and a small centered Cancel underneath,
+      // pinned to the bottom of the SAME fixed-height box stage 2
+      // uses via justify-content: space-between, same technique as
+      // .gt-wizard-stage2 itself.
       function wizardStage1Html() {
         return '' +
-          '<div class="gt-wizard-stage1">' +
-          '  <button type="button" class="gt-wizard-type-btn" data-type="item">' +
-          '    <img src="/static/img/icon-goal-item.png" alt="" /><span>Item</span></button>' +
-          '  <button type="button" class="gt-wizard-type-btn" data-type="kc">' +
-          '    <img src="/static/img/icon-goal-kc.png" alt="" /><span>Boss KC</span></button>' +
-          '  <button type="button" class="gt-wizard-type-btn" data-type="skill">' +
-          '    <img src="/static/img/icon-goal-skill.png" alt="" /><span>Skill</span></button>' +
+          '<div class="gt-wizard-stage1-wrap">' +
+          '  <div class="gt-wizard-stage1">' +
+          '    <button type="button" class="gt-wizard-type-btn" data-type="item">' +
+          '      <img src="/static/img/icon-goal-item.png" alt="" /><span>Item</span></button>' +
+          '    <button type="button" class="gt-wizard-type-btn" data-type="kc">' +
+          '      <img src="/static/img/icon-goal-kc.png" alt="" /><span>Boss KC</span></button>' +
+          '    <button type="button" class="gt-wizard-type-btn" data-type="skill">' +
+          '      <img src="/static/img/icon-goal-skill.png" alt="" /><span>Skill</span></button>' +
+          '  </div>' +
+          '  <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel gt-wizard-stage1-cancel" id="gtWizardCancel">Cancel</button>' +
           '</div>';
       }
 
@@ -9728,7 +9729,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           '<div class="gt-field gt-field-metric">' +
           '  <label>&nbsp;</label>' +
           '  <div class="gt-metric-toggle" id="gtMetricToggle">' +
-          '    <button type="button" class="gt-metric-btn" data-metric="level">Level</button>' +
+          '    <button type="button" class="gt-metric-btn" data-metric="level">Lvl</button>' +
           '    <button type="button" class="gt-metric-btn" data-metric="xp">XP</button>' +
           '  </div>' +
           '</div>'
@@ -9771,6 +9772,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           document.querySelectorAll('.gt-wizard-type-btn').forEach(function (btn) {
             btn.addEventListener('click', function () { wizardPickType(btn.getAttribute('data-type')); });
           });
+          document.getElementById('gtWizardCancel').addEventListener('click', closeWizard);
           return;
         }
 
@@ -9895,7 +9897,7 @@ def render_goal_tracking(player: PlayerView) -> str:
       function updateWizardTargetField() {
         var label = document.getElementById('gtTargetLabel');
         if (GT.type === 'kc') { label.textContent = 'KC'; }
-        else if (GT.type === 'skill') { label.textContent = (GT.skillMetric === 'xp') ? 'XP' : 'Level'; }
+        else if (GT.type === 'skill') { label.textContent = (GT.skillMetric === 'xp') ? 'XP' : 'Lvl'; }
         else { label.textContent = 'Quantity'; }
       }
 
