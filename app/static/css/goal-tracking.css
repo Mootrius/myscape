@@ -117,22 +117,13 @@
   margin-top: 14px;
 }
 
+/* Same min-width every wizard button now gets from the base
+   .gt-wizard-btn rule below -- kept as its own class purely because
+   stage 1/2's own layout (.gt-wizard-stage1-actions above) still needs
+   a hook to center this row as a group, not because its buttons are
+   sized any differently from Back/Cancel on any other stage any more. */
 .gt-wizard-stage1-cancel {
   min-width: 100px;
-}
-
-/* Compound selector (two classes) so this beats the plain
-   .gt-wizard-btn rule below on specificity -- that rule sits later
-   in the file and was winning on source order alone, which is why
-   an earlier attempt to shrink this button via .gt-wizard-stage1-cancel
-   alone had no visible effect. Shrinking it (from the base 36px/0 16px)
-   frees up more of the fixed box's leftover space for the gap above,
-   on top of the explicit margin-top, so Cancel reads as clearly
-   separated from the type-card row instead of flush against it. */
-.gt-wizard-btn.gt-wizard-stage1-cancel {
-  height: 26px;
-  padding: 0 14px;
-  font-size: 10px;
 }
 
 .gt-wizard-type-btn {
@@ -214,13 +205,18 @@
 .gt-field-error { display: none; font-size: 10.5px; color: var(--red); line-height: 1.3; }
 .gt-field-error.show { display: block; margin-top: 6px; }
 
-/* Back/Cancel/Save -- Back and Cancel share the same plain
+/* Back/Cancel/Save (or Next) -- Back and Cancel share the same plain
    secondary look as every other page's own .btn-secondary
    (mindmaps.css/purchase-goals.css), duplicated here rather than
    shared per this file's own "each page owns its stylesheet"
-   convention; Save keeps the page's one gold .gt-add-btn and grows
-   to fill the row's remaining width so it reads as the primary
-   action. */
+   convention; Save keeps the page's one gold .gt-add-btn and grows to
+   fill the row's remaining width so it reads as the primary action --
+   Next (.gt-wizard-btn-next below) borrows that same growing slot but
+   not the gold, since it isn't the action that actually creates the
+   goal. Sized to match stage 1/2's own Back/Cancel (the smaller
+   26px/0 14px/10px look, not this file's original 36px/0 16px/11px
+   one) so every wizard button -- whichever stage it's on -- now looks
+   like it belongs to the same row. */
 .gt-wizard-actions { display: flex; gap: 8px; }
 
 .gt-wizard-btn {
@@ -230,9 +226,9 @@
   border-radius: var(--radius);
   color: var(--text-dim);
   font-family: inherit;
-  height: 36px;
-  padding: 0 16px;
-  font-size: 11px;
+  height: 26px;
+  padding: 0 14px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
@@ -240,7 +236,24 @@
 
 .gt-wizard-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 
-.gt-wizard-actions .gt-add-btn { flex: 1 1 auto; height: 36px; }
+.gt-wizard-actions .gt-add-btn { flex: 1 1 auto; height: 26px; }
+
+/* Next (stage 3, recurring only -- see wizardStageTargetHtml in the
+   script) -- same size/growing slot as Save (it's still .gt-add-btn
+   underneath), recolored to the plain Back/Cancel look instead of
+   gold. There's a real Save still ahead of it on stage 4, so Next
+   shouldn't read as the button that actually creates the goal. */
+.gt-wizard-actions .gt-add-btn.gt-wizard-btn-next {
+  background: var(--panel-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.gt-wizard-actions .gt-add-btn.gt-wizard-btn-next:hover {
+  background: var(--panel-2);
+  border-color: var(--gold-dim);
+  color: var(--text);
+}
 
 /* Level/XP toggle, inline with the skill search + target fields --
    same segmented-pair look as Purchase Goals'/Mindmaps' own
@@ -284,8 +297,14 @@
 
 /* Narrower than a full-width field on purpose -- this is a plain "how
    many" count, not something that needs the row's whole width the way
-   the search/target fields on stage 3 do. */
-.gt-recur-interval-input { width: 140px; height: 34px; padding: 0 12px; align-self: flex-start; }
+   the search/target fields on stage 3 do. Selector is `input.` (type +
+   class), not just `.` -- myscape.css's own shared
+   input[type="text"] rule (width: 100%, padding: 12px 14px) is a type
+   + attribute selector, which beats a class selector alone on
+   specificity regardless of file/source order; matching its own
+   specificity here is what lets THIS rule's width/padding actually
+   win instead of silently losing to that shared default. */
+input.gt-recur-interval-input { width: 140px; height: 34px; padding: 0 12px; align-self: flex-start; }
 
 /* Same segmented-toggle idea as .gt-metric-toggle above, generalized
    to 5 buttons instead of 2 -- rather than that rule's own
@@ -293,8 +312,12 @@
    this overlaps borders with a uniform -1px margin-left and lifts
    whichever button is active/hovered a layer up (z-index) so its own
    full border always shows unbroken, however many neighbors it has on
-   either side. */
-.gt-recur-unit-toggle { display: flex; height: 34px; }
+   either side. Height matches the wizard's own Back/Cancel/Save/Next
+   buttons (.gt-wizard-btn/.gt-add-btn) rather than the 34px text
+   fields elsewhere on this stage -- these are buttons, not a field, so
+   they read as part of the same button family instead of another
+   input. */
+.gt-recur-unit-toggle { display: flex; height: 26px; }
 
 .gt-recur-unit-btn {
   flex: 1 1 20%;
@@ -368,9 +391,9 @@
   border: none;
   border-radius: var(--radius);
   font-family: inherit;
-  height: 34px;
+  height: 26px;
   padding: 0 20px;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;

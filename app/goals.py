@@ -188,6 +188,16 @@ def _clean_new_goal(
             raise GoalValidationError(f"skill must be one of {sorted(SKILL_NAMES)}.")
         if metric not in SKILL_METRICS:
             raise GoalValidationError("metric must be 'level' or 'xp'.")
+        # A recurring skill goal only ever tracks xp -- a level is a
+        # capped, non-repeating ceiling (99 either way, xp or not) so
+        # "gain N levels every W" doesn't keep meaning the same thing
+        # past that ceiling the way "gain N xp every W" always does.
+        # The wizard's own stage-3 metric toggle is hidden for this
+        # exact combination (see wizardStageTargetHtml/wizardPickType
+        # in app/pages.py), so this only ever actually fires against a
+        # request that bypassed the UI.
+        if is_recurring and metric != "xp":
+            raise GoalValidationError("Recurring skill goals only track experience.")
         bounds = (MIN_SKILL_XP, MAX_SKILL_XP) if metric == "xp" else (MIN_SKILL_LEVEL, MAX_SKILL_LEVEL)
         value = _clean_int_in_range(target_value, "target_value", *bounds)
         return {"goal_type": "skill", "target_name": skill, "metric": metric, "target_value": value, "item_id": None, **recurrence}
