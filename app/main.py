@@ -82,6 +82,7 @@ from app.pages import (
     render_account,
     render_dashboard,
     render_forgot_password,
+    render_goal_tracking,
     render_landing,
     render_login,
     render_loot_tracker,
@@ -1539,6 +1540,15 @@ def possessions_page(player: Optional[PlayerView] = Depends(get_optional_current
     if not player.email_verified_at:
         return RedirectResponse("/verify-email-required", status_code=302)
     return render_possessions(player)
+
+
+@app.get("/dashboard/goal-tracking", response_class=HTMLResponse)
+def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    if not player.email_verified_at:
+        return RedirectResponse("/verify-email-required", status_code=302)
+    return render_goal_tracking(player)
 
 
 @app.get("/api/possessions/search-items", response_model=ItemSearchResponse)

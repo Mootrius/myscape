@@ -109,6 +109,16 @@ try:
 except OSError:
     _POSSESSIONS_CSS_VERSION = 0
 
+# Same cache-busting trick again, for the Goal Tracking page's own
+# stylesheet.
+_GOAL_TRACKING_CSS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "css", "goal-tracking.css"
+)
+try:
+    _GOAL_TRACKING_CSS_VERSION = int(os.path.getmtime(_GOAL_TRACKING_CSS_PATH))
+except OSError:
+    _GOAL_TRACKING_CSS_VERSION = 0
+
 
 def _nav_sides(player: Optional[PlayerView]) -> tuple[str, str]:
     """The single link/button that goes on each side of the centered
@@ -683,6 +693,7 @@ _ICON_COINS = item_icon_url(995)
 _ICON_BONES = item_icon_url(536)
 _ICON_CLUELESS_SCROLL = item_icon_url(20249)
 _ICON_HEAVY_CASKET = item_icon_url(19941)
+_ICON_MAX_CAPE = item_icon_url(13280)
 
 
 def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
@@ -753,6 +764,18 @@ def render_dashboard(player: PlayerView) -> str:
         )
         + "</a>"
     )
+    goal_tracking_card = (
+        '<a href="/dashboard/goal-tracking" style="display:block;color:inherit;text-decoration:none;">'
+        + _dash_card(
+            _ICON_MAX_CAPE,
+            "Max cape",
+            "Goal Tracking",
+            "Visualize your goals by setting time-based quotas for yourself "
+            "to meet, complete with auto-detecting progress bars, "
+            "historical data, and more.",
+        )
+        + "</a>"
+    )
 
     body = f"""
     <div class="dash-grid">
@@ -760,6 +783,7 @@ def render_dashboard(player: PlayerView) -> str:
       {mindmaps_card}
       {possessions_card}
       {purchase_goals_card}
+      {goal_tracking_card}
     </div>
     """
     return _shell(title="Dashboard — myscape", player=player, body=body)
@@ -9326,5 +9350,156 @@ def render_possessions(player: PlayerView) -> str:
         player=player,
         body=body,
         extra_script=script,
+        extra_head=extra_head,
+    )
+
+
+# Every boss/boss-like activity the official OSRS hiscores currently
+# tracks (a "Bosses" category entry, i.e. NPC/activity killcount --
+# not a skill, minigame score, or other non-boss category), confirmed
+# against Wise Old Man's own live player data (api.wiseoldman.net,
+# which mirrors the hiscores 1:1) and the OSRS Wiki's Module:Hiscores.
+# The third element is that boss's matching icon in
+# app/static/boss-icons/ -- RuneLite's own SpriteID.java documents a
+# HISCORE_* sprite constant for most of these (the numeric ids behind
+# the file names here), which is where each icon file actually came
+# from (see the session that built this table for the full mapping).
+# A small handful of very recently added hiscores entries -- new
+# enough that RuneLite's own sprite catalogue hasn't caught up to them
+# yet -- have no matching sprite at all yet, and render_goal_tracking
+# below shows a plain placeholder for those instead of a broken image.
+# Artio/Callisto, Calvar'ion/Vet'ion, and Spindel/Venenatis are each a
+# pair of twin bosses that share one RuneLite icon (their easier
+# singleplayer and harder multiplayer versions look the same, just
+# reskinned) -- everything else here has its own distinct icon.
+_HISCORE_BOSSES: list[tuple[str, str, bool]] = [
+    ("abyssal-sire", "Abyssal Sire", True),
+    ("alchemical-hydra", "Alchemical Hydra", True),
+    ("amoxliatl", "Amoxliatl", True),
+    ("araxxor", "Araxxor", True),
+    ("artio", "Artio", True),
+    ("barrows-chests", "Barrows Chests", True),
+    ("brutus", "Brutus", False),
+    ("bryophyta", "Bryophyta", True),
+    ("callisto", "Callisto", True),
+    ("calvarion", "Calvar'ion", True),
+    ("cerberus", "Cerberus", True),
+    ("chambers-of-xeric", "Chambers of Xeric", True),
+    ("chambers-of-xeric-challenge-mode", "Chambers of Xeric: Challenge Mode", True),
+    ("chaos-elemental", "Chaos Elemental", True),
+    ("chaos-fanatic", "Chaos Fanatic", True),
+    ("commander-zilyana", "Commander Zilyana", True),
+    ("corporeal-beast", "Corporeal Beast", True),
+    ("crazy-archaeologist", "Crazy Archaeologist", True),
+    ("dagannoth-prime", "Dagannoth Prime", True),
+    ("dagannoth-rex", "Dagannoth Rex", True),
+    ("dagannoth-supreme", "Dagannoth Supreme", True),
+    ("deranged-archaeologist", "Deranged Archaeologist", True),
+    ("doom-of-mokhaiotl", "Doom of Mokhaiotl", False),
+    ("duke-sucellus", "Duke Sucellus", True),
+    ("general-graardor", "General Graardor", True),
+    ("giant-mole", "Giant Mole", True),
+    ("grotesque-guardians", "Grotesque Guardians", True),
+    ("hespori", "Hespori", True),
+    ("kalphite-queen", "Kalphite Queen", True),
+    ("king-black-dragon", "King Black Dragon", True),
+    ("kraken", "Kraken", True),
+    ("kreearra", "Kree'arra", True),
+    ("kril-tsutsaroth", "K'ril Tsutsaroth", True),
+    ("lunar-chests", "Lunar Chests", True),
+    ("mad-angel", "Mad Angel", False),
+    ("maggot-king", "Maggot King", False),
+    ("the-mimic", "The Mimic", True),
+    ("nex", "Nex", True),
+    ("the-nightmare", "The Nightmare", True),
+    ("phosanis-nightmare", "Phosani's Nightmare", False),
+    ("obor", "Obor", True),
+    ("phantom-muspah", "Phantom Muspah", True),
+    ("sarachnis", "Sarachnis", True),
+    ("scorpia", "Scorpia", True),
+    ("scurrius", "Scurrius", True),
+    ("shellbane-gryphon", "Shellbane Gryphon", False),
+    ("skotizo", "Skotizo", True),
+    ("sol-heredit", "Sol Heredit", True),
+    ("spindel", "Spindel", True),
+    ("tempoross", "Tempoross", True),
+    ("the-gauntlet", "The Gauntlet", True),
+    ("the-corrupted-gauntlet", "The Corrupted Gauntlet", True),
+    ("the-hueycoatl", "The Hueycoatl", True),
+    ("the-leviathan", "The Leviathan", True),
+    ("the-royal-titans", "The Royal Titans", True),
+    ("the-whisperer", "The Whisperer", True),
+    ("theatre-of-blood", "Theatre of Blood", True),
+    ("theatre-of-blood-hard-mode", "Theatre of Blood: Hard Mode", False),
+    ("thermonuclear-smoke-devil", "Thermonuclear Smoke Devil", True),
+    ("tombs-of-amascut", "Tombs of Amascut", True),
+    ("tombs-of-amascut-expert", "Tombs of Amascut: Expert Mode", True),
+    ("tzkal-zuk", "TzKal-Zuk", True),
+    ("tztok-jad", "TzTok-Jad", True),
+    ("vardorvis", "Vardorvis", True),
+    ("venenatis", "Venenatis", True),
+    ("vetion", "Vet'ion", True),
+    ("vorkath", "Vorkath", True),
+    ("wintertodt", "Wintertodt", True),
+    ("yama", "Yama", True),
+    ("zalcano", "Zalcano", True),
+    ("zulrah", "Zulrah", True),
+]
+
+
+def render_goal_tracking(player: PlayerView) -> str:
+    """The Goal Tracking page -- not a real feature yet, just the
+    research this app's actual goal-setting UI (time-based quotas for
+    XP gained/NPCs killed/clue scrolls completed/items gained, etc.,
+    see the dashboard card's own copy) will eventually get built
+    against. For now its entire content is this one reference table:
+    every boss the OSRS hiscores tracks (_HISCORE_BOSSES above) paired
+    with its RuneLite sprite icon, so a future "kill count" goal type
+    has a ready-made icon to show next to whichever boss a player picks.
+    """
+    extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
+
+    def _boss_row(slug: str, name: str, has_icon: bool) -> str:
+        if has_icon:
+            icon_cell = (
+                f'<img class="gt-boss-icon" src="/static/boss-icons/{slug}.png" '
+                f'alt="{escape(name)}" />'
+            )
+            name_cell = f'<span class="gt-boss-name">{escape(name)}</span>'
+        else:
+            icon_cell = '<div class="gt-boss-icon-missing" title="No RuneLite sprite yet">?</div>'
+            name_cell = (
+                f'<span class="gt-boss-name">{escape(name)}</span>'
+                '<span class="gt-boss-name-missing-note">No icon yet</span>'
+            )
+        return f'<tr><td class="gt-boss-icon-cell">{icon_cell}</td><td>{name_cell}</td></tr>'
+
+    rows_html = "".join(
+        _boss_row(slug, name, has_icon) for slug, name, has_icon in _HISCORE_BOSSES
+    )
+
+    body = f"""
+    <h2 class="page-title">Goal Tracking</h2>
+    <p class="gt-intro">
+      Scaffolding for now -- every boss the OSRS hiscores tracks, matched up
+      with its icon, ready for the actual goal-setting UI (time-based quotas
+      for XP gained, NPCs killed, clue scrolls completed, items gained, and
+      whatever else gets added) to be built against.
+    </p>
+    <div class="gt-card">
+      <table class="gt-boss-table">
+        <thead>
+          <tr><th></th><th>Boss</th></tr>
+        </thead>
+        <tbody>
+          {rows_html}
+        </tbody>
+      </table>
+    </div>
+    """
+    return _shell(
+        title="Goal Tracking — myscape",
+        player=player,
+        body=body,
         extra_head=extra_head,
     )

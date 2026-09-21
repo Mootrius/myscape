@@ -1,0 +1,93 @@
+/* Goal Tracking -- for now this page is just a reference table of
+   every boss the OSRS hiscores tracks, each paired with its RuneLite
+   sprite icon (see render_goal_tracking in app/pages.py for how that
+   pairing was built). Kept deliberately small/plain since the actual
+   goal-setting UI hasn't been built yet -- this table is scaffolding
+   to build that against, not a finished feature page. */
+
+.gt-intro {
+  color: var(--text-muted);
+  max-width: 640px;
+  margin: 0 0 20px;
+}
+
+/* Same translucent-panel/border/radius language as .loot-chart-card
+   (loot-tracker.css) and .gear-summary (purchase-goals.css) -- every
+   page's top-level "frame" card looks the same, this is just another
+   one of them. */
+.gt-card {
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 24px;
+}
+
+.gt-boss-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.gt-boss-table th {
+  text-align: left;
+  font-weight: normal;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gt-boss-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.gt-boss-table tr:last-child td { border-bottom: none; }
+
+/* Faint row highlight on hover -- same rgb(51,51,54) target every
+   other hoverable row on the site uses (.dash-card, .loot-npc-box,
+   .pm-row -- see their own comments), so this reads as consistent
+   with the rest of the site even though this row itself isn't
+   clickable yet. */
+.gt-boss-table tr:hover td { background-color: rgb(51, 51, 54); }
+
+.gt-boss-icon-cell { width: 44px; }
+
+/* Same pixelated upscale as .dash-card-icon img (myscape.css) -- these
+   are tiny hand-pixelled game sprites, so let them stay crisp rather
+   than blurring smooth when scaled up. */
+.gt-boss-icon {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+/* The handful of very recent hiscores bosses (see render_goal_tracking's
+   own docstring) RuneLite hasn't catalogued a sprite for yet -- a
+   plain dim placeholder square rather than a broken <img>, so a
+   missing icon reads as "not available yet" instead of looking like
+   something's wrong with the page. */
+.gt-boss-icon-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 16px;
+}
+
+.gt-boss-name { color: var(--text-dim); }
+
+.gt-boss-name-missing-note {
+  display: block;
+  color: var(--text-faint);
+  font-size: 12px;
+  margin-top: 2px;
+}
