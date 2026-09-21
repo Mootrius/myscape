@@ -37,6 +37,7 @@ from app.auth import (
     get_optional_current_account_from_session,
     get_optional_current_player_view_from_session,
 )
+from app import hiscores as sync_hiscores_module
 from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
 from app.limiter import limiter
@@ -1377,6 +1378,32 @@ def read_diaries(game_account: GameAccount = Depends(get_current_verified_game_a
     """The website's own read of the last-synced diary-tiers snapshot
     -- session-authenticated like every other GET here."""
     return {"diaryTiers": game_account.diary_tiers or {}}
+
+
+@app.post("/api/players/me/hiscores/sync")
+def sync_hiscores(
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Goal Tracking's "Sync from Hiscores" button (render_goal_tracking,
+    app/pages.py) -- session-authenticated, unlike every POST /api/
+    players/me/* endpoint around it: this one is triggered by the
+    website itself clicking a button, never the plugin, since boss kill
+    counts come from the official OSRS Hiscores rather than anything
+    RuneLite reports. See app/hiscores.py for the actual fetch, its
+    rate-limit posture, and why a fetch failure doesn't necessarily
+    become an error response here (a prior snapshot is served instead)."""
+    try:
+        result = sync_hiscores_module.sync_hiscores(db, game_account)
+    except sync_hiscores_module.NotLinkedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except sync_hiscores_module.HiscoresSyncError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    return {
+        "boss_kill_counts": result.boss_kill_counts,
+        "synced_at": result.synced_at.isoformat() if result.synced_at else None,
+        "from_cache": result.from_cache,
+    }
 
 
 @app.post("/api/players/me/loot", response_model=LootSyncResponse)

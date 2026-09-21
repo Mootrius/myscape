@@ -185,6 +185,34 @@ class GameAccount(Base):
     # independent of whatever that source currently holds.
     storage_synced_at = Column(JSONB, nullable=False, default=dict)
 
+    # Cached boss-kill-count snapshot from the official OSRS Hiscores
+    # (see app/hiscores.py) -- {<boss name, matching
+    # app.bosses.HISCORE_BOSSES>: <kill count>}. Unlike skills/
+    # completed_quests/diary_tiers above, the plugin never writes this
+    # -- it's populated by the website's own POST
+    # /api/players/me/hiscores/sync (Goal Tracking's "Sync from
+    # Hiscores" button), which is why it lives here as its own
+    # website-owned snapshot rather than folded into a plugin-synced
+    # column. Every boss the hiscores currently track is a key once
+    # synced at least once (0 for "never killed it", not omitted --
+    # see _parse_boss_kill_counts in app/hiscores.py), so an empty dict
+    # unambiguously means "never synced" rather than "synced, ranked
+    # for nothing".
+    boss_kill_counts = Column(JSONB, nullable=False, default=dict)
+    # Which hiscores game-mode endpoint actually resolved this account
+    # (one of app.hiscores.GAMEMODES' first elements) -- cached after
+    # the first successful sync purely so every later one hits that
+    # endpoint directly instead of probing every game mode again. Null
+    # until the first successful sync.
+    hiscores_account_type = Column(String, nullable=True)
+    # When boss_kill_counts above was last genuinely refreshed from the
+    # hiscores -- NOT merely when a sync was last requested, since a
+    # request inside app/hiscores.py's own refresh window reuses the
+    # cache and leaves this untouched. Drives both the "synced Xm ago"
+    # note on Goal Tracking and that same per-account refresh-interval
+    # check.
+    hiscores_synced_at = Column(DateTime(timezone=True), nullable=True)
+
     account = relationship("Account", back_populates="game_accounts")
 
     link_codes = relationship("LinkCode", back_populates="game_account", cascade="all, delete-orphan")

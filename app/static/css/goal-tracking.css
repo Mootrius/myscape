@@ -91,3 +91,47 @@
   font-size: 12px;
   margin-top: 2px;
 }
+
+.gt-boss-kc-head, .gt-boss-kc {
+  text-align: right;
+  width: 90px;
+}
+
+.gt-boss-kc { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+/* The sync controls above the table -- same gold-on-dark button as
+   .link-banner-btn (myscape.css) and the same display:none/.show error
+   pattern as .auth-error there, just laid out in a row rather than a
+   full-width banner since this sits inline above a card instead of
+   replacing the page header. */
+.gt-sync-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 16px;
+}
+
+.gt-sync-btn {
+  background: #221c10;
+  color: var(--gold);
+  border: none;
+  border-radius: var(--radius);
+  padding: 10px 18px;
+  font-size: 15px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.gt-sync-btn:hover { background: #362c1a; }
+.gt-sync-btn:disabled { opacity: 0.5; cursor: default; }
+
+.gt-sync-note { color: var(--text-faint); font-size: 14px; }
+
+.gt-sync-error {
+  display: none;
+  color: #e8a89e;
+  font-size: 14px;
+}
+
+.gt-sync-error.show { display: inline; }

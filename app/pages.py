@@ -4,6 +4,7 @@ No template engine -- these are simple enough that plain f-strings beat
 adding a Jinja2 dependency for a handful of pages. If the page count
 grows past "a handful," that tradeoff is worth revisiting.
 """
+import json
 import os
 import uuid
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ from datetime import datetime
 from html import escape
 from typing import TYPE_CHECKING, Optional
 
+from app.bosses import HISCORE_BOSSES
 from app.purchase_goals import item_icon_url
 
 if TYPE_CHECKING:
@@ -35,6 +37,12 @@ class PlayerView:
     email_verified_at: Optional[datetime]
     runescape_name: Optional[str]
     account_hash: Optional[str]
+    # Goal Tracking's hiscores snapshot (see app/hiscores.py and
+    # GameAccount's own docstring in app/models.py) -- an empty dict
+    # means "never synced", not "synced, ranked for nothing" (every
+    # boss synced at least once is a key, 0 or otherwise).
+    boss_kill_counts: dict
+    hiscores_synced_at: Optional[datetime]
 
 
 def build_player_view(account: "Account", game_account: Optional["GameAccount"]) -> PlayerView:
@@ -44,13 +52,16 @@ def build_player_view(account: "Account", game_account: Optional["GameAccount"])
     GameAccount into the single PlayerView this file's render_*
     functions expect. The identity fields (id, email, email_verified_at)
     always come from the Account; the game-data fields (runescape_name,
-    account_hash) come from the GameAccount when there is one."""
+    account_hash, boss_kill_counts, hiscores_synced_at) come from the
+    GameAccount when there is one."""
     return PlayerView(
         id=account.id,
         email=account.email,
         email_verified_at=account.email_verified_at,
         runescape_name=game_account.runescape_name if game_account else None,
         account_hash=game_account.account_hash if game_account else None,
+        boss_kill_counts=dict(game_account.boss_kill_counts or {}) if game_account else {},
+        hiscores_synced_at=game_account.hiscores_synced_at if game_account else None,
     )
 
 # Cache-busting query string for the stylesheet link in _shell() below.
@@ -9354,110 +9365,27 @@ def render_possessions(player: PlayerView) -> str:
     )
 
 
-# Every boss/boss-like activity the official OSRS hiscores currently
-# tracks (a "Bosses" category entry, i.e. NPC/activity killcount --
-# not a skill, minigame score, or other non-boss category), confirmed
-# against Wise Old Man's own live player data (api.wiseoldman.net,
-# which mirrors the hiscores 1:1) and the OSRS Wiki's Module:Hiscores.
-# The third element is that boss's matching icon in
-# app/static/boss-icons/ -- RuneLite's own SpriteID.java documents a
-# HISCORE_* sprite constant for most of these (the numeric ids behind
-# the file names here), which is where each icon file actually came
-# from (see the session that built this table for the full mapping).
-# A small handful of very recently added hiscores entries -- new
-# enough that RuneLite's own sprite catalogue hasn't caught up to them
-# yet -- have no matching sprite at all yet, and render_goal_tracking
-# below shows a plain placeholder for those instead of a broken image.
-# Artio/Callisto, Calvar'ion/Vet'ion, and Spindel/Venenatis are each a
-# pair of twin bosses that share one RuneLite icon (their easier
-# singleplayer and harder multiplayer versions look the same, just
-# reskinned) -- everything else here has its own distinct icon.
-_HISCORE_BOSSES: list[tuple[str, str, bool]] = [
-    ("abyssal-sire", "Abyssal Sire", True),
-    ("alchemical-hydra", "Alchemical Hydra", True),
-    ("amoxliatl", "Amoxliatl", True),
-    ("araxxor", "Araxxor", True),
-    ("artio", "Artio", True),
-    ("barrows-chests", "Barrows Chests", True),
-    ("brutus", "Brutus", True),
-    ("bryophyta", "Bryophyta", True),
-    ("callisto", "Callisto", True),
-    ("calvarion", "Calvar'ion", True),
-    ("cerberus", "Cerberus", True),
-    ("chambers-of-xeric", "Chambers of Xeric", True),
-    ("chambers-of-xeric-challenge-mode", "Chambers of Xeric: Challenge Mode", True),
-    ("chaos-elemental", "Chaos Elemental", True),
-    ("chaos-fanatic", "Chaos Fanatic", True),
-    ("commander-zilyana", "Commander Zilyana", True),
-    ("corporeal-beast", "Corporeal Beast", True),
-    ("crazy-archaeologist", "Crazy Archaeologist", True),
-    ("dagannoth-prime", "Dagannoth Prime", True),
-    ("dagannoth-rex", "Dagannoth Rex", True),
-    ("dagannoth-supreme", "Dagannoth Supreme", True),
-    ("deranged-archaeologist", "Deranged Archaeologist", True),
-    ("doom-of-mokhaiotl", "Doom of Mokhaiotl", True),
-    ("duke-sucellus", "Duke Sucellus", True),
-    ("general-graardor", "General Graardor", True),
-    ("giant-mole", "Giant Mole", True),
-    ("grotesque-guardians", "Grotesque Guardians", True),
-    ("hespori", "Hespori", True),
-    ("kalphite-queen", "Kalphite Queen", True),
-    ("king-black-dragon", "King Black Dragon", True),
-    ("kraken", "Kraken", True),
-    ("kreearra", "Kree'arra", True),
-    ("kril-tsutsaroth", "K'ril Tsutsaroth", True),
-    ("lunar-chests", "Lunar Chests", True),
-    ("mad-angel", "Mad Angel", True),
-    ("maggot-king", "Maggot King", True),
-    ("the-mimic", "The Mimic", True),
-    ("nex", "Nex", True),
-    ("the-nightmare", "The Nightmare", True),
-    ("phosanis-nightmare", "Phosani's Nightmare", True),
-    ("obor", "Obor", True),
-    ("phantom-muspah", "Phantom Muspah", True),
-    ("sarachnis", "Sarachnis", True),
-    ("scorpia", "Scorpia", True),
-    ("scurrius", "Scurrius", True),
-    ("shellbane-gryphon", "Shellbane Gryphon", True),
-    ("skotizo", "Skotizo", True),
-    ("sol-heredit", "Sol Heredit", True),
-    ("spindel", "Spindel", True),
-    ("tempoross", "Tempoross", True),
-    ("the-gauntlet", "The Gauntlet", True),
-    ("the-corrupted-gauntlet", "The Corrupted Gauntlet", True),
-    ("the-hueycoatl", "The Hueycoatl", True),
-    ("the-leviathan", "The Leviathan", True),
-    ("the-royal-titans", "The Royal Titans", True),
-    ("the-whisperer", "The Whisperer", True),
-    ("theatre-of-blood", "Theatre of Blood", True),
-    ("theatre-of-blood-hard-mode", "Theatre of Blood: Hard Mode", True),
-    ("thermonuclear-smoke-devil", "Thermonuclear Smoke Devil", True),
-    ("tombs-of-amascut", "Tombs of Amascut", True),
-    ("tombs-of-amascut-expert", "Tombs of Amascut: Expert Mode", True),
-    ("tzkal-zuk", "TzKal-Zuk", True),
-    ("tztok-jad", "TzTok-Jad", True),
-    ("vardorvis", "Vardorvis", True),
-    ("venenatis", "Venenatis", True),
-    ("vetion", "Vet'ion", True),
-    ("vorkath", "Vorkath", True),
-    ("wintertodt", "Wintertodt", True),
-    ("yama", "Yama", True),
-    ("zalcano", "Zalcano", True),
-    ("zulrah", "Zulrah", True),
-]
-
-
 def render_goal_tracking(player: PlayerView) -> str:
     """The Goal Tracking page -- not a real feature yet, just the
     research this app's actual goal-setting UI (time-based quotas for
     XP gained/NPCs killed/clue scrolls completed/items gained, etc.,
     see the dashboard card's own copy) will eventually get built
-    against. For now its entire content is this one reference table:
-    every boss the OSRS hiscores tracks (_HISCORE_BOSSES above) paired
-    with its RuneLite sprite icon, so a future "kill count" goal type
-    has a ready-made icon to show next to whichever boss a player picks.
+    against. For now its content is the reference table (every boss the
+    OSRS hiscores tracks, app.bosses.HISCORE_BOSSES, paired with its
+    RuneLite sprite icon) plus a real, working piece ahead of that UI:
+    a KC column sourced from the official OSRS Hiscores
+    (app/hiscores.py) and a "Sync from Hiscores" button to refresh it,
+    so a future "kill count" goal type has both a ready-made icon and a
+    real starting number to seed a goal against for whichever boss a
+    player picks.
+
+    Not linked (player.account_hash is None) shows the table with every
+    KC cell blank and no button -- there's no RuneLite character to
+    look up yet, same as every other page's linking story.
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
+    is_linked = player.account_hash is not None
+    has_synced = bool(player.boss_kill_counts)
 
     def _boss_row(slug: str, name: str, has_icon: bool) -> str:
         if has_icon:
@@ -9472,11 +9400,36 @@ def render_goal_tracking(player: PlayerView) -> str:
                 f'<span class="gt-boss-name">{escape(name)}</span>'
                 '<span class="gt-boss-name-missing-note">No icon yet</span>'
             )
-        return f'<tr><td class="gt-boss-icon-cell">{icon_cell}</td><td>{name_cell}</td></tr>'
+        kc = player.boss_kill_counts.get(name)
+        kc_text = f"{kc:,}" if isinstance(kc, int) else "—"
+        return (
+            f'<tr><td class="gt-boss-icon-cell">{icon_cell}</td><td>{name_cell}</td>'
+            f'<td class="gt-boss-kc" data-boss="{escape(name)}">{kc_text}</td></tr>'
+        )
 
     rows_html = "".join(
-        _boss_row(slug, name, has_icon) for slug, name, has_icon in _HISCORE_BOSSES
+        _boss_row(slug, name, has_icon) for slug, name, has_icon in HISCORE_BOSSES
     )
+
+    if is_linked:
+        sync_note = (
+            '<span id="gtSyncNote" class="gt-sync-note"></span>'
+            if has_synced
+            else '<span id="gtSyncNote" class="gt-sync-note">Not synced yet.</span>'
+        )
+        sync_controls = f"""
+        <div class="gt-sync-row">
+          <button type="button" id="gtSyncBtn" class="gt-sync-btn">Sync from Hiscores</button>
+          {sync_note}
+          <span id="gtSyncError" class="gt-sync-error"></span>
+        </div>
+        """
+    else:
+        sync_controls = (
+            '<div class="gt-sync-row">'
+            '<span class="gt-sync-note">Link your RuneLite account to sync kill counts.</span>'
+            "</div>"
+        )
 
     body = f"""
     <h2 class="page-title">Goal Tracking</h2>
@@ -9484,12 +9437,14 @@ def render_goal_tracking(player: PlayerView) -> str:
       Scaffolding for now -- every boss the OSRS hiscores tracks, matched up
       with its icon, ready for the actual goal-setting UI (time-based quotas
       for XP gained, NPCs killed, clue scrolls completed, items gained, and
-      whatever else gets added) to be built against.
+      whatever else gets added) to be built against. Kill counts come
+      straight from the official OSRS Hiscores.
     </p>
+    {sync_controls}
     <div class="gt-card">
       <table class="gt-boss-table">
         <thead>
-          <tr><th></th><th>Boss</th></tr>
+          <tr><th></th><th>Boss</th><th class="gt-boss-kc-head">KC</th></tr>
         </thead>
         <tbody>
           {rows_html}
@@ -9497,9 +9452,69 @@ def render_goal_tracking(player: PlayerView) -> str:
       </table>
     </div>
     """
+    script = f"""
+      var gtSyncedAtIso = {json.dumps(player.hiscores_synced_at.isoformat() if player.hiscores_synced_at else None)};
+
+      function gtFormatSyncedAt(iso) {{
+        if (!iso) return 'Not synced yet.';
+        var seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+        if (seconds < 60) return 'Synced just now.';
+        var minutes = Math.round(seconds / 60);
+        if (minutes < 60) return 'Synced ' + minutes + 'm ago.';
+        var hours = Math.round(minutes / 60);
+        if (hours < 24) return 'Synced ' + hours + 'h ago.';
+        var days = Math.round(hours / 24);
+        return 'Synced ' + days + 'd ago.';
+      }}
+
+      var gtSyncNoteEl = document.getElementById('gtSyncNote');
+      if (gtSyncNoteEl) {{
+        gtSyncNoteEl.textContent = gtFormatSyncedAt(gtSyncedAtIso);
+      }}
+
+      var gtSyncBtn = document.getElementById('gtSyncBtn');
+      if (gtSyncBtn) {{
+        gtSyncBtn.addEventListener('click', async function () {{
+          var errorEl = document.getElementById('gtSyncError');
+          errorEl.textContent = '';
+          errorEl.classList.remove('show');
+          gtSyncBtn.disabled = true;
+          var originalLabel = gtSyncBtn.textContent;
+          gtSyncBtn.textContent = 'Syncing…';
+          try {{
+            var res = await fetch('/api/players/me/hiscores/sync', {{ method: 'POST' }});
+            var data = await res.json().catch(function () {{ return {{}}; }});
+            if (!res.ok) {{
+              var msg = (data && data.detail) ? data.detail : 'Could not sync from the hiscores. Please try again.';
+              errorEl.textContent = msg;
+              errorEl.classList.add('show');
+              return;
+            }}
+            var kcByBoss = data.boss_kill_counts || {{}};
+            document.querySelectorAll('.gt-boss-kc').forEach(function (cell) {{
+              var boss = cell.getAttribute('data-boss');
+              if (Object.prototype.hasOwnProperty.call(kcByBoss, boss)) {{
+                cell.textContent = kcByBoss[boss].toLocaleString('en-US');
+              }}
+            }});
+            gtSyncedAtIso = data.synced_at || gtSyncedAtIso;
+            if (gtSyncNoteEl) {{
+              gtSyncNoteEl.textContent = gtFormatSyncedAt(gtSyncedAtIso);
+            }}
+          }} catch (err) {{
+            errorEl.textContent = 'Something went wrong. Please try again.';
+            errorEl.classList.add('show');
+          }} finally {{
+            gtSyncBtn.disabled = false;
+            gtSyncBtn.textContent = originalLabel;
+          }}
+        }});
+      }}
+    """
     return _shell(
         title="Goal Tracking — myscape",
         player=player,
         body=body,
+        extra_script=script,
         extra_head=extra_head,
     )
