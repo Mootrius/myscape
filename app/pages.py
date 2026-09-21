@@ -9702,18 +9702,27 @@ def render_goal_tracking(player: PlayerView) -> str:
           '<div class="gt-wizard-stage1-wrap">' +
           '  <div class="gt-wizard-stage1">' +
           '    <button type="button" class="gt-wizard-type-btn" data-type="item">' +
-          '      <img src="/static/img/icon-goal-item.png" alt="" /><span>Item</span></button>' +
+          '      <img src="/static/img/icon-goal-item.png" alt="" /><span>Item Qty</span></button>' +
           '    <button type="button" class="gt-wizard-type-btn" data-type="kc">' +
           '      <img src="/static/img/icon-goal-kc.png" alt="" /><span>Boss KC</span></button>' +
           '    <button type="button" class="gt-wizard-type-btn" data-type="skill">' +
-          '      <img src="/static/img/icon-goal-skill.png" alt="" /><span>Skill</span></button>' +
+          '      <img src="/static/img/icon-goal-skill.png" alt="" /><span>Skill Lvl/Xp</span></button>' +
           '  </div>' +
           '  <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel gt-wizard-stage1-cancel" id="gtWizardCancel">Cancel</button>' +
           '</div>';
       }
 
-      var WIZARD_SEARCH_LABEL = { item: 'Item', kc: 'Boss', skill: 'Skill' };
       var WIZARD_SEARCH_PLACEHOLDER = { item: 'Search for an item', kc: 'Search for a boss', skill: 'Search for a skill' };
+
+      // The target field's placeholder -- doubles as this field's only
+      // label now (see wizardStage2Html/updateWizardTargetField below,
+      // which is what keeps it current whenever the skill goal's own
+      // Lvl/Xp toggle switches).
+      function wizardTargetPlaceholder() {
+        if (GT.type === 'kc') return 'Target kc';
+        if (GT.type === 'skill') return (GT.skillMetric === 'xp') ? 'Target experience' : 'Target level';
+        return 'Target quantity';
+      }
 
       // Stage 2 -- one box, same fixed size as stage 1 (see the
       // .gt-wizard-expanded/#gtWizardStage height rules in
@@ -9723,11 +9732,13 @@ def render_goal_tracking(player: PlayerView) -> str:
       // pinned to the bottom via justify-content: space-between on
       // .gt-wizard-stage2 -- nothing about this stage's own markup
       // grows the box the way the old top Back link + stacked fields
-      // used to.
+      // used to. Neither field carries its own <label> any more --
+      // placeholder text (WIZARD_SEARCH_PLACEHOLDER/
+      // wizardTargetPlaceholder) does that job instead, so there's no
+      // label row above the inputs to keep in sync any more either.
       function wizardStage2Html() {
         var metricToggle = (GT.type !== 'skill') ? '' : (
           '<div class="gt-field gt-field-metric">' +
-          '  <label>&nbsp;</label>' +
           '  <div class="gt-metric-toggle" id="gtMetricToggle">' +
           '    <button type="button" class="gt-metric-btn" data-metric="level">Lvl</button>' +
           '    <button type="button" class="gt-metric-btn" data-metric="xp">XP</button>' +
@@ -9738,7 +9749,6 @@ def render_goal_tracking(player: PlayerView) -> str:
           '<div class="gt-wizard-stage2">' +
           '  <div class="gt-wizard-row">' +
           '    <div class="gt-field gt-field-target-search">' +
-          '      <label for="gtWizardSearchInput">' + WIZARD_SEARCH_LABEL[GT.type] + '</label>' +
           '      <div class="gt-search-box">' +
           '        <input type="text" id="gtWizardSearchInput" placeholder="' + WIZARD_SEARCH_PLACEHOLDER[GT.type] + '" autocomplete="off" />' +
           '        <div class="gt-suggestions" id="gtWizardSuggestions"></div>' +
@@ -9746,8 +9756,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           '    </div>' +
           metricToggle +
           '    <div class="gt-field gt-field-target">' +
-          '      <label for="gtTargetValue" id="gtTargetLabel"></label>' +
-          '      <input type="text" inputmode="decimal" id="gtTargetValue" autocomplete="off" />' +
+          '      <input type="text" inputmode="decimal" id="gtTargetValue" placeholder="' + wizardTargetPlaceholder() + '" autocomplete="off" />' +
           '    </div>' +
           '  </div>' +
           '  <div class="gt-field-error" id="gtTargetError"></div>' +
@@ -9895,10 +9904,7 @@ def render_goal_tracking(player: PlayerView) -> str:
       }
 
       function updateWizardTargetField() {
-        var label = document.getElementById('gtTargetLabel');
-        if (GT.type === 'kc') { label.textContent = 'KC'; }
-        else if (GT.type === 'skill') { label.textContent = (GT.skillMetric === 'xp') ? 'XP' : 'Lvl'; }
-        else { label.textContent = 'Quantity'; }
+        document.getElementById('gtTargetValue').placeholder = wizardTargetPlaceholder();
       }
 
       // Live, as-you-type range check for the target field -- mirrors

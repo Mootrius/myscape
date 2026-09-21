@@ -103,6 +103,12 @@
 .gt-wizard-stage1-cancel {
   align-self: center;
   min-width: 100px;
+  /* Explicit, not left to justify-content: space-between's own
+     leftover-space math alone -- the type cards got shorter but so
+     did the fixed box (see .gt-wizard-expanded), so there wasn't
+     always enough leftover space to keep Cancel from sitting flush
+     against the row above it. This guarantees a real gap either way. */
+  margin-top: 14px;
 }
 
 .gt-wizard-type-btn {
@@ -146,14 +152,16 @@
 
 .gt-wizard-row { display: flex; gap: 12px; align-items: flex-start; }
 
-.gt-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 200px; min-width: 160px; }
-
-.gt-field label {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
+/* No <label> of its own any more -- placeholder text on the field's
+   own input (WIZARD_SEARCH_PLACEHOLDER/wizardTargetPlaceholder in
+   the script) does that job instead, so .gt-field wraps just one
+   child now rather than a label+input stack. Still flex-direction:
+   column (not the row default), since that's what makes that one
+   child (the search box, the metric toggle, or the target input)
+   stretch to the wrapper's own full width via the column axis's
+   default align-items: stretch -- switching to row would only
+   stretch it to the wrapper's height instead. */
+.gt-field { display: flex; flex-direction: column; flex: 1 1 200px; min-width: 160px; }
 
 .gt-field select, .gt-field input[type="number"], .gt-field input[type="text"] { width: 100%; height: 34px; padding: 0 12px; }
 
@@ -203,9 +211,9 @@
 /* Level/XP toggle, inline with the skill search + target fields --
    same segmented-pair look as Purchase Goals'/Mindmaps' own
    .btn-secondary pairs, just a two-up toggle rather than a single
-   button. The empty &nbsp; label above it (see wizardStage2Html)
-   only exists to match the other two fields' own label height, so
-   all three inputs land on the same baseline. */
+   button. Same fixed 34px height as the other two fields' own
+   inputs, so all three land on the same row without any label row
+   above them to align against any more. */
 .gt-metric-toggle { display: flex; gap: 0; height: 34px; }
 
 .gt-metric-btn {
