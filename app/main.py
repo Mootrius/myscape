@@ -1444,6 +1444,17 @@ def sync_kill_counts(
     return KillCountSyncResponse(applied_count=applied_count)
 
 
+@app.get("/api/players/me/kill-counts")
+def read_kill_counts(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """The website's own read of the live kill-count snapshot --
+    session-authenticated like every other GET here, unlike the POST
+    right above it. Goal Tracking's own page polls this (see
+    render_goal_tracking's own script in app/pages.py) so a chatbox-
+    parsed kill count the plugin just posted shows up there within a
+    few seconds, without the player having to manually refresh."""
+    return {"boss_kill_counts": game_account.boss_kill_counts or {}}
+
+
 @app.post("/api/players/me/loot", response_model=LootSyncResponse)
 def sync_loot(
     payload: LootSyncRequest,

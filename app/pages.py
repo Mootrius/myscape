@@ -9375,14 +9375,14 @@ def render_goal_tracking(player: PlayerView) -> str:
     RuneLite sprite icon) plus a real, working piece ahead of that UI:
     a KC column that's always already live by the time this renders.
 
-    No button, no client-side fetch, and no sync of any kind triggered
-    from here -- player.boss_kill_counts is simply read as-is.
-    game_account.boss_kill_counts is seeded once, the moment a
-    character links or re-links (exchange_link_code in
-    app/routers/linking.py pulls the real OSRS hiscores right then),
-    and kept current after that by the plugin itself, live, the instant
-    it parses a kill count out of the chatbox (POST
-    /api/players/me/kill-counts -- see app.hiscores.
+    No button, no client-side fetch on the INITIAL render, and no sync
+    of any kind triggered from here -- player.boss_kill_counts is
+    simply read as-is for the first paint. game_account.boss_kill_counts
+    is seeded once, the moment a character links or re-links
+    (exchange_link_code in app/routers/linking.py pulls the real OSRS
+    hiscores right then), and kept current after that by the plugin
+    itself, live, the instant it parses a kill count out of the chatbox
+    (POST /api/players/me/kill-counts -- see app.hiscores.
     apply_kill_count_updates). That also means this table can be
     PARTIAL in an ordinary, expected way: a boss the player has killed
     since linking shows its confirmed number, while a boss they simply
@@ -9391,9 +9391,21 @@ def render_goal_tracking(player: PlayerView) -> str:
     bosses-or-nothing gate the way a single hiscores snapshot used to
     imply.
 
+    The server-side write is already live the instant the plugin POSTs
+    it -- what used to be missing was the BROWSER ever finding out
+    without a manual refresh. So, when linked, a small poll (GET
+    /api/players/me/kill-counts every 5s, same interval and pattern
+    Purchase Goals and Possessions already use -- see PG.pollTimer in
+    render_purchase_goals and the setInterval(loadSummary, ...) call in
+    render_possessions) patches each `.gt-boss-kc` cell in place by its
+    `data-boss` attribute, so a kill made mid-session shows up here
+    within a few seconds of the plugin reporting it, same as every
+    other page on this site that stays current without a reload.
+
     Not linked (player.account_hash is None) shows the table with every
     KC cell blank -- there's no RuneLite character to look up yet, same
-    as every other page's linking story.
+    as every other page's linking story -- and the poll doesn't start
+    at all, since there's nothing for it to fetch.
     """
     extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
     is_linked = player.account_hash is not None
@@ -9426,9 +9438,9 @@ def render_goal_tracking(player: PlayerView) -> str:
 
     if is_linked:
         sync_note = (
-            '<span class="gt-sync-note">Kept up to date automatically as you play.</span>'
+            '<span id="gtSyncNote" class="gt-sync-note">Kept up to date automatically as you play.</span>'
             if has_synced
-            else '<span class="gt-sync-note">No hiscores data yet -- check back soon.</span>'
+            else '<span id="gtSyncNote" class="gt-sync-note">No hiscores data yet -- check back soon.</span>'
         )
         sync_controls = f'<div class="gt-sync-row">{sync_note}</div>'
     else:
@@ -9461,9 +9473,44 @@ def render_goal_tracking(player: PlayerView) -> str:
       </table>
     </div>
     """
+    # Only linked accounts have anything worth polling for -- an
+    # unlinked one has no game_account.boss_kill_counts of its own and
+    # GET /api/players/me/kill-counts would just hand back {} on every
+    # request forever, so the poll doesn't start at all in that case
+    # (same "nothing to fetch yet" reasoning the sync_controls branch
+    # above already applies to the note itself).
+    script = (
+        """
+      async function gtRefreshKillCounts() {
+        try {
+          var res = await fetch('/api/players/me/kill-counts');
+          if (!res.ok) return;
+          var data = await res.json();
+          var counts = (data && data.boss_kill_counts) || {};
+          document.querySelectorAll('.gt-boss-kc').forEach(function (cell) {
+            var kc = counts[cell.getAttribute('data-boss')];
+            cell.textContent = (typeof kc === 'number') ? kc.toLocaleString('en-US') : '—';
+          });
+          var noteEl = document.getElementById('gtSyncNote');
+          if (noteEl && Object.keys(counts).length > 0) {
+            noteEl.textContent = 'Kept up to date automatically as you play.';
+          }
+        } catch (err) {
+          // Ignored, same as every other background poll on this site
+          // (see PG.pollTimer in render_purchase_goals) -- a dropped
+          // poll just means this one tick didn't refresh; the next one
+          // in 5s tries again on its own.
+        }
+      }
+      setInterval(gtRefreshKillCounts, 5000);
+    """
+        if is_linked
+        else ""
+    )
     return _shell(
         title="Goal Tracking — myscape",
         player=player,
         body=body,
+        extra_script=script,
         extra_head=extra_head,
     )
