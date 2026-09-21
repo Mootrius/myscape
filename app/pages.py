@@ -9429,6 +9429,14 @@ def render_goal_tracking(player: PlayerView) -> str:
     skill_options = "".join(
         f'<option value="{skill}">{escape(skill.title())}</option>' for skill in sorted(SKILL_NAMES)
     )
+    # A kc goal's own icon (see goalRowHtml in the script below) is its
+    # real boss sprite, not the generic KC badge -- every HISCORE_BOSSES
+    # entry has one (see the has_icon check in that module's own
+    # docstring; there's no missing-icon fallback needed here the way
+    # the old boss-table page once needed for its "no icon yet" case).
+    # Built here rather than duplicated client-side since HISCORE_BOSSES
+    # is this file's own source of truth for boss display names.
+    boss_slug_by_name_json = json.dumps({name: slug for slug, name, _has_icon in HISCORE_BOSSES})
 
     body = f"""
     <h2 class="page-title">Goal Tracking</h2>
@@ -9482,8 +9490,17 @@ def render_goal_tracking(player: PlayerView) -> str:
     </div>
     """
 
-    script = """
+    script = (
+        "var BOSS_SLUG_BY_NAME = " + boss_slug_by_name_json + ";\n"
+        + """
     (function () {
+      // Generic per-TYPE badge -- still what the type-picker buttons
+      // above show (they represent the category being picked, not a
+      // specific goal), and item goals' own row icon too (there's no
+      // single canonical sprite for "any item"). A kc/skill goal's own
+      // row icon is its real boss/skill sprite instead -- see
+      // goalRowHtml's iconSrc below, which only falls back to this for
+      // item goals.
       var TYPE_ICON = {
         kc: '/static/img/icon-goal-kc.png',
         skill: '/static/img/icon-goal-skill.png',
@@ -9665,12 +9682,33 @@ def render_goal_tracking(player: PlayerView) -> str:
         return 'Item quantity';
       }
 
+      // A kc goal's icon is its real boss sprite (app/static/boss-icons,
+      // same assets the old boss-table page used) and a skill goal's is
+      // its real skill sprite (app/static/skill-icons, sourced from the
+      // OSRS Wiki's own icon set) -- BOSS_SLUG_BY_NAME is injected above
+      // from app.bosses.HISCORE_BOSSES, and a skill goal's target_name
+      // is already the lowercase skill key the filename itself uses
+      // (see SKILL_NAMES/skill_options in render_goal_tracking). Falls
+      // back to the generic TYPE_ICON badge only if a boss name somehow
+      // isn't in BOSS_SLUG_BY_NAME -- shouldn't happen since the boss
+      // field is a <select> of exactly that list, but a missing/broken
+      // <img> would look far worse than the plain badge it replaces.
+      function goalIconSrc(g) {
+        if (g.goal_type === 'kc') {
+          var slug = BOSS_SLUG_BY_NAME[g.target_name];
+          if (slug) return '/static/boss-icons/' + slug + '.png';
+        } else if (g.goal_type === 'skill') {
+          return '/static/skill-icons/' + g.target_name + '.png';
+        }
+        return TYPE_ICON[g.goal_type];
+      }
+
       function goalRowHtml(g) {
         var pct = g.target_value > 0 ? Math.max(0, Math.min(100, (g.current_value / g.target_value) * 100)) : 0;
         var done = g.current_value >= g.target_value;
         return '' +
           '<div class="gt-goal-row' + (done ? ' gt-goal-done' : '') + '">' +
-          '  <img class="gt-goal-icon" src="' + TYPE_ICON[g.goal_type] + '" alt="" />' +
+          '  <img class="gt-goal-icon" src="' + goalIconSrc(g) + '" alt="" />' +
           '  <div class="gt-goal-info">' +
           '    <div class="gt-goal-name">' + escapeHtml(goalName(g)) + '</div>' +
           '    <div class="gt-goal-sub">' + goalSubtitle(g) + '</div>' +
@@ -9722,6 +9760,7 @@ def render_goal_tracking(player: PlayerView) -> str:
       setInterval(loadGoals, 5000);
     })();
     """
+    )
     return _shell(
         title="Goal Tracking — myscape",
         player=player,
