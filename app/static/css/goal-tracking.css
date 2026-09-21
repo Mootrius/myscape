@@ -111,6 +111,20 @@
   margin-top: 14px;
 }
 
+/* Compound selector (two classes) so this beats the plain
+   .gt-wizard-btn rule below on specificity -- that rule sits later
+   in the file and was winning on source order alone, which is why
+   an earlier attempt to shrink this button via .gt-wizard-stage1-cancel
+   alone had no visible effect. Shrinking it (from the base 36px/0 16px)
+   frees up more of the fixed box's leftover space for the gap above,
+   on top of the explicit margin-top, so Cancel reads as clearly
+   separated from the type-card row instead of flush against it. */
+.gt-wizard-btn.gt-wizard-stage1-cancel {
+  height: 26px;
+  padding: 0 14px;
+  font-size: 10px;
+}
+
 .gt-wizard-type-btn {
   display: flex;
   flex-direction: column;
