@@ -9446,7 +9446,7 @@ def render_goal_tracking(player: PlayerView) -> str:
     </div>
 
     <div class="gt-card gt-list-card">
-      <p class="gt-empty" id="gtEmpty" style="display:none;">No goals yet -- add one above to start tracking.</p>
+      <p class="gt-empty" id="gtEmpty" style="display:none;">Add a goal above to start tracking.</p>
       <div class="gt-goal-list" id="gtGoalList"></div>
     </div>
     """
