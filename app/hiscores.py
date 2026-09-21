@@ -13,6 +13,21 @@ the Loot Tracker has caught since it was taken, so a boss killed 30
 seconds ago shows up immediately even though the hiscores themselves
 won't be asked again for another _MIN_ACCOUNT_REFRESH_SECONDS.
 
+The official hiscores themselves only get recomputed when the
+character logs out -- not continuously while playing -- so a pull made
+mid-session just returns the same numbers Jagex already had, even
+though the player may well have racked up real kills since. Blindly
+trusting every pull as the new truth would make the KC column visibly
+regress every _MIN_ACCOUNT_REFRESH_SECONDS, right back down to that
+stale logged-in-the-whole-time number, erasing whatever the loot
+tracker had already topped it up with. sync_hiscores below only ever
+advances a given boss's stored value (and, in lockstep,
+boss_kill_counts_updated_at -- see GameAccount's own docstring in
+app/models.py) when a fresh pull reports a number that's actually
+DIFFERENT from what's already on file for that boss -- which can only
+happen after a real logout-triggered hiscores update -- never just
+because a pull happened to succeed.
+
 Deliberately the *official* Jagex endpoint, not Wise Old Man or any
 other third party: it's the same primary source WOM itself mirrors, so
 going direct costs nothing accuracy-wise and drops the extra
@@ -42,11 +57,11 @@ hammering it is a good way to get an IP soft-throttled):
    requests/restarts/deploys, unlike anything in-memory below). A sync
    requested again before this window elapses costs zero network calls
    -- it just hands back what's already stored. Generous enough that
-   double-clicking the button, or two tabs syncing at once, can't cause
-   a request burst, and roughly matched to how often the hiscores
-   themselves actually update anyway (see the module docstring above),
-   so a shorter window wouldn't even show fresher numbers most of the
-   time.
+   reloading Goal Tracking repeatedly, or two tabs open at once, can't
+   cause a request burst, and roughly matched to how often the
+   hiscores themselves actually update anyway (see the module
+   docstring above), so a shorter window wouldn't even show fresher
+   numbers most of the time.
 2. A hard global minimum spacing between ANY two outbound requests to
    Jagex (_throttle below) -- not just per account, across every
    account this whole process ever syncs, including the extra probe
@@ -65,9 +80,11 @@ hammering it is a good way to get an IP soft-throttled):
    request, never a multi-endpoint probe.
 
 A failed fetch never wipes out what's already stored -- sync_hiscores
-only overwrites boss_kill_counts/hiscores_synced_at on a genuine
-success, so a transient Jagex hiccup leaves Goal Tracking showing
-yesterday's numbers rather than blanking out.
+only ever overwrites hiscores_synced_at (and, per boss, boss_kill_counts/
+boss_kill_counts_updated_at where that boss's number actually changed)
+on a genuine success, so a transient Jagex hiccup, or a pull made while
+still logged in, both leave Goal Tracking showing exactly what it
+already had rather than blanking out or regressing.
 """
 import json
 import threading
@@ -227,13 +244,19 @@ def _is_fresh(synced_at: Optional[datetime]) -> bool:
 
 
 def sync_hiscores(db, game_account) -> HiscoresSyncResult:
-    """The one entry point POST /api/players/me/hiscores/sync (app/
-    main.py) calls. Returns cached data (from_cache=True, no network
-    call at all) when game_account.hiscores_synced_at is still within
-    _MIN_ACCOUNT_REFRESH_SECONDS; otherwise fetches fresh data and
-    updates+commits game_account's boss_kill_counts/
-    hiscores_account_type/hiscores_synced_at before returning it
-    (from_cache=False).
+    """The one entry point goal_tracking_page (app/main.py) calls on
+    every real page visit, and POST /api/players/me/hiscores/sync
+    calls for a manual/API-triggered resync. Returns cached data
+    (from_cache=True, no network call at all) when
+    game_account.hiscores_synced_at is still within
+    _MIN_ACCOUNT_REFRESH_SECONDS; otherwise fetches fresh data,
+    diffs it against what's already stored PER BOSS -- advancing
+    boss_kill_counts[name]/boss_kill_counts_updated_at[name] together
+    only for a boss whose pulled number actually differs (see this
+    module's own top-of-file comment for why an unconditional
+    overwrite would be wrong) -- always advances
+    hiscores_account_type/hiscores_synced_at regardless, commits, and
+    returns the (possibly partially-updated) result (from_cache=False).
 
     Raises NotLinkedError if this game account has no runescape_name
     yet, RecentlyFailedError if it failed within the last
@@ -301,16 +324,38 @@ def sync_hiscores(db, game_account) -> HiscoresSyncResult:
     with _failures_lock:
         _recent_failures.pop(game_account.id, None)
 
-    boss_kill_counts = _parse_boss_kill_counts(payload)
+    pulled = _parse_boss_kill_counts(payload)
     synced_at = _utcnow()
+    synced_at_iso = synced_at.isoformat()
 
-    game_account.boss_kill_counts = boss_kill_counts
+    # Per-boss diff against what's already stored -- see this module's
+    # own top-of-file comment and GameAccount's own docstring in
+    # app/models.py for why: the hiscores only actually change on
+    # logout, so a pull made mid-session just echoes back numbers
+    # already on file, and advancing boss_kill_counts_updated_at for a
+    # boss that DIDN'T change would wrongly reset
+    # display_boss_kill_counts's loot-tracker window for it, erasing
+    # progress it had already topped up client-side. Only a boss whose
+    # pulled number actually differs gets its stored value AND its own
+    # anchor moved forward together; everything else -- including a
+    # boss this account has simply never had any activity on, where
+    # pulled always equals stored (0 == 0) -- is left exactly as it
+    # was.
+    baseline = dict(game_account.boss_kill_counts or {})
+    anchors = dict(game_account.boss_kill_counts_updated_at or {})
+    for name, kc in pulled.items():
+        if baseline.get(name) != kc:
+            baseline[name] = kc
+            anchors[name] = synced_at_iso
+
+    game_account.boss_kill_counts = baseline
+    game_account.boss_kill_counts_updated_at = anchors
     game_account.hiscores_account_type = mode
     game_account.hiscores_synced_at = synced_at
     db.add(game_account)
     db.commit()
 
-    return HiscoresSyncResult(boss_kill_counts=boss_kill_counts, synced_at=synced_at, from_cache=False)
+    return HiscoresSyncResult(boss_kill_counts=baseline, synced_at=synced_at, from_cache=False)
 
 
 def display_boss_kill_counts(db, game_account) -> Dict[str, int]:
@@ -330,16 +375,26 @@ def display_boss_kill_counts(db, game_account) -> Dict[str, int]:
     Reuses app.loot.kc_counts_by_player -- the same all-time
     per-source occurrence list app/mindmaps.py's own "kc" goal type
     already checks a player-typed NPC name against -- filtered here to
-    just the occurrences after game_account.hiscores_synced_at, per
-    boss. Matches a LootEvent's source_name against our boss
-    display_name the same normalized (trimmed, lowercased) way that
-    existing "kc" goal matching already does (app.loot.npc_hide_key);
-    there's no separate "hiscores name -> in-game NPC name" table for
-    this because the in-game name is what our display_name was BUILT
-    from in the first place (see app/bosses.py's own docstring) --
-    the hiscores' own small set of divergent names
-    (HISCORES_NAME_OVERRIDES) is a different, unrelated mismatch that
-    only ever matters when talking to Jagex, not here.
+    just the occurrences after each boss's OWN
+    boss_kill_counts_updated_at entry (not one account-wide cutoff --
+    see that column's own docstring in app/models.py for why: two
+    different bosses can have gone stale at two different real logouts,
+    so each needs its own anchor). Matches a LootEvent's source_name
+    against our boss display_name the same normalized (trimmed,
+    lowercased) way that existing "kc" goal matching already does
+    (app.loot.npc_hide_key); there's no separate "hiscores name ->
+    in-game NPC name" table for this because the in-game name is what
+    our display_name was BUILT from in the first place (see
+    app/bosses.py's own docstring) -- the hiscores' own small set of
+    divergent names (HISCORES_NAME_OVERRIDES) is a different, unrelated
+    mismatch that only ever matters when talking to Jagex, not here.
+
+    A boss with no anchor entry yet (an account synced before
+    boss_kill_counts_updated_at existed, or the rare edge case of a
+    boss whose very first-ever pulled value happened to already match
+    some prior default) falls back to game_account.hiscores_synced_at
+    itself -- the best available "as of when is this number good"
+    answer for it.
 
     Returns {} for an account that's never completed a single hiscores
     sync (nothing to top up yet -- render_goal_tracking shows blank KC
@@ -349,12 +404,15 @@ def display_boss_kill_counts(db, game_account) -> Dict[str, int]:
     baseline = game_account.boss_kill_counts or {}
     if not baseline:
         return {}
-    since = game_account.hiscores_synced_at
+    anchors = game_account.boss_kill_counts_updated_at or {}
+    account_synced_at = game_account.hiscores_synced_at
     kc_counts = kc_counts_by_player(db, game_account)
     result = dict(baseline)
     for name, kc in baseline.items():
         if not isinstance(kc, int):
             continue
+        anchor_iso = anchors.get(name)
+        since = datetime.fromisoformat(anchor_iso) if anchor_iso else account_synced_at
         occurrences = kc_counts.get(("npc", npc_hide_key(name)), [])
         delta = sum(1 for ts in occurrences if ts and since is not None and ts > since)
         if delta:

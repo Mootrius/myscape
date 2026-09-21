@@ -200,20 +200,45 @@ class GameAccount(Base):
     # for nothing". This is the raw hiscores baseline, not what the
     # page actually displays -- see display_boss_kill_counts in
     # app/hiscores.py, which tops it up with anything the Loot Tracker
-    # has caught since hiscores_synced_at below.
+    # has caught since boss_kill_counts_updated_at below.
+    #
+    # A given boss's value here only ever moves when a fresh hiscores
+    # pull actually reports a DIFFERENT number for it (see
+    # sync_hiscores's own per-boss diff) -- never just because a pull
+    # happened. The official hiscores themselves only get recomputed
+    # when the character logs out, so a pull made while still logged
+    # in just returns the same numbers as last time; if this column
+    # were overwritten unconditionally on every pull, the KC column
+    # would visibly drop back down to that stale number every
+    # _MIN_ACCOUNT_REFRESH_SECONDS, erasing whatever the loot tracker
+    # had already topped it up with client-side. Diffing per boss
+    # instead of trusting every pull is what avoids that regression.
     boss_kill_counts = Column(JSONB, nullable=False, default=dict)
+    # {<boss name>: <ISO timestamp>} -- when boss_kill_counts[name]
+    # above last ACTUALLY changed value (not merely when it was last
+    # re-fetched and happened to match), one entry per boss once that
+    # boss has been seen at least once. This -- not hiscores_synced_at
+    # below -- is what display_boss_kill_counts anchors its "count
+    # loot_events after this point" window to, per boss: since a
+    # boss's own hiscores number only moves on a real Jagex-side
+    # update, only THAT counts as "the loot tracker's job to fill in
+    # after," and a pull that changed nothing must leave this alone so
+    # already-topped-up progress isn't lost (see boss_kill_counts's own
+    # comment above for the failure this prevents).
+    boss_kill_counts_updated_at = Column(JSONB, nullable=False, default=dict)
     # Which hiscores game-mode endpoint actually resolved this account
     # (one of app.hiscores.GAMEMODES' first elements) -- cached after
     # the first successful sync purely so every later one hits that
     # endpoint directly instead of probing every game mode again. Null
     # until the first successful sync.
     hiscores_account_type = Column(String, nullable=True)
-    # When boss_kill_counts above was last genuinely refreshed from the
-    # hiscores -- NOT merely when a sync was last requested, since a
-    # request inside app/hiscores.py's own refresh window reuses the
-    # cache and leaves this untouched. Drives both the "synced Xm ago"
-    # note on Goal Tracking and that same per-account refresh-interval
-    # check.
+    # When the hiscores were last successfully FETCHED -- not when
+    # boss_kill_counts above last actually changed (see
+    # boss_kill_counts_updated_at for that). Advances on every real
+    # pull regardless of whether the payload turned out identical to
+    # last time, since this is purely "did we talk to Jagex," which is
+    # what the "synced Xm ago" note on Goal Tracking and this same
+    # per-account refresh-interval check both actually mean.
     hiscores_synced_at = Column(DateTime(timezone=True), nullable=True)
 
     account = relationship("Account", back_populates="game_accounts")
