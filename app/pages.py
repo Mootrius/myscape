@@ -9935,7 +9935,7 @@ def render_goal_tracking(player: PlayerView) -> str:
                  RECURRING_ICON_SVG + '<span>Recurring</span></button>' +
           '  </div>' +
           '  <div class="gt-wizard-stage1-actions">' +
-          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel gt-wizard-stage1-cancel" id="gtWizardCancel">Cancel</button>' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
           '  </div>' +
           '</div>';
       }
@@ -9973,8 +9973,8 @@ def render_goal_tracking(player: PlayerView) -> str:
           '<div class="gt-wizard-stage1-wrap">' +
           '  <div class="gt-wizard-stage1">' + cards + '</div>' +
           '  <div class="gt-wizard-stage1-actions">' +
-          '    <button type="button" class="gt-wizard-btn gt-wizard-stage1-cancel" id="gtWizardBack">Back</button>' +
-          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel gt-wizard-stage1-cancel" id="gtWizardCancel">Cancel</button>' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
           '  </div>' +
           '</div>';
       }

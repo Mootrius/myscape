@@ -58,12 +58,23 @@
    size (three type-picker cards), which stage 2's shorter content
    (one field row + one button row) then fills the same way stage 1
    does, via #gtWizardStage/.gt-wizard-stage1/.gt-wizard-stage2 below
-   all stretching to its full height instead of sizing to content. */
+   all stretching to its full height instead of sizing to content.
+   174px, not the original 154px -- stage 4 (interval field + unit
+   toggle + actions row) fills essentially all of the original 154px
+   with zero slack for space-between to work with, which is exactly
+   why its toggle and actions row used to render touching; the extra
+   20px gives .gt-wizard-recur-fields' own margin-bottom room to
+   create a real gap there without that row overflowing past this
+   box's own bottom edge. Every stage's actions row still ends up
+   pinned to this same (now-taller) bottom edge either way -- see
+   .gt-wizard-stage1-wrap/.gt-wizard-stage2's own justify-content:
+   space-between -- so this only ever adds a bit more empty room
+   around the shorter stages, never moves anything out of alignment. */
 .gt-wizard-expanded {
   position: relative;
   width: 100%;
   max-width: 460px;
-  height: 154px;
+  height: 174px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -93,7 +104,15 @@
      therefore centering within) the parent's available space -- same
      fix #gtWizardStage already applies to itself for the same reason. */
   min-height: 0;
-  justify-content: center;
+  /* space-between (not center) so the actions row pins to the exact
+     same bottom edge .gt-wizard-stage2 already pins stage 3/4's own
+     actions row to -- centering the type-card-row+actions pair as one
+     block (the original approach) looked fine on its own, but left
+     stage 1/2's actions row sitting a few px lower than stage 3/4's,
+     since a centered pair's exact vertical offset depends on the
+     pair's own total height while space-between's bottom edge never
+     moves at all. All 4 stages now agree on that same fixed edge. */
+  justify-content: space-between;
 }
 
 .gt-wizard-stage1 {
@@ -115,15 +134,6 @@
      always enough leftover space to keep this row from sitting flush
      against the cards above it. This guarantees a real gap either way. */
   margin-top: 14px;
-}
-
-/* Same min-width every wizard button now gets from the base
-   .gt-wizard-btn rule below -- kept as its own class purely because
-   stage 1/2's own layout (.gt-wizard-stage1-actions above) still needs
-   a hook to center this row as a group, not because its buttons are
-   sized any differently from Back/Cancel on any other stage any more. */
-.gt-wizard-stage1-cancel {
-  min-width: 100px;
 }
 
 .gt-wizard-type-btn {
@@ -209,18 +219,24 @@
    secondary look as every other page's own .btn-secondary
    (mindmaps.css/purchase-goals.css), duplicated here rather than
    shared per this file's own "each page owns its stylesheet"
-   convention; Save keeps the page's one gold .gt-add-btn and grows to
-   fill the row's remaining width so it reads as the primary action --
-   Next (.gt-wizard-btn-next below) borrows that same growing slot but
-   not the gold, since it isn't the action that actually creates the
-   goal. Sized to match stage 1/2's own Back/Cancel (the smaller
-   26px/0 14px/10px look, not this file's original 36px/0 16px/11px
-   one) so every wizard button -- whichever stage it's on -- now looks
-   like it belongs to the same row. */
-.gt-wizard-actions { display: flex; gap: 8px; }
+   convention; Save/Next (.gt-add-btn) is the same fixed 100px width as
+   Back/Cancel now (see .gt-wizard-btn's own width below) rather than
+   growing to fill the row, so the whole row -- however many buttons it
+   has, whichever stage it's on -- always reads as a set of
+   same-sized buttons instead of one of them stretching to fill
+   leftover space. Centered as a group (align-self: center) so a
+   narrower row (stage 1's Cancel-alone, or stage 2's Back+Cancel)
+   doesn't just sit flush left the way a shrunk flex row normally
+   would -- same centering stage 1/2's own .gt-wizard-stage1-actions
+   already used, now shared here too so every stage's action row lines
+   up the same way horizontally as well as vertically (see
+   .gt-wizard-stage1-wrap's own justify-content below, which is what
+   lines all 4 stages' action rows up on the same y-axis). */
+.gt-wizard-actions { display: flex; gap: 8px; align-self: center; }
 
 .gt-wizard-btn {
   flex: 0 0 auto;
+  width: 100px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -236,10 +252,10 @@
 
 .gt-wizard-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 
-.gt-wizard-actions .gt-add-btn { flex: 1 1 auto; height: 26px; }
+.gt-wizard-actions .gt-add-btn { flex: 0 0 auto; width: 100px; height: 26px; }
 
 /* Next (stage 3, recurring only -- see wizardStageTargetHtml in the
-   script) -- same size/growing slot as Save (it's still .gt-add-btn
+   script) -- same fixed 100px size as Save (it's still .gt-add-btn
    underneath), recolored to the plain Back/Cancel look instead of
    gold. There's a real Save still ahead of it on stage 4, so Next
    shouldn't read as the button that actually creates the goal. */
@@ -292,8 +308,14 @@
    wizardStageCadenceHtml) so .gt-wizard-stage2's own space-between
    still only ever splits leftover room 3 ways (this block, the error
    line, the actions row), same as stage 3's field row/error/actions
-   already do. */
-.gt-wizard-recur-fields { display: flex; flex-direction: column; gap: 12px; }
+   already do. margin-bottom guarantees real breathing room below the
+   unit toggle even so -- the error line between this block and the
+   actions row is 0-height whenever there's nothing to show (the
+   common case), so space-between's own leftover-space math alone
+   wasn't reliably keeping the toggle clear of the buttons underneath
+   it, same reasoning as .gt-wizard-stage1-actions' own explicit
+   margin-top. */
+.gt-wizard-recur-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
 
 /* Narrower than a full-width field on purpose -- this is a plain "how
    many" count, not something that needs the row's whole width the way
