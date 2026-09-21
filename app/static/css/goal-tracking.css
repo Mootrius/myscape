@@ -329,6 +329,10 @@
   gap: 14px;
   padding: 12px 4px;
   border-bottom: 1px solid var(--border);
+  /* .gt-goal-delete is positioned absolutely within this (see below) so
+     it overlays the row instead of claiming a flex track -- that's what
+     lets .gt-goal-info/.gt-goal-bar use the row's full width. */
+  position: relative;
 }
 
 .gt-goal-list .gt-goal-row:last-child { border-bottom: none; }
@@ -349,6 +353,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Room for .gt-goal-delete, which overlays the row's top-right corner
+     rather than sitting in flow -- sized for its widest state, the "Are
+     you sure?" confirm label, so a long goal name's ellipsis never runs
+     under it. The sub-line and bar below don't need this: the button
+     doesn't reach down that far. */
+  padding-right: 92px;
 }
 
 .gt-goal-sub { color: var(--text-faint); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; margin-top: 1px; font-variant-numeric: tabular-nums; }
@@ -382,19 +392,19 @@
   line-height: 1;
   cursor: pointer;
   padding: 4px 6px;
-  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Pinned to the row's top edge (by .gt-goal-row's own align-items:
-     center, this would otherwise sit vertically centered across the
-     whole row -- icon/name/sub/bar stacked -- which puts it right
-     next to the progress bar underneath, and doubly so once it's
-     armed and widens into the "Are you sure?" label). This keeps it
-     up by the goal name instead, clear of the bar, whichever state
-     it's in. */
-  align-self: flex-start;
-  margin-top: -2px;
+  /* Overlaid on the row's top-right corner instead of sitting in the
+     row's flex flow, so it never claims horizontal space from
+     .gt-goal-info -- the name/sub/bar column, and the progress bar in
+     particular, run the row's full width whether this is the plain
+     trash icon or the wider "Are you sure?" confirm state. See
+     .gt-goal-row's position: relative and .gt-goal-name's padding-right
+     (which reserves room so a long name's ellipsis stays clear of it). */
+  position: absolute;
+  top: 10px;
+  right: 4px;
 }
 
 .gt-goal-delete:hover { color: var(--red); }
