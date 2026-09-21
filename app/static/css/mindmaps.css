@@ -785,6 +785,19 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   flex: 0 1 auto; padding: 0 20px;
 }
 
+/* Save reads as the popover's primary action -- same gold-bg,
+   lighten-on-hover treatment button.primary/.gt-add-btn use elsewhere
+   on the site (myscape.css/goal-tracking.css), overriding the plain
+   grey .btn-secondary look it'd otherwise share with Delete right
+   next to it. Dark near-black text, not white -- every other gold
+   button on the site uses it for exactly this reason: white-on-gold
+   reads poorly against --gold's own brightness (#ff981f), while dark
+   text against it is comfortably high-contrast. */
+.mm-goal-save-btn {
+  background: var(--gold); border-color: var(--gold); color: #221c10;
+}
+.mm-goal-save-btn:hover { background: #ffab42; border-color: #ffab42; color: #221c10; }
+
 /* Shorter than .btn-secondary's own default 32px -- this one sits in
    a small popover, not a row of full-size buttons. */
 .mm-color-popover-delete { width: auto; height: 22px; align-self: center; }
