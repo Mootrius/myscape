@@ -75,13 +75,16 @@ class GoalValidationError(ValueError):
     convention app.mindmaps' own clean_goal already follows."""
 
 
-def clean_new_goal(goal_type: str, target_name: str, metric: Optional[str], target_value) -> dict:
+def clean_new_goal(
+    goal_type: str, target_name: str, metric: Optional[str], target_value, item_id=None
+) -> dict:
     """Validates and normalizes a goal-creation request into
-    {"goal_type", "target_name", "metric", "target_value"}, ready to
-    write straight onto a new Goal row. Raises GoalValidationError
-    naming whatever's wrong -- mirrors app.mindmaps.clean_goal's own
-    per-field validation, just flattened to one goal per call (no
-    node/color dispatch, since this feature has no tree of its own).
+    {"goal_type", "target_name", "metric", "target_value", "item_id"},
+    ready to write straight onto a new Goal row. Raises
+    GoalValidationError naming whatever's wrong -- mirrors
+    app.mindmaps.clean_goal's own per-field validation, just flattened
+    to one goal per call (no node/color dispatch, since this feature
+    has no tree of its own).
 
     Thin wrapper around _clean_new_goal below: _clean_int_in_range
     (borrowed from app.mindmaps for the target_value bound-check every
@@ -95,14 +98,14 @@ def clean_new_goal(goal_type: str, target_name: str, metric: Optional[str], targ
     _clean_int_in_range's own messages never include anything but the
     field name and the bound that failed."""
     try:
-        return _clean_new_goal(goal_type, target_name, metric, target_value)
+        return _clean_new_goal(goal_type, target_name, metric, target_value, item_id)
     except GoalValidationError:
         raise
     except ValueError as exc:
         raise GoalValidationError(str(exc)) from exc
 
 
-def _clean_new_goal(goal_type: str, target_name: str, metric: Optional[str], target_value) -> dict:
+def _clean_new_goal(goal_type: str, target_name: str, metric: Optional[str], target_value, item_id) -> dict:
     if goal_type not in GOAL_TYPES:
         raise GoalValidationError(f"goal_type must be one of {GOAL_TYPES}.")
 
@@ -111,7 +114,7 @@ def _clean_new_goal(goal_type: str, target_name: str, metric: Optional[str], tar
         if display_name is None:
             raise GoalValidationError("Pick a real OSRS hiscores boss.")
         value = _clean_int_in_range(target_value, "target_value", 1, MAX_KC_TARGET)
-        return {"goal_type": "kc", "target_name": display_name, "metric": None, "target_value": value}
+        return {"goal_type": "kc", "target_name": display_name, "metric": None, "target_value": value, "item_id": None}
 
     if goal_type == "skill":
         skill = (target_name or "").strip().lower()
@@ -121,7 +124,7 @@ def _clean_new_goal(goal_type: str, target_name: str, metric: Optional[str], tar
             raise GoalValidationError("metric must be 'level' or 'xp'.")
         bounds = (MIN_SKILL_XP, MAX_SKILL_XP) if metric == "xp" else (MIN_SKILL_LEVEL, MAX_SKILL_LEVEL)
         value = _clean_int_in_range(target_value, "target_value", *bounds)
-        return {"goal_type": "skill", "target_name": skill, "metric": metric, "target_value": value}
+        return {"goal_type": "skill", "target_name": skill, "metric": metric, "target_value": value, "item_id": None}
 
     # item -- free text, not pre-validated against a real item the way
     # kc/skill are against their own closed vocabularies, same
@@ -134,7 +137,22 @@ def _clean_new_goal(goal_type: str, target_name: str, metric: Optional[str], tar
     if not name:
         raise GoalValidationError("Pick an item.")
     value = _clean_int_in_range(target_value, "target_value", 1, MAX_ITEM_QTY_TARGET)
-    return {"goal_type": "item", "target_name": name, "metric": None, "target_value": value}
+    # item_id is purely a display hint (see Goal.item_id's own
+    # docstring in app/models.py) -- whatever the search suggestion the
+    # player actually clicked carried, or None for free-typed text that
+    # never matched a result. Loosely sanity-checked (a real OSRS item
+    # id, not the free-text name's own bound), never required -- a bad
+    # or missing value just means the goal list falls back to the
+    # generic item badge, nothing about progress tracking depends on it.
+    clean_item_id = None
+    if item_id is not None:
+        try:
+            candidate = int(item_id)
+            if candidate > 0:
+                clean_item_id = candidate
+        except (TypeError, ValueError):
+            pass
+    return {"goal_type": "item", "target_name": name, "metric": None, "target_value": value, "item_id": clean_item_id}
 
 
 def build_progress_context(db, game_account) -> dict:

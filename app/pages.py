@@ -9416,70 +9416,33 @@ def render_goal_tracking(player: PlayerView) -> str:
         """
         return _shell(title="Goal Tracking — myscape", player=player, body=body, extra_head=extra_head)
 
-    # HISCORE_BOSSES is already alphabetical by display name (see its
-    # own module docstring in app/bosses.py) -- nothing to sort here.
-    # SKILL_NAMES (app/mindmaps.py) is OSRS's own skills-tab order, not
-    # alphabetical, so it's re-sorted for this dropdown -- same
-    # alphabetize-it convention this redesign is applying to the
-    # dashboard's own card order, applied here too since a long <select>
-    # is exactly the kind of list a player hunts through by name.
-    boss_options = "".join(
-        f'<option value="{escape(name)}">{escape(name)}</option>' for _slug, name, _has_icon in HISCORE_BOSSES
-    )
-    skill_options = "".join(
-        f'<option value="{skill}">{escape(skill.title())}</option>' for skill in sorted(SKILL_NAMES)
-    )
     # A kc goal's own icon (see goalRowHtml in the script below) is its
     # real boss sprite, not the generic KC badge -- every HISCORE_BOSSES
     # entry has one (see the has_icon check in that module's own
     # docstring; there's no missing-icon fallback needed here the way
     # the old boss-table page once needed for its "no icon yet" case).
     # Built here rather than duplicated client-side since HISCORE_BOSSES
-    # is this file's own source of truth for boss display names.
+    # is this file's own source of truth for boss display names. Its
+    # keys (already alphabetical -- see that module's own docstring)
+    # double as the wizard's own boss search list client-side, so
+    # there's no separate boss-names array to keep in sync with this.
     boss_slug_by_name_json = json.dumps({name: slug for slug, name, _has_icon in HISCORE_BOSSES})
+    # SKILL_NAMES (app/mindmaps.py) is OSRS's own skills-tab order, not
+    # alphabetical -- re-sorted here for the wizard's own skill search
+    # list, same alphabetize-it convention this redesign already
+    # applies to the dashboard's card order and the boss/skill icon
+    # lookups above.
+    skill_names_json = json.dumps(sorted(SKILL_NAMES))
 
-    body = f"""
+    body = """
     <h2 class="page-title">Goal Tracking</h2>
     <div class="auth-error" id="gtError"></div>
 
-    <div class="gt-card gt-add-card">
-      <h3 class="gt-card-title">Add a goal</h3>
-      <div class="gt-type-picker" id="gtTypePicker">
-        <button type="button" class="gt-type-btn" data-type="item">
-          <img src="/static/img/icon-goal-item.png" alt="" /><span>Item</span>
-        </button>
-        <button type="button" class="gt-type-btn" data-type="kc">
-          <img src="/static/img/icon-goal-kc.png" alt="" /><span>KC</span>
-        </button>
-        <button type="button" class="gt-type-btn" data-type="skill">
-          <img src="/static/img/icon-goal-skill.png" alt="" /><span>Skill</span>
-        </button>
-      </div>
-      <div class="gt-add-form">
-        <div class="gt-field" data-type-field="kc">
-          <label for="gtKcBoss">Boss</label>
-          <select id="gtKcBoss">{boss_options}</select>
-        </div>
-        <div class="gt-field" data-type-field="skill">
-          <label for="gtSkillName">Skill</label>
-          <select id="gtSkillName">{skill_options}</select>
-          <div class="gt-metric-toggle" id="gtMetricToggle">
-            <button type="button" class="gt-metric-btn" data-metric="level">Level</button>
-            <button type="button" class="gt-metric-btn" data-metric="xp">XP</button>
-          </div>
-        </div>
-        <div class="gt-field gt-field-item-search" data-type-field="item">
-          <label for="gtItemInput">Item</label>
-          <div class="gt-search-box">
-            <input type="text" id="gtItemInput" placeholder="Search for an item" autocomplete="off" />
-            <div class="gt-suggestions" id="gtItemSuggestions"></div>
-          </div>
-        </div>
-        <div class="gt-field gt-field-target">
-          <label for="gtTargetValue" id="gtTargetLabel">Target quantity</label>
-          <input type="number" id="gtTargetValue" min="1" />
-        </div>
-        <button type="button" class="gt-add-btn" id="gtAddBtn">Add goal</button>
+    <div class="gt-wizard" id="gtWizard">
+      <button type="button" class="gt-wizard-plus" id="gtWizardPlus" aria-label="Add a goal" title="Add a goal">+</button>
+      <div class="gt-wizard-expanded" id="gtWizardExpanded" style="display:none;">
+        <button type="button" class="gt-wizard-close" id="gtWizardClose" aria-label="Close" title="Close">&times;</button>
+        <div id="gtWizardStage"></div>
       </div>
     </div>
 
@@ -9492,6 +9455,7 @@ def render_goal_tracking(player: PlayerView) -> str:
 
     script = (
         "var BOSS_SLUG_BY_NAME = " + boss_slug_by_name_json + ";\n"
+        "var SKILL_NAMES_LIST = " + skill_names_json + ";\n"
         + """
     (function () {
       // Generic per-TYPE badge -- still what the type-picker buttons
@@ -9518,7 +9482,19 @@ def render_goal_tracking(player: PlayerView) -> str:
         skill_xp: { min: 0, max: 200000000 },
       };
 
-      var GT = { goals: [], type: 'item', skillMetric: 'level' };
+      var GT = {
+        goals: [],
+        wizardStage: 0, // 0 = collapsed (just the + box), 1 = pick a type, 2 = pick a target + value
+        type: null,
+        skillMetric: 'level',
+        itemId: null, // the chosen search result's real item id, if any -- see Goal.item_id's own docstring in app/models.py
+      };
+      // Cached once rather than recomputed on every keystroke -- both
+      // are small (71/24 entries) fixed lists, not endpoints, so the
+      // wizard's own boss/skill search (see wireWizardStage below)
+      // filters these client-side instead of round-tripping like the
+      // item search does.
+      var BOSS_NAMES = Object.keys(BOSS_SLUG_BY_NAME);
 
       function showError(msg) {
         var el = document.getElementById('gtError');
@@ -9560,28 +9536,223 @@ def render_goal_tracking(player: PlayerView) -> str:
         };
       }
 
-      // ---- Type picker / target field -------------------------------------
+      // ---- Add-goal wizard ----------------------------------------------
+      //
+      // Collapsed by default -- just the + box right under the page
+      // title. Clicking it expands the SAME box into a two-"page" flow:
+      // stage 1 picks a goal type (item/kc/skill), stage 2 picks the
+      // actual target (a search box for all three types now, not just
+      // item -- click a suggestion or type free text, same tolerance
+      // app.goals.clean_new_goal already gives an item goal's name) and
+      // its target value, then submits. The x (or a successful add)
+      // collapses back to stage 0, ready for the next goal.
 
-      function selectType(type) {
+      var wizardExpanded = document.getElementById('gtWizardExpanded');
+      var wizardStageEl = document.getElementById('gtWizardStage');
+      // The stage-2 target actually picked so far this visit -- reset
+      // every time stage 2 (re)renders (see wireWizardStage). name is
+      // whatever's in the search box, whether from a clicked suggestion
+      // or typed free text; itemId only ever gets set for an item goal,
+      // from the id a clicked item-search suggestion carried.
+      var wizardTarget = { name: '', itemId: null };
+
+      function openWizard() {
+        GT.wizardStage = 1;
+        GT.type = null;
+        GT.skillMetric = 'level';
+        GT.itemId = null;
+        renderWizard();
+      }
+
+      function closeWizard() {
+        GT.wizardStage = 0;
+        renderWizard();
+      }
+
+      function wizardPickType(type) {
         GT.type = type;
-        document.querySelectorAll('.gt-type-btn').forEach(function (btn) {
-          btn.classList.toggle('active', btn.getAttribute('data-type') === type);
-        });
-        document.querySelectorAll('[data-type-field]').forEach(function (field) {
-          field.style.display = (field.getAttribute('data-type-field') === type) ? '' : 'none';
-        });
-        updateTargetField();
+        GT.wizardStage = 2;
+        renderWizard();
       }
 
-      function selectMetric(metric) {
-        GT.skillMetric = metric;
-        document.querySelectorAll('.gt-metric-btn').forEach(function (btn) {
-          btn.classList.toggle('active', btn.getAttribute('data-metric') === metric);
-        });
-        updateTargetField();
+      function wizardBack() {
+        GT.wizardStage = 1;
+        GT.type = null;
+        GT.skillMetric = 'level';
+        GT.itemId = null;
+        renderWizard();
       }
 
-      function updateTargetField() {
+      document.getElementById('gtWizardPlus').addEventListener('click', openWizard);
+      document.getElementById('gtWizardClose').addEventListener('click', closeWizard);
+      // One listener for the whole page, not re-added per render (stage
+      // 2's own suggestions box gets rebuilt every time it renders) --
+      // looks the elements up fresh on each click instead, so this
+      // harmlessly no-ops on any stage where they don't exist.
+      document.addEventListener('click', function (e) {
+        var suggestions = document.getElementById('gtWizardSuggestions');
+        var searchInput = document.getElementById('gtWizardSearchInput');
+        if (suggestions && !suggestions.contains(e.target) && e.target !== searchInput) {
+          suggestions.classList.remove('show');
+        }
+      });
+
+      function renderWizard() {
+        var plusBtn = document.getElementById('gtWizardPlus');
+        if (GT.wizardStage === 0) {
+          plusBtn.style.display = '';
+          wizardExpanded.style.display = 'none';
+          return;
+        }
+        plusBtn.style.display = 'none';
+        wizardExpanded.style.display = '';
+        wizardStageEl.innerHTML = (GT.wizardStage === 1) ? wizardStage1Html() : wizardStage2Html();
+        wireWizardStage();
+      }
+
+      function wizardStage1Html() {
+        return '' +
+          '<div class="gt-wizard-stage1">' +
+          '  <button type="button" class="gt-wizard-type-btn" data-type="item">' +
+          '    <img src="/static/img/icon-goal-item.png" alt="" /><span>Item</span></button>' +
+          '  <button type="button" class="gt-wizard-type-btn" data-type="kc">' +
+          '    <img src="/static/img/icon-goal-kc.png" alt="" /><span>Boss KC</span></button>' +
+          '  <button type="button" class="gt-wizard-type-btn" data-type="skill">' +
+          '    <img src="/static/img/icon-goal-skill.png" alt="" /><span>Skill</span></button>' +
+          '</div>';
+      }
+
+      var WIZARD_SEARCH_LABEL = { item: 'Item', kc: 'Boss', skill: 'Skill' };
+      var WIZARD_SEARCH_PLACEHOLDER = { item: 'Search for an item', kc: 'Search for a boss', skill: 'Search for a skill' };
+
+      function wizardStage2Html() {
+        var metricToggle = (GT.type !== 'skill') ? '' : (
+          '<div class="gt-metric-toggle" id="gtMetricToggle">' +
+          '  <button type="button" class="gt-metric-btn" data-metric="level">Level</button>' +
+          '  <button type="button" class="gt-metric-btn" data-metric="xp">XP</button>' +
+          '</div>'
+        );
+        return '' +
+          '<div class="gt-wizard-stage2">' +
+          '  <button type="button" class="gt-wizard-back" id="gtWizardBack" aria-label="Back">&larr; Back</button>' +
+          '  <div class="gt-field gt-field-target-search">' +
+          '    <label for="gtWizardSearchInput">' + WIZARD_SEARCH_LABEL[GT.type] + '</label>' +
+          '    <div class="gt-search-box">' +
+          '      <input type="text" id="gtWizardSearchInput" placeholder="' + WIZARD_SEARCH_PLACEHOLDER[GT.type] + '" autocomplete="off" />' +
+          '      <div class="gt-suggestions" id="gtWizardSuggestions"></div>' +
+          '    </div>' +
+          metricToggle +
+          '  </div>' +
+          '  <div class="gt-field gt-field-target">' +
+          '    <label for="gtTargetValue" id="gtTargetLabel"></label>' +
+          '    <input type="number" id="gtTargetValue" min="1" />' +
+          '  </div>' +
+          '  <button type="button" class="gt-add-btn" id="gtAddBtn">Add goal</button>' +
+          '</div>';
+      }
+
+      // A skill's search list is its lowercase key (SKILL_NAMES_LIST),
+      // title-cased only for display/matching here -- a boss's search
+      // list (BOSS_NAMES) is already the exact display name, so this is
+      // a no-op for kc.
+      function wizardOptionLabel(raw) {
+        return (GT.type === 'skill') ? (raw.charAt(0).toUpperCase() + raw.slice(1)) : raw;
+      }
+
+      function wireWizardStage() {
+        if (GT.wizardStage === 1) {
+          document.querySelectorAll('.gt-wizard-type-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () { wizardPickType(btn.getAttribute('data-type')); });
+          });
+          return;
+        }
+
+        wizardTarget = { name: '', itemId: null };
+        document.getElementById('gtWizardBack').addEventListener('click', wizardBack);
+
+        var searchInput = document.getElementById('gtWizardSearchInput');
+        var suggestions = document.getElementById('gtWizardSuggestions');
+
+        function showSuggestions(names, iconFor) {
+          if (!names.length) { suggestions.classList.remove('show'); suggestions.innerHTML = ''; return; }
+          suggestions.innerHTML = names.map(function (raw) {
+            var label = wizardOptionLabel(raw);
+            var icon = iconFor ? iconFor(raw) : null;
+            return '<div class="gt-suggestion" data-raw="' + escapeHtml(raw) + '" data-label="' + escapeHtml(label) + '">' +
+              (icon ? '<img src="' + escapeHtml(icon) + '" alt="" />' : '') +
+              '<span>' + escapeHtml(label) + '</span></div>';
+          }).join('');
+          suggestions.classList.add('show');
+        }
+
+        function showItemSuggestions(results) {
+          if (!results.length) { suggestions.classList.remove('show'); suggestions.innerHTML = ''; return; }
+          suggestions.innerHTML = results.map(function (r) {
+            return '<div class="gt-suggestion" data-raw="' + escapeHtml(r.name) + '" data-label="' + escapeHtml(r.name) +
+              '" data-item-id="' + (r.id || '') + '">' +
+              (r.icon ? '<img src="' + escapeHtml(r.icon) + '" alt="" />' : '') +
+              '<span>' + escapeHtml(r.name) + '</span></div>';
+          }).join('');
+          suggestions.classList.add('show');
+        }
+
+        // Delegated (rather than re-bound per suggestion row) since
+        // suggestions.innerHTML gets replaced on every keystroke --
+        // binding per-row would mean re-binding constantly for no gain.
+        suggestions.addEventListener('click', function (e) {
+          var row = e.target.closest('.gt-suggestion');
+          if (!row) return;
+          var label = row.getAttribute('data-label');
+          searchInput.value = label;
+          wizardTarget.name = row.getAttribute('data-raw');
+          var itemId = row.getAttribute('data-item-id');
+          wizardTarget.itemId = (GT.type === 'item' && itemId) ? parseInt(itemId, 10) : null;
+          suggestions.classList.remove('show');
+          suggestions.innerHTML = '';
+        });
+
+        if (GT.type === 'item') {
+          searchInput.addEventListener('input', debounce(async function () {
+            wizardTarget.name = searchInput.value.trim();
+            wizardTarget.itemId = null;
+            var q = wizardTarget.name;
+            if (!q) { showItemSuggestions([]); return; }
+            var data = await apiCall('/api/items/search?q=' + encodeURIComponent(q));
+            showItemSuggestions(data ? data.results : []);
+          }, 200));
+        } else {
+          var pool = (GT.type === 'kc') ? BOSS_NAMES : SKILL_NAMES_LIST;
+          var iconFor = (GT.type === 'kc')
+            ? function (raw) { return '/static/boss-icons/' + BOSS_SLUG_BY_NAME[raw] + '.png'; }
+            : function (raw) { return '/static/skill-icons/' + raw + '.png'; };
+          searchInput.addEventListener('input', debounce(function () {
+            wizardTarget.name = searchInput.value.trim();
+            var q = wizardTarget.name.toLowerCase();
+            var matches = !q ? [] : pool.filter(function (raw) {
+              return wizardOptionLabel(raw).toLowerCase().indexOf(q) !== -1;
+            }).slice(0, 20);
+            showSuggestions(matches, iconFor);
+          }, 120));
+        }
+
+        if (GT.type === 'skill') {
+          document.querySelectorAll('.gt-metric-btn').forEach(function (btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-metric') === GT.skillMetric);
+            btn.addEventListener('click', function () {
+              GT.skillMetric = btn.getAttribute('data-metric');
+              document.querySelectorAll('.gt-metric-btn').forEach(function (b) {
+                b.classList.toggle('active', b === btn);
+              });
+              updateWizardTargetField();
+            });
+          });
+        }
+
+        updateWizardTargetField();
+        document.getElementById('gtAddBtn').addEventListener('click', wizardAddGoal);
+      }
+
+      function updateWizardTargetField() {
         var label = document.getElementById('gtTargetLabel');
         var input = document.getElementById('gtTargetValue');
         var bounds;
@@ -9594,68 +9765,16 @@ def render_goal_tracking(player: PlayerView) -> str:
         input.max = bounds.max;
       }
 
-      document.querySelectorAll('.gt-type-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () { selectType(btn.getAttribute('data-type')); });
-      });
-      document.querySelectorAll('.gt-metric-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () { selectMetric(btn.getAttribute('data-metric')); });
-      });
-      selectType('item');
-      selectMetric('level');
-
-      // ---- Item search typeahead (mirrors PG's own runSearch/renderIconSuggestions,
-      // app/pages.py's render_purchase_goals) ------------------------------
-
-      var itemInput = document.getElementById('gtItemInput');
-      var itemSuggestions = document.getElementById('gtItemSuggestions');
-
-      async function runItemSearch(query) {
-        query = (query || '').trim();
-        if (!query) { renderItemSuggestions([]); return; }
-        var data = await apiCall('/api/items/search?q=' + encodeURIComponent(query));
-        renderItemSuggestions(data ? data.results : []);
-      }
-
-      function renderItemSuggestions(results) {
-        if (!results.length) { itemSuggestions.classList.remove('show'); itemSuggestions.innerHTML = ''; return; }
-        itemSuggestions.innerHTML = results.map(function (r) {
-          return '<div class="gt-suggestion" data-item-name="' + escapeHtml(r.name) + '">' +
-            (r.icon ? '<img src="' + escapeHtml(r.icon) + '" alt="" />' : '') +
-            '<span>' + escapeHtml(r.name) + '</span></div>';
-        }).join('');
-        itemSuggestions.classList.add('show');
-        itemSuggestions.querySelectorAll('.gt-suggestion').forEach(function (row) {
-          row.addEventListener('click', function () {
-            itemInput.value = row.getAttribute('data-item-name');
-            itemSuggestions.classList.remove('show');
-            itemSuggestions.innerHTML = '';
-          });
-        });
-      }
-
-      itemInput.addEventListener('input', debounce(function () { runItemSearch(itemInput.value); }, 200));
-      document.addEventListener('click', function (e) {
-        if (!itemSuggestions.contains(e.target) && e.target !== itemInput) {
-          itemSuggestions.classList.remove('show');
-        }
-      });
-
-      // ---- Add goal ---------------------------------------------------------
-
-      async function addGoal() {
+      async function wizardAddGoal() {
         var targetInput = document.getElementById('gtTargetValue');
         var targetValue = parseInt(targetInput.value, 10);
-        var payload = { goal_type: GT.type, target_value: targetValue };
-        if (GT.type === 'kc') {
-          payload.target_name = document.getElementById('gtKcBoss').value;
-        } else if (GT.type === 'skill') {
-          payload.target_name = document.getElementById('gtSkillName').value;
-          payload.metric = GT.skillMetric;
-        } else {
-          payload.target_name = itemInput.value.trim();
-        }
-        if (!payload.target_name) { showError('Pick a target first.'); return; }
+        var targetName = wizardTarget.name.trim();
+        if (!targetName) { showError('Pick a target first.'); return; }
         if (!targetValue || targetValue < 1) { showError('Enter a target value.'); return; }
+
+        var payload = { goal_type: GT.type, target_name: targetName, target_value: targetValue };
+        if (GT.type === 'skill') { payload.metric = GT.skillMetric; }
+        if (GT.type === 'item' && wizardTarget.itemId) { payload.item_id = wizardTarget.itemId; }
 
         var data = await apiCall('/api/goals', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -9663,11 +9782,8 @@ def render_goal_tracking(player: PlayerView) -> str:
         if (!data) return;
         GT.goals.push(data);
         renderGoalList();
-        targetInput.value = '';
-        if (GT.type === 'item') { itemInput.value = ''; }
+        closeWizard();
       }
-
-      document.getElementById('gtAddBtn').addEventListener('click', addGoal);
 
       // ---- Goal list ----------------------------------------------------
 
@@ -9688,17 +9804,25 @@ def render_goal_tracking(player: PlayerView) -> str:
       // OSRS Wiki's own icon set) -- BOSS_SLUG_BY_NAME is injected above
       // from app.bosses.HISCORE_BOSSES, and a skill goal's target_name
       // is already the lowercase skill key the filename itself uses
-      // (see SKILL_NAMES/skill_options in render_goal_tracking). Falls
-      // back to the generic TYPE_ICON badge only if a boss name somehow
-      // isn't in BOSS_SLUG_BY_NAME -- shouldn't happen since the boss
-      // field is a <select> of exactly that list, but a missing/broken
-      // <img> would look far worse than the plain badge it replaces.
+      // (see SKILL_NAMES_LIST above). An item goal's icon is g.item_icon
+      // (the real RuneLite-CDN icon for whichever search suggestion the
+      // player picked -- see GoalOut.item_icon/Goal.item_id's own
+      // docstring in app/models.py) when one was captured. Falls back to
+      // the generic TYPE_ICON badge for a boss name somehow missing from
+      // BOSS_SLUG_BY_NAME (shouldn't happen -- the wizard's own boss
+      // search only ever offers names from that same list) and for any
+      // item goal with no item_icon (free-typed text that never matched
+      // a search result, or a goal predating this column) -- a
+      // missing/broken <img> would look far worse than the plain badge
+      // either fallback replaces.
       function goalIconSrc(g) {
         if (g.goal_type === 'kc') {
           var slug = BOSS_SLUG_BY_NAME[g.target_name];
           if (slug) return '/static/boss-icons/' + slug + '.png';
         } else if (g.goal_type === 'skill') {
           return '/static/skill-icons/' + g.target_name + '.png';
+        } else if (g.goal_type === 'item' && g.item_icon) {
+          return g.item_icon;
         }
         return TYPE_ICON[g.goal_type];
       }

@@ -1054,7 +1054,18 @@ class Goal(Base):
     live column -- see app/hiscores.py) -- deliberately NOT
     app.mindmaps' own "kc" goal machinery, which counts raw LootEvent
     occurrences instead (see app/goals.py's own module docstring for
-    why that's the wrong number for a lifetime-total goal)."""
+    why that's the wrong number for a lifetime-total goal).
+
+    item_id is ONLY meaningful for an "item" goal -- the real numeric
+    OSRS item id the player's search suggestion carried when they
+    picked it (app.item_ids' own id space), captured purely so the
+    goal list can show that item's actual RuneLite-CDN icon
+    (item_icon_url, app/purchase_goals.py) instead of the generic
+    item-goal badge. Play no part in progress computation at all --
+    that still resolves entirely from target_name (see
+    app.goals.current_value) -- so it's fine for this to be null (a
+    goal predating this column, or a free-text name that never matched
+    a search result)."""
 
     __tablename__ = "goals"
 
@@ -1064,6 +1075,7 @@ class Goal(Base):
     target_name = Column(String, nullable=False)
     metric = Column(String, nullable=True)
     target_value = Column(Integer, nullable=False)
+    item_id = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     game_account = relationship("GameAccount", back_populates="goals")

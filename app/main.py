@@ -119,6 +119,7 @@ from app.purchase_goals import (
     build_purchase_goals_state,
     get_mapping,
     has_derived_price,
+    item_icon_url,
     search_items,
 )
 from app.recipes import expand_recipe_components
@@ -2492,6 +2493,7 @@ def _goal_out(goal: Goal, context: dict) -> GoalOut:
         target_value=goal.target_value,
         current_value=goals_module.current_value(goal, context),
         target_display=goals_module.target_display(goal),
+        item_icon=item_icon_url(goal.item_id),
         created_at=goal.created_at,
     )
 
@@ -2529,7 +2531,7 @@ def create_goal(
     at creation time)."""
     try:
         cleaned = goals_module.clean_new_goal(
-            payload.goal_type, payload.target_name, payload.metric, payload.target_value
+            payload.goal_type, payload.target_name, payload.metric, payload.target_value, payload.item_id
         )
     except goals_module.GoalValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

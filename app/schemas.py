@@ -1595,6 +1595,15 @@ class GoalCreateRequest(BaseModel):
     # rules itself.
     metric: Optional[str] = None
     target_value: int
+    # Only meaningful for goal_type "item" -- the real OSRS item id the
+    # player's search suggestion carried (see ItemSearchResult), passed
+    # through purely so the goal list can show that item's actual icon
+    # instead of the generic item-goal badge (Goal.item_id's own
+    # docstring in app/models.py has the full reasoning). Never
+    # required and never validated against target_name itself -- a
+    # missing or mismatched value just costs the goal its real icon,
+    # nothing about progress tracking depends on it.
+    item_id: Optional[int] = None
 
 
 class GoalOut(BaseModel):
@@ -1602,7 +1611,10 @@ class GoalOut(BaseModel):
     by app.goals.current_value/target_display every time a GoalOut is
     built (both on creation and on every list read), same "always
     derive it live" stance every other live-progress number in this
-    app already takes."""
+    app already takes. item_icon is the same kind of always-derived
+    value, computed from the stored item_id via item_icon_url
+    (app/purchase_goals.py) rather than stored itself, so an icon CDN
+    change never needs a backfill."""
 
     id: uuid.UUID
     goal_type: str
@@ -1611,6 +1623,7 @@ class GoalOut(BaseModel):
     target_value: int
     current_value: int
     target_display: str
+    item_icon: Optional[str] = None
     created_at: datetime
 
 
