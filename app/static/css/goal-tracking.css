@@ -119,8 +119,15 @@
   justify-content: space-between;
 }
 
+/* justify-content: center now that the cards below no longer stretch
+   to fill this row's whole width (see .gt-wizard-type-btn's own
+   flex-basis) -- without it, a narrower row of cards would just sit
+   flush against the row's left edge instead of centered under the
+   Back/Cancel/Save row beneath it, which .gt-wizard-actions/
+   .gt-wizard-stage1-actions both already center as a group. */
 .gt-wizard-stage1 {
   display: flex;
+  justify-content: center;
   gap: 12px;
 }
 
@@ -140,13 +147,24 @@
   margin-top: 10px;
 }
 
+/* Fixed-ish width now (120px), not flex: 1 1 0 stretching to fill
+   whatever's left of the row -- three of these used to span the box's
+   entire ~410px content width edge to edge, reading more like a
+   segmented control than a set of separate tappable cards. flex-grow
+   0 keeps them from stretching back out on a wide row (stage 1's own
+   two-card row in particular, which had the most leftover space to
+   fill); flex-shrink stays allowed (not flex: 0 0 120px) purely as a
+   safety valve for a narrow viewport -- see the max-width: 720px query
+   below, which already tightens other same-row fields the same way --
+   so three cards can still shrink to fit rather than overflowing the
+   box instead of wrapping. */
 .gt-wizard-type-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  flex: 1 1 0;
+  flex: 0 1 120px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
