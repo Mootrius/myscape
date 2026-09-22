@@ -469,21 +469,26 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
    whenever the list itself is (see renderGoalList) -- sorting an
    empty list has nothing to show for it. */
 /* 9 buttons now (8 direction-paired + Custom) instead of the original
-   4 unpaired ones -- see the body's own #gtSortTabs markup -- so this
-   wraps instead of squeezing a 9th tab into one ever-thinner row the
-   way loot-tracker.css's own single-row .loot-sort-tabs does for its
-   8 (7 sort tabs + the eye toggle). flex-basis: 20% on each tab packs
-   5 per row before wrapping (5 * 20% = 100%), landing Custom alone at
-   the end of a second, shorter row of 4 -- flex-grow: 1 then lets
-   those 4 stretch out to fill that row evenly instead of sitting
-   flush left. */
-.gt-sort-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
+   4 unpaired ones -- see the body's own #gtSortTabs markup -- but
+   still one row, same as loot-tracker.css's own single-row
+   .loot-sort-tabs manages for its 8 (7 sort tabs + the eye toggle).
+   "Progress" is the longest label here (longer than anything in that
+   row, which maxes out at "Recent"), so fitting a 9th button next to
+   it needed a further trim below loot-tracker.css's own numbers --
+   smaller gap, tighter padding, smaller font/letter-spacing, and no
+   nowrap -- a label that still doesn't fit at its button's own share
+   of the row (mainly "Progress ↓"/"Progress ↑" on a narrow screen)
+   wraps onto a second line within that one button rather than
+   pushing any other button down, so the tab ROW itself always stays
+   a single line regardless of viewport width. */
+.gt-sort-tabs { display: flex; gap: 3px; margin-bottom: 14px; }
 
 .gt-sort-tab {
-  flex: 1 1 20%;
-  padding: 5px 3px;
-  font-size: 9.5px;
-  letter-spacing: 0.02em;
+  flex: 1;
+  padding: 5px 1px;
+  font-size: 8px;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2);

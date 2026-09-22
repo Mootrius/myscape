@@ -10600,15 +10600,19 @@ def render_goal_tracking(player: PlayerView) -> str:
           ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
       }
 
-      // Six ALWAYS-shown, always-2-digit unit/letter pairs -- Year,
-      // Month, Week, Day, Hour, Minute -- each just the remainder left
-      // after peeling off every larger unit first (the same "greedy
-      // decomposition" any digital-clock countdown uses), using
-      // RECUR_UNIT_SECONDS' own fixed-duration units throughout so
-      // this never disagrees with recurInfoIconHtml's own end-of-period
-      // math below. Negative input (a period that's already technically
+      // Always-2-digit unit/letter pairs -- Year, Month, Week, Day,
+      // Hour, Minute -- each just the remainder left after peeling off
+      // every larger unit first (the same "greedy decomposition" any
+      // digital-clock countdown uses), using RECUR_UNIT_SECONDS' own
+      // fixed-duration units throughout so this never disagrees with
+      // recurInfoIconHtml's own end-of-period math below. A unit that's
+      // 0 is left out entirely (a goal with weeks left has no use for
+      // "00Y 00M" in front of it), except when every single one is --
+      // an about-to-roll goal still gets a "00M" rather than an empty
+      // string. Negative input (a period that's already technically
       // over -- the 5s poll just hasn't caught the rollover yet) clamps
-      // to all-zeros rather than printing a negative countdown.
+      // to all-zeros (and so to that same "00M" floor) rather than
+      // printing a negative countdown.
       function fmtRecurCountdown(totalSeconds) {
         var sec = Math.max(0, Math.round(totalSeconds));
         var y = Math.floor(sec / RECUR_UNIT_SECONDS.year); sec -= y * RECUR_UNIT_SECONDS.year;
@@ -10617,7 +10621,10 @@ def render_goal_tracking(player: PlayerView) -> str:
         var d = Math.floor(sec / RECUR_UNIT_SECONDS.day); sec -= d * RECUR_UNIT_SECONDS.day;
         var h = Math.floor(sec / 3600); sec -= h * 3600;
         var mi = Math.floor(sec / 60);
-        return pad2(y) + 'Y ' + pad2(mo) + 'M ' + pad2(w) + 'W ' + pad2(d) + 'D ' + pad2(h) + 'H ' + pad2(mi) + 'M';
+        var units = [[y, 'Y'], [mo, 'M'], [w, 'W'], [d, 'D'], [h, 'H'], [mi, 'M']];
+        var shown = units.filter(function (u) { return u[0] !== 0; });
+        if (!shown.length) shown = [units[units.length - 1]];
+        return shown.map(function (u) { return pad2(u[0]) + u[1]; }).join(' ');
       }
 
       // The little hoverable "i" that follows a recurring goal's own
@@ -10639,7 +10646,7 @@ def render_goal_tracking(player: PlayerView) -> str:
         var periodStartMs = new Date(g.recur_period_start).getTime();
         var periodEndMs = periodStartMs + g.recur_interval * unitSeconds * 1000;
         var remainingSeconds = (periodEndMs - Date.now()) / 1000;
-        var tooltip = fmtIsoDateTimeLocal(g.recur_period_start) + ' · NEXT CYCLE IN ' + fmtRecurCountdown(remainingSeconds);
+        var tooltip = 'Set on ' + fmtIsoDateTimeLocal(g.recur_period_start) + ' · Next cycle in ' + fmtRecurCountdown(remainingSeconds);
         return '<span class="gt-goal-info-icon" title="' + escapeHtml(tooltip) + '">' +
           '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
           '<circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>' +
