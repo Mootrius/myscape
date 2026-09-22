@@ -601,3 +601,110 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   }
   .pm-row-name { font-size: 12px; }
 }
+
+/* ---------- Landing page preview (render_landing_storages_preview,
+   app/pages.py) -- same container treatment as the other three
+   previews' own (.landing-loot-preview in loot-tracker.css,
+   .landing-purchase-preview in purchase-goals.css, .landing-mindmap-
+   preview in mindmaps.css): max-height capped to the viewport,
+   clipped rather than overflowing, with a bottom feather that only
+   shows up once there's actually something hidden below it. Scoped
+   here instead since this preview's own markup/CSS classes are
+   Storages Viewer's, not any other page's. See .landing-loot-preview's
+   own comment in loot-tracker.css for the fuller reasoning -- not
+   repeated here. max-width matches the other three previews' own
+   900px exactly so all four interactive previews read as the same
+   size panel. ---------- */
+.landing-storages-preview {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100svh - 80px);
+  overflow: hidden;
+  position: relative;
+}
+.landing-storages-preview--clipped::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 15%;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+
+/* The reused body's own heading -- hidden rather than stripped from
+   the markup itself, so _possessions_panel_markup stays untouched
+   (same discipline as the other three previews' own hidden headings).
+   The tagline below takes over as this preview's own "title". */
+.landing-storages-preview .page-title { display: none; }
+
+/* ---------- Landing-preview-only hero row: character + tagline,
+   above the reused panel's own controls/table -- see
+   render_landing_storages_preview's own hero_markup comment. Mirrors
+   .purchase-preview-hero/.purchase-preview-tagline-wrap/.purchase-
+   preview-char in purchase-goals.css left-to-right: same flex row,
+   bottom-aligned, same sizing -- character as the FIRST flex child
+   (so it lands on the left), tagline's own wrap second (so it fills
+   whatever's left on the right), per this preview's own explicit
+   "put him on the left" request. See loot-tracker.css's own fuller
+   comments (loot-preview-hero) for the reasoning behind each rule
+   here, not repeated. ---------- */
+.storages-preview-hero {
+  display: flex;
+  align-items: flex-end;
+}
+.storages-preview-tagline-wrap {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.storages-preview-tagline {
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 400;
+  /* This preview's own copy ("...so you can keep track of everything
+     you own across Gielinor.") runs longer than the other three
+     previews' taglines -- long enough that it doesn't actually fit
+     on one line even at this panel's own full 900px width (unlike
+     loot/purchase/mindmap's own single-line taglines, which do -- see
+     their own identically-named rules for that single-line-with-
+     ellipsis-fallback pattern). Wrapping here instead of truncating
+     keeps the exact requested wording fully on screen; two lines at
+     this line-height comfortably clears the tagline-wrap's own 157px
+     stretch height either way. */
+  white-space: normal;
+}
+.storages-preview-tagline-gold { color: var(--gold); }
+.storages-preview-tagline-white { color: var(--text); }
+
+/* Fixed-HEIGHT flex item -- 157px matches .loot-preview-char/
+   .purchase-preview-char/.mindmap-preview-char exactly, so all four
+   preview characters render at the same height next to each other
+   despite each image's own source aspect ratio differing -- width is
+   left to follow from that automatically rather than forced to match
+   too. See .loot-preview-char's own comment (loot-tracker.css) for
+   the fuller reasoning. */
+.storages-preview-char {
+  flex: 0 0 auto;
+  height: 157px;
+  line-height: 0;
+}
+/* .landing-storages-preview .storages-preview-char img (two classes)
+   beats myscape.css's own .landing-anchor picture img (one class, two
+   elements) -- same override the other three previews' own characters
+   already need in their own stylesheets. */
+.landing-storages-preview .storages-preview-char img {
+  display: block;
+  height: 100%;
+  max-height: none;
+  width: auto;
+  max-width: none;
+}

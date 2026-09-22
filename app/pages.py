@@ -215,6 +215,34 @@ def _get_landing_mindmap_search_pools_data() -> Optional[dict]:
             return None
     return _landing_mindmap_search_pools_data
 
+# The landing page's own Storages Viewer preview (render_landing_
+# storages_preview) is backed by one real, curated snapshot: a one-time
+# GET /api/possessions/summary pull of the account's own real current
+# possessions -- every item owned across every synced storage, exactly
+# as the real page would show it -- with every PoH (Player-Owned-House,
+# i.e. Costume Room) item stripped out first (both the ones whose ONLY
+# location was "poh", dropped entirely, and the "poh" key itself
+# removed from any item that also owned some elsewhere, though the
+# real snapshot this was captured from happened to have none of the
+# latter). See render_landing_storages_preview's own docstring for how
+# the rest of the page (search/sort/filter/pin/saved views) stays
+# genuinely interactive against this one frozen, PoH-free snapshot.
+_LANDING_STORAGES_DEMO_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "landing_storages_demo.json"
+)
+_landing_storages_demo_data = None
+
+
+def _get_landing_storages_demo_data() -> Optional[dict]:
+    global _landing_storages_demo_data
+    if _landing_storages_demo_data is None:
+        try:
+            with open(_LANDING_STORAGES_DEMO_PATH, "r") as f:
+                _landing_storages_demo_data = json.load(f)
+        except (OSError, ValueError):
+            return None
+    return _landing_storages_demo_data
+
 # Same cache-busting trick again, for the Mindmaps page's own stylesheet.
 _MINDMAPS_CSS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "static", "css", "mindmaps.css"
@@ -700,12 +728,37 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <img src="/static/img/anchor-mindmaps.png" alt="Mindmaps -- to plan every step of your grind.">
         </picture>
       </section>"""
+    # Same idea a fourth time for Storages Viewer (see
+    # render_landing_storages_preview) -- replaces that same pre-
+    # composited marketing panel below with a live, genuinely
+    # interactive (search/sort/filter/pin/saved-views all actually
+    # work) look at the account's own real current possessions, PoH
+    # items excluded. Falls back to the plain image, same as the three
+    # above, if the curated snapshot isn't there to read.
+    storages_preview = render_landing_storages_preview()
+    if storages_preview:
+        storages_preview_head, storages_preview_body, storages_preview_script = storages_preview
+        storages_anchor_section = f"""
+      <section class="landing-anchor landing-anchor--storages-preview">
+        <div class="landing-storages-preview">
+          {storages_preview_body}
+        </div>
+      </section>"""
+    else:
+        storages_preview_head, storages_preview_script = "", ""
+        storages_anchor_section = """
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/anchor-storages.webp" type="image/webp">
+          <img src="/static/img/anchor-storages.png" alt="Storage viewing -- see everything you own, in one place.">
+        </picture>
+      </section>"""
     # The remaining "anchor" panels -- pre-composited marketing art
     # (one per showcased feature -- except loot tracking, purchase
-    # goals, and mindmaps now, see
-    # loot_anchor_section/purchase_anchor_section/mindmap_anchor_section
-    # above), not live markup, since each one is a fixed graphic that
-    # already has its own baked-in layout/
+    # goals, mindmaps, and storages viewing now, see
+    # loot_anchor_section/purchase_anchor_section/mindmap_anchor_section/
+    # storages_anchor_section above), not live markup, since each one
+    # is a fixed graphic that already has its own baked-in layout/
     # copy. The first one (landing-anchor--intro) shares a single stop
     # with the header above it (see myscape.css) instead of being its
     # own separate one, so scrolling doesn't stop twice just to reveal
@@ -733,12 +786,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
       {loot_anchor_section}
       {purchase_anchor_section}
       {mindmap_anchor_section}
-      <section class="landing-anchor">
-        <picture>
-          <source srcset="/static/img/anchor-storages.webp" type="image/webp">
-          <img src="/static/img/anchor-storages.png" alt="Storage viewing -- see everything you own, in one place.">
-        </picture>
-      </section>
+      {storages_anchor_section}
     </div>
     """
     # CSS scroll-snap (myscape.css) is the baseline -- it's what
@@ -861,7 +909,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
     # and render_landing_purchase_preview) just tack onto the end here --
     # an empty string, and a no-op, for either one that was None above
     # (the static-image fallback needs no script of its own).
-    script += loot_preview_script + purchase_preview_script + mindmap_preview_script
+    script += loot_preview_script + purchase_preview_script + mindmap_preview_script + storages_preview_script
     # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
     # every other page keeps its ordinary, un-snapped scrolling.
@@ -870,7 +918,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
         player=player,
         body=body,
         extra_script=script,
-        extra_head=loot_preview_head + purchase_preview_head + mindmap_preview_head,
+        extra_head=loot_preview_head + purchase_preview_head + mindmap_preview_head + storages_preview_head,
         body_class="landing",
         footer_extra=landing_cta,
         # The one page on the whole site actually meant to be found --
@@ -9868,15 +9916,23 @@ _POSSESSION_STORAGE_LABELS = {
 }
 
 
-def render_possessions(player: PlayerView) -> str:
-    """The Storages Viewer page -- a single line-by-line table of
-    everything the player currently owns across every synced storage
-    (see get_owned_breakdown in app/possessions.py), fetched from GET
-    /api/possessions/summary on load and re-polled every 5 seconds
-    after that (same cadence as Purchase Goals' own PG.pollTimer in
-    this file) so a change made in-game -- moving something out of the
-    bank, say -- shows up here on its own shortly after, not only once
-    the page is manually refreshed.
+def _possessions_panel_markup() -> Tuple[str, str, str]:
+    """Builds Storages Viewer's (extra_head, body, script) triple --
+    split out from render_possessions below (same reasoning, and the
+    same split _purchase_goals_panel_markup/_loot_tracker_panel_markup/
+    _mindmaps_panel_markup went through first) so the landing page's
+    own interactive preview (render_landing_storages_preview) can reuse
+    this exact markup/script inline, without render_possessions' own
+    _shell wrapper (nav/footer/auth) around it.
+
+    A single line-by-line table of everything the player currently owns
+    across every synced storage (see get_owned_breakdown in
+    app/possessions.py), fetched from GET /api/possessions/summary on
+    load and re-polled every 5 seconds after that (same cadence as
+    Purchase Goals' own PG.pollTimer in this file) so a change made
+    in-game -- moving something out of the bank, say -- shows up here
+    on its own shortly after, not only once the page is manually
+    refreshed.
 
     One row per item: the ENTIRE row is one link (see wikiItemUrl/
     rowHtml in the script) out to that item's OSRS Wiki page, opened in
@@ -11221,6 +11277,239 @@ def render_possessions(player: PlayerView) -> str:
       setInterval(loadSummary, 5000);
     })();
     """
+    return extra_head, body, script
+
+
+def render_landing_storages_preview() -> Optional[Tuple[str, str, str]]:
+    """The landing page's own interactive Storages Viewer preview --
+    same reuse-the-real-script pattern as the other three (reuses
+    _possessions_panel_markup's body/script completely unmodified,
+    layering demo-only behavior on top from the outside in a wrapper
+    script), backed by one real, curated snapshot: app/data/
+    landing_storages_demo.json is a one-time GET /api/possessions/
+    summary pull of the account's own real current possessions --
+    every item owned across every synced storage, exactly as the real
+    page would show it -- with every PoH (Player-Owned-House, i.e.
+    Costume Room) item stripped out first (see
+    _get_landing_storages_demo_data's own comment for exactly how).
+    Returns (extra_head, body, script) for render_landing to splice
+    into its own markup, same as the other three, or None if the
+    snapshot isn't there to read.
+
+    Closer in spirit to Loot Tracker's preview than Purchase Goals' or
+    Mindmaps': nothing here EDITS what's owned (there's no "add an
+    item" on the real page either), but everything else genuinely
+    works -- search, every column's sort/filter, pinning a row to the
+    top, and saving/reordering/deleting named views -- all running
+    against one frozen, PoH-free snapshot, in memory, never reaching
+    the real API:
+
+    1. A `fetch` shim, scoped to just this wrapper (a local `var
+       fetch` inside its own IIFE, never touching window.fetch), that:
+       - Answers GET /api/possessions/summary out of the frozen item
+         list, with each item's own `pinned` flag freshly computed
+         from whatever's currently in DEMO_PINNED_IDS (a plain Set) --
+         not just replayed from the snapshot's own original pins --
+         so a pin/unpin the player makes here survives the real page's
+         own 5-second poll (loadSummary re-fetches and replaces
+         state.items wholesale on every tick -- see
+         _possessions_panel_markup's own docstring) instead of
+         silently reverting a few seconds later. hiddenStorageKeys
+         works the same way, off a plain in-memory Set the settings-
+         menu checkboxes actually read and write below.
+       - Implements POST/DELETE /api/possessions/pins/{itemId} for
+         real against that same Set, returning {{pinnedItemIds: [...]}}
+         exactly like the real endpoint.
+       - Implements POST/DELETE /api/possessions/hidden-storages/
+         {{key}} for real against DEMO_HIDDEN_KEYS, returning
+         {{hiddenStorageKeys: [...]}}.
+       - Implements the saved-views endpoints (GET/POST /api/
+         possessions/views, DELETE /api/possessions/views/{{id}}, PUT
+         /api/possessions/views/order) for real against an in-memory
+         DEMO_VIEWS array, starting empty (a fresh account has none
+         either) -- so "+ Save View" genuinely creates one, its × genu-
+         inely deletes it, and dragging the strip genuinely reorders
+         it, all without ever touching the real, session-authenticated
+         API or this demo visitor's own (nonexistent) saved views.
+       - Anything else gets a harmless failure response instead of
+         ever reaching the real API.
+    2. No localStorage shadowing needed here (unlike Mindmaps) -- this
+       page's own script never reads or writes it.
+    3. Same bottom-edge feather as the other three previews (a
+       .landing-storages-preview--clipped toggle off a ResizeObserver).
+
+    Every item row is still a real, plain <a> out to the OSRS Wiki
+    (wikiItemUrl in the reused script) -- a public, unauthenticated
+    search URL with nothing account-specific in it, so unlike Purchase
+    Goals' own gear icons those links needed no extra handling at all;
+    they're left completely untouched here.
+
+    The 5-second poll (setInterval(loadSummary, 5000), inside {script}
+    itself) is left running rather than neutralized, same as Loot
+    Tracker's own poll -- it just keeps re-fetching the same
+    (pin/hidden-storage-aware) snapshot from the shim above, which is
+    harmless and, unlike stopping it, means a pin made here would
+    still be reflected if the player left the tab open for a while.
+    """
+    demo = _get_landing_storages_demo_data()
+    if demo is None:
+        return None
+    extra_head, body, script = _possessions_panel_markup()
+
+    # Landing-preview-only hero row, prepended in front of the reused
+    # panel body -- character on the LEFT this time (per this
+    # preview's own request), tagline's own wrap on the right -- same
+    # flex row/bottom-align treatment as the other three previews' own
+    # hero rows, just under this preview's own class names since its
+    # markup/CSS are Storages Viewer's, not any other page's. See
+    # .purchase-preview-hero in purchase-goals.css for the identical
+    # character-first layout this mirrors. The reused body's own
+    # "Storages Viewer" <h2> is hidden via CSS (.landing-storages-
+    # preview .page-title), same as the other three.
+    hero_markup = """
+    <div class="storages-preview-hero">
+      <picture class="storages-preview-char">
+        <source srcset="/static/img/landing-storages-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-storages-preview-char.png" alt="" />
+      </picture>
+      <div class="storages-preview-tagline-wrap">
+        <p class="storages-preview-tagline">
+          <span class="storages-preview-tagline-gold">STORAGES VIEWING</span> <span class="storages-preview-tagline-white">so you can keep track of everything you own across Gielinor.</span>
+        </p>
+      </div>
+    </div>
+    """
+    body = hero_markup + body
+
+    items_json = json.dumps(demo.get("items") or [])
+    hidden_keys_json = json.dumps(demo.get("hiddenStorageKeys") or [])
+    wrapper_script = f"""
+    (function () {{
+      // The captured, PoH-free snapshot itself (see
+      // _get_landing_storages_demo_data's own comment) -- a plain
+      // array of items, each already shaped exactly like the real
+      // GET /api/possessions/summary response's own `items` entries.
+      var DEMO_ITEMS = {items_json};
+      // Working, mutable copies -- NOT re-derived from DEMO_ITEMS on
+      // every read, so a pin/unpin or a settings-menu toggle made here
+      // survives this page's own 5-second re-poll (see this function's
+      // own docstring, point 1).
+      var DEMO_PINNED_IDS = new Set(DEMO_ITEMS.filter(function (i) {{ return i.pinned; }}).map(function (i) {{ return i.itemId; }}));
+      var DEMO_HIDDEN_KEYS = new Set({hidden_keys_json});
+      var DEMO_VIEWS = [];
+
+      function newViewId() {{
+        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {{
+          var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        }});
+      }}
+
+      function currentSummary() {{
+        return {{
+          items: DEMO_ITEMS.map(function (item) {{
+            return Object.assign({{}}, item, {{ pinned: DEMO_PINNED_IDS.has(item.itemId) }});
+          }}),
+          hiddenStorageKeys: Array.from(DEMO_HIDDEN_KEYS),
+        }};
+      }}
+
+      // ---- fetch shim -----------------------------------------------------
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        function ok(data) {{ return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(data); }} }}); }}
+        function fail(detail) {{ return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{ detail: detail }}); }} }}); }}
+
+        if (url === '/api/possessions/summary' && method === 'GET') {{
+          return ok(currentSummary());
+        }}
+
+        if (url.indexOf('/api/possessions/pins/') === 0) {{
+          var itemId = Number(decodeURIComponent(url.slice('/api/possessions/pins/'.length)));
+          if (method === 'POST') DEMO_PINNED_IDS.add(itemId);
+          else if (method === 'DELETE') DEMO_PINNED_IDS.delete(itemId);
+          else return fail('Not available in this preview.');
+          return ok({{ pinnedItemIds: Array.from(DEMO_PINNED_IDS) }});
+        }}
+
+        if (url.indexOf('/api/possessions/hidden-storages/') === 0) {{
+          var key = decodeURIComponent(url.slice('/api/possessions/hidden-storages/'.length));
+          if (method === 'POST') DEMO_HIDDEN_KEYS.add(key);
+          else if (method === 'DELETE') DEMO_HIDDEN_KEYS.delete(key);
+          else return fail('Not available in this preview.');
+          return ok({{ hiddenStorageKeys: Array.from(DEMO_HIDDEN_KEYS) }});
+        }}
+
+        if (url === '/api/possessions/views' && method === 'GET') {{
+          return ok({{ views: DEMO_VIEWS }});
+        }}
+        if (url === '/api/possessions/views' && method === 'POST') {{
+          var body = {{}};
+          try {{ body = opts.body ? JSON.parse(opts.body) : {{}}; }} catch (e) {{ body = {{}}; }}
+          var name = String(body.name == null ? '' : body.name).trim().slice(0, 80);
+          if (!name) return fail("A view needs a name.");
+          DEMO_VIEWS.push({{ id: newViewId(), name: name, config: body.config || {{}} }});
+          return ok({{ views: DEMO_VIEWS }});
+        }}
+        if (url === '/api/possessions/views/order' && method === 'PUT') {{
+          var orderBody = {{}};
+          try {{ orderBody = opts.body ? JSON.parse(opts.body) : {{}}; }} catch (e) {{ orderBody = {{}}; }}
+          var order = orderBody.order || [];
+          var byId = {{}};
+          DEMO_VIEWS.forEach(function (v) {{ byId[v.id] = v; }});
+          var reordered = order.map(function (id) {{ return byId[id]; }}).filter(Boolean);
+          // Any view missing from the given order (shouldn't happen --
+          // the reused script always sends every chip's own id) stays
+          // appended at the end rather than silently vanishing.
+          DEMO_VIEWS.forEach(function (v) {{ if (order.indexOf(v.id) === -1) reordered.push(v); }});
+          DEMO_VIEWS = reordered;
+          return ok({{ views: DEMO_VIEWS }});
+        }}
+        if (url.indexOf('/api/possessions/views/') === 0 && method === 'DELETE') {{
+          var delId = decodeURIComponent(url.slice('/api/possessions/views/'.length));
+          DEMO_VIEWS = DEMO_VIEWS.filter(function (v) {{ return v.id !== delId; }});
+          return ok({{ views: DEMO_VIEWS }});
+        }}
+
+        // A view rename (PATCH /api/possessions/views/{{id}}) -- not
+        // wired up to any button in the reused script (see this
+        // function's own docstring) -- and anything else this script
+        // doesn't otherwise call. Graceful failure, never the real
+        // network -- same discipline as the other three previews' own
+        // catch-all.
+        return fail('Not available in this preview.');
+      }};
+
+      {script}
+
+      // Same bottom-edge feather as the other three previews -- see
+      // .landing-storages-preview/.landing-storages-preview--clipped
+      // in possessions.css, and render_landing_loot_preview's own
+      // wrapper script for the fuller comment this mirrors.
+      var previewEl = document.querySelector('.landing-storages-preview');
+      if (previewEl) {{
+        var checkClipped = function () {{
+          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
+          previewEl.classList.toggle('landing-storages-preview--clipped', overflowing);
+        }};
+        checkClipped();
+        new ResizeObserver(checkClipped).observe(previewEl);
+      }}
+    }})();
+    """
+    return extra_head, body, wrapper_script
+
+
+def render_possessions(player: PlayerView) -> str:
+    """The Storages Viewer page -- see _possessions_panel_markup above
+    for the full markup/script; this is just that plus the _shell
+    wrapper a real, logged-in-or-not page visit needs (see
+    render_landing_storages_preview for the OTHER caller, which skips
+    _shell entirely and embeds the same panel inline on the landing
+    page instead)."""
+    extra_head, body, script = _possessions_panel_markup()
     return _shell(
         title="Storages Viewer — myscape",
         player=player,

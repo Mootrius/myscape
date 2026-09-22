@@ -987,6 +987,17 @@ footer {
   align-items: flex-start;
 }
 
+/* Same top-anchoring, same reasoning, for the Storages Viewer preview
+   (render_landing_storages_preview) -- sorting/filtering the table or
+   opening the saved-views strip's own save popover can change the
+   panel's own content height same as the other three previews' own
+   interactions can, so this panel gets the same fix for the same
+   reason. See .landing-storages-preview in possessions.css for its
+   own feather. */
+.landing-anchor--storages-preview {
+  align-items: flex-start;
+}
+
 /* The logo/tagline panel shares a single stop with the header above
    it (see body.landing header in the scroll-snap rules up top)
    instead of being its own separate one, but it's still pinned to
