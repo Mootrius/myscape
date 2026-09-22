@@ -306,29 +306,31 @@
 .gt-metric-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
 
 /* Stage 4 (recurring goals only) -- the interval field and its
-   HOUR/DAY/WEEK/MONTH/YEAR toggle grouped as one block (see
-   wizardStageCadenceHtml) so .gt-wizard-stage2's own space-between
-   still only ever splits leftover room 3 ways (this block, the error
-   line, the actions row), same as stage 3's field row/error/actions
-   already do. margin-bottom guarantees real breathing room below the
-   unit toggle even so -- the error line between this block and the
-   actions row is 0-height whenever there's nothing to show (the
-   common case), so space-between's own leftover-space math alone
-   wasn't reliably keeping the toggle clear of the buttons underneath
-   it, same reasoning as .gt-wizard-stage1-actions' own explicit
-   margin-top. */
-.gt-wizard-recur-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+   HOUR/DAY/WEEK/MONTH/YEAR toggle sit on one row now (previously
+   stacked), grouped as one block (see wizardStageCadenceHtml) so
+   .gt-wizard-stage2's own space-between still only ever splits
+   leftover room between this block and the actions row, same 2-way
+   split stage 3's field row/actions already uses. align-items:
+   center lines the two up on their vertical middle despite their
+   different heights (34px field, 26px toggle buttons) rather than
+   their tops. margin-bottom guarantees real breathing room below
+   this row even so -- space-between's own leftover-space math alone
+   wasn't reliably keeping it clear of the buttons underneath it, same
+   reasoning as .gt-wizard-stage1-actions' own explicit margin-top. */
+.gt-wizard-recur-fields { display: flex; flex-direction: row; align-items: center; gap: 12px; margin-bottom: 16px; }
 
 /* Narrower than a full-width field on purpose -- this is a plain "how
    many" count, not something that needs the row's whole width the way
-   the search/target fields on stage 3 do. Selector is `input.` (type +
-   class), not just `.` -- myscape.css's own shared
-   input[type="text"] rule (width: 100%, padding: 12px 14px) is a type
-   + attribute selector, which beats a class selector alone on
-   specificity regardless of file/source order; matching its own
+   the search/target fields on stage 3 do. Fixed rather than flexible
+   (no flex-grow) so the unit toggle beside it is what absorbs the
+   row's remaining width instead of splitting it with this field.
+   Selector is `input.` (type + class), not just `.` -- myscape.css's
+   own shared input[type="text"] rule (width: 100%, padding: 12px 14px)
+   is a type + attribute selector, which beats a class selector alone
+   on specificity regardless of file/source order; matching its own
    specificity here is what lets THIS rule's width/padding actually
    win instead of silently losing to that shared default. */
-input.gt-recur-interval-input { width: 140px; height: 34px; padding: 0 12px; align-self: flex-start; }
+input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padding: 0 12px; }
 
 /* Same segmented-toggle idea as .gt-metric-toggle above, generalized
    to 5 buttons instead of 2 -- rather than that rule's own
@@ -341,7 +343,7 @@ input.gt-recur-interval-input { width: 140px; height: 34px; padding: 0 12px; ali
    fields elsewhere on this stage -- these are buttons, not a field, so
    they read as part of the same button family instead of another
    input. */
-.gt-recur-unit-toggle { display: flex; height: 26px; }
+.gt-recur-unit-toggle { display: flex; height: 26px; flex: 1 1 auto; min-width: 0; }
 
 .gt-recur-unit-btn {
   flex: 1 1 20%;
