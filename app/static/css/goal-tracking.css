@@ -59,35 +59,34 @@
    own content is" -- so the box never grows/shrinks/jumps as the
    wizard moves through its stages; every stage's own content
    (#gtWizardStage/.gt-wizard-stage1-wrap/.gt-wizard-stage2 below) then
-   stretches to fill it via justify-content: space-between, rather than
-   sizing to content.
-   150px is stage 1/2's own natural size (the type-picker cards, sized
-   down in a later pass specifically so this box didn't have to stay
-   as tall as they used to be -- see .gt-wizard-type-btn's own padding/
-   icon size and .gt-wizard-stage1-actions' margin-top, both trimmed
-   together with this height): at that size, their card row + actions
-   row fill it with just .gt-wizard-stage1-actions' own explicit
-   margin-top as a gap, zero slack left over. Stage 3/4's own content
-   (a single field row, or -- since interval+toggle moved onto one
-   row -- a single cadence row) is shorter than that, so the same
-   150px leaves them a noticeably bigger space-between gap above their
-   actions row -- comfortable, not cramped, just not as tight a fit as
-   stage 1/2's. Every stage's actions row still ends up pinned to this
-   same fixed bottom edge either way -- see .gt-wizard-stage1-wrap/
-   .gt-wizard-stage2's own justify-content: space-between -- so
-   shrinking this only ever tightens that leftover gap, never moves
-   anything out of alignment.
-   max-width went from 460px to 580px specifically to fit stage 3's
-   widest row -- a one-time skill+xp goal's search + Lvl/Xp toggle +
-   GAIN/REACH toggle + target field, all on one line (see
-   .gt-wizard-row/.gt-field-target-mode below) -- without squeezing the
-   search field down to an uncomfortable width. Every other stage just
-   ends up with a little more of the same centered breathing room. */
+   fills it, top row flush to the top edge and the actions row pinned
+   to the bottom via margin-top: auto (see .gt-wizard-stage1-actions/
+   .gt-wizard-actions below), rather than sizing to content.
+   174px (up from 150px) is what it takes to fit THREE rows now
+   instead of two -- every stage grew an extra segmented-control row
+   in the middle (see .gt-wizard-segrow below): stage 1/2's own
+   type-card row moved up against the top edge and Back/Cancel/Next/
+   Save moved down against the bottom edge to open that middle space
+   up, even though stage 1/2 have no segmented control of their own to
+   put there -- a bigger empty gap on those two stages is what keeps
+   all 4 stages reading as the same fixed-size box rather than stage
+   1/2 looking cramped next to stage 3/4's now-fuller ones. Stage 3/4's
+   own 3 real rows (fields + segmented row + actions) need 112px of
+   that -- 34px field row + 25px segmented row + 25px actions row +
+   two 14px gaps (see .gt-wizard-stage2's own gap below) -- so 120px of
+   content height (174 minus the 30/24 top/bottom padding) leaves a
+   little slack even there rather than the old "zero slack" exact fit,
+   which was fragile any time a button/field's own height drifted by a
+   px or two.
+   max-width stays 580px -- still sized for stage 3's widest row, a
+   one-time skill+xp goal's search + target field pair (now just those
+   two, since Lvl/Xp and GAIN/REACH moved down to their own row below
+   it -- see .gt-wizard-segrow). */
 .gt-wizard-expanded {
   position: relative;
   width: 100%;
   max-width: 580px;
-  height: 150px;
+  height: 174px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -105,27 +104,20 @@
    a small centered Cancel underneath (there's no top-right x any
    more -- see wizardStage1Html). The wrap fills the full fixed
    height (same technique .gt-wizard-stage2 uses); the type-card row
-   and Cancel are centered as a single group within it, rather than
-   pinned to the top/bottom edges, so shrinking Cancel doesn't leave
-   lopsided empty space below it. */
+   sits flush at the top and Cancel is pinned flush at the bottom (see
+   .gt-wizard-stage1-actions' own margin-top: auto below) -- the exact
+   same top-row-up/actions-row-down shape .gt-wizard-stage2 uses for
+   stages 3/4, just with an empty middle instead of a segmented-control
+   row, since stage 1/2 have none of their own. */
 .gt-wizard-stage1-wrap {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   /* Flex items default to min-height: auto, which floors this at its
-     own content size and stops it from ever actually occupying (and
-     therefore centering within) the parent's available space -- same
-     fix #gtWizardStage already applies to itself for the same reason. */
+     own content size and stops it from ever actually occupying the
+     parent's available space -- same fix #gtWizardStage already
+     applies to itself for the same reason. */
   min-height: 0;
-  /* space-between (not center) so the actions row pins to the exact
-     same bottom edge .gt-wizard-stage2 already pins stage 3/4's own
-     actions row to -- centering the type-card-row+actions pair as one
-     block (the original approach) looked fine on its own, but left
-     stage 1/2's actions row sitting a few px lower than stage 3/4's,
-     since a centered pair's exact vertical offset depends on the
-     pair's own total height while space-between's bottom edge never
-     moves at all. All 4 stages now agree on that same fixed edge. */
-  justify-content: space-between;
 }
 
 /* justify-content: center now that the cards below no longer stretch
@@ -148,48 +140,53 @@
   display: flex;
   gap: 8px;
   align-self: center;
-  /* Explicit, not left to justify-content: space-between's own
-     leftover-space math alone -- the type cards got shorter but so
-     did the fixed box (see .gt-wizard-expanded), so there wasn't
-     always enough leftover space to keep this row from sitting flush
-     against the cards above it. This guarantees a real gap either way.
-     6px, not 10px -- the cards (62px) + this row (26px) already leave
-     only 6px of room in the box's 94px content height (see
-     .gt-wizard-expanded's own comment), so 10px overflowed the fixed
-     box by 4px and dropped this row below the same bottom edge stage
-     3/4's own actions row pins to. 6px fills that room exactly, with
-     zero slack either way, so both rows land on it. */
-  margin-top: 6px;
+  /* auto (not a fixed px value) is what pins this row to the box's
+     bottom edge, same as .gt-wizard-actions' own margin-top: auto does
+     for stages 3/4 -- it eats up whatever's left of the fixed box's
+     now-taller content height (see .gt-wizard-expanded) after the
+     type-card row above it, rather than needing that leftover math
+     worked out by hand. Self-adjusting if either row's own height ever
+     drifts, unlike a fixed margin sized to exactly fill a specific
+     leftover gap. */
+  margin-top: auto;
 }
 
-/* Fixed-ish width now (120px), not flex: 1 1 0 stretching to fill
-   whatever's left of the row -- three of these used to span the box's
-   entire ~410px content width edge to edge, reading more like a
-   segmented control than a set of separate tappable cards. flex-grow
-   0 keeps them from stretching back out on a wide row (stage 1's own
-   two-card row in particular, which had the most leftover space to
-   fill); flex-shrink stays allowed (not flex: 0 0 120px) purely as a
-   safety valve for a narrow viewport -- see the max-width: 720px query
-   below, which already tightens other same-row fields the same way --
-   so three cards can still shrink to fit rather than overflowing the
-   box instead of wrapping. */
+/* Square now (64x64), not a 120x62 rectangle -- width dropped to
+   match the existing height instead of the other way around, so the
+   icon above the label still reads at roughly the same size it always
+   has. Fixed width AND height (not just a flex-basis) is what actually
+   guarantees the square -- box-sizing: border-box (myscape.css's own
+   site-wide * rule) keeps padding/border from pushing the rendered box
+   past either number. overflow: hidden is a safety valve for the
+   longest label ("SKILL LVL/XP") wrapping to a 3rd line at this width
+   -- 2 lines fits with room to spare (see .gt-wizard-type-btn span's
+   own font-size below), so this should never actually clip anything
+   in practice. flex-shrink stays allowed (flex: 0 1 64px, not 0 0) as
+   a safety valve for a narrow viewport, same reasoning the old 120px
+   rule already used -- see the max-width: 720px query below. */
 .gt-wizard-type-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  flex: 0 1 120px;
+  gap: 4px;
+  flex: 0 1 64px;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-muted);
   font-family: inherit;
-  padding: 10px 12px;
+  padding: 6px 4px;
   cursor: pointer;
 }
 
-.gt-wizard-type-btn img { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; }
+/* Trimmed from 26px alongside the card's own shrink to a 64px square
+   above -- keeps the icon reading as an icon (not crowding the label
+   under it) at the new, narrower content width. */
+.gt-wizard-type-btn img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
 
 /* The one-time/recurring cards' own icons (ONE_TIME_ICON_SVG/
    RECURRING_ICON_SVG in the script) -- inline SVGs rather than the
@@ -199,34 +196,43 @@
    only picks up gold on :hover below) -- these two are the one card
    style on this page whose icon is a deliberate color accent rather
    than a neutral badge. */
-.gt-wizard-type-btn svg.gt-recur-icon { width: 26px; height: 26px; color: var(--gold); flex: none; }
+.gt-wizard-type-btn svg.gt-recur-icon { width: 22px; height: 22px; color: var(--gold); flex: none; }
 
+/* font-size (and letter-spacing) trimmed down from the old 120px-wide
+   card's own 11px/0.04em -- the square's ~52px of content width
+   (64px minus this rule's own 4px+4px padding and the 2px border)
+   needs a smaller label to keep the two- and three-word options
+   ("Item Qty", "Skill Lvl/Xp") readable across 2 lines rather than
+   overflowing sideways. text-align: center is what actually centers
+   each wrapped line -- align-items: center on the card above only
+   centers the label block AS a whole, not the text within its own
+   second line. */
 .gt-wizard-type-btn span {
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 9px;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
+  text-align: center;
 }
 
 .gt-wizard-type-btn:hover { border-color: var(--gold); color: var(--text); background: var(--panel); }
 
-/* Stage 2: search for the target + set its value, all on one row,
-   then Back/Cancel/Save pinned to the bottom -- the wizard's own
-   "page 2". space-between (rather than a fixed gap) is what makes
-   the field row sit at the top and the button row sit at the
-   bottom of the SAME fixed-height box stage 1 uses, whatever the
-   leftover space between them ends up being. */
+/* Stage 2 -- three rows now: search for the target + set its value on
+   top, this stage's own segmented control(s) on a row of their own
+   underneath (see .gt-wizard-segrow below), then Back/Cancel/Save
+   pinned to the bottom. gap (rather than space-between) sets the
+   minimum breathing room between whichever rows are actually present
+   -- .gt-wizard-actions' own margin-top: auto (below) is what then
+   pins the actions row to this box's bottom edge regardless of how
+   many rows come before it, eating up whatever's left of the fixed
+   box's height (see .gt-wizard-expanded) after gap has done its part. */
 .gt-wizard-stage2 {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  justify-content: space-between;
+  gap: 14px;
 }
 
-/* align-items: center (not the flex-start this used to be) is what
-   vertically centers the now-shorter 25px Lvl/Xp and Gain/Reach
-   toggles against the 34px search/target text fields beside them on
-   this same row, rather than pinning every field to the row's own top
-   edge regardless of its own height. */
 .gt-wizard-row { display: flex; gap: 12px; align-items: center; }
 
 /* No <label> of its own any more -- placeholder text on the field's
@@ -234,33 +240,47 @@
    the script) does that job instead, so .gt-field wraps just one
    child now rather than a label+input stack. Still flex-direction:
    column (not the row default), since that's what makes that one
-   child (the search box, the metric toggle, or the target input)
-   stretch to the wrapper's own full width via the column axis's
-   default align-items: stretch -- switching to row would only
-   stretch it to the wrapper's height instead. */
+   child (the search box or the target input) stretch to the
+   wrapper's own full width via the column axis's default
+   align-items: stretch -- switching to row would only stretch it to
+   the wrapper's height instead. */
 .gt-field { display: flex; flex-direction: column; flex: 1 1 200px; min-width: 160px; }
 
 .gt-field select, .gt-field input[type="number"], .gt-field input[type="text"] { width: 100%; height: 34px; padding: 0 12px; }
 
 /* The search field grows to fill whatever room the fixed-width
-   target (and, for a skill goal, metric) fields beside it don't
-   need -- this is what keeps item/quantity, boss/kc, and
-   skill/level-xp/target each on one line regardless of how long a
-   picked name is. */
+   target field beside it doesn't need -- this is what keeps
+   item/quantity, boss/kc, and skill/level-xp/target each on one line
+   regardless of how long a picked name is. Just the two of them on
+   this row now -- the Lvl/Xp and GAIN/REACH toggles that used to sit
+   inline here moved down to their own row (.gt-wizard-segrow below). */
 .gt-wizard-row .gt-field-target-search { flex: 1 1 auto; min-width: 0; }
 .gt-wizard-row .gt-field-target { flex: 0 0 118px; min-width: 0; }
-.gt-wizard-row .gt-field-metric { flex: 0 0 108px; min-width: 0; }
 
-/* GAIN/REACH's own field slot (see #gtTargetModeField in
-   wizardStageTargetHtml, app/pages.py) -- same fixed-width idea as
-   .gt-field-target/.gt-field-metric just above, sized for "GAIN"/
-   "REACH" (longer than Lvl/XP's own 2-3 letters) at this toggle's own
-   11px font. :empty -- not width:0 -- is what makes an inapplicable
-   goal's row look exactly like it did before this field existed: a
-   display:none field is skipped by flexbox entirely, so it consumes
-   neither its own flex-basis nor a gap on either side, and the search
-   field's flex: 1 1 auto reclaims the space right back. */
-.gt-wizard-row .gt-field-target-mode { flex: 0 0 128px; min-width: 0; }
+/* Stage 3's own Lvl/Xp toggle and/or GAIN/REACH field (see
+   #gtWizardSegRow/#gtTargetModeField in wizardStageTargetHtml,
+   app/pages.py) -- a segmented-control row of its own underneath the
+   search/target fields rather than living inline with them, same
+   "this stage's segmented controls get their own row" shape stage 4's
+   own .gt-recur-unit-toggle now uses too (see that rule's own comment
+   below). Centered as a group (not stretched full-width) since these
+   are compact fixed-width toggles, not fields that need the row's
+   whole ~530px to stay readable -- see .gt-metric-toggle/
+   .gt-target-mode-toggle's own width below for their exact sizing.
+   --empty (added/removed by updateWizardSegRowVisibility in the
+   script) is what collapses this whole row out of the stage's flex
+   flow for an item goal, or a skill goal currently on Lvl -- neither
+   has a segmented control to show here at all. */
+.gt-wizard-segrow { display: flex; gap: 10px; justify-content: center; align-items: center; }
+.gt-wizard-segrow--empty { display: none; }
+
+/* :empty (not width: 0) is what makes an inapplicable goal's row look
+   exactly like it did before this field existed -- a display: none
+   field is skipped by flexbox entirely, so it consumes neither space
+   nor a gap on either side. Whether the whole .gt-wizard-segrow row
+   around it disappears too is a separate question, handled by
+   .gt-wizard-segrow--empty above rather than this rule, since that row
+   can also hold the Lvl/Xp toggle beside this field. */
 #gtTargetModeField:empty { display: none; }
 
 /* Site-wide standard: a missing/out-of-range field just gets a red
@@ -284,11 +304,13 @@
    narrower row (stage 1's Cancel-alone, or stage 2's Back+Cancel)
    doesn't just sit flush left the way a shrunk flex row normally
    would -- same centering stage 1/2's own .gt-wizard-stage1-actions
-   already used, now shared here too so every stage's action row lines
-   up the same way horizontally as well as vertically (see
-   .gt-wizard-stage1-wrap's own justify-content below, which is what
-   lines all 4 stages' action rows up on the same y-axis). */
-.gt-wizard-actions { display: flex; gap: 8px; align-self: center; }
+   already uses, shared here too so every stage's action row lines up
+   the same way horizontally. margin-top: auto is what pins this row
+   to the box's bottom edge vertically -- same reasoning as
+   .gt-wizard-stage1-actions' own margin-top: auto, just here for
+   stage 3/4's own actions row instead of stage 1/2's, so all 4
+   stages' action rows land on the same fixed bottom edge either way. */
+.gt-wizard-actions { display: flex; gap: 8px; align-self: center; margin-top: auto; }
 
 /* height: 25px on this and every other button/segmented-control-button
    on the site is the shared site-wide button height -- matches Loot
@@ -337,15 +359,16 @@
   color: var(--text);
 }
 
-/* Level/XP toggle, inline with the skill search + target fields --
-   same segmented-pair look as Purchase Goals'/Mindmaps' own
-   .btn-secondary pairs, just a two-up toggle rather than a single
-   button. Site-wide 25px button height (see .gt-wizard-btn's own
-   comment above) rather than the 34px the other two fields' own text
-   inputs use -- shorter than its row-mates now, but .gt-wizard-row's
-   own align-items: center is what keeps it vertically centered
-   against them rather than pinned to the row's top edge. */
-.gt-metric-toggle { display: flex; gap: 0; height: 25px; }
+/* Level/XP toggle -- sits in #gtWizardSegRow now (see
+   wizardStageTargetHtml, app/pages.py), not inline with the search/
+   target fields any more, so this needs its own explicit width
+   (108px, the same size its old wrapping .gt-field-metric flex-basis
+   gave it) rather than relying on a flex sibling to size it. Same
+   segmented-pair look as Purchase Goals'/Mindmaps' own .btn-secondary
+   pairs, just a two-up toggle rather than a single button, and the
+   same site-wide 25px button height every other button/toggle on the
+   site shares (see .gt-wizard-btn's own comment above). */
+.gt-metric-toggle { display: flex; gap: 0; height: 25px; width: 108px; flex: none; }
 
 .gt-metric-btn {
   flex: 1 1 50%;
@@ -377,14 +400,14 @@
 /* Same segmented-pair idea as .gt-metric-toggle above (reused look,
    own class -- this is a different CHOICE about the same target-value
    field, not another metric), same site-wide 25px button height as
-   that one too now -- it sits inline in the field row beside
-   .gt-metric-toggle now (see #gtTargetModeField in
-   wizardStageTargetHtml, app/pages.py), not underneath it, so it reads
-   as one more field choice on that row rather than a lightweight
-   afterthought below it; .gt-wizard-row's own align-items: center
-   keeps it (and .gt-metric-toggle) vertically centered against the
-   row's own 34px text fields despite being shorter than them. */
-.gt-target-mode-toggle { display: flex; gap: 0; height: 25px; }
+   that one too. Lives inside #gtTargetModeField inside #gtWizardSegRow
+   now (see wizardStageTargetHtml, app/pages.py) -- beside
+   .gt-metric-toggle when both apply, same segmented-control row
+   either way -- so this also needs its own explicit width (128px,
+   the same size its old wrapping .gt-field-target-mode flex-basis
+   gave it, sized for "GAIN"/"REACH" being longer than Lvl/XP's own
+   2-3 letters) rather than relying on a flex sibling to size it. */
+.gt-target-mode-toggle { display: flex; gap: 0; height: 25px; width: 128px; flex: none; }
 
 .gt-target-mode-btn {
   flex: 1 1 50%;
@@ -412,19 +435,15 @@
 
 .gt-target-mode-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
 
-/* Stage 4 (recurring goals only) -- the interval field and its
-   HOUR/DAY/WEEK/MONTH/YEAR toggle sit on one row now (previously
-   stacked), grouped as one block (see wizardStageCadenceHtml) so
-   .gt-wizard-stage2's own space-between still only ever splits
-   leftover room between this block and the actions row, same 2-way
-   split stage 3's field row/actions already uses. align-items:
-   center lines the two up on their vertical middle despite their
-   different heights (34px field, 25px toggle buttons) rather than
-   their tops. margin-bottom guarantees real breathing room below
-   this row even so -- space-between's own leftover-space math alone
-   wasn't reliably keeping it clear of the buttons underneath it, same
-   reasoning as .gt-wizard-stage1-actions' own explicit margin-top. */
-.gt-wizard-recur-fields { display: flex; flex-direction: row; align-items: center; gap: 12px; margin-bottom: 16px; }
+/* Stage 4 (recurring goals only) -- just the interval field now; its
+   own HOUR/DAY/WEEK/MONTH/YEAR toggle moved down to a row of its own
+   (.gt-wizard-segrow, reused from stage 3 -- see
+   .gt-recur-unit-toggle's own comment below) rather than sharing this
+   one with it. justify-content: center is what centers the field
+   under the search/target row's own ~530px width now that it's the
+   row's only child, instead of sitting flush left the way a lone
+   fixed-width flex child normally would. */
+.gt-wizard-recur-fields { display: flex; flex-direction: row; justify-content: center; }
 
 /* Narrower than a full-width field on purpose -- this is a plain "how
    many" count, not something that needs the row's whole width the way
@@ -449,7 +468,12 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
    Back/Cancel/Save/Next buttons (.gt-wizard-btn/.gt-add-btn) rather
    than the 34px text fields elsewhere on this stage -- these are
    buttons, not a field, so they read as part of the same button
-   family instead of another input. */
+   family instead of another input. Sits alone in its own
+   .gt-wizard-segrow row now (see wizardStageCadenceHtml, app/pages.py)
+   rather than sharing a row with the interval field -- flex: 1 1 auto
+   is what still has it fill that row's full width the way it always
+   has, same as when it shared the row with the (now fixed-width, no
+   longer flex-growing) interval field beside it. */
 .gt-recur-unit-toggle { display: flex; height: 25px; flex: 1 1 auto; min-width: 0; }
 
 .gt-recur-unit-btn {
@@ -798,13 +822,17 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
 input[type="text"].invalid { border-color: var(--red); }
 
 @media (max-width: 720px) {
-  /* Fields and stage 1's type cards stay in a row even here -- a
-     fixed same-size box and same-line fields (see .gt-wizard-expanded/
-     .gt-wizard-row above) are the whole point of this layout now, so
-     narrower screens just get tighter fixed widths instead of the
-     stacking this media query used to fall back to. */
+  /* Fields stay in a row even here -- a fixed same-size box and
+     same-line fields (see .gt-wizard-expanded/.gt-wizard-row above)
+     are the whole point of this layout now, so narrower screens just
+     get tighter fixed widths instead of the stacking this media query
+     used to fall back to. The type cards need no such override any
+     more -- they're a fixed 64px square regardless of viewport width
+     now (see .gt-wizard-type-btn above), not a flex-basis that used
+     to need shrinking down here. Lvl/Xp and GAIN/REACH (now on their
+     own .gt-wizard-segrow row, not sharing the field row above) get
+     the same treatment here too, for the same reason. */
   .gt-wizard-row .gt-field-target { flex-basis: 96px; }
-  .gt-wizard-row .gt-field-metric { flex-basis: 92px; }
-  .gt-wizard-row .gt-field-target-mode { flex-basis: 108px; }
-  .gt-wizard-type-btn { padding: 16px 6px; }
+  .gt-metric-toggle { width: 92px; }
+  .gt-target-mode-toggle { width: 108px; }
 }
