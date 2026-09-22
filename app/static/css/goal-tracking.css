@@ -143,8 +143,14 @@
      leftover-space math alone -- the type cards got shorter but so
      did the fixed box (see .gt-wizard-expanded), so there wasn't
      always enough leftover space to keep this row from sitting flush
-     against the cards above it. This guarantees a real gap either way. */
-  margin-top: 10px;
+     against the cards above it. This guarantees a real gap either way.
+     6px, not 10px -- the cards (62px) + this row (26px) already leave
+     only 6px of room in the box's 94px content height (see
+     .gt-wizard-expanded's own comment), so 10px overflowed the fixed
+     box by 4px and dropped this row below the same bottom edge stage
+     3/4's own actions row pins to. 6px fills that room exactly, with
+     zero slack either way, so both rows land on it. */
+  margin-top: 6px;
 }
 
 /* Fixed-ish width now (120px), not flex: 1 1 0 stretching to fill
