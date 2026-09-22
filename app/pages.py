@@ -9871,11 +9871,13 @@ def render_goal_tracking(player: PlayerView) -> str:
         // see Goal.baseline_value's own docstring in app/models.py for
         // what each one actually means server-side). Only ever READ
         // when targetModeApplies() is true (see wizardAddGoal); left
-        // untouched -- not force-reset -- when the toggle's own row is
-        // just hidden rather than genuinely inapplicable (switching Lvl
-        // <-> Xp on the same visit, say), so a player's own REACH pick
-        // survives a brief detour through Lvl the same way GT.type/
-        // wizardTarget already survive a Back-then-Forward.
+        // untouched -- not force-reset -- whenever the toggle doesn't
+        // currently apply, whether that means it's hidden entirely
+        // (switching to an item goal) or just showing disabled
+        // (switching a skill goal's own Lvl/Xp toggle to Lvl -- see
+        // targetModeVisible/wireTargetModeToggle), so a player's own
+        // GAIN/REACH pick survives a brief detour either way, the same
+        // way GT.type/wizardTarget already survive a Back-then-Forward.
         targetMode: 'gain',
         recurInterval: '', // stage 4's own text field, kept here so re-rendering that stage (e.g. after Back then forward again) doesn't lose it
         recurUnit: 'day', // stage 4's own segmented-control selection
@@ -10148,19 +10150,38 @@ def render_goal_tracking(player: PlayerView) -> str:
 
       var WIZARD_SEARCH_PLACEHOLDER = { item: 'Search for an item', kc: 'Search for a boss', skill: 'Search for a skill' };
 
-      // Whether stage 3's own #gtTargetModeToggle (GAIN/REACH) is
-      // offered at all for whatever's currently picked -- mirrors
-      // app.goals.target_mode_allows_gain exactly (see its own
-      // comment for why a LEVEL-metric skill goal and an "item" goal
-      // both stay REACH-only, and a recurring goal doesn't need a
-      // second, independent baseline of its own). The server
-      // re-validates against its own copy regardless (clean_target_mode
-      // in app/goals.py) -- this is purely what decides whether the
-      // client shows the toggle and sends target_mode at all.
+      // Whether GAIN/REACH actually means anything for whatever's
+      // currently picked -- mirrors app.goals.target_mode_allows_gain
+      // exactly (see its own comment for why a LEVEL-metric skill goal
+      // and an "item" goal both stay REACH-only, and a recurring goal
+      // doesn't need a second, independent baseline of its own). The
+      // server re-validates against its own copy regardless
+      // (clean_target_mode in app/goals.py) -- this is what decides
+      // whether target_mode actually gets sent (see wizardAddGoal) and
+      // which placeholder phrasing applies (wizardTargetPlaceholder),
+      // NOT whether #gtTargetModeToggle is on the page at all -- see
+      // targetModeVisible just below for that, which is a strictly
+      // wider set (a one-time skill goal shows -- but disables -- this
+      // toggle even on LEVEL, where this function returns false).
       function targetModeApplies() {
         if (GT.recurring === 'recurring') return false;
         if (GT.type === 'kc') return true;
         if (GT.type === 'skill') return GT.skillMetric === 'xp';
+        return false;
+      }
+
+      // Whether #gtTargetModeToggle renders in the DOM at all, whether
+      // or not it's actually usable right now -- a one-time skill goal
+      // shows it on LEVEL too (disabled -- see wireTargetModeToggle),
+      // rather than making it pop in and out purely from flipping
+      // Lvl<->Xp, so a player can see GAIN/REACH exists for this goal
+      // type without having to already be on Xp to discover it. Same
+      // as targetModeApplies() everywhere else -- a recurring goal or
+      // an item goal never shows this toggle at all, disabled or not.
+      function targetModeVisible() {
+        if (GT.recurring === 'recurring') return false;
+        if (GT.type === 'kc') return true;
+        if (GT.type === 'skill') return true;
         return false;
       }
 
@@ -10288,7 +10309,7 @@ def render_goal_tracking(player: PlayerView) -> str:
       }
 
       // Fills #gtTargetModeField in (or empties it back out) to match
-      // targetModeApplies() right now, and wires its two buttons --
+      // targetModeVisible() right now, and wires its two buttons --
       // called once from wireWizardStage when stage 3 first renders,
       // and again from the Lvl/Xp metric toggle's own click handler
       // (updateWizardTargetField's neighbor, not that function itself)
@@ -10298,25 +10319,40 @@ def render_goal_tracking(player: PlayerView) -> str:
       // filled, same content) field is a harmless no-op past the first
       // real change. Emptying it (rather than hiding it some other
       // way) is what lets #gtTargetModeField:empty in goal-tracking.css
-      // collapse it out of the row's flex flow entirely when it
-      // doesn't apply -- see that rule's own comment. Also refreshes
-      // #gtWizardSegRow's own visibility every time (see
-      // updateWizardSegRowVisibility below), since this is the one
-      // function that runs every time this field's contents could have
-      // changed -- the row it's part of needs to disappear right along
-      // with it once it (and any Lvl/Xp toggle beside it) both go
-      // empty.
+      // collapse it out of the row's flex flow entirely when it isn't
+      // visible at all (an item goal, or any recurring goal) -- see
+      // that rule's own comment. Also refreshes #gtWizardSegRow's own
+      // visibility every time (see updateWizardSegRowVisibility
+      // below), since this is the one function that runs every time
+      // this field's contents could have changed -- the row it's part
+      // of needs to disappear right along with it once it (and any
+      // Lvl/Xp toggle beside it) both go empty.
+      //
+      // When it's visible but doesn't currently apply (a one-time
+      // skill goal on LEVEL) it still renders -- see targetModeVisible
+      // vs. targetModeApplies' own comments for why -- just with
+      // .gt-target-mode-toggle--disabled added (dims it via CSS and
+      // turns off pointer-events, see goal-tracking.css) and no click
+      // handler wired up at all, rather than one that would silently
+      // no-op. GT.targetMode itself is left alone either way (not
+      // force-reset to 'reach') so a player's own GAIN/REACH pick
+      // survives a detour through LEVEL and is still showing, just
+      // dimmed, when they flip back to XP.
       function wireTargetModeToggle() {
         var field = document.getElementById('gtTargetModeField');
         if (!field) return;
-        if (!targetModeApplies()) {
+        if (!targetModeVisible()) {
           field.innerHTML = '';
           updateWizardSegRowVisibility();
           return;
         }
+        var applies = targetModeApplies();
         field.innerHTML = targetModeToggleHtml();
+        var toggleEl = document.getElementById('gtTargetModeToggle');
+        toggleEl.classList.toggle('gt-target-mode-toggle--disabled', !applies);
         document.querySelectorAll('#gtTargetModeToggle .gt-target-mode-btn').forEach(function (btn) {
           btn.classList.toggle('active', btn.getAttribute('data-mode') === GT.targetMode);
+          if (!applies) return;
           btn.addEventListener('click', function () {
             var newMode = btn.getAttribute('data-mode');
             if (newMode === GT.targetMode) return;

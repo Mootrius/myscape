@@ -62,35 +62,29 @@
    fills it, top row flush to the top edge and the actions row pinned
    to the bottom via margin-top: auto (see .gt-wizard-stage1-actions/
    .gt-wizard-actions below), rather than sizing to content.
-   174px (up from 150px) is what it takes to fit THREE rows now
-   instead of two -- every stage grew an extra segmented-control row
-   in the middle (see .gt-wizard-segrow below): stage 1/2's own
-   type-card row moved up against the top edge and Back/Cancel/Next/
-   Save moved down against the bottom edge to open that middle space
-   up, even though stage 1/2 have no segmented control of their own to
-   put there -- a bigger empty gap on those two stages is what keeps
-   all 4 stages reading as the same fixed-size box rather than stage
-   1/2 looking cramped next to stage 3/4's now-fuller ones. Stage 3/4's
-   own 3 real rows (fields + segmented row + actions) need 112px of
-   that -- 34px field row + 25px segmented row + 25px actions row +
-   two 14px gaps (see .gt-wizard-stage2's own gap below) -- so 120px of
-   content height (174 minus the 30/24 top/bottom padding) leaves a
-   little slack even there rather than the old "zero slack" exact fit,
-   which was fragile any time a button/field's own height drifted by a
-   px or two.
-   max-width stays 580px -- still sized for stage 3's widest row, a
-   one-time skill+xp goal's search + target field pair (now just those
-   two, since Lvl/Xp and GAIN/REACH moved down to their own row below
-   it -- see .gt-wizard-segrow). */
+   160px (trimmed down from 174px, tightening the padding and the
+   inter-row gap along with it -- see the padding below and
+   .gt-wizard-stage2's own gap) is still enough to fit stage 3/4's own
+   3 real rows (fields + segmented row + actions) -- 34px field row +
+   25px segmented row + 25px actions row + two 11px gaps = 106px --
+   inside the 114px of content height (160 minus the 26/20 top/bottom
+   padding) this leaves, with a little slack rather than a "zero
+   slack" exact fit that'd be fragile if any button/field's own height
+   ever drifted by a px or two.
+   max-width dropped from 580px to 520px, alongside the side padding's
+   own trim from 24px to 20px -- stage 3's widest row (a one-time
+   skill/kc goal's search + target field pair) still has plenty of
+   room at this width; nothing on this page was ever close to
+   overflowing it. */
 .gt-wizard-expanded {
   position: relative;
   width: 100%;
-  max-width: 580px;
-  height: 174px;
+  max-width: 520px;
+  height: 160px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 30px 24px 24px;
+  padding: 26px 20px 20px;
   display: flex;
   flex-direction: column;
 }
@@ -225,12 +219,13 @@
    -- .gt-wizard-actions' own margin-top: auto (below) is what then
    pins the actions row to this box's bottom edge regardless of how
    many rows come before it, eating up whatever's left of the fixed
-   box's height (see .gt-wizard-expanded) after gap has done its part. */
+   box's height (see .gt-wizard-expanded) after gap has done its part.
+   11px (down from 14px) alongside the box's own shorter height. */
 .gt-wizard-stage2 {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  gap: 14px;
+  gap: 11px;
 }
 
 .gt-wizard-row { display: flex; gap: 12px; align-items: center; }
@@ -435,6 +430,18 @@
 
 .gt-target-mode-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
 
+/* A one-time skill goal on LEVEL -- see targetModeVisible/
+   wireTargetModeToggle in the script -- renders this toggle rather
+   than hiding it, but with this class added: GAIN/REACH doesn't mean
+   anything for a level goal, so it's not clickable (pointer-events:
+   none, no click handler even wired up) and reads as visibly
+   unavailable (dimmed via opacity) rather than looking identical to
+   its normal, interactive state. Whichever button was active stays
+   showing as active underneath the dimming -- GT.targetMode itself is
+   never force-reset (see its own comment where it's declared) -- so
+   flipping back to XP un-dims the same choice instead of resetting it. */
+.gt-target-mode-toggle--disabled { opacity: 0.4; pointer-events: none; }
+
 /* Stage 4 (recurring goals only) -- just the interval field now; its
    own HOUR/DAY/WEEK/MONTH/YEAR toggle moved down to a row of its own
    (.gt-wizard-segrow, reused from stage 3 -- see
@@ -470,14 +477,21 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
    buttons, not a field, so they read as part of the same button
    family instead of another input. Sits alone in its own
    .gt-wizard-segrow row now (see wizardStageCadenceHtml, app/pages.py)
-   rather than sharing a row with the interval field -- flex: 1 1 auto
-   is what still has it fill that row's full width the way it always
-   has, same as when it shared the row with the (now fixed-width, no
-   longer flex-growing) interval field beside it. */
-.gt-recur-unit-toggle { display: flex; height: 25px; flex: 1 1 auto; min-width: 0; }
+   rather than sharing a row with the interval field. Each segment is a
+   fixed 54px now (5*54 - 4*1px of overlap = 266px total), not a
+   flex-grow share of the row's full width -- same 54px each of
+   .gt-metric-toggle's own two LVL/XP segments get (108px / 2), so
+   HOUR/DAY/WEEK/MONTH/YEAR reads as the same "shortened" segment size
+   as that other segmented control rather than a much wider one just
+   because it happens to have more buttons in it. .gt-wizard-segrow's
+   own justify-content: center is what centers this narrower-than-
+   before control under the row above it now that it no longer
+   stretches to fill the row's full width. */
+.gt-recur-unit-toggle { display: flex; height: 25px; flex: none; width: 266px; }
 
 .gt-recur-unit-btn {
-  flex: 1 1 20%;
+  flex: 0 0 54px;
+  width: 54px;
   height: 100%;
   margin-left: -1px;
   background: var(--panel-2);
