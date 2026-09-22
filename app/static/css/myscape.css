@@ -946,6 +946,26 @@ footer {
   scroll-snap-stop: always;
 }
 
+/* The interactive Loot Tracker preview (render_landing_loot_preview,
+   app/pages.py) is the one .landing-anchor whose content's own height
+   actually changes after the page loads -- clicking an NPC tile or a
+   chart bar re-renders the NPC/item panels shorter, since there's
+   less to show once it's scoped down (see .landing-loot-preview in
+   loot-tracker.css for the feather that already handles the panel
+   coming out TALLER than its slide). .landing-anchor's own
+   align-items: center above re-centers that shorter content inside
+   the same fixed-height slide every time it changes -- for a marketing
+   image that height never changes, so centering is invisible there;
+   for this panel it reads as a jarring jump on every filter/drill-
+   down click instead. Anchoring to the top keeps this panel's own top
+   edge fixed regardless of how tall its current content is, so a
+   filter only ever changes how much (still centered horizontally,
+   just not vertically) empty space is left under it, never where it
+   itself sits. */
+.landing-anchor--loot-preview {
+  align-items: flex-start;
+}
+
 /* The logo/tagline panel shares a single stop with the header above
    it (see body.landing header in the scroll-snap rules up top)
    instead of being its own separate one, but it's still pinned to

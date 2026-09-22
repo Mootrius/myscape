@@ -4806,17 +4806,63 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
       var DEMO_STATE = {demo_json};
       var DEMO_BUCKET_STATES = {bucket_states_json};
 
+      // The demo's own client-side hide/unhide state -- the real
+      // hidden set lives in the HiddenLootEntry table (app/models.py)
+      // behind a real account; there's no account here, so this is
+      // just two in-memory Sets, gone on refresh, keyed exactly like
+      // the real npc_hide_key/item_hide_key (app/loot.py) so a hide
+      // made against one casing/id-vs-name still matches consistently.
+      var hiddenNpcs = new Set();
+      var hiddenItemKeys = new Set();
+      function npcHideKey(name) {{ return (name || '').trim().toLowerCase(); }}
+      function itemHideKey(itemId, itemName) {{
+        return itemId != null ? ('id:' + itemId) : ('name:' + (itemName || '').trim().toLowerCase());
+      }}
+      // Patches just the per-entry "hidden" flags a GET response
+      // carries (see build_loot_state's own docstring in app/loot.py
+      // for the full real shape) onto a deep clone of the static
+      // snapshot, using the two Sets above -- deliberately NOT
+      // recomputing the bucket/windowValue/windowKills exclusion a
+      // real hidden NPC/item also triggers server-side (that needs
+      // the full aggregation build_loot_state does, which is exactly
+      // the reimplementation this whole preview was built to avoid --
+      // see this function's own doc comment, point 1). The eye
+      // buttons still do something real and visible this way -- the
+      // tile dims, its icon flips to "unhide", the panel's own "show
+      // hidden" toggle filters it in/out -- just without the header
+      // GP/KC totals ticking down to match, a gap a demo visitor
+      // clicking an eye button to see what it does is in no position
+      // to notice.
+      function applyHiddenFlags(payload) {{
+        var out = JSON.parse(JSON.stringify(payload));
+        (out.windowNpcs || []).forEach(function (n) {{ n.hidden = hiddenNpcs.has(npcHideKey(n.sourceName)); }});
+        (out.windowItems || []).forEach(function (it) {{ it.hidden = hiddenItemKeys.has(itemHideKey(it.itemId, it.itemName)); }});
+        if (out.npcItems) {{
+          Object.keys(out.npcItems).forEach(function (name) {{
+            (out.npcItems[name] || []).forEach(function (it) {{ it.hidden = hiddenItemKeys.has(itemHideKey(it.itemId, it.itemName)); }});
+          }});
+        }}
+        return out;
+      }}
+
       // Shadows the outer/global fetch for everything inside this one
       // IIFE only (see this function's own doc comment, point 1) --
       // the reused script text below calls bare `fetch(...)`, which
       // JS resolves against the nearest enclosing scope that declares
       // one, so it finds THIS var rather than window.fetch without
-      // that script needing to change at all.
-      var fetch = function (url) {{
+      // that script needing to change at all. Now takes `options` too
+      // (the reused script's own hide/unhide calls send a method +
+      // JSON body -- see hideLootNpc/unhideLootItem/etc. below) since
+      // telling POST/DELETE apart from GET, and reading who's being
+      // hidden, both need it.
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
         var qIndex = url.indexOf('?');
         var path = qIndex === -1 ? url : url.slice(0, qIndex);
         var params = new URLSearchParams(qIndex === -1 ? '' : url.slice(qIndex + 1));
-        if (path === '/api/players/me/loot') {{
+
+        if (path === '/api/players/me/loot' && method === 'GET') {{
           var payload = DEMO_STATE;
           if (params.get('range') === 'custom' && params.get('start')) {{
             var startParam = params.get('start');
@@ -4824,11 +4870,24 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
               if (DEMO_STATE.buckets[i].start === startParam) {{ payload = DEMO_BUCKET_STATES[i]; break; }}
             }}
           }}
-          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(payload); }} }});
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(applyHiddenFlags(payload)); }} }});
         }}
-        // hidden-npcs/hidden-items POST+DELETE -- see this function's
-        // own doc comment, point 1, for why this stays a no-op rather
-        // than forwarding to the real endpoint.
+        if (path === '/api/players/me/loot/hidden-npcs') {{
+          var npcBody = opts.body ? JSON.parse(opts.body) : {{}};
+          var npcKey = npcHideKey(npcBody.name);
+          if (method === 'POST') hiddenNpcs.add(npcKey);
+          else if (method === 'DELETE') hiddenNpcs.delete(npcKey);
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{}}); }} }});
+        }}
+        if (path === '/api/players/me/loot/hidden-items') {{
+          var itemBody = opts.body ? JSON.parse(opts.body) : {{}};
+          var itemKey = itemHideKey(itemBody.item_id, itemBody.item_name);
+          if (method === 'POST') hiddenItemKeys.add(itemKey);
+          else if (method === 'DELETE') hiddenItemKeys.delete(itemKey);
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{}}); }} }});
+        }}
+        // Nothing else the reused script calls should ever land here,
+        // but a harmless no-op beats a hard failure if it someday does.
         return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{}}); }} }});
       }};
 
