@@ -661,3 +661,58 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .landing-purchase-preview .gear-slot-remove {
   cursor: default;
 }
+
+/* ---------- Landing-preview-only hero row: character + tagline,
+   above the reused panel's own overlay/gear cards -- see
+   render_landing_purchase_preview's own hero_markup comment. Mirrors
+   .loot-preview-hero/.loot-preview-tagline-wrap/.loot-preview-char in
+   loot-tracker.css left-to-right: same flex row, bottom-aligned, same
+   sizing -- just with the character as the FIRST flex child (so it
+   lands on the left) and the tagline's own wrap second (so it fills
+   whatever's left on the right), instead of the other way around. See
+   that file's own fuller comments for the reasoning behind each rule
+   here, not repeated. ---------- */
+.purchase-preview-hero {
+  display: flex;
+  align-items: flex-end;
+}
+.purchase-preview-tagline-wrap {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.purchase-preview-tagline {
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.purchase-preview-tagline-gold { color: var(--gold); }
+.purchase-preview-tagline-white { color: var(--text); }
+
+.purchase-preview-char {
+  flex: 0 0 auto;
+  width: 130px;
+  line-height: 0;
+}
+/* .landing-purchase-preview .purchase-preview-char img (two classes)
+   beats myscape.css's own .landing-anchor picture img (one class, two
+   elements) -- same override this preview's gear/item icons already
+   need elsewhere, and Loot Tracker's own character needs in
+   loot-tracker.css. */
+.landing-purchase-preview .purchase-preview-char img {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+}

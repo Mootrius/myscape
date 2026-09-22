@@ -581,10 +581,13 @@ def render_landing(player: Optional[PlayerView]) -> str:
         </picture>
       </section>"""
     # Same idea again for Purchase Goals (see
-    # render_landing_purchase_preview) -- replaces the last
+    # render_landing_purchase_preview) -- replaces that same
     # pre-composited marketing panel below with a live, read-only
     # look at the account's own real "Tombs of Amascut" gear setup
     # (sorting still works; nothing can be added, removed, or moved).
+    # Placed right after loot_anchor_section below (moved up from its
+    # original spot at the very end of the anchor list) so the two
+    # interactive previews run back to back.
     # Falls back to the plain image, same as loot_anchor_section above,
     # if the curated snapshot isn't there to read.
     purchase_preview = render_landing_purchase_preview()
@@ -605,10 +608,11 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <img src="/static/img/anchor-purchase-planner.png" alt="Purchase planner -- plan and track your next big buys.">
         </picture>
       </section>"""
-    # Three "anchor" panels -- pre-composited marketing art (logo/
-    # tagline, then one per showcased feature -- except loot tracking
-    # now, see loot_anchor_section above), not live markup, since each
-    # one is a fixed graphic that already has its own baked-in layout/
+    # The remaining "anchor" panels -- pre-composited marketing art
+    # (one per showcased feature -- except loot tracking and purchase
+    # goals now, see loot_anchor_section/purchase_anchor_section
+    # above), not live markup, since each one is a fixed graphic that
+    # already has its own baked-in layout/
     # copy. The first one (landing-anchor--intro) shares a single stop
     # with the header above it (see myscape.css) instead of being its
     # own separate one, so scrolling doesn't stop twice just to reveal
@@ -634,6 +638,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
         </p>
       </section>
       {loot_anchor_section}
+      {purchase_anchor_section}
       <section class="landing-anchor">
         <picture>
           <source srcset="/static/img/anchor-mindmaps.webp" type="image/webp">
@@ -646,7 +651,6 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <img src="/static/img/anchor-storages.png" alt="Storage viewing -- see everything you own, in one place.">
         </picture>
       </section>
-      {purchase_anchor_section}
     </div>
     """
     # CSS scroll-snap (myscape.css) is the baseline -- it's what
@@ -5178,6 +5182,35 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
     if demo is None:
         return None
     extra_head, body, script = _purchase_goals_panel_markup()
+
+    # Landing-preview-only hero row, prepended in front of the reused
+    # panel body -- same technique as render_landing_loot_preview's own
+    # hero_markup (see that function's comment for the fuller
+    # reasoning), mirrored left-to-right: the character sits on the
+    # LEFT here instead of the right, and the tagline's own wrap takes
+    # up whatever's left on the right instead of the left, purely by
+    # swapping which element comes first in this flex row (see
+    # .purchase-preview-hero in purchase-goals.css -- a plain flex row,
+    # same as .loot-preview-hero, still bottom-aligning both children
+    # flush with the first real card below (the GP overlay) with no
+    # overlap and no gap). The reused body's own "Purchase Goals" <h2>
+    # is already hidden via CSS (.landing-purchase-preview .page-title,
+    # in purchase-goals.css), same as Loot Tracker's.
+    hero_markup = """
+    <div class="purchase-preview-hero">
+      <picture class="purchase-preview-char">
+        <source srcset="/static/img/landing-purchase-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-purchase-preview-char.png" alt="" />
+      </picture>
+      <div class="purchase-preview-tagline-wrap">
+        <p class="purchase-preview-tagline">
+          <span class="purchase-preview-tagline-gold">PURCHASE GOALS</span> <span class="purchase-preview-tagline-white">to prepare for your next big spending spree.</span>
+        </p>
+      </div>
+    </div>
+    """
+    body = hero_markup + body
+
     demo_json = json.dumps(demo)
     wrapper_script = f"""
     (function () {{
