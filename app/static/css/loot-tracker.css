@@ -670,13 +670,22 @@
 /* Downscaled well below the character's own source-image size
    (landing-loot-preview-char.png/.webp -- 340x410, already cropped
    to just its upper half) -- sized to read as a small figure peeking
-   over the chart, not a second focal point. A fixed-width flex item,
-   not absolutely positioned -- see .loot-preview-hero above for why
-   that's what keeps its own bottom edge flush with the chart card's
-   top border instead of overlapping past it. */
+   over the chart, not a second focal point. A fixed-HEIGHT flex item
+   (was fixed-width, 130px) -- height is what this and
+   .purchase-preview-char (purchase-goals.css) are standardized on, so
+   the two preview characters read as the same size next to each
+   other despite their own source images having different aspect
+   ratios; width is left to follow from that automatically. Not
+   absolutely positioned -- see .loot-preview-hero above for why that
+   flex layout is what keeps its own bottom edge flush with the chart
+   card's top border instead of overlapping past it. 157px is this
+   image's own previous rendered height at width: 130px (130 *
+   410/340), kept as-is so this preview looks pixel-identical to
+   before -- .purchase-preview-char matches this value exactly rather
+   than the other way around. */
 .loot-preview-char {
   flex: 0 0 auto;
-  width: 130px;
+  height: 157px;
   line-height: 0;
 }
 /* .landing-loot-preview .loot-preview-char img (two classes) beats
@@ -688,8 +697,8 @@
    comment in myscape.css) if this weren't scoped to win over it. */
 .landing-loot-preview .loot-preview-char img {
   display: block;
-  width: 100%;
-  max-width: none;
-  height: auto;
+  height: 100%;
   max-height: none;
+  width: auto;
+  max-width: none;
 }

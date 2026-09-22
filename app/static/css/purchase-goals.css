@@ -621,10 +621,13 @@ button.primary#pgNameSave, .pg-setup-form-save {
    once there's actually something hidden below it), scoped here
    instead since this preview's own markup/CSS classes are Purchase
    Goals', not Loot Tracker's. See that class's own comment for the
-   fuller reasoning -- not repeated here. ---------- */
+   fuller reasoning -- not repeated here. max-width matches
+   .landing-loot-preview's own 900px exactly (was 1000px) so the two
+   interactive previews -- now back to back in the anchor order --
+   read as the same size panel, not two different widths. ---------- */
 .landing-purchase-preview {
   width: 100%;
-  max-width: 1000px;
+  max-width: 900px;
   margin: 0 auto;
   max-height: calc(100vh - 80px);
   max-height: calc(100svh - 80px);
@@ -699,9 +702,17 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .purchase-preview-tagline-gold { color: var(--gold); }
 .purchase-preview-tagline-white { color: var(--text); }
 
+/* Fixed-HEIGHT flex item (was fixed-width, 130px) -- 157px matches
+   .loot-preview-char in loot-tracker.css exactly, so the two preview
+   characters render at the same height next to each other despite
+   this image's own source aspect ratio (350x292, already cropped to
+   its upper half) being wider/shorter than the loot character's
+   (340x410) -- width is left to follow from that automatically
+   rather than forced to match too. See .loot-preview-char's own
+   comment for the fuller reasoning. */
 .purchase-preview-char {
   flex: 0 0 auto;
-  width: 130px;
+  height: 157px;
   line-height: 0;
 }
 /* .landing-purchase-preview .purchase-preview-char img (two classes)
@@ -711,8 +722,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
    loot-tracker.css. */
 .landing-purchase-preview .purchase-preview-char img {
   display: block;
-  width: 100%;
-  max-width: none;
-  height: auto;
+  height: 100%;
   max-height: none;
+  width: auto;
+  max-width: none;
 }
