@@ -804,20 +804,23 @@ def render_dashboard(player: PlayerView) -> str:
         + "</a>"
     )
 
-    # Alphabetical by each card's own displayed title (Goal Tracking,
-    # Loot Tracker, Mindmaps, Purchase Goals, Storages Viewer) -- NOT
-    # by feature/route name, since "Storages Viewer" is what a player
-    # scanning this grid actually reads, not "Possessions". Keep this
-    # order alphabetical going forward: a new card's *_card variable
-    # slots into the list below wherever its own <h3> title falls
-    # alphabetically, same as every card here already does.
+    # No longer alphabetical (Goal Tracking, Loot Tracker, Mindmaps,
+    # Purchase Goals, Storages Viewer) -- a deliberate, explicitly
+    # chosen order instead: Loot Tracker, Purchase Goals, Mindmaps,
+    # Storages Viewer, Goal Tracking. Nothing about this order is
+    # derived from anything else (not the card variables' own
+    # declaration order above, not each title's length or route name),
+    # so a new card's *_card variable just gets inserted at whatever
+    # position it's meant to appear -- there's no rule left to keep it
+    # consistent with, unlike the old alphabetical version of this
+    # comment.
     body = f"""
     <div class="dash-grid">
-      {goal_tracking_card}
       {loot_tracker_card}
-      {mindmaps_card}
       {purchase_goals_card}
+      {mindmaps_card}
       {possessions_card}
+      {goal_tracking_card}
     </div>
     """
     return _shell(title="Dashboard — myscape", player=player, body=body)
@@ -4068,7 +4071,12 @@ def render_loot_tracker(player: PlayerView) -> str:
         emptyEl.style.display = 'none';
 
         function itemTitle(it) {
-          return it.itemName + ' \\u00d7 ' + fmtGp(it.quantity) + ' \\u2014 ' + fmtGp(it.value) + ' gp';
+          // No space between the × and the quantity that follows it
+          // (unlike the — on either side of it) -- reads as a single
+          // "x123"-style unit, the same way the box's own always-visible
+          // .loot-item-box-qty badge just below already renders its
+          // × + fmtGpCompact(it.quantity) with nothing between them.
+          return it.itemName + ' \\u00d7' + fmtGp(it.quantity) + ' \\u2014 ' + fmtGp(it.value) + ' gp';
         }
 
         // Same hiddenFlags addition, same reason, as renderNpcRow's key
