@@ -149,6 +149,72 @@ def _get_landing_purchase_demo_data() -> Optional[dict]:
             return None
     return _landing_purchase_demo_data
 
+# Same idea a third time, for the landing page's own interactive
+# Mindmaps preview (see render_landing_mindmap_preview below) -- a
+# real (not synthetic) mindmap, same reasoning as Purchase Goals'
+# above: a one-time GET /api/mindmaps pull of the account's own real
+# "Example" mindmap, trimmed down to just that one mindmap (there was
+# only one to begin with). Unlike Loot Tracker/Purchase Goals, this
+# preview genuinely lets a visitor edit -- add/move/recolor/delete
+# nodes, undo/redo, fill in goal criteria -- entirely against this
+# frozen snapshot in memory (see that function's own docstring for how
+# the mutation logic is ported to JS), so there's nothing to keep in
+# sync with the real account either; a visitor's edits never touch it.
+_LANDING_MINDMAP_DEMO_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "landing_mindmap_demo.json"
+)
+_landing_mindmap_demo_data = None
+
+
+def _get_landing_mindmap_demo_data() -> Optional[dict]:
+    global _landing_mindmap_demo_data
+    if _landing_mindmap_demo_data is None:
+        try:
+            with open(_LANDING_MINDMAP_DEMO_PATH, "r") as f:
+                _landing_mindmap_demo_data = json.load(f)
+        except (OSError, ValueError):
+            return None
+    return _landing_mindmap_demo_data
+
+# The Mindmaps preview's goal-criteria search fields (KC/item/quest)
+# normally hit session-authenticated endpoints (/api/npcs/search,
+# /api/items/search, /api/quests/search -- see app/main.py) that would
+# either 401 for an anonymous visitor or, for a logged-in one browsing
+# back to "/", send their own real session cookie to a request this
+# preview triggered -- neither of which this preview should ever do
+# (same "never reach the real API with a visitor's own session cookie"
+# discipline as every other shimmed endpoint here). Rather than just
+# failing those searches outright (which would make three of the
+# eight goal types feel broken in a preview that's supposed to let
+# people "edit all they want"), this bundles a curated LOCAL snapshot
+# to filter client-side instead -- the full real NPC (1,334) and quest
+# (218) name lists (small enough to just ship whole, via
+# app/npc_names.py/app/quest_names.py, the exact same snapshots
+# search_npc_names/search_quest_names already search), plus a hand-
+# picked ~175-item subset of well-known goal-worthy items (the full
+# item snapshot is 11.5k entries/~1MB -- far too much to ship on a
+# landing page for what's a curated demo, not the real search). An
+# obscure item won't turn up here the way it would on the real page;
+# see render_landing_mindmap_preview's own wrapper script for how
+# these get searched (the exact same startswith-then-contains ranking
+# search_npc_names/search_quest_names/search_items use server-side,
+# ported to JS).
+_LANDING_MINDMAP_SEARCH_POOLS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "landing_mindmap_search_pools.json"
+)
+_landing_mindmap_search_pools_data = None
+
+
+def _get_landing_mindmap_search_pools_data() -> Optional[dict]:
+    global _landing_mindmap_search_pools_data
+    if _landing_mindmap_search_pools_data is None:
+        try:
+            with open(_LANDING_MINDMAP_SEARCH_POOLS_PATH, "r") as f:
+                _landing_mindmap_search_pools_data = json.load(f)
+        except (OSError, ValueError):
+            return None
+    return _landing_mindmap_search_pools_data
+
 # Same cache-busting trick again, for the Mindmaps page's own stylesheet.
 _MINDMAPS_CSS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "static", "css", "mindmaps.css"
@@ -608,9 +674,36 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <img src="/static/img/anchor-purchase-planner.png" alt="Purchase planner -- plan and track your next big buys.">
         </picture>
       </section>"""
+    # Same idea a third time for Mindmaps (see
+    # render_landing_mindmap_preview) -- replaces that same
+    # pre-composited marketing panel below with a genuinely editable
+    # live copy of the account's own real "Example" mindmap (every
+    # add/recolor/delete/reparent/undo/redo/goal-save actually works,
+    # entirely in-memory -- nothing reaches the real account). Falls
+    # back to the plain image, same as the two above, if either the
+    # curated snapshot or its search-pools sidecar isn't there to read.
+    mindmap_preview = render_landing_mindmap_preview()
+    if mindmap_preview:
+        mindmap_preview_head, mindmap_preview_body, mindmap_preview_script = mindmap_preview
+        mindmap_anchor_section = f"""
+      <section class="landing-anchor landing-anchor--mindmap-preview">
+        <div class="landing-mindmap-preview">
+          {mindmap_preview_body}
+        </div>
+      </section>"""
+    else:
+        mindmap_preview_head, mindmap_preview_script = "", ""
+        mindmap_anchor_section = """
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/anchor-mindmaps.webp" type="image/webp">
+          <img src="/static/img/anchor-mindmaps.png" alt="Mindmaps -- to plan every step of your grind.">
+        </picture>
+      </section>"""
     # The remaining "anchor" panels -- pre-composited marketing art
-    # (one per showcased feature -- except loot tracking and purchase
-    # goals now, see loot_anchor_section/purchase_anchor_section
+    # (one per showcased feature -- except loot tracking, purchase
+    # goals, and mindmaps now, see
+    # loot_anchor_section/purchase_anchor_section/mindmap_anchor_section
     # above), not live markup, since each one is a fixed graphic that
     # already has its own baked-in layout/
     # copy. The first one (landing-anchor--intro) shares a single stop
@@ -639,12 +732,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
       </section>
       {loot_anchor_section}
       {purchase_anchor_section}
-      <section class="landing-anchor">
-        <picture>
-          <source srcset="/static/img/anchor-mindmaps.webp" type="image/webp">
-          <img src="/static/img/anchor-mindmaps.png" alt="Mindmaps -- to plan every step of your grind.">
-        </picture>
-      </section>
+      {mindmap_anchor_section}
       <section class="landing-anchor">
         <picture>
           <source srcset="/static/img/anchor-storages.webp" type="image/webp">
@@ -773,7 +861,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
     # and render_landing_purchase_preview) just tack onto the end here --
     # an empty string, and a no-op, for either one that was None above
     # (the static-image fallback needs no script of its own).
-    script += loot_preview_script + purchase_preview_script
+    script += loot_preview_script + purchase_preview_script + mindmap_preview_script
     # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
     # every other page keeps its ordinary, un-snapped scrolling.
@@ -782,7 +870,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
         player=player,
         body=body,
         extra_script=script,
-        extra_head=loot_preview_head + purchase_preview_head,
+        extra_head=loot_preview_head + purchase_preview_head + mindmap_preview_head,
         body_class="landing",
         footer_extra=landing_cta,
         # The one page on the whole site actually meant to be found --
@@ -5426,17 +5514,711 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
     return extra_head, body, wrapper_script
 
 
-def render_mindmaps(player: PlayerView) -> str:
-    """The Mindmaps page -- brand new feature, no Maintrius equivalent to
-    port. Same overall shape as Purchase Goals/Loot Tracker: a static
-    HTML skeleton, everything below it rendered client-side from one
-    polled-once JSON payload (GET /api/mindmaps, see app/mindmaps.py's
-    build_mindmaps_state), so every mutation endpoint can just hand back
-    the freshly recomputed state and let the same render() redraw
-    everything. Unlike those two pages, there's no background poll --
-    nothing external (no RuneLite plugin, no wiki prices) ever changes a
-    mindmap out from under the player, so there's nothing to poll for
-    that their own last action here hasn't already applied.
+def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
+    """The landing page's own interactive Mindmaps preview -- same idea
+    as render_landing_loot_preview/render_landing_purchase_preview
+    (reuses _mindmaps_panel_markup's body/script completely unmodified,
+    layering demo-only behavior on top from the outside in a wrapper
+    script), backed by one real, curated snapshot: app/data/
+    landing_mindmap_demo.json is a one-time GET /api/mindmaps pull of
+    the account's own real "Example" mindmap (there was only one to
+    begin with -- see that file's own comment above). Returns
+    (extra_head, body, script) for render_landing to splice into its
+    own markup, same as the other two previews, or None if either the
+    mindmap snapshot or its search-pools sidecar (see
+    _get_landing_mindmap_search_pools_data's own comment) isn't there
+    to read.
+
+    Unlike Loot Tracker/Purchase Goals -- which only ever let a visitor
+    look, sort, or (Purchase Goals) click through to the wiki -- this
+    preview is genuinely, fully editable: add/recolor/delete/reparent
+    nodes, undo/redo, fill in every goal type's criteria, exactly like
+    the real page, per the player's own request ("essentially have a
+    window/viewport they can work with to edit the mindmap all they
+    want"). That's possible here in a way it wasn't for the other two
+    because a mindmap's own tree-shape mutations (app/mindmaps.py's
+    add_node/add_shared_child/update_node/delete_node/replace_nodes/
+    clean_goal) never touch account-specific game state at all --
+    unlike an item's price/ownership or a kill's own gp value, a
+    node's text/color/order/parentId/goal criteria are just plain data
+    the player themselves fully controls -- so porting that logic to
+    JS below is enough for the whole editing experience to work
+    faithfully against this one frozen snapshot, in memory, never
+    reaching the real API. The one thing genuinely entangled with live
+    account state -- a node's `completed` flag (app/mindmaps.py's
+    evaluate_completion, checked against the player's own synced
+    skills/items/quests/diary/kc) -- is simply frozen at whatever the
+    snapshot already baked in per node id, EXCEPT the gray "manual
+    complete" toggle (the one completion check that was never
+    account-derived in the first place -- see setNodeGoal below) and
+    the root node's own completed flag (always just "every other node
+    here is complete," recomputed fresh from whatever's currently true
+    of the nodes that exist right now -- see withRecomputedRoot).
+
+    1. A `fetch` shim, scoped to just this wrapper (a local `var
+       fetch` inside its own IIFE, never touching window.fetch), that:
+       - Answers GET /api/mindmaps out of DEMO_MINDMAP's current node
+         list (buildState below).
+       - Implements every node-mutation endpoint FOR REAL against
+         DEMO_MINDMAP.nodes, in memory -- addNode/addSharedChild/
+         updateNode/deleteNode/replaceNodes/setNodeGoal below are each
+         a faithful JS port of their same-named Python counterpart in
+         app/mindmaps.py (see each function's own comment for exactly
+         what it mirrors), so every add/recolor/delete/reparent/undo/
+         redo/goal-save genuinely works, recomputing and returning the
+         same full-state shape the real endpoint would. A validation
+         failure (a goal missing a required field, a malformed undo/
+         redo snapshot, ...) rejects the same way the real endpoint's
+         400 does -- {{detail: "..."}} -- so the panel's own existing
+         error handling (showError/showGoalSaveError) surfaces it
+         exactly as it would for real.
+       - Answers the three goal-criteria search endpoints
+         (/api/npcs/search, /api/items/search, /api/quests/search)
+         out of the bundled local SEARCH_POOLS (see
+         _get_landing_mindmap_search_pools_data's own comment for why
+         these are shimmed too rather than left to hit the real,
+         session-authenticated endpoints) using the same startswith-
+         then-contains ranking app/npc_names.py's search_npc_names
+         (and its item/quest siblings) use server-side -- see
+         localSearchNames/localSearchItems below.
+       - Anything else (a mindmap-level create/rename/delete -- there's
+         only ever the one mindmap here, and #mmSwitchBtn is neutered
+         below so its menu can never even open to reach those) gets a
+         harmless failure response instead of ever reaching the real
+         API with a visitor's own session cookie.
+    2. `localStorage` is ALSO shadowed here (a local `var localStorage`
+       backed by a plain in-memory object, never touching
+       window.localStorage) -- not for privacy/API-cookie reasons like
+       `fetch` above, but because the reused script persists two
+       preferences under real per-origin localStorage keys (
+       myscape:mindmaps:editMode, myscape:mindmaps:activeMindmapId --
+       see loadStoredEditMode/setActiveMindmapId in the reused script)
+       and this landing page shares an origin with the real,
+       authenticated Mindmaps page. Without this, a visitor who'd
+       previously left Edit Mode on (or a different mindmap active) on
+       the real page would find this preview silently inheriting that
+       state instead of starting fresh -- and, worse, every toggle
+       made HERE would overwrite THEIR real stored preference out from
+       under them. An empty in-memory store fixes both: this preview
+       always starts in Edit Mode off (exactly as requested) regardless
+       of the visitor's real history, and nothing it does here ever
+       touches their actual browser storage.
+    3. #mmSwitchBtn -- wired only once, on script load (unlike, say,
+       Purchase Goals' .gear-slot, which rewires fresh every render --
+       this one's more like that page's #pgIconTrigger) -- gets the
+       same one-time cloneNode+replaceWith strip, so its mindmap-
+       switcher menu (new/rename/delete, and switching between
+       mindmaps there aren't more than one of here) can never open.
+       The rest of the toolbar -- undo/redo, zoom in/out/fit,
+       fullscreen, and Edit Mode itself -- is left completely alone,
+       exactly as the player asked ("have the actual buttons available
+       in the normal mindmap editor").
+    4. Same bottom-edge feather as the other two previews (a
+       .landing-mindmap-preview--clipped toggle off a ResizeObserver),
+       even though .mm-canvas already has its own fixed height --
+       between the hero row above it and the toolbar, the WHOLE panel
+       can still exceed a short viewport, same reasoning as the other
+       two.
+
+    No setInterval here at all (see _mindmaps_panel_markup's own
+    docstring -- the real page doesn't poll either), so unlike the
+    other two previews there's nothing background to leave running or
+    neutralize.
+    """
+    demo = _get_landing_mindmap_demo_data()
+    search_pools = _get_landing_mindmap_search_pools_data()
+    if demo is None or search_pools is None:
+        return None
+    extra_head, body, script = _mindmaps_panel_markup()
+
+    # Landing-preview-only hero row, prepended in front of the reused
+    # panel body -- same technique as the other two previews' own
+    # hero_markup, mirrored the SAME way Loot Tracker's own is (tagline
+    # on the left, image on the right -- Purchase Goals' is the one
+    # that flipped it), per the player's own request this round. See
+    # .mindmap-preview-hero in mindmaps.css for the shared flex-row/
+    # bottom-align treatment (same as .loot-preview-hero/
+    # .purchase-preview-hero, just under this preview's own class
+    # names since its markup/CSS are Mindmaps', not either other
+    # page's). The reused body's own "Mindmaps" <h2> is hidden via CSS
+    # (.landing-mindmap-preview .page-title), same as the other two.
+    hero_markup = """
+    <div class="mindmap-preview-hero">
+      <div class="mindmap-preview-tagline-wrap">
+        <p class="mindmap-preview-tagline">
+          <span class="mindmap-preview-tagline-gold">MINDMAPS</span> <span class="mindmap-preview-tagline-white">to help you plan every step of your grind.</span>
+        </p>
+      </div>
+      <picture class="mindmap-preview-char">
+        <source srcset="/static/img/landing-mindmap-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-mindmap-preview-char.png" alt="" />
+      </picture>
+    </div>
+    """
+    body = hero_markup + body
+
+    demo_json = json.dumps(demo)
+    search_pools_json = json.dumps(search_pools)
+    wrapper_script = f"""
+    (function () {{
+      // The captured snapshot itself, exactly as GET /api/mindmaps
+      // returned it for the real account's real "Example" mindmap
+      // (see this function's own docstring) -- {{mindmaps: [oneMindmap]}}.
+      var DEMO_STATE = {demo_json};
+      var DEMO_MINDMAP = DEMO_STATE.mindmaps[0];
+      // The curated local search data (see
+      // _get_landing_mindmap_search_pools_data's own comment) --
+      // {{npcs: [name, ...], quests: [name, ...], items: [{{name, id}}, ...]}}.
+      var SEARCH_POOLS = {search_pools_json};
+      var ITEM_ICON_CDN_BASE = 'https://static.runelite.net/cache/item/icon/';
+
+      // ---- localStorage shadow -- see this function's own docstring,
+      // point 2, for why. A plain in-memory object standing in for the
+      // two methods the reused script actually calls
+      // (getItem/setItem/removeItem) -- nothing fancier is needed
+      // since nothing here ever iterates keys or reads .length.
+      var localStorage = (function () {{
+        var store = {{}};
+        return {{
+          getItem: function (k) {{ return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; }},
+          setItem: function (k, v) {{ store[k] = String(v); }},
+          removeItem: function (k) {{ delete store[k]; }},
+        }};
+      }})();
+
+      // ---- Mutation logic, ported from app/mindmaps.py -----------------
+      //
+      // Every function below is a faithful JS port of its same-named
+      // Python counterpart -- same validation, same defaults, same
+      // return shape (a brand new node array, never mutated in
+      // place, exactly like the Python originals) -- so the fetch
+      // shim further down can apply them against DEMO_MINDMAP.nodes
+      // and hand back a response indistinguishable in SHAPE from the
+      // real endpoint's, even though nothing here ever touches a
+      // database. `completed` rides along as a plain field on each
+      // node object (exactly how the real API already serializes it
+      // -- see serialize_mindmap) rather than a separate side table;
+      // see each function's own comment for exactly when it resets
+      // vs. carries over untouched, and withRecomputedRoot further
+      // down for the one field NEVER just carried over as-is.
+      var NODE_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'white'];
+      var DEFAULT_COLOR = 'gray';
+      var DEFAULT_TEXT = 'New';
+      var MAX_NODE_TEXT_LENGTH = 120;
+      var MAX_NODE_NOTE_LENGTH = 200;
+      var GOAL_TYPE_BY_COLOR = {{ gray: 'manual', red: 'kc', orange: 'item', yellow: 'gp', green: 'skill', blue: 'quest', purple: 'diary', white: null }};
+      var KC_ACTIVITY_TYPES = ['npc', 'pickpocket', 'event'];
+      var SKILL_NAMES = {{}};
+      ['attack', 'defence', 'strength', 'hitpoints', 'ranged', 'prayer', 'magic', 'cooking', 'woodcutting', 'fletching',
+       'fishing', 'firemaking', 'crafting', 'smithing', 'mining', 'herblore', 'agility', 'thieving', 'slayer', 'farming',
+       'runecraft', 'hunter', 'construction', 'sailing'].forEach(function (s) {{ SKILL_NAMES[s] = true; }});
+      var DIARY_AREAS = {{}};
+      ['ardougne', 'desert', 'falador', 'fremennik', 'kandarin', 'karamja', 'kourend_kebos', 'lumbridge_draynor',
+       'morytania', 'varrock', 'western_provinces', 'wilderness'].forEach(function (a) {{ DIARY_AREAS[a] = true; }});
+      var DIARY_TIERS = ['easy', 'medium', 'hard', 'elite'];
+      var MAX_GOAL_NAME_LENGTH = 80;
+      var MAX_KC_TARGET = 1000000, MAX_ITEM_QTY_TARGET = 2000000000, MAX_GP_TARGET = 100000000000;
+      var MIN_SKILL_LEVEL = 1, MAX_SKILL_LEVEL = 126, MIN_SKILL_XP = 0, MAX_SKILL_XP = 200000000;
+
+      function newNodeId() {{
+        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {{
+          var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        }});
+      }}
+      function cleanText(text, allowEmpty) {{
+        text = String(text == null ? '' : text).trim().slice(0, MAX_NODE_TEXT_LENGTH).trim();
+        if (allowEmpty) return text;
+        return text || DEFAULT_TEXT;
+      }}
+      function cleanNote(note) {{
+        var cleaned = String(note == null ? '' : note).trim();
+        var lines = cleaned.split('\\n');
+        if (lines.length > 2) cleaned = lines.slice(0, 2).join('\\n');
+        return cleaned.slice(0, MAX_NODE_NOTE_LENGTH);
+      }}
+      function cleanColor(color, isRoot) {{
+        if (isRoot) return 'white';
+        var cleaned = NODE_COLORS.indexOf(color) !== -1 ? color : DEFAULT_COLOR;
+        return cleaned === 'white' ? DEFAULT_COLOR : cleaned;
+      }}
+      function cleanGoalText(value, fieldName) {{
+        var text = String(value == null ? '' : value).trim().slice(0, MAX_GOAL_NAME_LENGTH);
+        if (!text) throw new Error(fieldName + " can't be empty.");
+        return text;
+      }}
+      function cleanIntInRange(value, fieldName, minimum, maximum) {{
+        var n = Number(value);
+        if (!isFinite(n)) throw new Error(fieldName + ' must be a whole number.');
+        n = Math.trunc(n);
+        if (n < minimum || n > maximum) throw new Error(fieldName + ' must be between ' + minimum + ' and ' + maximum + '.');
+        return n;
+      }}
+      function cleanGoalDate(value, fieldName) {{
+        var text = String(value == null ? '' : value).trim();
+        if (!/^\\d{{4}}-\\d{{2}}-\\d{{2}}$/.test(text)) throw new Error(fieldName + ' must be a YYYY-MM-DD date.');
+        return text;
+      }}
+      function defaultGoal(color) {{
+        var t = GOAL_TYPE_BY_COLOR[color];
+        if (t === 'manual') return {{ manualComplete: false }};
+        if (t == null) return null;
+        return {{}};
+      }}
+      // Mirrors clean_goal in app/mindmaps.py -- see that function's
+      // own docstring for the require_complete distinction (true for
+      // a fresh goal-form save, false for restoring an undo/redo
+      // snapshot).
+      function cleanGoal(color, goal, requireComplete) {{
+        var t = GOAL_TYPE_BY_COLOR[color];
+        goal = (goal && typeof goal === 'object') ? goal : {{}};
+        if (t === 'manual') return {{ manualComplete: !!goal.manualComplete }};
+        if (t == null) return null;
+        var cleaned = {{}};
+        function field(name, cleanFn, missingMsg) {{
+          var value = goal[name];
+          if (value == null || value === '') {{
+            if (requireComplete) throw new Error(missingMsg);
+            return;
+          }}
+          cleaned[name] = cleanFn(value);
+        }}
+        if (t === 'kc') {{
+          field('activityType', function (v) {{
+            if (KC_ACTIVITY_TYPES.indexOf(v) === -1) throw new Error('activityType must be one of ' + KC_ACTIVITY_TYPES.join(', ') + '.');
+            return v;
+          }}, 'Pick what kind of activity this goal tracks.');
+          field('sourceName', function (v) {{ return cleanGoalText(v, 'sourceName'); }}, 'Pick an NPC.');
+          field('targetCount', function (v) {{ return cleanIntInRange(v, 'targetCount', 1, MAX_KC_TARGET); }}, 'Set a target kc.');
+          if (goal.sinceDate) cleaned.sinceDate = cleanGoalDate(goal.sinceDate, 'sinceDate');
+          return cleaned;
+        }}
+        if (t === 'item') {{
+          field('itemName', function (v) {{ return cleanGoalText(v, 'itemName'); }}, 'Pick an item.');
+          field('targetQty', function (v) {{ return cleanIntInRange(v, 'targetQty', 1, MAX_ITEM_QTY_TARGET); }}, 'Set a target quantity.');
+          return cleaned;
+        }}
+        if (t === 'gp') {{
+          field('targetGp', function (v) {{ return cleanIntInRange(v, 'targetGp', 1, MAX_GP_TARGET); }}, 'Set a gp target.');
+          return cleaned;
+        }}
+        if (t === 'skill') {{
+          field('skill', function (v) {{
+            v = String(v).trim().toLowerCase();
+            if (!SKILL_NAMES[v]) throw new Error('skill must be a real OSRS skill.');
+            return v;
+          }}, 'Pick a skill.');
+          field('metric', function (v) {{
+            if (v !== 'level' && v !== 'xp') throw new Error("metric must be 'level' or 'xp'.");
+            return v;
+          }}, 'Pick level or experience.');
+          if (cleaned.metric === 'xp') {{
+            field('target', function (v) {{ return cleanIntInRange(v, 'target', MIN_SKILL_XP, MAX_SKILL_XP); }}, 'Set an experience target.');
+          }} else {{
+            field('target', function (v) {{ return cleanIntInRange(v, 'target', MIN_SKILL_LEVEL, MAX_SKILL_LEVEL); }}, 'Set a level target.');
+          }}
+          return cleaned;
+        }}
+        if (t === 'quest') {{
+          field('questName', function (v) {{ return cleanGoalText(v, 'questName'); }}, 'Pick a quest.');
+          return cleaned;
+        }}
+        if (t === 'diary') {{
+          field('area', function (v) {{
+            v = String(v).trim().toLowerCase();
+            if (!DIARY_AREAS[v]) throw new Error('area must be a real diary area.');
+            return v;
+          }}, 'Pick a diary area.');
+          field('tier', function (v) {{
+            v = String(v).trim().toLowerCase();
+            if (DIARY_TIERS.indexOf(v) === -1) throw new Error('tier must be one of ' + DIARY_TIERS.join(', ') + '.');
+            return v;
+          }}, 'Pick a tier.');
+          return cleaned;
+        }}
+        return cleaned;
+      }}
+      function findNode(nodes, id) {{
+        for (var i = 0; i < nodes.length; i++) {{ if (nodes[i].id === id) return nodes[i]; }}
+        return null;
+      }}
+      function childrenOf(nodes, parentId) {{
+        return nodes.filter(function (n) {{ return n.parentId === parentId; }}).sort(function (a, b) {{ return a.order - b.order; }});
+      }}
+      function depthOf(nodes, id) {{
+        var depth = 0, node = findNode(nodes, id);
+        while (node && node.parentId != null) {{ node = findNode(nodes, node.parentId); depth++; }}
+        return depth;
+      }}
+      function nextChildOrder(nodes, parentId) {{
+        var kids = childrenOf(nodes, parentId);
+        return kids.length ? kids[kids.length - 1].order + 1.0 : 0.0;
+      }}
+      function orderAfter(nodes, node) {{
+        var sibs = childrenOf(nodes, node.parentId);
+        var idx = sibs.findIndex(function (n) {{ return n.id === node.id; }});
+        if (idx + 1 < sibs.length) return (node.order + sibs[idx + 1].order) / 2.0;
+        return node.order + 1.0;
+      }}
+      function orderBefore(nodes, node) {{
+        var sibs = childrenOf(nodes, node.parentId);
+        var idx = sibs.findIndex(function (n) {{ return n.id === node.id; }});
+        if (idx > 0) return (sibs[idx - 1].order + node.order) / 2.0;
+        return node.order - 1.0;
+      }}
+      // Mirrors add_node in app/mindmaps.py -- returns {{nodes, newId}}.
+      function addNode(nodes, relativeId, relation, text, color, before) {{
+        var relative = findNode(nodes, relativeId);
+        if (!relative) throw new Error('That node no longer exists.');
+        var newColor = cleanColor(color, false);
+        var newNode = {{ id: newNodeId(), text: cleanText(text, true), color: newColor, goal: defaultGoal(newColor), completed: false }};
+        if (relation === 'child') {{
+          newNode.parentId = relativeId;
+          newNode.order = nextChildOrder(nodes, relativeId);
+          return {{ nodes: nodes.concat([newNode]), newId: newNode.id }};
+        }}
+        if (relation === 'sibling') {{
+          if (relative.parentId == null) throw new Error("The root node can't have a sibling -- try adding a parent or child instead.");
+          newNode.parentId = relative.parentId;
+          newNode.order = before ? orderBefore(nodes, relative) : orderAfter(nodes, relative);
+          return {{ nodes: nodes.concat([newNode]), newId: newNode.id }};
+        }}
+        if (relation === 'parent') {{
+          if (relative.parentId == null) throw new Error("The root node can't have a parent added -- it's the one node every mindmap keeps.");
+          newNode.parentId = relative.parentId;
+          newNode.order = relative.order;
+          var updated = nodes.map(function (n) {{
+            if (n.id === relativeId) {{ n = Object.assign({{}}, n, {{ parentId: newNode.id, order: 0.0 }}); }}
+            return n;
+          }});
+          return {{ nodes: updated.concat([newNode]), newId: newNode.id }};
+        }}
+        throw new Error("relation must be 'parent', 'child', or 'sibling'.");
+      }}
+      // Mirrors add_shared_child in app/mindmaps.py.
+      function addSharedChild(nodes, parentIds, text, color) {{
+        if (parentIds.length < 2) throw new Error('Select at least two nodes to add a shared child below them.');
+        parentIds.forEach(function (pid) {{ if (!findNode(nodes, pid)) throw new Error('That node no longer exists.'); }});
+        var depths = {{}};
+        parentIds.forEach(function (pid) {{ depths[depthOf(nodes, pid)] = true; }});
+        if (Object.keys(depths).length > 1) throw new Error('Selected nodes must all be at the same level to add a shared child below them.');
+        var primaryParentId = parentIds[0];
+        var newColor = cleanColor(color, false);
+        var newNode = {{
+          id: newNodeId(), text: cleanText(text, true), color: newColor, goal: defaultGoal(newColor), completed: false,
+          parentId: primaryParentId, order: nextChildOrder(nodes, primaryParentId), extraParentIds: parentIds.slice(1),
+        }};
+        return {{ nodes: nodes.concat([newNode]), newId: newNode.id }};
+      }}
+      // Mirrors update_node in app/mindmaps.py -- a color change resets
+      // `goal` back to a blank default for the new color (same as the
+      // real page) AND resets `completed` back to false (the demo's
+      // own addition -- see this function's own docstring, point 1 of
+      // the wrapper's overall doc comment: whatever the snapshot froze
+      // for the OLD color's criteria means nothing once those criteria
+      // are gone).
+      function updateNode(nodes, nodeId, text, color, note) {{
+        var node = findNode(nodes, nodeId);
+        if (!node) throw new Error('That node no longer exists.');
+        var isRoot = node.parentId == null;
+        return nodes.map(function (n) {{
+          if (n.id !== nodeId) return n;
+          n = Object.assign({{}}, n);
+          if (text != null) n.text = cleanText(text, false);
+          if (color != null) {{
+            var newColor = cleanColor(color, isRoot);
+            if (newColor !== n.color) {{ n.goal = defaultGoal(newColor); n.completed = false; }}
+            n.color = newColor;
+          }}
+          if (note != null) n.note = cleanNote(note);
+          return n;
+        }});
+      }}
+      // Mirrors delete_node in app/mindmaps.py -- cascades to the
+      // whole subtree, then prunes the deleted id(s) out of every
+      // remaining node's own extraParentIds.
+      function deleteNode(nodes, nodeId) {{
+        var target = findNode(nodes, nodeId);
+        if (!target) throw new Error('That node no longer exists.');
+        if (target.parentId == null) throw new Error("The root node can't be deleted on its own -- delete the whole mindmap instead.");
+        var toRemove = {{}};
+        toRemove[nodeId] = true;
+        var changed = true;
+        while (changed) {{
+          changed = false;
+          nodes.forEach(function (n) {{
+            if (!toRemove[n.id] && n.parentId != null && toRemove[n.parentId]) {{ toRemove[n.id] = true; changed = true; }}
+          }});
+        }}
+        var kept = [];
+        nodes.forEach(function (n) {{
+          if (toRemove[n.id]) return;
+          if (n.extraParentIds && n.extraParentIds.length) {{
+            var pruned = n.extraParentIds.filter(function (pid) {{ return !toRemove[pid]; }});
+            if (pruned.length !== n.extraParentIds.length) n = Object.assign({{}}, n, {{ extraParentIds: pruned }});
+          }}
+          kept.push(n);
+        }});
+        return kept;
+      }}
+      // Mirrors replace_nodes in app/mindmaps.py -- what Undo/Redo
+      // restore against (MM.undoStack/MM.redoStack, in the reused
+      // script below, hold past copies of this same mindmap's own
+      // node list). `completed` is carried over from the snapshot
+      // being restored (it's a genuine past server-shaped response,
+      // not fresh player input) rather than reset, same as every
+      // OTHER field here being re-cleaned but not re-derived.
+      function replaceNodes(nodes) {{
+        if (!nodes || !nodes.length) throw new Error('A mindmap needs at least one node.');
+        var ids = nodes.map(function (n) {{ return n.id; }});
+        var idSet = {{}};
+        var dup = false;
+        ids.forEach(function (id) {{ if (id == null || idSet[id]) dup = true; idSet[id] = true; }});
+        if (dup || Object.keys(idSet).length !== ids.length) throw new Error('Every node needs its own unique id.');
+        var byId = {{}};
+        nodes.forEach(function (n) {{ byId[n.id] = n; }});
+        var roots = nodes.filter(function (n) {{ return n.parentId == null; }});
+        if (roots.length !== 1) throw new Error('A mindmap needs exactly one root node.');
+        nodes.forEach(function (n) {{ if (n.parentId != null && !idSet[n.parentId]) throw new Error("A node's parent must exist in the same tree."); }});
+        nodes.forEach(function (n) {{
+          var cur = n, hops = 0;
+          while (cur && cur.parentId != null) {{
+            hops++;
+            if (hops > nodes.length) throw new Error('The submitted tree contains a cycle.');
+            cur = byId[cur.parentId];
+          }}
+        }});
+        return nodes.map(function (n) {{
+          var isRoot = n.parentId == null;
+          var newColor = cleanColor(n.color, isRoot);
+          var newNode = {{
+            id: n.id, parentId: n.parentId != null ? n.parentId : null,
+            text: cleanText(n.text, true), color: newColor,
+            goal: cleanGoal(newColor, n.goal, false),
+            order: (typeof n.order === 'number') ? n.order : 0.0,
+            completed: !!n.completed,
+          }};
+          if (n.note) newNode.note = cleanNote(n.note);
+          if (n.extraParentIds && n.extraParentIds.length) {{
+            var pruned = n.extraParentIds.filter(function (pid) {{ return idSet[pid] && pid !== n.id; }});
+            if (pruned.length) newNode.extraParentIds = pruned;
+          }}
+          return newNode;
+        }});
+      }}
+      // Mirrors set_node_goal in app/mindmaps.py -- also how a gray
+      // node's manual "Complete" checkbox works (see clean_goal's own
+      // 'manual' branch): for a gray node specifically, `completed` IS
+      // the cleaned manualComplete flag, applied right here -- the one
+      // completion check this demo can genuinely, correctly keep live
+      // (see this function's own doc comment, point 1, in the wrapper's
+      // overall docstring). Every other color's `completed` is left
+      // exactly as it was; filling in real criteria here doesn't
+      // (and, without live account context, can't) newly evaluate it.
+      function setNodeGoal(nodes, nodeId, goal) {{
+        var node = findNode(nodes, nodeId);
+        if (!node) throw new Error('That node no longer exists.');
+        var color = node.color || DEFAULT_COLOR;
+        var cleaned = cleanGoal(color, goal, true);
+        return nodes.map(function (n) {{
+          if (n.id !== nodeId) return n;
+          var out = Object.assign({{}}, n, {{ goal: cleaned }});
+          if (color === 'gray') out.completed = !!(cleaned && cleaned.manualComplete);
+          return out;
+        }});
+      }}
+      // The root's own `completed` is never just carried over -- see
+      // evaluate_completion's own root-completion comment in
+      // app/mindmaps.py: true iff the mindmap has at least one other
+      // node and every one of them is complete. Every other node's
+      // `completed` already knows its own right answer (frozen from
+      // the snapshot, or freshly toggled by setNodeGoal above), so
+      // this is a pure aggregation over values already sitting right
+      // there on each node -- no account context needed, unlike every
+      // OTHER color's own completion check.
+      function findRootId(nodes) {{
+        var r = nodes.find(function (n) {{ return n.parentId == null; }});
+        return r ? r.id : null;
+      }}
+      function withRecomputedRoot(nodes) {{
+        var rootId = findRootId(nodes);
+        if (rootId == null) return nodes;
+        var nonRoot = nodes.filter(function (n) {{ return n.id !== rootId; }});
+        var rootComplete = nonRoot.length > 0 && nonRoot.every(function (n) {{ return !!n.completed; }});
+        return nodes.map(function (n) {{ return n.id === rootId ? Object.assign({{}}, n, {{ completed: rootComplete }}) : n; }});
+      }}
+      function currentState() {{
+        return {{ mindmaps: [Object.assign({{}}, DEMO_MINDMAP, {{ nodes: withRecomputedRoot(DEMO_MINDMAP.nodes) }})] }};
+      }}
+
+      // ---- Local goal-criteria search -- see this function's own
+      // docstring for why these are answered locally instead of ever
+      // reaching /api/npcs|items|quests/search for real. Same
+      // startswith-then-contains ranking (shortest match first within
+      // each tier) as search_npc_names/search_quest_names/search_items
+      // in the real Python modules.
+      function localSearchNames(list, query) {{
+        var q = String(query || '').trim().toLowerCase();
+        if (!q) return [];
+        var starts = [], contains = [];
+        list.forEach(function (name) {{
+          var lname = name.toLowerCase();
+          if (lname.indexOf(q) === 0) starts.push(name);
+          else if (lname.indexOf(q) !== -1) contains.push(name);
+        }});
+        starts.sort(function (a, b) {{ return a.length - b.length; }});
+        contains.sort(function (a, b) {{ return a.length - b.length; }});
+        return starts.concat(contains).slice(0, 20);
+      }}
+      function localSearchItems(list, query) {{
+        var q = String(query || '').trim().toLowerCase();
+        if (!q) return [];
+        var starts = [], contains = [];
+        list.forEach(function (item) {{
+          var lname = item.name.toLowerCase();
+          if (lname.indexOf(q) === 0) starts.push(item);
+          else if (lname.indexOf(q) !== -1) contains.push(item);
+        }});
+        starts.sort(function (a, b) {{ return a.name.length - b.name.length; }});
+        contains.sort(function (a, b) {{ return a.name.length - b.name.length; }});
+        return starts.concat(contains).slice(0, 20).map(function (item) {{
+          return {{ id: item.id, name: item.name, icon: ITEM_ICON_CDN_BASE + item.id + '.png' }};
+        }});
+      }}
+
+      // ---- fetch shim -----------------------------------------------------
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+        var params = new URLSearchParams(qIndex === -1 ? '' : url.slice(qIndex + 1));
+        function ok(data) {{ return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(data); }} }}); }}
+        function fail(detail) {{ return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{ detail: detail }}); }} }}); }}
+
+        if (path === '/api/mindmaps' && method === 'GET') {{
+          return ok(currentState());
+        }}
+        if (path === '/api/npcs/search' && method === 'GET') {{
+          return ok({{ results: localSearchNames(SEARCH_POOLS.npcs, params.get('q')) }});
+        }}
+        if (path === '/api/quests/search' && method === 'GET') {{
+          return ok({{ results: localSearchNames(SEARCH_POOLS.quests, params.get('q')) }});
+        }}
+        if (path === '/api/items/search' && method === 'GET') {{
+          return ok({{ results: localSearchItems(SEARCH_POOLS.items, params.get('q')) }});
+        }}
+
+        var mmPrefix = '/api/mindmaps/' + encodeURIComponent(DEMO_MINDMAP.id);
+        var body = {{}};
+        try {{ body = opts.body ? JSON.parse(opts.body) : {{}}; }} catch (e) {{ body = {{}}; }}
+
+        if (path === mmPrefix + '/nodes' && method === 'POST') {{
+          try {{
+            var res = addNode(DEMO_MINDMAP.nodes, body.relative_to, body.relation, body.text, body.color, !!body.before);
+            DEMO_MINDMAP.nodes = res.nodes;
+            var state = currentState();
+            state.newNodeId = res.newId;
+            return ok(state);
+          }} catch (e) {{ return fail(e.message); }}
+        }}
+        if (path === mmPrefix + '/nodes/shared-child' && method === 'POST') {{
+          try {{
+            var res2 = addSharedChild(DEMO_MINDMAP.nodes, body.parent_ids || [], body.text, body.color);
+            DEMO_MINDMAP.nodes = res2.nodes;
+            var state2 = currentState();
+            state2.newNodeId = res2.newId;
+            return ok(state2);
+          }} catch (e) {{ return fail(e.message); }}
+        }}
+        if (path === mmPrefix + '/nodes' && method === 'PUT') {{
+          try {{
+            DEMO_MINDMAP.nodes = replaceNodes(body.nodes || []);
+            return ok(currentState());
+          }} catch (e) {{ return fail(e.message); }}
+        }}
+        if (path.indexOf(mmPrefix + '/nodes/') === 0) {{
+          var rest = path.slice((mmPrefix + '/nodes/').length);
+          var isGoal = rest.slice(-5) === '/goal';
+          var nodeId = decodeURIComponent(isGoal ? rest.slice(0, -5) : rest);
+          if (method === 'PATCH' && isGoal) {{
+            try {{
+              DEMO_MINDMAP.nodes = setNodeGoal(DEMO_MINDMAP.nodes, nodeId, body.goal || {{}});
+              if (body.note != null) DEMO_MINDMAP.nodes = updateNode(DEMO_MINDMAP.nodes, nodeId, null, null, body.note);
+              return ok(currentState());
+            }} catch (e) {{ return fail(e.message); }}
+          }}
+          if (method === 'PATCH') {{
+            try {{
+              DEMO_MINDMAP.nodes = updateNode(DEMO_MINDMAP.nodes, nodeId, body.text, body.color, body.note);
+              return ok(currentState());
+            }} catch (e) {{ return fail(e.message); }}
+          }}
+          if (method === 'DELETE') {{
+            try {{
+              DEMO_MINDMAP.nodes = deleteNode(DEMO_MINDMAP.nodes, nodeId);
+              return ok(currentState());
+            }} catch (e) {{ return fail(e.message); }}
+          }}
+        }}
+        // A mindmap-level create/rename/delete -- unreachable in
+        // practice (see #mmSwitchBtn's own neutering below), and
+        // anything else this script doesn't otherwise call. Graceful
+        // failure, never the real network -- same discipline as the
+        // other two previews' own catch-all.
+        return fail('Not available in this preview.');
+      }};
+
+      {script}
+
+      // Neutralizes the mindmap-switcher trigger -- wired only once,
+      // on script load (unlike, say, Purchase Goals' own .gear-slot,
+      // which rewires fresh every render), so the same one-time
+      // cloneNode+replaceWith strip Loot Tracker's own range button
+      // and Purchase Goals' own #pgIconTrigger both use works here
+      // too. Its menu (new/rename/delete/switch) can now never open --
+      // there's only the one mindmap here anyway.
+      var switchBtn = document.getElementById('mmSwitchBtn');
+      if (switchBtn) {{
+        switchBtn.replaceWith(switchBtn.cloneNode(true));
+        document.getElementById('mmSwitchBtn').style.cursor = 'default';
+      }}
+
+      // Same bottom-edge feather as the other two previews -- see
+      // .landing-mindmap-preview/.landing-mindmap-preview--clipped in
+      // mindmaps.css, and render_landing_loot_preview's own wrapper
+      // script for the fuller comment this mirrors.
+      var previewEl = document.querySelector('.landing-mindmap-preview');
+      if (previewEl) {{
+        var checkClipped = function () {{
+          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
+          previewEl.classList.toggle('landing-mindmap-preview--clipped', overflowing);
+        }};
+        checkClipped();
+        new ResizeObserver(checkClipped).observe(previewEl);
+      }}
+    }})();
+    """
+    return extra_head, body, wrapper_script
+
+
+def _mindmaps_panel_markup() -> Tuple[str, str, str]:
+    """Builds Mindmaps' (extra_head, body, script) triple -- split out
+    from render_mindmaps below (same reasoning, and the same split
+    _purchase_goals_panel_markup/_loot_tracker_panel_markup went
+    through first) so the landing page's own interactive preview
+    (render_landing_mindmap_preview) can embed this exact same panel
+    markup/script rather than forking a second copy of either. Nothing
+    here references `player` at all -- everything below is rendered
+    client-side from one polled-once JSON payload (GET /api/mindmaps,
+    see app/mindmaps.py's build_mindmaps_state), so every mutation
+    endpoint can just hand back the freshly recomputed state and let
+    the same render() redraw everything. Unlike Loot Tracker/Purchase
+    Goals, there's no background poll -- nothing external (no RuneLite
+    plugin, no wiki prices) ever changes a mindmap out from under the
+    player, so there's nothing to poll for that their own last action
+    here hasn't already applied.
 
     The canvas (pan/zoom, node layout, the elbow connector lines) is
     plain positioned <div>s plus one <svg> overlay, laid out by a small
@@ -8980,6 +9762,17 @@ def render_mindmaps(player: PlayerView) -> str:
       loadState();
     })();
     """
+    return extra_head, body, script
+
+
+def render_mindmaps(player: PlayerView) -> str:
+    """The Mindmaps page -- see _mindmaps_panel_markup above for the
+    full markup/script; this is just that plus the _shell wrapper a
+    real, logged-in-or-not page visit needs (see
+    render_landing_mindmap_preview for the OTHER caller, which skips
+    _shell entirely and embeds the same panel inline on the landing
+    page instead)."""
+    extra_head, body, script = _mindmaps_panel_markup()
     return _shell(
         title="Mindmaps — myscape",
         player=player,

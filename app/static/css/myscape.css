@@ -976,6 +976,17 @@ footer {
   align-items: flex-start;
 }
 
+/* Same top-anchoring, same reasoning, for the Mindmaps preview
+   (render_landing_mindmap_preview) -- editing the mindmap (adding/
+   deleting/reparenting nodes, opening a goal form) can change the
+   panel's own content height same as the other two previews' own
+   filtering/sorting can, so this panel gets the same fix for the same
+   reason. See .landing-mindmap-preview in mindmaps.css for its own
+   feather. */
+.landing-anchor--mindmap-preview {
+  align-items: flex-start;
+}
+
 /* The logo/tagline panel shares a single stop with the header above
    it (see body.landing header in the scroll-snap rules up top)
    instead of being its own separate one, but it's still pinned to

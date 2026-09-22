@@ -1101,3 +1101,109 @@ button.primary#mmCreateFirstBtn {
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
 }
+
+/* ---------- Landing page preview (render_landing_mindmap_preview,
+   app/pages.py) -- same container treatment as .landing-loot-preview
+   (loot-tracker.css) and .landing-purchase-preview (purchase-
+   goals.css): max-height capped to the viewport, clipped rather than
+   overflowing, with a bottom feather that only shows up once there's
+   actually something hidden below it. Scoped here instead since this
+   preview's own markup/CSS classes are Mindmaps', not either other
+   page's. See .landing-loot-preview's own comment in loot-tracker.css
+   for the fuller reasoning -- not repeated here. max-width matches
+   the other two previews' own 900px exactly so all three interactive
+   previews read as the same size panel. ---------- */
+.landing-mindmap-preview {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100svh - 80px);
+  overflow: hidden;
+  position: relative;
+}
+.landing-mindmap-preview--clipped::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 15%;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+
+/* The reused body's own heading and the mindmap-switcher header row --
+   hidden rather than stripped from the markup itself, so
+   _mindmaps_panel_markup stays untouched (same discipline as
+   .landing-purchase-preview .page-title/.pg-header in purchase-
+   goals.css). This preview only ever has the one "Example" mindmap to
+   show (see render_landing_mindmap_preview's own docstring, and
+   #mmSwitchBtn's own one-time neutering in its wrapper script), so
+   there's nothing for the switcher to switch between anyway -- same
+   reasoning purchase-goals.css's .pg-header already went through. */
+.landing-mindmap-preview .page-title,
+.landing-mindmap-preview .mm-header {
+  display: none;
+}
+
+/* ---------- Landing-preview-only hero row: tagline + character,
+   above the reused panel's own toolbar/canvas -- see
+   render_landing_mindmap_preview's own hero_markup comment. Mirrors
+   .loot-preview-hero/.loot-preview-tagline-wrap/.loot-preview-char in
+   loot-tracker.css left-to-right: same flex row, bottom-aligned, same
+   sizing -- just with the tagline's own wrap as the FIRST flex child
+   (so it lands on the left) and the character second (so it lands on
+   the right), same order Loot Tracker itself uses and the reverse of
+   Purchase Goals' (character first, purchase-goals.css) -- per this
+   preview's own explicit "text on the left"/"image... right side"
+   request. See loot-tracker.css's own fuller comments for the
+   reasoning behind each rule here, not repeated. ---------- */
+.mindmap-preview-hero {
+  display: flex;
+  align-items: flex-end;
+}
+.mindmap-preview-tagline-wrap {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.mindmap-preview-tagline {
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mindmap-preview-tagline-gold { color: var(--gold); }
+.mindmap-preview-tagline-white { color: var(--text); }
+
+/* Fixed-HEIGHT flex item -- 157px matches .loot-preview-char/
+   .purchase-preview-char exactly, so all three preview characters
+   render at the same height next to each other despite each image's
+   own source aspect ratio differing -- width is left to follow from
+   that automatically rather than forced to match too. See
+   .loot-preview-char's own comment (loot-tracker.css) for the fuller
+   reasoning. */
+.mindmap-preview-char {
+  flex: 0 0 auto;
+  height: 157px;
+  line-height: 0;
+}
+/* .landing-mindmap-preview .mindmap-preview-char img (two classes)
+   beats myscape.css's own .landing-anchor picture img (one class, two
+   elements) -- same override the other two previews' own characters
+   already need in their own stylesheets. */
+.landing-mindmap-preview .mindmap-preview-char img {
+  display: block;
+  height: 100%;
+  max-height: none;
+  width: auto;
+  max-width: none;
+}
