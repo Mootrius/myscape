@@ -10078,8 +10078,14 @@ def render_goal_tracking(player: PlayerView) -> str:
           ? GOAL_TYPE_OPTIONS.filter(function (o) { return o.type !== 'item'; })
           : GOAL_TYPE_OPTIONS;
         var cards = options.map(function (o) {
+          // A recurring skill goal has no Lvl/Xp choice -- it's XP-only
+          // (see wizardStageTargetHtml's own comment on why) -- so this
+          // card says just "Skill Xp" on that path instead of the
+          // one-time flow's "Skill Lvl/Xp", which would otherwise
+          // promise a level option this path never actually offers.
+          var label = (o.type === 'skill' && GT.recurring === 'recurring') ? 'Skill Xp' : o.label;
           return '<button type="button" class="gt-wizard-type-btn" data-type="' + o.type + '">' +
-            '<img src="' + o.icon + '" alt="" /><span>' + o.label + '</span></button>';
+            '<img src="' + o.icon + '" alt="" /><span>' + label + '</span></button>';
         }).join('');
         return '' +
           '<div class="gt-wizard-stage1-wrap">' +
