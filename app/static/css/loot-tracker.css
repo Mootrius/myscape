@@ -613,18 +613,56 @@
    the tagline below takes over as this preview's own "title". */
 .landing-loot-preview .page-title { display: none; }
 
+/* A plain flex row now, not an absolute-positioning/z-index rig --
+   the character is a normal flex item sharing the row with the
+   tagline's own wrap, so the row's own height is just whatever the
+   taller of the two needs (in practice, always the character -- see
+   .loot-preview-char below), and align-items: flex-end bottom-aligns
+   both children flush with the row's own bottom edge. That bottom
+   edge is also where the chart card begins (nothing between them
+   adds any margin/padding -- see .loot-chart-card, untouched here),
+   so the character's own bottom edge lands exactly on the card's own
+   top border with no overlap and no gap either side -- the "cut off
+   right at the border" look this replaced the earlier overlapping/
+   z-index version for. */
 .loot-preview-hero {
-  position: relative;
-  height: 144px;
+  display: flex;
+  align-items: flex-end;
+}
+/* Stretches to the row's full height (overriding the row's own
+   flex-end for this one child) purely so its flex-centered text
+   below has the whole height to center within -- not just however
+   tall one line of text is -- then centers that text in both
+   directions inside whatever's left once .loot-preview-char (a fixed
+   width) has taken its own column, which is exactly "the remaining
+   space above the graph the character doesn't take up." */
+.loot-preview-tagline-wrap {
+  flex: 1 1 auto;
+  align-self: stretch;
   display: flex;
   align-items: center;
+  justify-content: center;
+  min-width: 0; /* lets the row below actually shrink instead of overflowing the card */
 }
 .loot-preview-tagline {
   margin: 0;
-  padding-right: 155px; /* keeps clear of the character's own column at the right */
-  font-size: 18px;
-  line-height: 1.4;
-  font-weight: 600;
+  max-width: 100%;
+  min-width: 0; /* flex items default to their content's width as a floor -- without this, the truncation below can never actually kick in */
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 400; /* unbolded -- was 600 */
+  white-space: nowrap;
+  /* At 900px (this panel's own max-width) the full line fits with
+     room to spare -- this only ever engages on a narrow enough
+     viewport that it wouldn't, trading the truncated tail for a
+     line that reads off both edges of the panel at once (centered
+     text overflowing a fixed box spills evenly either side, which
+     -- combined with .landing-loot-preview's own overflow: hidden --
+     otherwise means neither "LOOT TRACKING" at the start nor the
+     "before." at the end stays on screen). */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .loot-preview-tagline-gold { color: var(--gold); }
 .loot-preview-tagline-white { color: var(--text); }
@@ -632,22 +670,12 @@
 /* Downscaled well below the character's own source-image size
    (landing-loot-preview-char.png/.webp -- 340x410, already cropped
    to just its upper half) -- sized to read as a small figure peeking
-   over the chart, not a second focal point. Positioned to hang off
-   the hero row's own bottom-right corner: `bottom` pushes just its
-   own lower edge past the row's own box, into the chart card's own
-   top padding (see .loot-chart-card's landing-preview-only z-index
-   below for the other half of this effect -- the card's own
-   background painting over that sliver is what actually sells
-   "poking up from behind" rather than "floating in front of"). Kept
-   deliberately shallow (16px) rather than a deeper tuck -- the chart
-   card's own header row (range button, "ALL NPCs", the kc/gp totals)
-   starts right after its 18px top padding with no real gap to spare,
-   so anything deeper here would start burying that live, readable
-   text instead of just the character's own hem. */
+   over the chart, not a second focal point. A fixed-width flex item,
+   not absolutely positioned -- see .loot-preview-hero above for why
+   that's what keeps its own bottom edge flush with the chart card's
+   top border instead of overlapping past it. */
 .loot-preview-char {
-  position: absolute;
-  right: 6px;
-  bottom: -16px;
+  flex: 0 0 auto;
   width: 130px;
   line-height: 0;
 }
@@ -664,17 +692,4 @@
   max-width: none;
   height: auto;
   max-height: none;
-}
-
-/* Lifts the card into its own stacking layer so its (mostly-opaque,
-   see --panel-translucent) background actually paints over the
-   character's own 16px tuck (.loot-preview-char's `bottom` above)
-   instead of the other way around -- an absolutely-positioned,
-   z-index:auto element like .loot-preview-char otherwise paints
-   ABOVE plain in-flow content like this card regardless of source
-   order, which would read as the character floating in front of the
-   chart rather than standing behind it. */
-.landing-loot-preview .loot-chart-card {
-  position: relative;
-  z-index: 1;
 }

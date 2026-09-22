@@ -4817,15 +4817,19 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
     # loot-tracker.css) rather than stripped here, so this still never
     # touches _loot_tracker_panel_markup's own markup -- same reuse
     # discipline as everything else in this function. See
-    # .loot-preview-hero/.loot-preview-char/.loot-chart-card's own
-    # landing-preview override in loot-tracker.css for how the
-    # character's lower half actually ends up tucked behind the chart
-    # card's own (mostly-opaque) top edge.
+    # .loot-preview-hero/.loot-preview-tagline-wrap/.loot-preview-char's
+    # own landing-preview rules in loot-tracker.css: a plain flex row
+    # bottom-aligns the character flush with the chart card's own top
+    # border (no overlap), while the tagline's own wrap stretches to
+    # fill whatever's left beside it and centers the text there both
+    # ways.
     hero_markup = """
     <div class="loot-preview-hero">
-      <p class="loot-preview-tagline">
-        <span class="loot-preview-tagline-gold">LOOT TRACKING</span> <span class="loot-preview-tagline-white">like you've never experienced it before.</span>
-      </p>
+      <div class="loot-preview-tagline-wrap">
+        <p class="loot-preview-tagline">
+          <span class="loot-preview-tagline-gold">LOOT TRACKING</span> <span class="loot-preview-tagline-white">like you've never experienced it before.</span>
+        </p>
+      </div>
       <picture class="loot-preview-char">
         <source srcset="/static/img/landing-loot-preview-char.webp" type="image/webp">
         <img src="/static/img/landing-loot-preview-char.png" alt="" />
