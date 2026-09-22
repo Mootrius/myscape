@@ -600,3 +600,81 @@
 .loot-range-btn--static { cursor: default; }
 .loot-range-btn--static:hover { border-color: var(--border); color: var(--text-dim); }
 .loot-range-btn--static .loot-range-caret { display: none; }
+
+/* ---------- Landing-preview-only hero row: character + tagline,
+   replacing the reused page's own "Loot Tracker" heading -- see
+   render_landing_loot_preview's own hero_markup comment. Everything
+   here is scoped under .landing-loot-preview so none of it reaches
+   the real, authenticated Loot Tracker page, which still gets its
+   plain .page-title heading and none of this markup at all. ---------- */
+
+/* The reused body's own heading -- hidden rather than stripped from
+   the markup itself, so _loot_tracker_panel_markup stays untouched;
+   the tagline below takes over as this preview's own "title". */
+.landing-loot-preview .page-title { display: none; }
+
+.loot-preview-hero {
+  position: relative;
+  height: 144px;
+  display: flex;
+  align-items: center;
+}
+.loot-preview-tagline {
+  margin: 0;
+  padding-right: 155px; /* keeps clear of the character's own column at the right */
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.loot-preview-tagline-gold { color: var(--gold); }
+.loot-preview-tagline-white { color: var(--text); }
+
+/* Downscaled well below the character's own source-image size
+   (landing-loot-preview-char.png/.webp -- 340x410, already cropped
+   to just its upper half) -- sized to read as a small figure peeking
+   over the chart, not a second focal point. Positioned to hang off
+   the hero row's own bottom-right corner: `bottom` pushes just its
+   own lower edge past the row's own box, into the chart card's own
+   top padding (see .loot-chart-card's landing-preview-only z-index
+   below for the other half of this effect -- the card's own
+   background painting over that sliver is what actually sells
+   "poking up from behind" rather than "floating in front of"). Kept
+   deliberately shallow (16px) rather than a deeper tuck -- the chart
+   card's own header row (range button, "ALL NPCs", the kc/gp totals)
+   starts right after its 18px top padding with no real gap to spare,
+   so anything deeper here would start burying that live, readable
+   text instead of just the character's own hem. */
+.loot-preview-char {
+  position: absolute;
+  right: 6px;
+  bottom: -16px;
+  width: 130px;
+  line-height: 0;
+}
+/* .landing-loot-preview .loot-preview-char img (two classes) beats
+   myscape.css's own .landing-anchor picture img (one class, two
+   elements) -- that rule sizes every plain marketing screenshot's
+   <picture><img> on this page (width: min(700px, 82vw)) and would
+   otherwise blow this character up the same way it once did the
+   NPC/item icons elsewhere in this same panel (see that rule's own
+   comment in myscape.css) if this weren't scoped to win over it. */
+.landing-loot-preview .loot-preview-char img {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+}
+
+/* Lifts the card into its own stacking layer so its (mostly-opaque,
+   see --panel-translucent) background actually paints over the
+   character's own 16px tuck (.loot-preview-char's `bottom` above)
+   instead of the other way around -- an absolutely-positioned,
+   z-index:auto element like .loot-preview-char otherwise paints
+   ABOVE plain in-flow content like this card regardless of source
+   order, which would read as the character floating in front of the
+   chart rather than standing behind it. */
+.landing-loot-preview .loot-chart-card {
+  position: relative;
+  z-index: 1;
+}

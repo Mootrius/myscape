@@ -4805,6 +4805,35 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
     if demo is None:
         return None
     extra_head, body, script = _loot_tracker_panel_markup()
+
+    # Landing-preview-only hero row, prepended in front of the reused
+    # panel body -- the character (cropped to just its upper half, see
+    # scripts that generated landing-loot-preview-char.png/.webp) and
+    # the gold/white tagline that replaced the old static marketing
+    # image's own baked-in copy (see anchor-loot-tracking.png/webp,
+    # still on disk but no longer referenced) once this preview took
+    # its place. The reused body's own "Loot Tracker" <h2> is hidden
+    # purely via CSS (.landing-loot-preview .page-title, in
+    # loot-tracker.css) rather than stripped here, so this still never
+    # touches _loot_tracker_panel_markup's own markup -- same reuse
+    # discipline as everything else in this function. See
+    # .loot-preview-hero/.loot-preview-char/.loot-chart-card's own
+    # landing-preview override in loot-tracker.css for how the
+    # character's lower half actually ends up tucked behind the chart
+    # card's own (mostly-opaque) top edge.
+    hero_markup = """
+    <div class="loot-preview-hero">
+      <p class="loot-preview-tagline">
+        <span class="loot-preview-tagline-gold">LOOT TRACKING</span> <span class="loot-preview-tagline-white">like you've never experienced it before.</span>
+      </p>
+      <picture class="loot-preview-char">
+        <source srcset="/static/img/landing-loot-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-loot-preview-char.png" alt="" />
+      </picture>
+    </div>
+    """
+    body = hero_markup + body
+
     demo_json = json.dumps(demo["full"])
     bucket_states_json = json.dumps(demo["buckets"])
     hide_breakdown_json = json.dumps(demo["hideBreakdown"])
