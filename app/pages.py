@@ -10891,9 +10891,7 @@ def render_goal_tracking(player: PlayerView) -> str:
       // a bar..." comment in loot-tracker.css; there's no custom
       // tooltip component anywhere to build one from), so this is a
       // plain title attribute, not a floating element of its own. Two
-      // different tooltips depending on which kind of goal this is --
-      // both share the same "Set on [date] · ..." shape (see
-      // fmtIsoDateTimeLocal), just with a different second half:
+      // different tooltips depending on which kind of goal this is:
       //   recurring    -- "Set on [period start] · Next cycle in
       //     [countdown]" -- g.recur_period_start is the CURRENT
       //     period's own start (see GoalOut's own docstring in
@@ -10901,18 +10899,20 @@ def render_goal_tracking(player: PlayerView) -> str:
       //     describe -- when this period began, and how much of it is
       //     left -- so recur_period_start plus recur_interval/
       //     recur_unit is all this branch needs.
-      //   one-time GAIN -- "Set on [created_at] · Started at [baseline]
-      //     [UNIT]" -- a one-time goal's own baseline_value is captured
-      //     once at creation and never re-baselined (there's no period
-      //     to roll forward -- see Goal.baseline_value's own docstring
-      //     in app/models.py), so created_at (already exposed, and
-      //     exactly the moment that baseline was taken) stands in for
-      //     recur_period_start here; g.baseline_value itself is the
-      //     "Started at" number. Only ever non-null for a kc goal or an
-      //     xp-metric skill goal (see app.goals.target_mode_allows_gain
-      //     -- a level goal/item goal never get a baseline captured at
-      //     all), so the unit branch below only needs to cover those
-      //     two.
+      //   one-time GAIN -- just "Started at [baseline] [UNIT]" -- no
+      //     "Set on [date]" half here (unlike the recurring branch
+      //     above): a one-time goal has only the one baseline, ever,
+      //     so pairing it with its own creation date added nothing a
+      //     player couldn't already tell from the goal card itself,
+      //     where "Started at" alone is what actually answers "why
+      //     does progress not start at 0". g.baseline_value is
+      //     captured once at creation and never re-baselined (there's
+      //     no period to roll forward -- see Goal.baseline_value's own
+      //     docstring in app/models.py) and is only ever non-null for
+      //     a kc goal or an xp-metric skill goal (see
+      //     app.goals.target_mode_allows_gain -- a level goal/item
+      //     goal never get a baseline captured at all), so the unit
+      //     branch below only needs to cover those two.
       // Neither branch fires (returns '') for a REACH-mode one-time
       // goal or an item goal -- both read as a plain lifetime total
       // already, nothing to add.
@@ -10928,7 +10928,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           }
         } else if (!g.is_recurring && g.baseline_value != null) {
           var unit = (g.goal_type === 'kc') ? ' KC' : (g.goal_type === 'skill' && g.metric === 'xp') ? ' XP' : '';
-          tooltip = 'Set on ' + fmtIsoDateTimeLocal(g.created_at) + ' · Started at ' + fmtNum(g.baseline_value) + unit;
+          tooltip = 'Started at ' + fmtNum(g.baseline_value) + unit;
         }
         if (!tooltip) return '';
         return '<span class="gt-goal-info-icon" title="' + escapeHtml(tooltip) + '">' +
