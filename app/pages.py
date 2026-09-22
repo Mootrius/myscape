@@ -6218,6 +6218,58 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
         return fail('Not available in this preview.');
       }};
 
+      // Disables wheel/trackpad-scroll zooming here -- only the
+      // toolbar's own +/-/fit buttons should zoom this preview (per
+      // this preview's own follow-up request), unlike the real page,
+      // where scrolling over the canvas also zooms it (see the reused
+      // script's own canvasEl 'wheel' listener, registered a moment
+      // from now, just below). A first attempt at this intercepted the
+      // event on a capturing-phase listener on the whole preview
+      // wrapper and called both preventDefault and stopPropagation --
+      // that did stop the zoom, but stopPropagation there also stopped
+      // the SAME event from ever reaching the landing page's own
+      // window-level 'wheel' listener (see the intro panel's snap-
+      // scroll IIFE, above -- this landing page scrolls itself
+      // entirely through that JS-driven section-snapping, not native
+      // body scrolling), so a visitor's wheel gesture over this
+      // preview did nothing at all instead of moving down the page.
+      // stopPropagation can't selectively skip just ONE listener
+      // without also blocking every other listener anywhere else on
+      // the event's path (both further down and further back up), so
+      // there's no way to stop just the reused canvas listener that
+      // way without also breaking the page's own scroll-snapping.
+      //
+      // Instead, this shadows addEventListener on #mmCanvas itself,
+      // scoped to just this one element instance (not the shared
+      // prototype) -- the exact same "intercept the call, never touch
+      // the reused source" spirit as this wrapper's own fetch shim
+      // above, just aimed at addEventListener instead -- and wraps
+      // the one 'wheel' listener the reused script is about to
+      // register a moment from now, rather than dropping it outright: a wheel
+      // event over the note textarea or the goal-search popover still
+      // reaches the reused listener's own existing bail-out/swallow
+      // logic for those two cases unchanged (see its own comment,
+      // just below, for why those still need to behave exactly as
+      // they do on the real page), but a plain wheel-over-canvas
+      // event now skips the reused listener entirely -- nothing here
+      // calls preventDefault or stopPropagation for that case, so the
+      // event is free to bubble all the way up to the landing page's
+      // own window-level 'wheel' listener and scroll-snap the page,
+      // same as a wheel event anywhere else on it. Every other event
+      // type this or any later code registers on the canvas passes
+      // through to the real addEventListener untouched.
+      var mmCanvasForWheelPatch = document.getElementById('mmCanvas');
+      if (mmCanvasForWheelPatch) {{
+        var mmRealAddEventListener = mmCanvasForWheelPatch.addEventListener.bind(mmCanvasForWheelPatch);
+        mmCanvasForWheelPatch.addEventListener = function (type, listener, opts) {{
+          if (type !== 'wheel') return mmRealAddEventListener(type, listener, opts);
+          return mmRealAddEventListener('wheel', function (e) {{
+            if (e.target.closest('[data-role="node-note-input"], .mm-node-note-text')) return listener(e);
+            if (e.target.closest('[data-role="popover"]')) return listener(e);
+          }}, opts);
+        }};
+      }}
+
       {script}
 
       // Neutralizes the mindmap-switcher trigger -- wired only once,
@@ -6234,36 +6286,6 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
       }}
 
       var previewEl = document.querySelector('.landing-mindmap-preview');
-
-      // Disables wheel/trackpad-scroll zooming here -- only the
-      // toolbar's own +/-/fit buttons should zoom this preview (per
-      // this preview's own follow-up request), unlike the real page,
-      // where scrolling over the canvas also zooms it (see the reused
-      // script's own canvasEl 'wheel' listener, added inside {script}
-      // just above). A capturing-phase listener on the whole preview
-      // wrapper -- not on #mmCanvas itself, where a listener added
-      // here would just run in registration order alongside that
-      // reused bubble-phase one rather than reliably before it, since
-      // same-element listeners fire in add order regardless of the
-      // capture flag -- intercepts the event before it ever reaches
-      // that target, so the reused listener's own zoom logic never
-      // runs at all for a plain scroll. The two cases that handler
-      // itself already carves out as "not really canvas-zoom" -- a
-      // wheel event over the goal-search suggestions dropdown, or a
-      // node's note textarea, both of which it deliberately hands off
-      // to their own scrolling (or, for the note, just swallows
-      // outright) instead of zooming -- are passed straight through
-      // here unchanged, so neither of those still-desired behaviors
-      // regresses.
-      if (previewEl) {{
-        previewEl.addEventListener('wheel', function (e) {{
-          if (!e.target.closest('#mmCanvas')) return;
-          if (e.target.closest('[data-role="popover"]')) return;
-          if (e.target.closest('[data-role="node-note-input"], .mm-node-note-text')) return;
-          e.preventDefault();
-          e.stopPropagation();
-        }}, {{ capture: true, passive: false }});
-      }}
 
       // Same bottom-edge feather as the other two previews -- see
       // .landing-mindmap-preview/.landing-mindmap-preview--clipped in
