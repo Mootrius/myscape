@@ -13125,8 +13125,23 @@ def render_goal_tracking(player: PlayerView) -> str:
           // to match glowCustomSortTab's own trigger, and so this
           // fires the instant a drag is attempted too, not only on a
           // completed click.
+          //
+          // Bails out for a pointerdown that started on the row's own
+          // .gt-goal-delete button -- both its plain trash-icon state
+          // and its armed "Are you sure?" confirm state are the same
+          // element (see .gt-goal-delete--confirm above), so this one
+          // check covers pressing either. Without it, a press meant to
+          // delete a goal was bubbling straight up to this listener
+          // and glowing the CUSTOM tab right along with it, which
+          // reads as "you can only delete goals in Custom mode" --
+          // untrue and not what a delete press is even about. Only a
+          // press on the row itself, outside that button, is what
+          // should ever point someone at Custom mode.
           listEl.querySelectorAll('.gt-goal-row').forEach(function (el) {
-            el.addEventListener('pointerdown', function () { glowCustomSortTab(); });
+            el.addEventListener('pointerdown', function (e) {
+              if (e.target.closest('.gt-goal-delete')) return;
+              glowCustomSortTab();
+            });
           });
           return;
         }
