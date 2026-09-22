@@ -1023,7 +1023,20 @@ footer {
   50% { transform: translateY(5px); opacity: 1; }
 }
 
-.landing-anchor img {
+/* Scoped to "picture img" specifically, not every img under a
+   .landing-anchor -- the interactive Loot Tracker preview
+   (render_landing_loot_preview, a .landing-anchor of its own; see
+   .landing-loot-preview in loot-tracker.css) reuses the real Loot
+   Tracker page's own markup wholesale, which is full of its own
+   correctly-sized img tags (NPC portraits, item icons -- see
+   .loot-npc-box-icon/.loot-item-box-icon in loot-tracker.css) that
+   are never wrapped in a <picture> the way each plain marketing
+   screenshot below is. An unscoped `.landing-anchor img` cascaded
+   onto those too (one class + element beats their own one-class
+   rules) and blew every icon up to 700px -- scoping to the
+   <picture> wrapper keeps this rule aimed at just the marketing
+   screenshots it was written for. */
+.landing-anchor picture img {
   display: block;
   /* A fixed width (not max-width) is what makes all three panels the
      same size regardless of their own image's aspect ratio -- height
@@ -1040,9 +1053,10 @@ footer {
 /* The intro logo reads fine smaller than the two feature screenshots
    -- it's a wordmark, not a UI panel that needs room to be legible --
    so it gets its own, slightly smaller width instead of matching
-   .landing-anchor img above. Same specificity (one class + img), so
-   source order is what makes this win over the shared rule. */
-.landing-anchor--intro img {
+   .landing-anchor picture img above. Same specificity (one class +
+   element + element), so source order is what makes this win over
+   the shared rule. */
+.landing-anchor--intro picture img {
   width: min(450px, 55vw);
 }
 

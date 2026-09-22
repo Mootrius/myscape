@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from html import escape
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
 from app.bosses import HISCORE_BOSSES
 from app.mindmaps import SKILL_NAMES
@@ -101,6 +101,30 @@ try:
     _LOOT_TRACKER_CSS_VERSION = int(os.path.getmtime(_LOOT_TRACKER_CSS_PATH))
 except OSError:
     _LOOT_TRACKER_CSS_VERSION = 0
+
+# The landing page's own interactive Loot Tracker preview (see
+# render_landing_loot_preview below) is backed by a static, curated
+# snapshot rather than a live account -- see scripts/gen_landing_loot_demo.py's
+# own module docstring for how it's built/regenerated. Lazily read once
+# and memoized (same one-JSON-file-behind-a-getter shape as
+# app/npc_names.py's get_npc_names), not baked in at import time, so a
+# missing/corrupt file fails the one page that needs it instead of the
+# whole app failing to start.
+_LANDING_LOOT_DEMO_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "landing_loot_demo.json"
+)
+_landing_loot_demo_data = None
+
+
+def _get_landing_loot_demo_data() -> Optional[dict]:
+    global _landing_loot_demo_data
+    if _landing_loot_demo_data is None:
+        try:
+            with open(_LANDING_LOOT_DEMO_PATH, "r") as f:
+                _landing_loot_demo_data = json.load(f)
+        except (OSError, ValueError):
+            return None
+    return _landing_loot_demo_data
 
 # Same cache-busting trick again, for the Mindmaps page's own stylesheet.
 _MINDMAPS_CSS_PATH = os.path.join(
@@ -506,19 +530,47 @@ def render_landing(player: Optional[PlayerView]) -> str:
           </div>
         </div>
     """
+    # Interactive live preview of the real Loot Tracker feature (see
+    # render_landing_loot_preview) in place of that panel's own
+    # pre-composited marketing image below -- a visitor can actually
+    # search/sort/hover/click through a genuine (if curated/fixed, not
+    # this visitor's own) day of loot rather than just looking at a
+    # picture of the feature. Falls back to the plain image (the
+    # landing page's every OTHER feature panel still works this way --
+    # see the three .landing-anchor sections below) if the curated
+    # snapshot isn't there to read, same as before this existed.
+    loot_preview = render_landing_loot_preview()
+    if loot_preview:
+        loot_preview_head, loot_preview_body, loot_preview_script = loot_preview
+        loot_anchor_section = f"""
+      <section class="landing-anchor landing-anchor--loot-preview">
+        <div class="landing-loot-preview">
+          {loot_preview_body}
+        </div>
+      </section>"""
+    else:
+        loot_preview_head, loot_preview_script = "", ""
+        loot_anchor_section = """
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/anchor-loot-tracking.webp" type="image/webp">
+          <img src="/static/img/anchor-loot-tracking.png" alt="Loot tracking like you've never seen it before.">
+        </picture>
+      </section>"""
     # Three "anchor" panels -- pre-composited marketing art (logo/
-    # tagline, then one per showcased feature), not live markup, since
-    # each one is a fixed graphic that already has its own baked-in
-    # layout/copy. The first one (landing-anchor--intro) shares a
-    # single stop with the header above it (see myscape.css) instead
-    # of being its own separate one, so scrolling doesn't stop twice
-    # just to reveal the logo -- but it's still pinned to exactly one
-    # full screen (header + logo + the "explore features" cue at the
-    # bottom, nothing else) via that same CSS, with the script below
-    # measuring the header's actual rendered height to make that work.
-    # webp first (much smaller) with a png fallback for anything that
-    # doesn't support it.
-    body = """
+    # tagline, then one per showcased feature -- except loot tracking
+    # now, see loot_anchor_section above), not live markup, since each
+    # one is a fixed graphic that already has its own baked-in layout/
+    # copy. The first one (landing-anchor--intro) shares a single stop
+    # with the header above it (see myscape.css) instead of being its
+    # own separate one, so scrolling doesn't stop twice just to reveal
+    # the logo -- but it's still pinned to exactly one full screen
+    # (header + logo + the "explore features" cue at the bottom,
+    # nothing else) via that same CSS, with the script below measuring
+    # the header's actual rendered height to make that work. webp first
+    # (much smaller) with a png fallback for anything that doesn't
+    # support it.
+    body = f"""
     <div class="landing-anchors">
       <section class="landing-anchor landing-anchor--intro">
         <div class="landing-anchor-intro-media">
@@ -533,12 +585,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <span class="landing-scroll-cue-arrow"></span>
         </p>
       </section>
-      <section class="landing-anchor">
-        <picture>
-          <source srcset="/static/img/anchor-loot-tracking.webp" type="image/webp">
-          <img src="/static/img/anchor-loot-tracking.png" alt="Loot tracking like you've never seen it before.">
-        </picture>
-      </section>
+      {loot_anchor_section}
       <section class="landing-anchor">
         <picture>
           <source srcset="/static/img/anchor-mindmaps.webp" type="image/webp">
@@ -674,6 +721,12 @@ def render_landing(player: Optional[PlayerView]) -> str:
       }
     })();
     """
+    # The loot preview's own wrapper script (fetch shim, range-selector
+    # neutering -- see render_landing_loot_preview) just tacks onto the
+    # end here -- an empty string, and a no-op, when loot_preview was
+    # None above (the static-image fallback needs no script of its
+    # own).
+    script += loot_preview_script
     # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
     # every other page keeps its ordinary, un-snapped scrolling.
@@ -682,6 +735,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
         player=player,
         body=body,
         extra_script=script,
+        extra_head=loot_preview_head,
         body_class="landing",
         footer_extra=landing_cta,
         # The one page on the whole site actually meant to be found --
@@ -3080,29 +3134,17 @@ def render_purchase_goals(player: PlayerView) -> str:
     )
 
 
-def render_loot_tracker(player: PlayerView) -> str:
-    """The Loot Tracker page -- a first pass at porting the original
-    single-user Maintrius tool's Loot Tracker/Trip Tracker features
-    (see app/loot.py's module docstring for what's here today and
-    what's deliberately not yet). Same shape as render_purchase_goals
-    above: a thin server-rendered shell, everything below it drawn
-    client-side from one polled JSON payload (GET /api/players/me/loot,
-    see app/loot.py's build_loot_state), re-polled from scratch
-    whenever the range button picks a new range.
-
-    Everything on this page scopes together to whichever range is
-    currently selected (see the range button up top -- presets plus a
-    CUSTOM start/end date pair): the bar chart; the NPC panel
-    below-left that lets a player click one NPC to see just that NPC's
-    share of each bucket's loot filled in at the bottom of its bar (the
-    bar's own full all-sources height still shows as an outline above
-    it), searchable/sortable via its own search box and sort tabs; and
-    the item panel below-right, which mirrors that same search/sort UI
-    over either every item dropped by every NPC in the range (nothing
-    selected) or just the selected NPC's own items -- see
-    renderBarChart/renderNpcRow/renderItemList below, and
-    build_loot_state in app/loot.py for the matching buckets/
-    npcBucketValues/windowItems/npcItems shape."""
+def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
+    """Builds the Loot Tracker's (extra_head, body, script) triple --
+    split out from render_loot_tracker below so the landing page's own
+    interactive preview (render_landing_loot_preview) can embed the
+    exact same panel markup/script rather than forking a second copy of
+    either. Neither piece references `player` at all (this page is a
+    thin server-rendered shell -- everything below it is drawn client-
+    side from one polled JSON payload, see this function's own body),
+    which is exactly what makes reusing it as a self-contained embedded
+    panel possible in the first place: nothing here assumes it's being
+    rendered inside _shell for a logged-in visitor."""
     extra_head = f'<link rel="stylesheet" href="/static/css/loot-tracker.css?v={_LOOT_TRACKER_CSS_VERSION}" />'
 
     # Feather's own "eye" outline -- the "show hidden" toggle button
@@ -4667,6 +4709,39 @@ def render_loot_tracker(player: PlayerView) -> str:
       setInterval(loadState, 10000);
     })();
     """
+    return extra_head, body, script
+
+
+def render_loot_tracker(player: PlayerView) -> str:
+    """The Loot Tracker page -- a first pass at porting the original
+    single-user Maintrius tool's Loot Tracker/Trip Tracker features
+    (see app/loot.py's module docstring for what's here today and
+    what's deliberately not yet). Same shape as render_purchase_goals
+    above: a thin server-rendered shell, everything below it drawn
+    client-side from one polled JSON payload (GET /api/players/me/loot,
+    see app/loot.py's build_loot_state), re-polled from scratch
+    whenever the range button picks a new range.
+
+    Everything on this page scopes together to whichever range is
+    currently selected (see the range button up top -- presets plus a
+    CUSTOM start/end date pair): the bar chart; the NPC panel
+    below-left that lets a player click one NPC to see just that NPC's
+    share of each bucket's loot filled in at the bottom of its bar (the
+    bar's own full all-sources height still shows as an outline above
+    it), searchable/sortable via its own search box and sort tabs; and
+    the item panel below-right, which mirrors that same search/sort UI
+    over either every item dropped by every NPC in the range (nothing
+    selected) or just the selected NPC's own items -- see
+    renderBarChart/renderNpcRow/renderItemList below, and
+    build_loot_state in app/loot.py for the matching buckets/
+    npcBucketValues/windowItems/npcItems shape.
+
+    The actual markup/script live in _loot_tracker_panel_markup just
+    above -- this is now just that plus the _shell wrapper a real,
+    logged-in-or-not page visit needs (see render_landing_loot_preview
+    for the OTHER caller, which skips _shell entirely and embeds the
+    same panel inline on the landing page instead)."""
+    extra_head, body, script = _loot_tracker_panel_markup()
     return _shell(
         title="Loot Tracker — myscape",
         player=player,
@@ -4674,6 +4749,114 @@ def render_loot_tracker(player: PlayerView) -> str:
         extra_script=script,
         extra_head=extra_head,
     )
+
+
+def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
+    """The landing page's own interactive Loot Tracker preview -- a
+    real visitor, logged in or not, can search/sort/hover items exactly
+    like the genuine page, click an NPC tile to filter down to its own
+    items, and click a bar in the chart to drill into that hour, all
+    without an account behind any of it. Returns (extra_head, body,
+    script) for render_landing to splice into its own markup, or None
+    if the curated snapshot (app/data/landing_loot_demo.json, built by
+    scripts/gen_landing_loot_demo.py -- see that script's own module
+    docstring for what's in it and why it's fixed rather than
+    randomized) isn't there to read, so a missing/corrupt file quietly
+    falls back to the plain marketing image render_landing used before
+    this existed, rather than breaking the whole landing page.
+
+    Reuses _loot_tracker_panel_markup's body/script completely
+    unmodified -- not a fork -- and layers three demo-only behaviors on
+    top purely from the outside, in a wrapper script appended after it:
+
+    1. A `fetch` shim, scoped to just this wrapper (a local `var fetch`
+       inside its own IIFE, never touching window.fetch), that answers
+       every one of the panel's own calls to /api/players/me/loot* out
+       of the static snapshot instead of the network -- the base 24h
+       read, a bucket-click's own scoped read (matched by that bucket's
+       `start` timestamp against the snapshot's precomputed per-bucket
+       payloads -- see gen_landing_loot_demo.py), and the per-tile
+       hide/unhide POST/DELETE calls (answered with a no-op success,
+       since there's no real account here for a hide to persist
+       against -- critically, this also means those calls never reach
+       the REAL endpoint with a visitor's own real session cookie,
+       which plain unmodified fetch() would otherwise do for a logged-
+       in visitor who followed the header's own ?home=1 logo link back
+       to this page).
+    2. The range/date selector neutered right after the reused script
+       finishes its own wiring -- explicitly asked to be non-
+       interactive here, since a fixed one-day snapshot has no other
+       range to actually switch to. Only the button's own click
+       listener is stripped (cloneNode+replaceWith); the dropdown
+       itself stays in the DOM, inert, since the reused script still
+       reaches for it by id from several other code paths on every
+       render.
+    3. setInterval(loadState, 10000) inside the reused script keeps
+       polling every 10s regardless -- harmless (it just re-renders the
+       same static payload) rather than worth special-casing away.
+    """
+    demo = _get_landing_loot_demo_data()
+    if demo is None:
+        return None
+    extra_head, body, script = _loot_tracker_panel_markup()
+    demo_json = json.dumps(demo["full"])
+    bucket_states_json = json.dumps(demo["buckets"])
+    wrapper_script = f"""
+    (function () {{
+      var DEMO_STATE = {demo_json};
+      var DEMO_BUCKET_STATES = {bucket_states_json};
+
+      // Shadows the outer/global fetch for everything inside this one
+      // IIFE only (see this function's own doc comment, point 1) --
+      // the reused script text below calls bare `fetch(...)`, which
+      // JS resolves against the nearest enclosing scope that declares
+      // one, so it finds THIS var rather than window.fetch without
+      // that script needing to change at all.
+      var fetch = function (url) {{
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+        var params = new URLSearchParams(qIndex === -1 ? '' : url.slice(qIndex + 1));
+        if (path === '/api/players/me/loot') {{
+          var payload = DEMO_STATE;
+          if (params.get('range') === 'custom' && params.get('start')) {{
+            var startParam = params.get('start');
+            for (var i = 0; i < DEMO_STATE.buckets.length; i++) {{
+              if (DEMO_STATE.buckets[i].start === startParam) {{ payload = DEMO_BUCKET_STATES[i]; break; }}
+            }}
+          }}
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(payload); }} }});
+        }}
+        // hidden-npcs/hidden-items POST+DELETE -- see this function's
+        // own doc comment, point 1, for why this stays a no-op rather
+        // than forwarding to the real endpoint.
+        return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{}}); }} }});
+      }};
+
+      {script}
+
+      // Neutralizes the range/date selector -- runs after the reused
+      // script above has already finished its own synchronous DOM
+      // wiring (including this button's click listener), so stripping
+      // it means replacing the node outright: cloneNode(true) copies
+      // its markup/children but none of the listeners attached to the
+      // original, which is exactly what "no longer clickable" means
+      // here. The dropdown menu itself is left alone (still in the DOM,
+      // still starting from its own display:none) rather than removed
+      // -- with the button's own listener gone it can never be opened
+      // in the first place, and the reused script still calls
+      // document.getElementById('lootRangeMenu') from several other
+      // places (closeRangeMenu, updateRangeMenuActive, the outside-
+      // click handler, the menu's own click handler) on every render,
+      // not just the button's click -- removing the node made those
+      // throw on the null it got back instead.
+      var rangeBtn = document.getElementById('lootRangeBtn');
+      if (rangeBtn) {{
+        rangeBtn.replaceWith(rangeBtn.cloneNode(true));
+        document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
+      }}
+    }})();
+    """
+    return extra_head, body, wrapper_script
 
 
 def render_mindmaps(player: PlayerView) -> str:

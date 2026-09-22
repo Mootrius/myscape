@@ -527,3 +527,38 @@
 .loot-npc-box-wrap:hover .loot-eye-btn,
 .loot-item-box-wrap:hover .loot-eye-btn { opacity: 1; pointer-events: auto; }
 .loot-eye-btn:hover { color: var(--gold); }
+
+/* ---------- the landing page's own interactive preview (see
+   render_landing_loot_preview in app/pages.py) -- everything above
+   this point is unchanged, shared markup/CSS with the real, logged-in
+   Loot Tracker page; these two rules are the only preview-specific
+   additions loot-tracker.css needed. ---------- */
+
+/* Constrains the reused panel to fit inside one landing-page scroll-
+   snap "slide" (see .landing-anchor in myscape.css, min-height: 100vh
+   with no matching max) instead of growing past it the way a normal
+   page lets this same content grow tall on a small viewport -- an
+   internal scrollbar on the (rare) overflow case beats a landing-page
+   panel that's taller than the screen it's meant to occupy. 80px is
+   .landing-anchor's own top+bottom padding (40px each), so this fills
+   exactly the room that padding leaves rather than guessing a fixed
+   height. svh layered after vh for the same mobile-address-bar reason
+   .landing-anchor itself already does. */
+.landing-loot-preview {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100svh - 80px);
+  overflow-y: auto;
+}
+
+/* The range/date selector is explicitly non-interactive here (see
+   render_landing_loot_preview's own fetch shim -- a fixed one-day
+   snapshot has no other range to switch to) -- no caret, no hover
+   state, and a default cursor rather than the pointer .loot-range-btn
+   normally gets, so it reads as the plain "24 HOURS" label it now is
+   rather than a dropdown a visitor might try to click. */
+.loot-range-btn--static { cursor: default; }
+.loot-range-btn--static:hover { border-color: var(--border); color: var(--text-dim); }
+.loot-range-btn--static .loot-range-caret { display: none; }
