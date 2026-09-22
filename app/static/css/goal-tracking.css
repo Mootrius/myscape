@@ -333,6 +333,53 @@
 
 .gt-metric-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
 
+/* GAIN/REACH toggle, its own row between the target-value row and the
+   actions row -- see #gtTargetModeRow in wizardStageTargetHtml
+   (app/pages.py) for why it's a separate row rather than squeezed into
+   the field row above, which already holds up to three fields (search,
+   metric toggle, target value) for a skill+xp goal. Empty (and so zero
+   height, no margin either thanks to :not(:empty) below) whenever
+   GAIN/REACH doesn't apply to whatever's currently picked -- see
+   targetModeApplies in the script -- so an item/skill-level/recurring
+   goal's stage 3 box is exactly as tall as it's always been;
+   .gt-wizard-expanded's own fixed height (its own comment above) has
+   slack to spare for this one extra row on the goal types that DO show
+   it. */
+.gt-target-mode-row:not(:empty) { margin-top: 10px; }
+
+/* Same segmented-pair idea as .gt-metric-toggle above (reused look,
+   own class -- this is a different CHOICE about the same target-value
+   field, not another metric, and it spans the row's full width rather
+   than sitting in a fixed 108px-wide field slot the way Lvl/Xp does),
+   sized to match the wizard's own Back/Cancel/Save/Next buttons (26px
+   height, 10px font) just below it instead of the 34px text fields
+   above it -- this reads as a lightweight in-between choice, not
+   another input to fill in. */
+.gt-target-mode-toggle { display: flex; gap: 0; height: 26px; }
+
+.gt-target-mode-btn {
+  flex: 1 1 50%;
+  height: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Same first-child border fix as .gt-metric-btn's own -- see its
+   comment just above for why this only suppresses the seam while
+   NOT active. */
+.gt-target-mode-btn:first-child:not(.active) { border-right: none; }
+
+.gt-target-mode-btn:hover { color: var(--text); }
+
+.gt-target-mode-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+
 /* Stage 4 (recurring goals only) -- the interval field and its
    HOUR/DAY/WEEK/MONTH/YEAR toggle sit on one row now (previously
    stacked), grouped as one block (see wizardStageCadenceHtml) so

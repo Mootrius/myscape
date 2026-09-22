@@ -96,6 +96,78 @@ MAX_RECUR_INTERVAL = 999
 # goes up.
 RECURRING_GOAL_TYPES = ("kc", "skill")
 
+# A ONE-TIME goal's own choice of what target_value means -- see
+# Goal.baseline_value's own docstring in app/models.py for the shared
+# mechanism this rides on. "reach" is every one-time goal's only
+# reading before this existed (target_value is a lifetime total to
+# reach) and stays the default whenever target_mode is omitted (see
+# clean_target_mode below); "gain" instead baselines the goal against
+# its own current absolute_value() at creation (see create_goal in
+# app/main.py), so target_value reads as "how much MORE" instead.
+# Recurring goals don't get a choice here at all -- they already have
+# their own always-on period-relative baseline (recur_period_start),
+# which is exactly the "gain" reading applied automatically every
+# period; a second, independent one-time baseline on top of that would
+# just be redundant, not a real third option.
+GOAL_TARGET_MODES = ("reach", "gain")
+
+
+def target_mode_allows_gain(goal_type: str, metric: Optional[str], is_recurring: bool) -> bool:
+    """Whether a ONE-TIME goal of this shape can be put in "gain" mode
+    at all -- kc, or an xp-metric skill goal, and only when it's not
+    also recurring (see GOAL_TARGET_MODES' own comment for why
+    recurring goals don't need a second baseline). Two cases are
+    excluded on purpose, not just left unimplemented:
+      - a LEVEL-metric skill goal has no "gain" reading to offer in the
+        first place -- a target LEVEL (e.g. "reach level 80") is
+        already the only way to express a level target at all; there's
+        no separate "gain N levels" phrasing the way "gain N kc"/"gain
+        N xp" both read naturally, since OSRS's own xp-per-level curve
+        (SKILL_XP_TABLE) means "N levels" isn't a fixed amount of
+        anything current_value()'s plain baseline-subtraction could
+        measure the same way a raw kc/xp count can.
+      - an "item" goal's own owned quantity isn't a monotonic lifetime
+        total (you can sell/lose items, not just gain them), the exact
+        same reasoning RECURRING_GOAL_TYPES already excludes "item"
+        for -- see its own comment."""
+    if is_recurring:
+        return False
+    if goal_type == "kc":
+        return True
+    if goal_type == "skill":
+        return metric == "xp"
+    return False
+
+
+def clean_target_mode(goal_type: str, metric: Optional[str], is_recurring: bool, target_mode) -> str:
+    """Validates a new goal's own GAIN/REACH choice (#gtTargetModeToggle
+    in app/pages.py) against the ALREADY-cleaned goal_type/metric/
+    is_recurring clean_new_goal returned -- called separately from that
+    function (not folded into it) because target_mode isn't a Goal
+    column itself and so has no place in the {"goal_type": ..., ...}
+    dict clean_new_goal hands straight to Goal(**cleaned); see
+    create_goal in app/main.py for how the two calls fit together.
+
+    None/omitted defaults to "reach" -- the wizard itself always sends
+    one of the two explicitly whenever GT.targetMode's own toggle is
+    offered at all (defaulting that toggle to "gain" -- see
+    app/pages.py), so a request that leaves this out entirely is only
+    ever a raw API call, which should keep getting today's only-ever-
+    existed absolute reading rather than quietly switching to a
+    relative one it never asked for. "gain" itself still raises
+    GoalValidationError for a goal shape target_mode_allows_gain
+    doesn't cover (an item goal, a level-metric skill goal, or a
+    recurring one) -- same "validate strictly, don't silently coerce"
+    stance _clean_new_goal's own is_recurring check already takes for
+    the parallel "recurring, but not kc/skill" case."""
+    mode = target_mode or "reach"
+    if mode not in GOAL_TARGET_MODES:
+        raise GoalValidationError(f"target_mode must be one of {GOAL_TARGET_MODES}.")
+    if mode == "gain" and not target_mode_allows_gain(goal_type, metric, is_recurring):
+        raise GoalValidationError("Gain mode is only available for a one-time kc goal or a one-time xp-metric skill goal.")
+    return mode
+
+
 # app.bosses.HISCORE_BOSSES' display names, keyed lowercase, so a goal
 # submitted with any casing still resolves -- the real UI always
 # submits one of these names verbatim (see the <select> in
@@ -123,10 +195,12 @@ def clean_new_goal(
     """Validates and normalizes a goal-creation request into
     {"goal_type", "target_name", "metric", "target_value", "item_id",
     "is_recurring", "recur_interval", "recur_unit"}, ready to write
-    straight onto a new Goal row (recur_period_start/
-    recur_baseline_value aren't part of this -- see create_goal in
-    app/main.py, which sets both from live progress context this
-    function has no access to). Raises GoalValidationError naming
+    straight onto a new Goal row (recur_period_start/baseline_value
+    aren't part of this -- see create_goal in app/main.py, which sets
+    both from live progress context this function has no access to;
+    clean_target_mode below is the sibling validator for whether
+    baseline_value gets set at all on a one-time goal). Raises
+    GoalValidationError naming
     whatever's wrong -- mirrors app.mindmaps.clean_goal's own per-field
     validation, just flattened to one goal per call (no node/color
     dispatch, since this feature has no tree of its own).
@@ -249,15 +323,23 @@ def build_progress_context(db, game_account) -> dict:
 
 def current_value(goal, context: dict) -> int:
     """This goal's live progress number toward target_value, in
-    whatever unit target_value is in. For a non-recurring goal this IS
-    absolute_value() below -- a lifetime total, exactly as before this
-    column existed. For a recurring one it's absolute_value() minus
-    goal.recur_baseline_value instead -- how much has been gained
-    since the CURRENT period started (see maybe_roll_recurring_period,
-    which is what keeps recur_baseline_value/recur_period_start current
-    -- this function only ever reads them, never rolls a period over
+    whatever unit target_value is in. Whenever goal.baseline_value is
+    null -- a REACH-mode one-time goal, an item goal (never offered a
+    baseline at all -- see target_mode_allows_gain), or a recurring
+    goal that somehow hasn't been baselined yet -- this IS
+    absolute_value() below, a lifetime total, exactly as every goal
+    read before baseline_value existed. Otherwise it's absolute_value()
+    minus goal.baseline_value instead -- how much has changed since
+    whatever moment that baseline was captured (a recurring goal's own
+    current period start, kept current by maybe_roll_recurring_period
+    -- this function only ever reads it, never rolls a period over
     itself, so call that first on every goal this is used against, the
-    same way list_goals in app/main.py does).
+    same way list_goals in app/main.py does; or a one-time GAIN goal's
+    own creation time, captured once and never touched again -- see
+    create_goal in app/main.py). Deliberately keyed off "does this goal
+    have a baseline" rather than goal.is_recurring -- see
+    Goal.baseline_value's own docstring in app/models.py for why a
+    one-time goal can end up with one too.
 
     Clamped at 0 purely as a defensive floor -- absolute_value() should
     never legitimately drop below a baseline captured from that same
@@ -265,10 +347,9 @@ def current_value(goal, context: dict) -> int:
     a manually-edited account shouldn't be able to show a negative
     progress bar."""
     absolute = absolute_value(goal, context)
-    if not goal.is_recurring:
+    if goal.baseline_value is None:
         return absolute
-    baseline = goal.recur_baseline_value if goal.recur_baseline_value is not None else absolute
-    return max(0, absolute - baseline)
+    return max(0, absolute - goal.baseline_value)
 
 
 def progress_pct(goal, context: dict) -> float:
@@ -316,11 +397,11 @@ def absolute_value(goal, context: dict) -> int:
     -- computed fresh from `context` every call rather than ever stored
     on the Goal row itself, the same "always derive it live" stance
     app.mindmaps.evaluate_completion already takes for its own goal
-    nodes. Never itself period-relative -- see current_value above for
-    the number a recurring goal's progress bar actually compares
-    against target_value, and create_goal/maybe_roll_recurring_period
-    (this function is also what each of those calls to capture a fresh
-    recur_baseline_value)."""
+    nodes. Never itself baseline-relative -- see current_value above for
+    the number a goal's progress bar actually compares against
+    target_value once a baseline is involved, and
+    create_goal/maybe_roll_recurring_period (this function is also what
+    each of those calls to capture a fresh baseline_value)."""
     if goal.goal_type == "kc":
         kc = context["boss_kill_counts"].get(goal.target_name)
         return kc if isinstance(kc, int) else 0
@@ -350,8 +431,8 @@ def maybe_roll_recurring_period(goal, context: dict) -> bool:
     whichever one `now` actually falls in, re-baselining it as it goes
     -- called against every goal on every GET /api/goals (see list_goals
     in app/main.py) before current_value reads recur_period_start/
-    recur_baseline_value off it, so those two columns are never more
-    than one request stale. Returns whether it actually changed
+    baseline_value off it, so those two columns are never more than one
+    request stale. Returns whether it actually changed
     anything, so the caller knows whether there's something new to
     commit; a no-op (not recurring, or still inside the current period)
     touches nothing and returns False.
@@ -378,7 +459,7 @@ def maybe_roll_recurring_period(goal, context: dict) -> bool:
         return False
     periods_elapsed = int(elapsed // period_seconds)
     goal.recur_period_start = goal.recur_period_start + timedelta(seconds=periods_elapsed * period_seconds)
-    goal.recur_baseline_value = absolute_value(goal, context)
+    goal.baseline_value = absolute_value(goal, context)
     return True
 
 

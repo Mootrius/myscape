@@ -1076,27 +1076,54 @@ class Goal(Base):
     goal predating this column, or a free-text name that never matched
     a search result).
 
-    is_recurring/recur_interval/recur_unit/recur_period_start/
-    recur_baseline_value together make a "kc" or "skill" goal (the
-    wizard never offers this for "item") repeat every
-    recur_interval*recur_unit (e.g. every 1 WEEK) instead of tracking
-    one lifetime total forever -- see app.goals.current_value/
-    maybe_roll_recurring_period for the actual rollover logic. Every
-    OTHER goal field above keeps its exact same meaning either way
-    (target_value is still the number to reach -- just per-period
-    instead of lifetime-total for a recurring goal); these five columns
-    are additive, not a parallel goal shape.
+    is_recurring/recur_interval/recur_unit/recur_period_start together
+    make a "kc" or "skill" goal (the wizard never offers this for
+    "item") repeat every recur_interval*recur_unit (e.g. every 1 WEEK)
+    instead of tracking one lifetime total forever -- see
+    app.goals.current_value/maybe_roll_recurring_period for the actual
+    rollover logic. Every OTHER goal field above keeps its exact same
+    meaning either way (target_value is still the number to reach --
+    just per-period instead of lifetime-total for a recurring goal);
+    these four columns are additive, not a parallel goal shape.
 
-    recur_period_start/recur_baseline_value are the only two of this
-    group a recurring goal ever has written back to it after creation
-    (see maybe_roll_recurring_period) -- recur_period_start is when the
-    CURRENT period began, and recur_baseline_value is this goal's own
-    absolute_value() reading at that moment, so the period's own
-    progress is always just "absolute_value() now minus that baseline"
-    rather than a lifetime total. Both null for a non-recurring goal,
-    and both set once at creation time (recur_period_start to "now",
-    recur_baseline_value to the goal's starting absolute_value()) for a
-    recurring one -- see create_goal in app/main.py."""
+    recur_period_start is the only one of that group a recurring goal
+    ever has written back to it after creation (see
+    maybe_roll_recurring_period) -- when the CURRENT period began, so
+    the period's own progress is always "absolute_value() now minus
+    baseline_value" rather than a lifetime total (see that column's own
+    docstring just below). Null for a non-recurring goal, set once at
+    creation time to "now" for a recurring one -- see create_goal in
+    app/main.py.
+
+    baseline_value is this goal's own absolute_value() reading at
+    whatever moment its progress started being measured FROM, so
+    current_value() (app/goals.py) can read "how much has actually
+    changed since then" instead of a lifetime total -- absolute_value()
+    minus this, floored at 0. Two different goals end up needing that
+    same "progress since a starting point" shape for two different
+    reasons, so this one column serves both:
+      - a RECURRING goal (is_recurring true) always has one -- see
+        recur_period_start above; re-baselined every time
+        maybe_roll_recurring_period rolls the period forward, so it's
+        never more than one period stale.
+      - a ONE-TIME "GAIN"-mode kc goal or xp-metric skill goal also
+        gets one, captured once at creation and never touched again --
+        see create_goal in app/main.py, and
+        app.goals.target_mode_allows_gain for exactly which
+        combinations this is offered for at all (a target LEVEL has no
+        equivalent "gain" reading -- see that function's own comment --
+        and an item's own owned quantity isn't a monotonic lifetime
+        total the way kc/xp are, the same reasoning
+        RECURRING_GOAL_TYPES already excludes "item" for). The wizard's
+        own #gtTargetModeToggle (GAIN/REACH, app/pages.py) is what lets
+        a player choose this for a one-time goal; REACH (this column
+        left null) is every one-time goal's only reading before this
+        toggle existed, and still is for anything the toggle doesn't
+        cover.
+    Both a "REACH"-mode one-time goal and an "item" goal leave this
+    null -- current_value() falls straight back to absolute_value()
+    whenever it's null, regardless of is_recurring, so those two cases
+    need no special-casing of their own there at all."""
 
     __tablename__ = "goals"
 
@@ -1111,7 +1138,7 @@ class Goal(Base):
     recur_interval = Column(Integer, nullable=True)
     recur_unit = Column(String, nullable=True)
     recur_period_start = Column(DateTime(timezone=True), nullable=True)
-    recur_baseline_value = Column(Integer, nullable=True)
+    baseline_value = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
     # The player's own drag-and-drop order for the goal list in
     # "custom" sort mode (GameAccount.goal_sort_mode == "custom") --

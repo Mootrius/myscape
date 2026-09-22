@@ -2502,6 +2502,7 @@ def _goal_out(goal: Goal, context: dict) -> GoalOut:
         recur_interval=goal.recur_interval,
         recur_unit=goal.recur_unit,
         recur_period_start=goal.recur_period_start,
+        baseline_value=goal.baseline_value,
         sort_order=goal.sort_order,
         created_at=goal.created_at,
     )
@@ -2533,11 +2534,11 @@ def list_goals(
     Also where a recurring goal's own period actually rolls forward
     (goals_module.maybe_roll_recurring_period) -- every poll of this
     same endpoint, before its progress is read, so recur_period_start/
-    recur_baseline_value are never more than one request stale for
-    whichever goals actually crossed a period boundary since the last
-    poll. Committed once for the whole batch, only when at least one
-    goal actually rolled -- the common case (nobody's cadence has
-    elapsed since 5 seconds ago) touches the database not at all."""
+    baseline_value are never more than one request stale for whichever
+    goals actually crossed a period boundary since the last poll.
+    Committed once for the whole batch, only when at least one goal
+    actually rolled -- the common case (nobody's cadence has elapsed
+    since 5 seconds ago) touches the database not at all."""
     goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
     context = goals_module.build_progress_context(db, game_account)
     rolled = False
@@ -2632,13 +2633,22 @@ def create_goal(
     range, an item goal just needs a non-empty name -- see its own
     docstring for why item names aren't validated against a real item
     at creation time; a recurring goal's own interval/unit get the same
-    treatment, and is only allowed at all for goal_type "kc"/"skill").
+    treatment, and is only allowed at all for goal_type "kc"/"skill"),
+    and app.goals.clean_target_mode for the sibling validation of a
+    ONE-TIME goal's own GAIN/REACH choice (payload.target_mode --
+    "gain" only for a one-time kc goal or a one-time xp-metric skill
+    goal). Both run inside the same try block -- either one's
+    GoalValidationError gets the same plain 400.
 
     A recurring goal's very first period starts right now, baselined
     against its own current absolute_value() (see app/goals.py) so it
-    opens at 0/target_value exactly like a fresh non-recurring goal
-    does -- computed from the SAME context this already needs to build
-    the response below, not a second query."""
+    opens at 0/target_value exactly like a REACH-mode one-time goal
+    does; a one-time GAIN-mode goal gets that same baseline treatment
+    (just without a recur_period_start alongside it -- there's no
+    period to roll forward again later, see Goal.baseline_value's own
+    docstring in app/models.py) -- both computed from the SAME context
+    this already needs to build the response below, not a second
+    query."""
     try:
         cleaned = goals_module.clean_new_goal(
             payload.goal_type,
@@ -2650,13 +2660,18 @@ def create_goal(
             payload.recur_interval,
             payload.recur_unit,
         )
+        target_mode = goals_module.clean_target_mode(
+            cleaned["goal_type"], cleaned["metric"], cleaned["is_recurring"], payload.target_mode
+        )
     except goals_module.GoalValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     context = goals_module.build_progress_context(db, game_account)
     goal = Goal(game_account_id=game_account.id, **cleaned)
     if goal.is_recurring:
         goal.recur_period_start = _utcnow()
-        goal.recur_baseline_value = goals_module.absolute_value(goal, context)
+        goal.baseline_value = goals_module.absolute_value(goal, context)
+    elif target_mode == "gain":
+        goal.baseline_value = goals_module.absolute_value(goal, context)
     db.add(goal)
     db.commit()
     db.refresh(goal)

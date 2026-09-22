@@ -9859,6 +9859,19 @@ def render_goal_tracking(player: PlayerView) -> str:
         type: null,
         skillMetric: 'level',
         itemId: null, // the chosen search result's real item id, if any -- see Goal.item_id's own docstring in app/models.py
+        // A ONE-TIME kc or xp-metric skill goal's own GAIN/REACH choice
+        // (#gtTargetModeToggle, stage 3 -- see targetModeApplies) --
+        // 'gain' by default (a player thinking "get 50 more kc" is
+        // likely more common than "reach a lifetime total of 50 kc" --
+        // see Goal.baseline_value's own docstring in app/models.py for
+        // what each one actually means server-side). Only ever READ
+        // when targetModeApplies() is true (see wizardAddGoal); left
+        // untouched -- not force-reset -- when the toggle's own row is
+        // just hidden rather than genuinely inapplicable (switching Lvl
+        // <-> Xp on the same visit, say), so a player's own REACH pick
+        // survives a brief detour through Lvl the same way GT.type/
+        // wizardTarget already survive a Back-then-Forward.
+        targetMode: 'gain',
         recurInterval: '', // stage 4's own text field, kept here so re-rendering that stage (e.g. after Back then forward again) doesn't lose it
         recurUnit: 'day', // stage 4's own segmented-control selection
       };
@@ -9945,6 +9958,7 @@ def render_goal_tracking(player: PlayerView) -> str:
         GT.type = null;
         GT.skillMetric = 'level';
         GT.itemId = null;
+        GT.targetMode = 'gain';
         GT.recurInterval = '';
         GT.recurUnit = 'day';
         renderWizard();
@@ -9982,9 +9996,9 @@ def render_goal_tracking(player: PlayerView) -> str:
       // wizardPickRecurrence/wizardPickType above). Only resets what
       // the stage being left back INTO doesn't already own, so e.g.
       // backing out of stage 4 (cadence) straight to stage 3 keeps
-      // GT.type/wizardTarget/GT.skillMetric intact -- there's nothing
-      // wrong with them, stage 3 just wants to be exactly as the
-      // player left it.
+      // GT.type/wizardTarget/GT.skillMetric/GT.targetMode intact --
+      // there's nothing wrong with them, stage 3 just wants to be
+      // exactly as the player left it.
       function wizardBack() {
         if (GT.wizardStage === 4) {
           GT.wizardStage = 3;
@@ -9993,6 +10007,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           GT.type = null;
           GT.skillMetric = 'level';
           GT.itemId = null;
+          GT.targetMode = 'gain';
         } else if (GT.wizardStage === 2) {
           GT.wizardStage = 1;
           GT.recurring = null;
@@ -10128,13 +10143,38 @@ def render_goal_tracking(player: PlayerView) -> str:
 
       var WIZARD_SEARCH_PLACEHOLDER = { item: 'Search for an item', kc: 'Search for a boss', skill: 'Search for a skill' };
 
+      // Whether stage 3's own #gtTargetModeToggle (GAIN/REACH) is
+      // offered at all for whatever's currently picked -- mirrors
+      // app.goals.target_mode_allows_gain exactly (see its own
+      // comment for why a LEVEL-metric skill goal and an "item" goal
+      // both stay REACH-only, and a recurring goal doesn't need a
+      // second, independent baseline of its own). The server
+      // re-validates against its own copy regardless (clean_target_mode
+      // in app/goals.py) -- this is purely what decides whether the
+      // client shows the toggle and sends target_mode at all.
+      function targetModeApplies() {
+        if (GT.recurring === 'recurring') return false;
+        if (GT.type === 'kc') return true;
+        if (GT.type === 'skill') return GT.skillMetric === 'xp';
+        return false;
+      }
+
       // The target field's placeholder -- doubles as this field's only
       // label now (see wizardStageTargetHtml/updateWizardTargetField
       // below, which is what keeps it current whenever the skill
-      // goal's own Lvl/Xp toggle switches).
+      // goal's own Lvl/Xp toggle -- or now #gtTargetModeToggle itself
+      // -- switches). A GAIN-mode kc/xp goal gets its own "___ to
+      // gain" phrasing instead of "Target ___", so the field itself
+      // keeps reinforcing which reading is active without needing a
+      // separate label row to do it -- the exact ambiguity
+      // #gtTargetModeToggle exists to resolve in the first place.
       function wizardTargetPlaceholder() {
-        if (GT.type === 'kc') return 'Target kc';
-        if (GT.type === 'skill') return (GT.skillMetric === 'xp') ? 'Target experience' : 'Target level';
+        var gain = targetModeApplies() && GT.targetMode === 'gain';
+        if (GT.type === 'kc') return gain ? 'Kc to gain' : 'Target kc';
+        if (GT.type === 'skill') {
+          if (GT.skillMetric === 'xp') return gain ? 'Experience to gain' : 'Target experience';
+          return 'Target level';
+        }
         return 'Target quantity';
       }
 
@@ -10154,6 +10194,22 @@ def render_goal_tracking(player: PlayerView) -> str:
       // goal -- there's one more page (stage 4's own cadence picker)
       // before this actually submits, see wireWizardStage's own click
       // handler for the id="gtWizardSave" button below.
+      //
+      // #gtTargetModeRow (GAIN/REACH, one-time kc/xp-skill goals only
+      // -- see targetModeApplies) is a THIRD row here, between the
+      // field row and the actions row, but always rendered as this one
+      // always-present empty wrapper regardless of whether it applies
+      // -- wireTargetModeToggle (called once from wireWizardStage,
+      // and again from the Lvl/Xp toggle's own click handler) fills it
+      // in or empties it back out in place, since switching Lvl<->Xp
+      // doesn't re-render this whole stage. An empty wrapper collapses
+      // to zero height on its own, so an item/skill-level/recurring
+      // goal's stage 3 box is exactly as tall as it always was --
+      // .gt-wizard-expanded's own fixed 150px height (see its comment
+      // in goal-tracking.css) has slack to spare for the one extra row
+      // a kc/xp-skill goal picks up here, so this never grows the box
+      // itself, just eats a little more of that same leftover
+      // space-between gap.
       function wizardStageTargetHtml() {
         // No Lvl/Xp choice at all for a recurring skill goal -- it only
         // ever tracks xp (see wizardPickType, which is what forces
@@ -10187,12 +10243,61 @@ def render_goal_tracking(player: PlayerView) -> str:
           '      <input type="text" inputmode="decimal" id="gtTargetValue" placeholder="' + wizardTargetPlaceholder() + '" autocomplete="off" />' +
           '    </div>' +
           '  </div>' +
+          '  <div class="gt-target-mode-row" id="gtTargetModeRow"></div>' +
           '  <div class="gt-wizard-actions">' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
           '    <button type="button" class="' + saveBtnClass + '" id="gtWizardSave">' + saveLabel + '</button>' +
           '  </div>' +
           '</div>';
+      }
+
+      // #gtTargetModeRow's own contents -- see targetModeApplies/
+      // wireTargetModeToggle for who calls this and when. Same
+      // 2-button segmented look as #gtMetricToggle just above (reused
+      // classes, not a near-duplicate set of rules -- see
+      // .gt-target-mode-toggle's own comment in goal-tracking.css for
+      // why this one gets its own class anyway despite the shared
+      // look), GAIN first since that's this control's own default.
+      function targetModeToggleHtml() {
+        return '' +
+          '<div class="gt-target-mode-toggle" id="gtTargetModeToggle">' +
+          '  <button type="button" class="gt-target-mode-btn" data-mode="gain">Gain</button>' +
+          '  <button type="button" class="gt-target-mode-btn" data-mode="reach">Reach</button>' +
+          '</div>';
+      }
+
+      // Fills #gtTargetModeRow in (or empties it back out) to match
+      // targetModeApplies() right now, and wires its two buttons --
+      // called once from wireWizardStage when stage 3 first renders,
+      // and again from the Lvl/Xp metric toggle's own click handler
+      // (updateWizardTargetField's neighbor, not that function itself)
+      // since switching Lvl<->Xp changes targetModeApplies()'s own
+      // answer without stage 3 ever re-rendering from scratch. Safe to
+      // call repeatedly -- re-wiring an already-empty (or already-
+      // filled, same content) row is a harmless no-op past the first
+      // real change.
+      function wireTargetModeToggle() {
+        var row = document.getElementById('gtTargetModeRow');
+        if (!row) return;
+        if (!targetModeApplies()) { row.innerHTML = ''; return; }
+        row.innerHTML = targetModeToggleHtml();
+        document.querySelectorAll('#gtTargetModeToggle .gt-target-mode-btn').forEach(function (btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-mode') === GT.targetMode);
+          btn.addEventListener('click', function () {
+            var newMode = btn.getAttribute('data-mode');
+            if (newMode === GT.targetMode) return;
+            GT.targetMode = newMode;
+            document.querySelectorAll('#gtTargetModeToggle .gt-target-mode-btn').forEach(function (b) {
+              b.classList.toggle('active', b === btn);
+            });
+            // Reinforces the new choice right in the target field's own
+            // placeholder ("Kc to gain" <-> "Target kc") -- same
+            // in-place update the Lvl/Xp toggle's own click handler
+            // already does for the same field, for the same reason.
+            updateWizardTargetField();
+          });
+        });
       }
 
       // Recurring only -- HOUR/DAY/WEEK/MONTH/YEAR, in the same order
@@ -10378,6 +10483,13 @@ def render_goal_tracking(player: PlayerView) -> str:
               document.querySelectorAll('.gt-metric-btn').forEach(function (b) {
                 b.classList.toggle('active', b === btn);
               });
+              // Lvl<->Xp is the one thing that can change
+              // targetModeApplies()'s own answer without leaving stage
+              // 3 -- xp offers GAIN/REACH, level doesn't -- so this is
+              // what keeps #gtTargetModeRow in sync with whichever one's
+              // now active, same as updateWizardTargetField just below
+              // keeps the target field's own placeholder in sync.
+              wireTargetModeToggle();
               updateWizardTargetField();
               validateTargetField();
             });
@@ -10390,6 +10502,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           validateTargetField();
         });
 
+        wireTargetModeToggle();
         updateWizardTargetField();
         // One-time saves straight from here, same as this button
         // always has; recurring instead captures the name/value picked
@@ -10523,6 +10636,15 @@ def render_goal_tracking(player: PlayerView) -> str:
           payload.is_recurring = true;
           payload.recur_interval = Number(document.getElementById('gtRecurInterval').value.trim());
           payload.recur_unit = GT.recurUnit;
+        } else if (targetModeApplies()) {
+          // Sent explicitly (both "gain" and "reach") whenever the
+          // toggle's actually offered, rather than leaning on the
+          // server's own omitted-field default -- see
+          // GoalCreateRequest.target_mode's own docstring in
+          // app/schemas.py for why that default exists at all (it's for
+          // a raw API call that never knew to send this, not for this
+          // wizard, which always knows).
+          payload.target_mode = GT.targetMode;
         }
 
         var data = await apiCall('/api/goals', {
@@ -10553,7 +10675,11 @@ def render_goal_tracking(player: PlayerView) -> str:
       // this PERIOD's progress, not a lifetime total, for a recurring
       // goal (see app.goals.current_value), so the number above reads
       // correctly either way without this function needing to know or
-      // care which kind of goal it's showing.
+      // care which kind of goal it's showing. goalInfoIconHtml tags
+      // along too whenever it has something to show -- right after the
+      // cadence text for a recurring goal (same as before), or straight
+      // after the plain progress number for a one-time GAIN goal, which
+      // has no cadence text of its own to follow.
       function goalProgressLabel(g) {
         var cur = fmtNum(g.current_value);
         var tgt = fmtNum(g.target_value);
@@ -10562,7 +10688,8 @@ def render_goal_tracking(player: PlayerView) -> str:
         else if (g.goal_type === 'skill') base = (g.metric === 'xp') ? (cur + ' / ' + tgt + ' XP') : ('LVL ' + cur + ' / ' + tgt);
         else base = cur + ' / ' + tgt;
         var cadence = recurCadenceLabel(g);
-        return cadence ? (base + ' · ' + cadence + recurInfoIconHtml(g)) : base;
+        var info = goalInfoIconHtml(g);
+        return cadence ? (base + ' · ' + cadence + info) : (base + info);
       }
 
       // "EVERY WEEK" for an interval of 1, "EVERY 2 WEEKS" otherwise --
@@ -10605,7 +10732,7 @@ def render_goal_tracking(player: PlayerView) -> str:
       // off every larger unit first (the same "greedy decomposition"
       // any digital-clock countdown uses), using RECUR_UNIT_SECONDS'
       // own fixed-duration units throughout so this never disagrees
-      // with recurInfoIconHtml's own end-of-period math below. A unit
+      // with goalInfoIconHtml's own end-of-period math below. A unit
       // that's 0 is left out entirely (a goal with weeks left has no
       // use for "0Y 0M" in front of it), except when every single one
       // is -- an about-to-roll goal still gets a "0M" rather than an
@@ -10632,26 +10759,53 @@ def render_goal_tracking(player: PlayerView) -> str:
         return shown.map(function (u) { return u[0] + u[1]; }).join(' ');
       }
 
-      // The little hoverable "i" that follows a recurring goal's own
-      // cadence tag (e.g. "EVERY 2 WEEKS") -- native title="..." is
-      // this whole codebase's only tooltip mechanism (see e.g. the
-      // "Hovering a bar..." comment in loot-tracker.css; there's no
-      // custom tooltip component anywhere to build one from), so this
-      // is a plain title attribute, not a floating element of its own.
-      // g.recur_period_start is the CURRENT period's own start (see
-      // GoalOut's own docstring in app/schemas.py), which is what both
-      // halves of the tooltip actually describe -- when this period
-      // began, and how much of it is left -- so recur_period_start plus
-      // its own recur_interval/recur_unit is all this needs; nothing
-      // here has to know current_value/target_value at all.
-      function recurInfoIconHtml(g) {
-        if (!g.is_recurring || !g.recur_period_start) return '';
-        var unitSeconds = RECUR_UNIT_SECONDS[g.recur_unit];
-        if (!unitSeconds) return '';
-        var periodStartMs = new Date(g.recur_period_start).getTime();
-        var periodEndMs = periodStartMs + g.recur_interval * unitSeconds * 1000;
-        var remainingSeconds = (periodEndMs - Date.now()) / 1000;
-        var tooltip = 'Set on ' + fmtIsoDateTimeLocal(g.recur_period_start) + ' · Next cycle in ' + fmtRecurCountdown(remainingSeconds);
+      // The little hoverable "i" that follows either a recurring goal's
+      // own cadence tag (e.g. "EVERY 2 WEEKS") or a one-time GAIN-mode
+      // goal's plain progress number -- native title="..." is this
+      // whole codebase's only tooltip mechanism (see e.g. the "Hovering
+      // a bar..." comment in loot-tracker.css; there's no custom
+      // tooltip component anywhere to build one from), so this is a
+      // plain title attribute, not a floating element of its own. Two
+      // different tooltips depending on which kind of goal this is --
+      // both share the same "Set on [date] · ..." shape (see
+      // fmtIsoDateTimeLocal), just with a different second half:
+      //   recurring    -- "Set on [period start] · Next cycle in
+      //     [countdown]" -- g.recur_period_start is the CURRENT
+      //     period's own start (see GoalOut's own docstring in
+      //     app/schemas.py), which is what both halves actually
+      //     describe -- when this period began, and how much of it is
+      //     left -- so recur_period_start plus recur_interval/
+      //     recur_unit is all this branch needs.
+      //   one-time GAIN -- "Set on [created_at] · Started at [baseline]
+      //     [UNIT]" -- a one-time goal's own baseline_value is captured
+      //     once at creation and never re-baselined (there's no period
+      //     to roll forward -- see Goal.baseline_value's own docstring
+      //     in app/models.py), so created_at (already exposed, and
+      //     exactly the moment that baseline was taken) stands in for
+      //     recur_period_start here; g.baseline_value itself is the
+      //     "Started at" number. Only ever non-null for a kc goal or an
+      //     xp-metric skill goal (see app.goals.target_mode_allows_gain
+      //     -- a level goal/item goal never get a baseline captured at
+      //     all), so the unit branch below only needs to cover those
+      //     two.
+      // Neither branch fires (returns '') for a REACH-mode one-time
+      // goal or an item goal -- both read as a plain lifetime total
+      // already, nothing to add.
+      function goalInfoIconHtml(g) {
+        var tooltip = null;
+        if (g.is_recurring && g.recur_period_start) {
+          var unitSeconds = RECUR_UNIT_SECONDS[g.recur_unit];
+          if (unitSeconds) {
+            var periodStartMs = new Date(g.recur_period_start).getTime();
+            var periodEndMs = periodStartMs + g.recur_interval * unitSeconds * 1000;
+            var remainingSeconds = (periodEndMs - Date.now()) / 1000;
+            tooltip = 'Set on ' + fmtIsoDateTimeLocal(g.recur_period_start) + ' · Next cycle in ' + fmtRecurCountdown(remainingSeconds);
+          }
+        } else if (!g.is_recurring && g.baseline_value != null) {
+          var unit = (g.goal_type === 'kc') ? ' KC' : (g.goal_type === 'skill' && g.metric === 'xp') ? ' XP' : '';
+          tooltip = 'Set on ' + fmtIsoDateTimeLocal(g.created_at) + ' · Started at ' + fmtNum(g.baseline_value) + unit;
+        }
+        if (!tooltip) return '';
         return '<span class="gt-goal-info-icon" title="' + escapeHtml(tooltip) + '">' +
           '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
           '<circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>' +

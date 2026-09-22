@@ -1615,6 +1615,16 @@ class GoalCreateRequest(BaseModel):
     is_recurring: bool = False
     recur_interval: Optional[int] = None
     recur_unit: Optional[str] = None
+    # A ONE-TIME goal's own GAIN/REACH choice (see
+    # app.goals.GOAL_TARGET_MODES/clean_target_mode, which does the
+    # real validation -- "gain" only for a one-time kc goal or a
+    # one-time xp-metric skill goal, "reach" always allowed). None (the
+    # default) means "reach" -- every one-time goal's only reading
+    # before this field existed, and clean_target_mode's own fallback
+    # when this is left out entirely. Ignored for a recurring goal --
+    # it already has its own always-on period-relative baseline, see
+    # GOAL_TARGET_MODES' own comment.
+    target_mode: Optional[str] = None
 
 
 class GoalOut(BaseModel):
@@ -1638,18 +1648,23 @@ class GoalOut(BaseModel):
     regardless -- the goal list's own text still reads "LVL 20 / 40",
     just its bar fill no longer matches that ratio literally.
 
-    current_value is already the RIGHT number for a recurring goal too
-    -- how much has been gained since its current period started, not
-    a lifetime total (see app.goals.current_value) -- so the UI never
-    needs to know is_recurring to render the progress bar/text
-    correctly; is_recurring/recur_interval/recur_unit are exposed
-    purely so the goal list can show its own cadence tag (e.g. "EVERY 2
-    WEEKS") next to it. recur_period_start is exposed too now, purely
-    for the info icon that cadence tag grows (see recurInfoIconHtml in
-    app/pages.py) -- it needs the CURRENT period's own start time to
-    say when it began and count down to the next one.
-    recur_baseline_value stays server-side either way -- nothing in the
-    UI needs it directly, unlike recur_period_start.
+    current_value is already the RIGHT number for a recurring goal, or
+    a one-time GAIN-mode goal, too -- how much has changed since
+    whatever moment its own baseline_value was captured, not a lifetime
+    total (see app.goals.current_value/Goal.baseline_value's own
+    docstring in app/models.py) -- so the UI never needs to re-derive
+    that itself to render the progress bar/text correctly;
+    is_recurring/recur_interval/recur_unit are exposed purely so the
+    goal list can show its own cadence tag (e.g. "EVERY 2 WEEKS") next
+    to it. recur_period_start/baseline_value ARE both exposed now
+    (unlike before baseline_value's own GAIN-mode use existed) purely
+    for the info icon a recurring goal's cadence tag, or a one-time
+    GAIN goal's plain progress text, grows (see goalInfoIconHtml in
+    app/pages.py) -- a recurring goal's icon needs recur_period_start
+    to say when its current period began and count down to the next
+    one; a one-time GAIN goal's instead needs baseline_value (plus
+    created_at, already exposed below) to say when it started tracking
+    and from what number.
 
     sort_order is this goal's own position in the player's custom
     drag-and-drop order (see Goal.sort_order's own docstring in
@@ -1670,6 +1685,7 @@ class GoalOut(BaseModel):
     recur_interval: Optional[int] = None
     recur_unit: Optional[str] = None
     recur_period_start: Optional[datetime] = None
+    baseline_value: Optional[int] = None
     sort_order: Optional[float] = None
     created_at: datetime
 
