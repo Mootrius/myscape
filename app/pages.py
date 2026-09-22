@@ -439,7 +439,14 @@ def _shell(
   <header>
     <nav class="wrap header-inner">
       <div class="nav-side nav-left">{nav_left}</div>
-      <p class="logo"><a href="/">myscape</a></p>
+      <!-- ?home=1 only while player is set -- see root()'s own comment
+           in main.py for the full story: it's the one way a logged-in
+           player can reach the actual landing page here instead of
+           root()'s auto-redirect to /dashboard, which is what every
+           other click or typed-in "/" gets now. Left off while
+           logged out, since that redirect never fires for this page
+           then anyway -- nothing to opt out of. -->
+      <p class="logo"><a href="{'/?home=1' if player else '/'}">myscape</a></p>
       <div class="nav-side nav-right">{nav_right}</div>
     </nav>
   </header>
@@ -459,14 +466,18 @@ def _shell(
 
 def render_landing(player: Optional[PlayerView]) -> str:
     # root() (main.py) redirects a logged-in player to /dashboard
-    # before this ever runs, so in practice this only ever renders for
-    # a logged-out visitor now. It still takes player and handles both
-    # cases correctly regardless -- same Optional[PlayerView] signature
-    # every other render_* function here has, and the header's
-    # "myscape" logo/nav plus the footer's own linked-status note (both
-    # from _shell/player below) already needed to handle either case on
-    # their own anyway -- rather than assuming its one caller will
-    # never change.
+    # before this ever runs -- UNLESS that request carried ?home=1,
+    # which is what the header's own "myscape" logo puts on its href
+    # while player is set (see _shell()), specifically so a logged-in
+    # player has one deliberate way back to this exact page. So this
+    # still renders for both a logged-out visitor and a logged-in one
+    # who followed that link, and takes/handles player either way --
+    # same Optional[PlayerView] signature every other render_*
+    # function here has, and the header's own logo/nav plus the
+    # footer's linked-status note (both from _shell/player below)
+    # already needed to handle either case on their own regardless.
+    # (The "ready to start"/CTA buttons below do too -- see the
+    # if player: block just past this comment.)
     # The footer's own "ARE YOU READY?" call to action (see _footer()'s
     # extra param and _shell()'s footer_extra) -- deliberately rendered
     # *inside* <footer> rather than as one more .landing-anchor, so it

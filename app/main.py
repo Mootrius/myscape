@@ -451,18 +451,30 @@ def on_startup():
 
 
 @app.get("/", response_class=HTMLResponse)
-def root(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
+def root(
+    home: Optional[str] = None,
+    player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
+):
     # A logged-in player lands straight on /dashboard, same as every
     # other logged-out-only page on the site already does (see
     # signup_page/login_page/forgot_password_page just below) -- they'd
     # have no reason to want the marketing landing page once they're
     # already a user, whether they typed myscape.io in fresh or clicked
-    # a stale link (including the header's own "myscape" logo, plain
-    # href="/") back to it. This one whole-site behavior covers both:
-    # a request never reaches render_landing at all once a player's
-    # logged in, so there's no separate "which page do they land on"
-    # decision to make per entry point.
-    if player:
+    # a stale link back to it. That's everything EXCEPT the header's
+    # own "myscape" logo (see _shell() in pages.py), which is a
+    # deliberate "go home" click, not a stale/accidental one -- a
+    # player who chose that over the "Dashboard" nav link sitting right
+    # next to it clearly wants the actual landing page, so it's the one
+    # entry point this redirect has to be skippable for. ?home=1 is how
+    # it opts out: _shell() only ever puts that on the logo's own href,
+    # and only while player is set (a logged-out request always renders
+    # the landing page here regardless, so there's nothing for it to
+    # skip), which makes this query param a proxy for "this GET came
+    # from that specific link" -- the only signal a stateless page load
+    # like this one has to go on. It sticks to whatever URL a player
+    # copies or bookmarks from there, same trade-off as any other
+    # link-encoded state on the web.
+    if player and not home:
         return RedirectResponse("/dashboard", status_code=302)
     return render_landing(player)
 
