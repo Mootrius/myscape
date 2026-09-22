@@ -10181,35 +10181,42 @@ def render_goal_tracking(player: PlayerView) -> str:
       // Stage 3 -- one box, same fixed size as stage 2 (see the
       // .gt-wizard-expanded/#gtWizardStage height rules in
       // goal-tracking.css): the search field (+ the skill goal's own
-      // lvl/xp toggle) and its target-value field share a single row
-      // near the top, and Back/Cancel/Save-or-Next sit in their own
-      // row pinned to the bottom via justify-content: space-between on
-      // .gt-wizard-stage2 -- nothing about this stage's own markup
-      // grows the box the way the old top Back link + stacked fields
-      // used to. Neither field carries its own <label> any more --
-      // placeholder text (WIZARD_SEARCH_PLACEHOLDER/
-      // wizardTargetPlaceholder) does that job instead, so there's no
-      // label row above the inputs to keep in sync any more either.
-      // The last button reads Next instead of Save for a recurring
-      // goal -- there's one more page (stage 4's own cadence picker)
-      // before this actually submits, see wireWizardStage's own click
-      // handler for the id="gtWizardSave" button below.
+      // lvl/xp toggle, + the GAIN/REACH toggle below) and its
+      // target-value field all share a single row near the top, and
+      // Back/Cancel/Save-or-Next sit in their own row pinned to the
+      // bottom via justify-content: space-between on .gt-wizard-stage2
+      // -- nothing about this stage's own markup grows the box the way
+      // the old top Back link + stacked fields used to. Neither field
+      // carries its own <label> any more -- placeholder text
+      // (WIZARD_SEARCH_PLACEHOLDER/wizardTargetPlaceholder) does that
+      // job instead, so there's no label row above the inputs to keep
+      // in sync any more either. The last button reads Next instead of
+      // Save for a recurring goal -- there's one more page (stage 4's
+      // own cadence picker) before this actually submits, see
+      // wireWizardStage's own click handler for the id="gtWizardSave"
+      // button below.
       //
-      // #gtTargetModeRow (GAIN/REACH, one-time kc/xp-skill goals only
-      // -- see targetModeApplies) is a THIRD row here, between the
-      // field row and the actions row, but always rendered as this one
-      // always-present empty wrapper regardless of whether it applies
-      // -- wireTargetModeToggle (called once from wireWizardStage,
-      // and again from the Lvl/Xp toggle's own click handler) fills it
-      // in or empties it back out in place, since switching Lvl<->Xp
-      // doesn't re-render this whole stage. An empty wrapper collapses
-      // to zero height on its own, so an item/skill-level/recurring
-      // goal's stage 3 box is exactly as tall as it always was --
-      // .gt-wizard-expanded's own fixed 150px height (see its comment
-      // in goal-tracking.css) has slack to spare for the one extra row
-      // a kc/xp-skill goal picks up here, so this never grows the box
-      // itself, just eats a little more of that same leftover
-      // space-between gap.
+      // #gtTargetModeField (GAIN/REACH, one-time kc/xp-skill goals only
+      // -- see targetModeApplies) sits in that SAME row, between the
+      // lvl/xp toggle (or, for a kc goal, which has none, straight
+      // after the search field) and the target field -- right where a
+      // player's eye already lands moving from "what am I tracking" to
+      // "how much", which is the whole point of putting this choice
+      // there instead of a separate row underneath. It's always
+      // rendered as this one always-present empty wrapper regardless
+      // of whether it applies -- wireTargetModeToggle (called once
+      // from wireWizardStage, and again from the Lvl/Xp toggle's own
+      // click handler) fills it in or empties it back out in place,
+      // since switching Lvl<->Xp doesn't re-render this whole stage.
+      // An empty wrapper takes up no room in the row at all (see
+      // #gtTargetModeField:empty in goal-tracking.css) -- and the
+      // search field's own flex-grow is what reclaims that space --
+      // so an item/skill-level/recurring goal's row looks exactly like
+      // it did before this field existed. .gt-wizard-expanded got
+      // wider (see its own comment in goal-tracking.css) specifically
+      // so a skill+xp goal's full four-field row (search, lvl/xp,
+      // gain/reach, target) still has room to breathe rather than
+      // squeezing the search field down to nothing.
       function wizardStageTargetHtml() {
         // No Lvl/Xp choice at all for a recurring skill goal -- it only
         // ever tracks xp (see wizardPickType, which is what forces
@@ -10239,11 +10246,11 @@ def render_goal_tracking(player: PlayerView) -> str:
           '      </div>' +
           '    </div>' +
           metricToggle +
+          '    <div class="gt-field gt-field-target-mode" id="gtTargetModeField"></div>' +
           '    <div class="gt-field gt-field-target">' +
           '      <input type="text" inputmode="decimal" id="gtTargetValue" placeholder="' + wizardTargetPlaceholder() + '" autocomplete="off" />' +
           '    </div>' +
           '  </div>' +
-          '  <div class="gt-target-mode-row" id="gtTargetModeRow"></div>' +
           '  <div class="gt-wizard-actions">' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
@@ -10252,10 +10259,10 @@ def render_goal_tracking(player: PlayerView) -> str:
           '</div>';
       }
 
-      // #gtTargetModeRow's own contents -- see targetModeApplies/
+      // #gtTargetModeField's own contents -- see targetModeApplies/
       // wireTargetModeToggle for who calls this and when. Same
-      // 2-button segmented look as #gtMetricToggle just above (reused
-      // classes, not a near-duplicate set of rules -- see
+      // 2-button segmented look as #gtMetricToggle just beside it
+      // (reused classes, not a near-duplicate set of rules -- see
       // .gt-target-mode-toggle's own comment in goal-tracking.css for
       // why this one gets its own class anyway despite the shared
       // look), GAIN first since that's this control's own default.
@@ -10267,7 +10274,7 @@ def render_goal_tracking(player: PlayerView) -> str:
           '</div>';
       }
 
-      // Fills #gtTargetModeRow in (or empties it back out) to match
+      // Fills #gtTargetModeField in (or empties it back out) to match
       // targetModeApplies() right now, and wires its two buttons --
       // called once from wireWizardStage when stage 3 first renders,
       // and again from the Lvl/Xp metric toggle's own click handler
@@ -10275,13 +10282,16 @@ def render_goal_tracking(player: PlayerView) -> str:
       // since switching Lvl<->Xp changes targetModeApplies()'s own
       // answer without stage 3 ever re-rendering from scratch. Safe to
       // call repeatedly -- re-wiring an already-empty (or already-
-      // filled, same content) row is a harmless no-op past the first
-      // real change.
+      // filled, same content) field is a harmless no-op past the first
+      // real change. Emptying it (rather than hiding it some other
+      // way) is what lets #gtTargetModeField:empty in goal-tracking.css
+      // collapse it out of the row's flex flow entirely when it
+      // doesn't apply -- see that rule's own comment.
       function wireTargetModeToggle() {
-        var row = document.getElementById('gtTargetModeRow');
-        if (!row) return;
-        if (!targetModeApplies()) { row.innerHTML = ''; return; }
-        row.innerHTML = targetModeToggleHtml();
+        var field = document.getElementById('gtTargetModeField');
+        if (!field) return;
+        if (!targetModeApplies()) { field.innerHTML = ''; return; }
+        field.innerHTML = targetModeToggleHtml();
         document.querySelectorAll('#gtTargetModeToggle .gt-target-mode-btn').forEach(function (btn) {
           btn.classList.toggle('active', btn.getAttribute('data-mode') === GT.targetMode);
           btn.addEventListener('click', function () {
@@ -10486,9 +10496,9 @@ def render_goal_tracking(player: PlayerView) -> str:
               // Lvl<->Xp is the one thing that can change
               // targetModeApplies()'s own answer without leaving stage
               // 3 -- xp offers GAIN/REACH, level doesn't -- so this is
-              // what keeps #gtTargetModeRow in sync with whichever one's
-              // now active, same as updateWizardTargetField just below
-              // keeps the target field's own placeholder in sync.
+              // what keeps #gtTargetModeField in sync with whichever
+              // one's now active, same as updateWizardTargetField just
+              // below keeps the target field's own placeholder in sync.
               wireTargetModeToggle();
               updateWizardTargetField();
               validateTargetField();

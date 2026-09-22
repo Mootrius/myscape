@@ -73,11 +73,17 @@
    same fixed bottom edge either way -- see .gt-wizard-stage1-wrap/
    .gt-wizard-stage2's own justify-content: space-between -- so
    shrinking this only ever tightens that leftover gap, never moves
-   anything out of alignment. */
+   anything out of alignment.
+   max-width went from 460px to 580px specifically to fit stage 3's
+   widest row -- a one-time skill+xp goal's search + Lvl/Xp toggle +
+   GAIN/REACH toggle + target field, all on one line (see
+   .gt-wizard-row/.gt-field-target-mode below) -- without squeezing the
+   search field down to an uncomfortable width. Every other stage just
+   ends up with a little more of the same centered breathing room. */
 .gt-wizard-expanded {
   position: relative;
   width: 100%;
-  max-width: 460px;
+  max-width: 580px;
   height: 150px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
@@ -237,6 +243,18 @@
 .gt-wizard-row .gt-field-target { flex: 0 0 118px; min-width: 0; }
 .gt-wizard-row .gt-field-metric { flex: 0 0 108px; min-width: 0; }
 
+/* GAIN/REACH's own field slot (see #gtTargetModeField in
+   wizardStageTargetHtml, app/pages.py) -- same fixed-width idea as
+   .gt-field-target/.gt-field-metric just above, sized for "GAIN"/
+   "REACH" (longer than Lvl/XP's own 2-3 letters) at this toggle's own
+   11px font. :empty -- not width:0 -- is what makes an inapplicable
+   goal's row look exactly like it did before this field existed: a
+   display:none field is skipped by flexbox entirely, so it consumes
+   neither its own flex-basis nor a gap on either side, and the search
+   field's flex: 1 1 auto reclaims the space right back. */
+.gt-wizard-row .gt-field-target-mode { flex: 0 0 128px; min-width: 0; }
+#gtTargetModeField:empty { display: none; }
+
 /* Site-wide standard: a missing/out-of-range field just gets a red
    border, no message anywhere (see validateTargetField/
    validateRecurField and the search-input .invalid toggles in the
@@ -333,29 +351,16 @@
 
 .gt-metric-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
 
-/* GAIN/REACH toggle, its own row between the target-value row and the
-   actions row -- see #gtTargetModeRow in wizardStageTargetHtml
-   (app/pages.py) for why it's a separate row rather than squeezed into
-   the field row above, which already holds up to three fields (search,
-   metric toggle, target value) for a skill+xp goal. Empty (and so zero
-   height, no margin either thanks to :not(:empty) below) whenever
-   GAIN/REACH doesn't apply to whatever's currently picked -- see
-   targetModeApplies in the script -- so an item/skill-level/recurring
-   goal's stage 3 box is exactly as tall as it's always been;
-   .gt-wizard-expanded's own fixed height (its own comment above) has
-   slack to spare for this one extra row on the goal types that DO show
-   it. */
-.gt-target-mode-row:not(:empty) { margin-top: 10px; }
-
 /* Same segmented-pair idea as .gt-metric-toggle above (reused look,
    own class -- this is a different CHOICE about the same target-value
-   field, not another metric, and it spans the row's full width rather
-   than sitting in a fixed 108px-wide field slot the way Lvl/Xp does),
-   sized to match the wizard's own Back/Cancel/Save/Next buttons (26px
-   height, 10px font) just below it instead of the 34px text fields
-   above it -- this reads as a lightweight in-between choice, not
-   another input to fill in. */
-.gt-target-mode-toggle { display: flex; gap: 0; height: 26px; }
+   field, not another metric), now sized to MATCH that same 34px/11px
+   field-row look rather than the wizard's own smaller Back/Cancel/
+   Save/Next buttons -- it sits inline in the field row beside
+   .gt-metric-toggle now (see #gtTargetModeField in
+   wizardStageTargetHtml, app/pages.py), not underneath it, so it reads
+   as one more field choice on that row rather than a lightweight
+   afterthought below it. */
+.gt-target-mode-toggle { display: flex; gap: 0; height: 34px; }
 
 .gt-target-mode-btn {
   flex: 1 1 50%;
@@ -364,7 +369,7 @@
   border: 1px solid var(--border);
   color: var(--text-muted);
   font-family: inherit;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 0;
@@ -767,5 +772,6 @@ input[type="text"].invalid { border-color: var(--red); }
      stacking this media query used to fall back to. */
   .gt-wizard-row .gt-field-target { flex-basis: 96px; }
   .gt-wizard-row .gt-field-metric { flex-basis: 92px; }
+  .gt-wizard-row .gt-field-target-mode { flex-basis: 108px; }
   .gt-wizard-type-btn { padding: 16px 6px; }
 }
