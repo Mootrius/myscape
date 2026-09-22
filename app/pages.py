@@ -11905,6 +11905,14 @@ def render_goal_tracking(player: PlayerView) -> str:
         // same visit, then backed out into a recurring one, doesn't
         // silently carry that stale choice forward.
         if (GT.recurring === 'recurring' && type === 'skill') { GT.skillMetric = 'xp'; }
+        // This is the one place stage 3 is ever entered FRESH (either
+        // the first time, or after backing out to stage 2 and picking
+        // a type again -- possibly a different one, whose old target
+        // wouldn't even make sense any more), so this is where
+        // wizardTarget gets cleared -- see wireWizardStage's own
+        // comment for why it deliberately does NOT clear this itself
+        // any more.
+        wizardTarget = { name: '', itemId: null, value: null };
         GT.wizardStage = 3;
         renderWizard();
       }
@@ -12400,12 +12408,25 @@ def render_goal_tracking(player: PlayerView) -> str:
           return;
         }
 
-        wizardTarget = { name: '', itemId: null, value: null };
+        // No longer resets wizardTarget here -- this stage's own DOM
+        // gets fully torn down and rebuilt by renderWizard on EVERY
+        // visit, including backing out of stage 4 straight back into
+        // this one (see wizardBack), so resetting unconditionally
+        // right here was wiping out whatever was already picked/typed
+        // the moment a player backed out of the cadence stage to
+        // change it -- the search box and target field came back
+        // empty even though wizardTarget itself (per wizardBack's own
+        // comment) was never meant to be touched by that trip.
+        // wizardPickType is the one real "start fresh" moment now (see
+        // its own comment), so this just restores whatever's already
+        // in wizardTarget instead, which is a no-op the very first
+        // time (it's still the empty object wizardPickType just set).
         document.getElementById('gtWizardBack').addEventListener('click', wizardBack);
         document.getElementById('gtWizardCancel').addEventListener('click', closeWizard);
 
         var searchInput = document.getElementById('gtWizardSearchInput');
         var suggestions = document.getElementById('gtWizardSuggestions');
+        searchInput.value = wizardTarget.name || '';
 
         function showSuggestions(names, iconFor) {
           if (!names.length) { suggestions.classList.remove('show'); suggestions.innerHTML = ''; return; }
@@ -12526,6 +12547,13 @@ def render_goal_tracking(player: PlayerView) -> str:
         }
 
         var targetInput = document.getElementById('gtTargetValue');
+        // Restores whatever number was already captured into
+        // wizardTarget.value the last time Next was pressed from this
+        // same stage (see the Next/Save handler just below) -- null
+        // the very first time a fresh wizardTarget reaches here (see
+        // wizardPickType), same as searchInput.value's own restore
+        // just above.
+        if (wizardTarget.value != null) targetInput.value = String(wizardTarget.value);
         targetInput.addEventListener('input', function () {
           filterNumericSuffixInput(targetInput);
           validateTargetField();
