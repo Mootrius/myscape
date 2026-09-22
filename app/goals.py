@@ -54,6 +54,7 @@ from app.mindmaps import (
     _clean_int_in_range,
     _normalize_lookup_name,
     _offhand_pair_name,
+    _xp_for_level,
 )
 from app.purchase_goals import build_owned_pools
 
@@ -268,6 +269,44 @@ def current_value(goal, context: dict) -> int:
         return absolute
     baseline = goal.recur_baseline_value if goal.recur_baseline_value is not None else absolute
     return max(0, absolute - baseline)
+
+
+def progress_pct(goal, context: dict) -> float:
+    """How full this goal's progress bar should read, 0-100 -- current
+    current_value()/target_value directly for every goal type except a
+    LEVEL-metric skill goal, where that's the wrong ratio: a level
+    number is a badly nonlinear stand-in for how much play it actually
+    takes (SKILL_XP_TABLE's own xp-per-level curve is exponential, so
+    the xp gap from level 20 to level 40 is nowhere near the gap from
+    level 60 to level 80 -- going from level 1 to 2 might be a single
+    kill, going from level 98 to 99 can be a hundred hours), so
+    current_value/target_value (both plain level numbers there -- see
+    absolute_value's own comment on why) would show a level 20 goal
+    with a target of 40 as "50% done" even though it's actually taken
+    a tiny fraction of the xp the goal really represents.
+
+    That one case is scored in xp instead: how much of the target
+    level's own xp requirement (_xp_for_level(goal.target_value),
+    OSRS's real xp-per-level curve) the player's live xp in that skill
+    has already reached -- the same underlying number a level goal's
+    completion already turns on (see absolute_value's own level
+    branch), just read as a fraction here instead of floored to a
+    level. Skill+xp goals need none of this -- current_value/
+    target_value are already both real xp there, already linear in
+    exactly the sense this function exists to restore for the level
+    case. Level-metric skill goals are never recurring (see
+    _clean_new_goal's own check), so there's no period-relative
+    baseline to account for here the way current_value() has to for
+    everything else."""
+    if goal.goal_type == "skill" and goal.metric == "level":
+        have_xp = (context["skills"].get(goal.target_name) or {}).get("xp", 0)
+        need_xp = _xp_for_level(goal.target_value)
+        if need_xp <= 0:
+            return 100.0
+        return max(0.0, min(100.0, (have_xp / need_xp) * 100))
+    if goal.target_value <= 0:
+        return 0.0
+    return max(0.0, min(100.0, (current_value(goal, context) / goal.target_value) * 100))
 
 
 def absolute_value(goal, context: dict) -> int:

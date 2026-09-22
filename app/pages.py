@@ -10587,7 +10587,17 @@ def render_goal_tracking(player: PlayerView) -> str:
       // class rather than deleting anything, and only a second click
       // while in that state actually calls deleteGoal.
       function goalRowHtml(g) {
-        var pct = g.target_value > 0 ? Math.max(0, Math.min(100, (g.current_value / g.target_value) * 100)) : 0;
+        // g.progress_pct, not current_value/target_value divided here
+        // -- for most goals that's the same ratio either way, but a
+        // LEVEL-metric skill goal's current_value/target_value are
+        // both plain level numbers, and OSRS's xp-per-level curve is
+        // exponential (level 20 isn't "halfway" to level 40 in actual
+        // playtime), so dividing those directly would fill the bar at
+        // the wrong pace. progress_pct is already computed server-side
+        // in xp for that case (see app.goals.progress_pct), and is
+        // just the plain current/target ratio for every other goal
+        // type, so this can read it the same way regardless of type.
+        var pct = g.progress_pct;
         var done = g.current_value >= g.target_value;
         return '' +
           '<div class="gt-goal-row' + (done ? ' gt-goal-done' : '') + '">' +

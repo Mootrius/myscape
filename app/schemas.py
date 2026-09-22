@@ -1618,14 +1618,25 @@ class GoalCreateRequest(BaseModel):
 
 
 class GoalOut(BaseModel):
-    """current_value/target_display are never stored -- computed fresh
-    by app.goals.current_value/target_display every time a GoalOut is
-    built (both on creation and on every list read), same "always
-    derive it live" stance every other live-progress number in this
-    app already takes. item_icon is the same kind of always-derived
-    value, computed from the stored item_id via item_icon_url
-    (app/purchase_goals.py) rather than stored itself, so an icon CDN
-    change never needs a backfill.
+    """current_value/progress_pct/target_display are never stored --
+    computed fresh by app.goals.current_value/progress_pct/
+    target_display every time a GoalOut is built (both on creation and
+    on every list read), same "always derive it live" stance every
+    other live-progress number in this app already takes. item_icon is
+    the same kind of always-derived value, computed from the stored
+    item_id via item_icon_url (app/purchase_goals.py) rather than
+    stored itself, so an icon CDN change never needs a backfill.
+
+    progress_pct is its own field, not just current_value/target_value
+    left for the UI to divide itself, because that division is only
+    actually correct for a kc/item/xp goal -- a LEVEL-metric skill
+    goal's progress bar needs to read in xp under the hood (OSRS's own
+    xp-per-level curve is exponential, so level 20 isn't "halfway" to
+    level 40), and the UI has no xp table of its own to do that
+    conversion with (see app.goals.progress_pct's own comment).
+    current_value/target_value stay plain level numbers for that case
+    regardless -- the goal list's own text still reads "LVL 20 / 40",
+    just its bar fill no longer matches that ratio literally.
 
     current_value is already the RIGHT number for a recurring goal too
     -- how much has been gained since its current period started, not
@@ -1642,6 +1653,7 @@ class GoalOut(BaseModel):
     metric: Optional[str] = None
     target_value: int
     current_value: int
+    progress_pct: float
     target_display: str
     item_icon: Optional[str] = None
     is_recurring: bool

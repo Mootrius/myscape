@@ -2493,6 +2493,7 @@ def _goal_out(goal: Goal, context: dict) -> GoalOut:
         metric=goal.metric,
         target_value=goal.target_value,
         current_value=goals_module.current_value(goal, context),
+        progress_pct=goals_module.progress_pct(goal, context),
         target_display=goals_module.target_display(goal),
         item_icon=item_icon_url(goal.item_id),
         is_recurring=goal.is_recurring,
