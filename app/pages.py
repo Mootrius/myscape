@@ -126,6 +126,29 @@ def _get_landing_loot_demo_data() -> Optional[dict]:
             return None
     return _landing_loot_demo_data
 
+# Same idea again, for the landing page's own interactive Purchase
+# Goals preview (see render_landing_purchase_preview below) -- a
+# static, curated snapshot rather than a live account, this one a
+# real (not synthetic) gear setup: a one-time GET /api/gear-setups
+# pull of the actual "Tombs of Amascut" setup, trimmed down to just
+# that one setup -- see that function's own docstring for why a real
+# snapshot rather than a generated one, unlike Loot Tracker's.
+_LANDING_PURCHASE_DEMO_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "landing_purchase_demo.json"
+)
+_landing_purchase_demo_data = None
+
+
+def _get_landing_purchase_demo_data() -> Optional[dict]:
+    global _landing_purchase_demo_data
+    if _landing_purchase_demo_data is None:
+        try:
+            with open(_LANDING_PURCHASE_DEMO_PATH, "r") as f:
+                _landing_purchase_demo_data = json.load(f)
+        except (OSError, ValueError):
+            return None
+    return _landing_purchase_demo_data
+
 # Same cache-busting trick again, for the Mindmaps page's own stylesheet.
 _MINDMAPS_CSS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "static", "css", "mindmaps.css"
@@ -557,6 +580,31 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <img src="/static/img/anchor-loot-tracking.png" alt="Loot tracking like you've never seen it before.">
         </picture>
       </section>"""
+    # Same idea again for Purchase Goals (see
+    # render_landing_purchase_preview) -- replaces the last
+    # pre-composited marketing panel below with a live, read-only
+    # look at the account's own real "Tombs of Amascut" gear setup
+    # (sorting still works; nothing can be added, removed, or moved).
+    # Falls back to the plain image, same as loot_anchor_section above,
+    # if the curated snapshot isn't there to read.
+    purchase_preview = render_landing_purchase_preview()
+    if purchase_preview:
+        purchase_preview_head, purchase_preview_body, purchase_preview_script = purchase_preview
+        purchase_anchor_section = f"""
+      <section class="landing-anchor landing-anchor--purchase-preview">
+        <div class="landing-purchase-preview">
+          {purchase_preview_body}
+        </div>
+      </section>"""
+    else:
+        purchase_preview_head, purchase_preview_script = "", ""
+        purchase_anchor_section = """
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/anchor-purchase-planner.webp" type="image/webp">
+          <img src="/static/img/anchor-purchase-planner.png" alt="Purchase planner -- plan and track your next big buys.">
+        </picture>
+      </section>"""
     # Three "anchor" panels -- pre-composited marketing art (logo/
     # tagline, then one per showcased feature -- except loot tracking
     # now, see loot_anchor_section above), not live markup, since each
@@ -598,12 +646,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <img src="/static/img/anchor-storages.png" alt="Storage viewing -- see everything you own, in one place.">
         </picture>
       </section>
-      <section class="landing-anchor">
-        <picture>
-          <source srcset="/static/img/anchor-purchase-planner.webp" type="image/webp">
-          <img src="/static/img/anchor-purchase-planner.png" alt="Purchase planner -- plan and track your next big buys.">
-        </picture>
-      </section>
+      {purchase_anchor_section}
     </div>
     """
     # CSS scroll-snap (myscape.css) is the baseline -- it's what
@@ -721,12 +764,12 @@ def render_landing(player: Optional[PlayerView]) -> str:
       }
     })();
     """
-    # The loot preview's own wrapper script (fetch shim, range-selector
-    # neutering -- see render_landing_loot_preview) just tacks onto the
-    # end here -- an empty string, and a no-op, when loot_preview was
-    # None above (the static-image fallback needs no script of its
-    # own).
-    script += loot_preview_script
+    # The loot/purchase previews' own wrapper scripts (fetch shims,
+    # neutered/read-only-ified controls -- see render_landing_loot_preview
+    # and render_landing_purchase_preview) just tack onto the end here --
+    # an empty string, and a no-op, for either one that was None above
+    # (the static-image fallback needs no script of its own).
+    script += loot_preview_script + purchase_preview_script
     # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
     # every other page keeps its ordinary, un-snapped scrolling.
@@ -735,7 +778,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
         player=player,
         body=body,
         extra_script=script,
-        extra_head=loot_preview_head,
+        extra_head=loot_preview_head + purchase_preview_head,
         body_class="landing",
         footer_extra=landing_cta,
         # The one page on the whole site actually meant to be found --
@@ -1640,21 +1683,28 @@ def render_not_found(player: Optional[PlayerView] = None) -> str:
     return _shell(title="Page not found — myscape", player=player, body=body)
 
 
-def render_purchase_goals(player: PlayerView) -> str:
-    """The Purchase Goals page -- named "gear setups" a player plans and
-    tracks GP toward, ported feature-for-feature from the original
-    single-user Maintrius tool's own Purchase Goals UI (see
-    app/purchase_goals.py's module docstring for what changed and what
-    didn't on the way over).
+def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
+    """Builds Purchase Goals' (extra_head, body, script) triple -- split
+    out from render_purchase_goals below (same reasoning, and the same
+    split _loot_tracker_panel_markup went through first) so the landing
+    page's own interactive preview (render_landing_purchase_preview)
+    can embed this exact same panel markup/script rather than forking a
+    second copy of either. Nothing here references `player` at all --
+    everything below the header shell is rendered client-side from a
+    single polled JSON payload (GET /api/gear-setups, see that endpoint
+    in app/main.py), the same self-contained-embeddable shape Loot
+    Tracker's own panel already has.
 
-    Unlike the other pages here, everything below the header shell is
-    rendered client-side from a single polled JSON payload (GET
-    /api/gear-setups, see that endpoint in app/main.py) rather than
-    server-rendered -- the original tool worked the same way (a local
-    HTML file polling its own local server), and keeping that shape
-    means every mutation endpoint can just hand back the freshly
-    recomputed state and let the same render() function redraw
-    everything, rather than juggling two different rendering paths."""
+    Named "gear setups" a player plans and tracks GP toward, ported
+    feature-for-feature from the original single-user Maintrius tool's
+    own Purchase Goals UI (see app/purchase_goals.py's module docstring
+    for what changed and what didn't on the way over). Rendering
+    everything from one polled payload (rather than server-rendered)
+    is what the original tool did too (a local HTML file polling its
+    own local server), and keeping that shape means every mutation
+    endpoint can just hand back the freshly recomputed state and let
+    the same render() function redraw everything, rather than juggling
+    two different rendering paths."""
     extra_head = (
         f'<link rel="stylesheet" href="/static/css/purchase-goals.css?v={_PURCHASE_GOALS_CSS_VERSION}" />'
     )
@@ -3125,6 +3175,15 @@ def render_purchase_goals(player: PlayerView) -> str:
       }, 5000);
     })();
     """
+    return extra_head, body, script
+
+
+def render_purchase_goals(player: PlayerView) -> str:
+    """The Purchase Goals page -- see _purchase_goals_panel_markup above
+    for everything that actually builds it; this is now just that panel
+    wrapped in the logged-in shell, the same split render_loot_tracker
+    already has over _loot_tracker_panel_markup."""
+    extra_head, body, script = _purchase_goals_panel_markup()
     return _shell(
         title="Purchase Goals — myscape",
         player=player,
@@ -5035,6 +5094,258 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
         // relative) -- observing the panel itself catches both in one
         // place, without hooking into any of the reused script's own
         // render functions.
+        new ResizeObserver(checkClipped).observe(previewEl);
+      }}
+    }})();
+    """
+    return extra_head, body, wrapper_script
+
+
+def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
+    """The landing page's own interactive Purchase Goals preview --
+    same idea as render_landing_loot_preview above (reuses
+    _purchase_goals_panel_markup's body/script completely unmodified,
+    layering demo-only behavior on top from the outside in a wrapper
+    script), but backed by one real, curated snapshot instead of a
+    generated one: app/data/landing_purchase_demo.json is a one-time
+    GET /api/gear-setups pull of the account's own actual "Tombs of
+    Amascut" gear setup, trimmed down to just that one setup. Unlike
+    Loot Tracker (which had no real account to draw a realistic demo
+    from, so scripts/gen_landing_loot_demo.py generates one), this
+    account's own real setup already exists and is exactly what the
+    player asked this preview show -- "what I do/don't have
+    currently" -- so there's nothing to synthesize; the file is just
+    that API response, frozen. It stays frozen deliberately (no
+    regeneration script) -- a visitor's own browsing never changes it
+    (see the fetch shim below), and it's not expected to be
+    refreshed just because real prices/ownership drift over time. If
+    the setup is ever renamed or replaced, recapture this file (log
+    in, GET /api/gear-setups, keep just that one setup's object) and
+    replace it directly. Returns (extra_head, body, script) for
+    render_landing to splice into its own markup, same as the loot
+    preview, or None if the snapshot isn't there to read.
+
+    This preview is explicitly narrower than the real page: only one
+    setup (no setup selector, no new/rename/delete -- see the
+    .pg-header CSS override in purchase-goals.css), no "Purchase
+    Goals" heading (also CSS -- .page-title), and nothing in the gear
+    doll/inventory grid is clickable at all (no add/remove/move, no
+    setup-icon picker) -- a visitor can look and sort, never edit.
+    Sorting the "Still to Purchase" list (including dragging rows in
+    Custom mode) is the one thing that's genuinely interactive here,
+    tracked entirely in this wrapper's own local state (currentSort/
+    customOrder below), the same "real but local, never hits the
+    genuine endpoint" treatment Loot Tracker's hide/unhide got.
+
+    1. A `fetch` shim, scoped to just this wrapper (a local `var
+       fetch` inside its own IIFE, never touching window.fetch),
+       answering GET /api/gear-setups out of the static snapshot
+       (recomputing the "Still to Purchase" order/next-purchase from
+       whatever currentSort/customOrder currently are -- see
+       sortStillToPurchase/buildStatePayload below), and the two
+       sort-related PUT endpoints for real (updating that same local
+       state and returning the same recomputed payload the real
+       endpoints would). Every other gear-setups/items-search call
+       this script could still in principle make (it shouldn't ever,
+       given points 2/3 below, but a shim answers all of them anyway,
+       same discipline as the loot preview) gets a harmless failure
+       response instead of ever reaching the real API with a visitor's
+       own session cookie.
+    2. Every click/mousedown/dragstart originating anywhere inside the
+       gear doll + inventory grid (#pgGearFrame) is caught and
+       swallowed by one capturing-phase listener attached to that
+       element once, up front -- see the comment further down for why
+       that's the one reliable way to neuter this particular part of
+       the reused script: wireSlotClicks rewires a fresh listener on
+       every single .gear-slot element on every render (unlike the
+       range button below, or Loot Tracker's, which are wired once),
+       so a one-time cloneNode+replaceWith strip (which only ever
+       catches whatever's wired at that instant) would just get
+       silently undone the next time the panel re-renders.
+    3. The setup-display-icon trigger (#pgIconTrigger) IS wired only
+       once, on script load (see render_purchase_goals's own script),
+       so that one small edit affordance -- unrelated to any single
+       gear slot, so #2 above doesn't already cover it -- gets the
+       ordinary one-time cloneNode+replaceWith strip instead, same
+       technique as Loot Tracker's own range button.
+    4. setInterval(loadState, 5000) inside the reused script keeps
+       polling every 5s regardless -- harmless (it just re-renders the
+       same static payload, recomputed through whatever sort state
+       this visitor's own clicks have left it in) rather than worth
+       special-casing away.
+    """
+    demo = _get_landing_purchase_demo_data()
+    if demo is None:
+        return None
+    extra_head, body, script = _purchase_goals_panel_markup()
+    demo_json = json.dumps(demo)
+    wrapper_script = f"""
+    (function () {{
+      // The captured snapshot itself, exactly as GET /api/gear-setups
+      // returned it for the real account's real "Tombs of Amascut"
+      // setup (see this function's own docstring) -- {{coins,
+      // pricesError, mappingError, gearSetups: [oneSetup], ownedItems}}.
+      // Never mutated in place; buildStatePayload below always starts
+      // fresh from this and only overlays the two fields sorting can
+      // actually change.
+      var DEMO_BASE = {demo_json};
+      var SETUP_ID = DEMO_BASE.gearSetups[0].id;
+
+      // This demo's own local sort state -- there's no account behind
+      // this preview for a sort choice to persist against, so (like
+      // Loot Tracker's hiddenNpcs/hiddenItemKeys) it's just plain
+      // variables, gone on refresh. Mirrors the two fields
+      // GearSetup.still_to_purchase_sort_mode/_custom_order hold
+      // server-side for a real setup.
+      var currentSort = DEMO_BASE.gearSetups[0].stillToPurchaseSort || 'low_to_high';
+      var customOrder = null; // [{{slotType, slot}}, ...] once a Custom drag lands, else null
+
+      function stillToPurchaseKey(entry) {{ return entry.slotType + '::' + entry.slot; }}
+
+      // Exactly mirrors _still_to_purchase_summary's own sort branch
+      // in app/purchase_goals.py -- same five modes, same tie-break
+      // (custom falls back to cost-ascending for anything not in
+      // customOrder yet, ranked after everything that is). Sorts a
+      // copy of the snapshot's own already-resolved stillToPurchase
+      // list rather than re-deriving it from equipment/inventory --
+      // that list is already exactly the right (owned-filtered,
+      // purchasable-filtered) set, so there's nothing left to redo
+      // except reordering it.
+      function sortStillToPurchase(items, mode, order) {{
+        var out = items.slice();
+        if (mode === 'high_to_low') {{
+          out.sort(function (a, b) {{ return b.cost - a.cost; }});
+        }} else if (mode === 'alphabetical') {{
+          out.sort(function (a, b) {{ return a.itemName.toLowerCase() < b.itemName.toLowerCase() ? -1 : a.itemName.toLowerCase() > b.itemName.toLowerCase() ? 1 : 0; }});
+        }} else if (mode === 'reverse_alphabetical') {{
+          out.sort(function (a, b) {{ return a.itemName.toLowerCase() < b.itemName.toLowerCase() ? 1 : a.itemName.toLowerCase() > b.itemName.toLowerCase() ? -1 : 0; }});
+        }} else if (mode === 'custom') {{
+          var orderIndex = {{}};
+          (order || []).forEach(function (entry, i) {{ orderIndex[stillToPurchaseKey(entry)] = i; }});
+          var fallbackIndex = (order || []).length;
+          out.sort(function (a, b) {{
+            var ia = orderIndex.hasOwnProperty(stillToPurchaseKey(a)) ? orderIndex[stillToPurchaseKey(a)] : fallbackIndex;
+            var ib = orderIndex.hasOwnProperty(stillToPurchaseKey(b)) ? orderIndex[stillToPurchaseKey(b)] : fallbackIndex;
+            if (ia !== ib) return ia - ib;
+            return a.cost - b.cost;
+          }});
+        }} else {{
+          out.sort(function (a, b) {{ return a.cost - b.cost; }});
+        }}
+        return out;
+      }}
+
+      // Rebuilds the full GET-/api/gear-setups-shaped payload from
+      // DEMO_BASE plus whatever currentSort/customOrder are right now
+      // -- same three fields a real sort/reorder PUT changes
+      // server-side (stillToPurchaseSort, stillToPurchase, and
+      // nextPurchase, which is always just stillToPurchase[0] -- see
+      // _still_to_purchase_summary's own comment on that), nothing
+      // else ever touched.
+      function buildStatePayload() {{
+        var base = DEMO_BASE.gearSetups[0];
+        var sorted = sortStillToPurchase(base.stillToPurchase, currentSort, customOrder);
+        var nextPurchase = null;
+        if (sorted.length) {{
+          var top = sorted[0];
+          var cost = top.cost;
+          nextPurchase = Object.assign({{}}, top, {{
+            progressPct: cost <= 0 ? 100 : Math.round(Math.min(DEMO_BASE.coins, cost) / cost * 1000) / 10,
+            funded: DEMO_BASE.coins >= cost,
+          }});
+        }}
+        var setup = Object.assign({{}}, base, {{
+          stillToPurchaseSort: currentSort,
+          stillToPurchase: sorted,
+          nextPurchase: nextPurchase,
+        }});
+        return Object.assign({{}}, DEMO_BASE, {{ gearSetups: [setup] }});
+      }}
+
+      // Shadows the outer/global fetch for everything inside this one
+      // IIFE only (see this function's own doc comment, point 1) --
+      // the reused script text below calls bare `fetch(...)`, which
+      // resolves to this local var instead of window.fetch without
+      // that script needing to change at all.
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+
+        if (path === '/api/gear-setups' && method === 'GET') {{
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(buildStatePayload()); }} }});
+        }}
+        if (path === '/api/gear-setups/' + SETUP_ID + '/still-to-purchase-sort' && method === 'PUT') {{
+          var sortBody = opts.body ? JSON.parse(opts.body) : {{}};
+          currentSort = sortBody.sort_mode || currentSort;
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(buildStatePayload()); }} }});
+        }}
+        if (path === '/api/gear-setups/' + SETUP_ID + '/still-to-purchase-order' && method === 'PUT') {{
+          var orderBody = opts.body ? JSON.parse(opts.body) : {{}};
+          customOrder = (orderBody.order || []).map(function (e) {{ return {{ slotType: e.slot_type, slot: e.slot }}; }});
+          currentSort = 'custom';
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(buildStatePayload()); }} }});
+        }}
+        // Nothing else the reused script calls should ever actually
+        // reach here (see this function's own doc comment, points 2
+        // and 3 -- every other mutation's own UI trigger is neutered
+        // before a click can start one), but a graceful failure beats
+        // a hard one if it someday does, same as apiCall already
+        // handles for a real failed request.
+        return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{ message: 'Not available in this preview.' }}); }} }});
+      }};
+
+      {script}
+
+      // Neutralizes the setup-display-icon trigger -- wired only once,
+      // on script load (unlike every .gear-slot below it, which is
+      // rewired fresh on every render -- see this function's own doc
+      // comment, point 3), so the same one-time cloneNode+replaceWith
+      // strip Loot Tracker's own range button uses works here too.
+      var iconTrigger = document.getElementById('pgIconTrigger');
+      if (iconTrigger) {{
+        iconTrigger.replaceWith(iconTrigger.cloneNode(true));
+        document.getElementById('pgIconTrigger').style.cursor = 'default';
+      }}
+
+      // Swallows every click/mousedown/dragstart anywhere inside the
+      // gear doll + inventory grid before wireSlotClicks' own (freshly
+      // re-wired every render -- see this function's own doc comment,
+      // point 2) listeners ever see it: a capturing-phase listener
+      // fires top-down, before any bubbling-phase listener on the
+      // element itself, and #pgGearFrame's own identity survives every
+      // render (renderContent only ever replaces its innerHTML, never
+      // the element itself -- see that function in the reused script
+      // above), so this one registration -- made once, right here --
+      // keeps working no matter how many times the doll/grid inside it
+      // gets rebuilt from scratch. stopImmediatePropagation is what
+      // actually matters (it keeps the event from ever reaching
+      // wireSlotClicks' own listeners on the slot underneath);
+      // preventDefault alongside it also blocks a drag from starting
+      // at all, so dragover/drop on some OTHER slot never gets
+      // meaningful data to act on either.
+      var gearFrame = document.getElementById('pgGearFrame');
+      if (gearFrame) {{
+        ['click', 'mousedown', 'dragstart'].forEach(function (evt) {{
+          gearFrame.addEventListener(evt, function (e) {{
+            e.stopImmediatePropagation();
+            e.preventDefault();
+          }}, true);
+        }});
+      }}
+
+      // Same bottom-edge feather as Loot Tracker's own preview -- see
+      // .landing-purchase-preview/.landing-purchase-preview--clipped
+      // in purchase-goals.css, and render_landing_loot_preview's own
+      // wrapper script for the fuller comment this mirrors.
+      var previewEl = document.querySelector('.landing-purchase-preview');
+      if (previewEl) {{
+        var checkClipped = function () {{
+          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
+          previewEl.classList.toggle('landing-purchase-preview--clipped', overflowing);
+        }};
+        checkClipped();
         new ResizeObserver(checkClipped).observe(previewEl);
       }}
     }})();

@@ -966,6 +966,16 @@ footer {
   align-items: flex-start;
 }
 
+/* Same top-anchoring, same reasoning, for the Purchase Goals preview
+   (render_landing_purchase_preview) -- sorting the "Still to
+   Purchase" list can change its content's own height same as
+   filtering Loot Tracker's own preview can, so this panel gets the
+   same fix for the same reason. See .landing-purchase-preview in
+   purchase-goals.css for its own feather. */
+.landing-anchor--purchase-preview {
+  align-items: flex-start;
+}
+
 /* The logo/tagline panel shares a single stop with the header above
    it (see body.landing header in the scroll-snap rules up top)
    instead of being its own separate one, but it's still pinned to

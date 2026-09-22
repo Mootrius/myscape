@@ -613,3 +613,51 @@ button.primary#pgNameSave, .pg-setup-form-save {
   .pg-body { flex-direction: column; align-items: center; }
   .pg-gear-frame { flex-direction: column; }
 }
+
+/* ---------- Landing page preview (render_landing_purchase_preview,
+   app/pages.py) -- same container treatment as .landing-loot-preview
+   in loot-tracker.css (max-height capped to the viewport, clipped
+   rather than overflowing, with a bottom feather that only shows up
+   once there's actually something hidden below it), scoped here
+   instead since this preview's own markup/CSS classes are Purchase
+   Goals', not Loot Tracker's. See that class's own comment for the
+   fuller reasoning -- not repeated here. ---------- */
+.landing-purchase-preview {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100svh - 80px);
+  overflow: hidden;
+  position: relative;
+}
+.landing-purchase-preview--clipped::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 15%;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+
+/* The reused body's own heading and the setup selector/menu row --
+   hidden rather than stripped from the markup itself, so
+   _purchase_goals_panel_markup stays untouched (same discipline as
+   .landing-loot-preview .page-title in loot-tracker.css). This
+   preview only ever shows the one setup it was built from (see
+   render_landing_purchase_preview's own docstring), so there's
+   nothing for a selector to switch between anyway. */
+.landing-purchase-preview .page-title,
+.landing-purchase-preview .pg-header {
+  display: none;
+}
+
+/* Nothing in the gear doll/inventory grid is interactive here (see
+   render_landing_purchase_preview's own docstring, point 2) --
+   default cursor rather than whatever .gear-slot/.gear-slot-remove
+   normally hint at (pointer, hover states), so it doesn't invite a
+   click that's already been swallowed before it can do anything. */
+.landing-purchase-preview .gear-slot,
+.landing-purchase-preview .gear-slot-remove {
+  cursor: default;
+}
