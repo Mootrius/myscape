@@ -71,15 +71,22 @@
    padding) this leaves, with a little slack rather than a "zero
    slack" exact fit that'd be fragile if any button/field's own height
    ever drifted by a px or two.
-   max-width dropped from 580px to 520px, alongside the side padding's
-   own trim from 24px to 20px -- stage 3's widest row (a one-time
-   skill/kc goal's search + target field pair) still has plenty of
-   room at this width; nothing on this page was ever close to
-   overflowing it. */
+   max-width dropped again, 520px down to 380px -- narrow enough that
+   the widest row on the page is now Back/Cancel/Next(or Save), 3
+   buttons at 316px total (see .gt-wizard-btn/.gt-add-btn's own 100px
+   width + .gt-wizard-actions' 8px gaps), with the 20px side padding
+   below providing the cushion around it rather than any extra
+   leftover row width doing that job. Every other row still fits
+   comfortably inside that same 340px of content width (380 minus the
+   20+20 padding): the search+target field pair (which used to be the
+   widest row, back when GAIN/REACH still lived inline with it) is
+   118px target + 12px gap + a ~210px search field, still plenty
+   readable; the widest segmented-control row (Lvl/Xp + GAIN/REACH
+   together) is 246px; stage 4's own recur-unit toggle is 266px. */
 .gt-wizard-expanded {
   position: relative;
   width: 100%;
-  max-width: 520px;
+  max-width: 380px;
   height: 160px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
