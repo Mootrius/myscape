@@ -670,17 +670,9 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   font-size: 30px;
   line-height: 1.25;
   font-weight: 400;
-  /* This preview's own copy ("...so you can keep track of everything
-     you own across Gielinor.") runs longer than the other three
-     previews' taglines -- long enough that it doesn't actually fit
-     on one line even at this panel's own full 900px width (unlike
-     loot/purchase/mindmap's own single-line taglines, which do -- see
-     their own identically-named rules for that single-line-with-
-     ellipsis-fallback pattern). Wrapping here instead of truncating
-     keeps the exact requested wording fully on screen; two lines at
-     this line-height comfortably clears the tagline-wrap's own 157px
-     stretch height either way. */
-  white-space: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .storages-preview-tagline-gold { color: var(--gold); }
 .storages-preview-tagline-white { color: var(--text); }

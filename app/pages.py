@@ -11374,7 +11374,7 @@ def render_landing_storages_preview() -> Optional[Tuple[str, str, str]]:
       </picture>
       <div class="storages-preview-tagline-wrap">
         <p class="storages-preview-tagline">
-          <span class="storages-preview-tagline-gold">STORAGES VIEWING</span> <span class="storages-preview-tagline-white">so you can keep track of everything you own across Gielinor.</span>
+          <span class="storages-preview-tagline-gold">STORAGES VIEWING</span> <span class="storages-preview-tagline-white">to keep track of everything you own.</span>
         </p>
       </div>
     </div>
