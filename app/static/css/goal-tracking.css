@@ -54,27 +54,31 @@
 
 /* A fixed size across every stage -- not "however tall this stage's
    own content is" -- so the box never grows/shrinks/jumps as the
-   wizard moves through its stages; matches stage 1's own natural
-   size (three type-picker cards), which stage 2's shorter content
-   (one field row + one button row) then fills the same way stage 1
-   does, via #gtWizardStage/.gt-wizard-stage1/.gt-wizard-stage2 below
-   all stretching to its full height instead of sizing to content.
-   174px, not the original 154px -- stage 4 (interval field + unit
-   toggle + actions row) fills essentially all of the original 154px
-   with zero slack for space-between to work with, which is exactly
-   why its toggle and actions row used to render touching; the extra
-   20px gives .gt-wizard-recur-fields' own margin-bottom room to
-   create a real gap there without that row overflowing past this
-   box's own bottom edge. Every stage's actions row still ends up
-   pinned to this same (now-taller) bottom edge either way -- see
-   .gt-wizard-stage1-wrap/.gt-wizard-stage2's own justify-content:
-   space-between -- so this only ever adds a bit more empty room
-   around the shorter stages, never moves anything out of alignment. */
+   wizard moves through its stages; every stage's own content
+   (#gtWizardStage/.gt-wizard-stage1-wrap/.gt-wizard-stage2 below) then
+   stretches to fill it via justify-content: space-between, rather than
+   sizing to content.
+   150px is stage 1/2's own natural size (the type-picker cards, sized
+   down in a later pass specifically so this box didn't have to stay
+   as tall as they used to be -- see .gt-wizard-type-btn's own padding/
+   icon size and .gt-wizard-stage1-actions' margin-top, both trimmed
+   together with this height): at that size, their card row + actions
+   row fill it with just .gt-wizard-stage1-actions' own explicit
+   margin-top as a gap, zero slack left over. Stage 3/4's own content
+   (a single field row, or -- since interval+toggle moved onto one
+   row -- a single cadence row) is shorter than that, so the same
+   150px leaves them a noticeably bigger space-between gap above their
+   actions row -- comfortable, not cramped, just not as tight a fit as
+   stage 1/2's. Every stage's actions row still ends up pinned to this
+   same fixed bottom edge either way -- see .gt-wizard-stage1-wrap/
+   .gt-wizard-stage2's own justify-content: space-between -- so
+   shrinking this only ever tightens that leftover gap, never moves
+   anything out of alignment. */
 .gt-wizard-expanded {
   position: relative;
   width: 100%;
   max-width: 460px;
-  height: 174px;
+  height: 150px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -133,7 +137,7 @@
      did the fixed box (see .gt-wizard-expanded), so there wasn't
      always enough leftover space to keep this row from sitting flush
      against the cards above it. This guarantees a real gap either way. */
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .gt-wizard-type-btn {
@@ -141,18 +145,18 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1 1 0;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-muted);
   font-family: inherit;
-  padding: 14px 12px;
+  padding: 10px 12px;
   cursor: pointer;
 }
 
-.gt-wizard-type-btn img { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; }
+.gt-wizard-type-btn img { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; }
 
 /* The one-time/recurring cards' own icons (ONE_TIME_ICON_SVG/
    RECURRING_ICON_SVG in the script) -- inline SVGs rather than the
@@ -162,7 +166,7 @@
    only picks up gold on :hover below) -- these two are the one card
    style on this page whose icon is a deliberate color accent rather
    than a neutral badge. */
-.gt-wizard-type-btn svg.gt-recur-icon { width: 32px; height: 32px; color: var(--gold); flex: none; }
+.gt-wizard-type-btn svg.gt-recur-icon { width: 26px; height: 26px; color: var(--gold); flex: none; }
 
 .gt-wizard-type-btn span {
   font-size: 11px;
