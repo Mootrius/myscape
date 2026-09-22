@@ -6,12 +6,19 @@ app/data/landing_loot_demo.json.
 This is NOT a live feature -- there's no logged-out account for a
 marketing-page visitor to poll real loot from, so the preview instead
 ships a single, fixed ("curated", the person's own word for it when
-this was scoped) snapshot: one made-up "day" of killing eight NPCs the
+this was scoped) snapshot: one made-up "day" of killing four NPCs the
 person picked by name and kill count, with drops simulated from each
 NPC's real OSRS Wiki drop table (weights/rates hand-transcribed into
 NPCS below), spread across a 24-hour schedule with exactly four blank
 hours (see BLANK_HOURS/SESSION_PLAN) rather than either a perfectly
 even distribution or one single sitting.
+
+Originally shipped with eight NPCs (also Green dragon, Frost dragon,
+Venenatis, The Leviathan), but the person asked for those four to come
+back out -- their much higher-value drops (dragon bones, blood runes,
+Fangs of Venenatis and the like) were skewing the whole day's loot
+distribution next to four low/mid-level NPCs' worth of loot. What's
+left is a Goblin/Hill Giant/Turoth/Pyrelord day only.
 
 The output is produced by running the exact same server-side
 aggregation the real Loot Tracker uses (build_loot_state in
@@ -29,12 +36,12 @@ load" choice this preview was built around.
 Two separate random.Random instances, both seeded but independently
 so (see `rng`/`loot_rng` below): one lays out the day's schedule (how
 kills split across hours), the other rolls each kill's own loot --
-kept apart so hand-tuning one (e.g. picking a seed with a satisfying
-spread of rare drops) never perturbs the other. loot_rng's seed here
-(9) was picked exactly that way: searched across a range of seeds
-offline for one landing a small, not-overwhelming handful of the
-flashier possible drops (see the module-level comment further down,
-by NPCS, for which ones) without needing to hand-place a single item.
+kept apart so hand-tuning one never perturbs the other. loot_rng's
+seed here (9) was originally picked by searching across a range of
+seeds offline for a satisfying spread of rare drops from the since-
+removed higher-level NPCs (see above); nothing in the remaining four
+NPCs' own drop tables is rare enough for the specific seed to matter
+much, so it was left as-is rather than re-searched.
 
 Run with: python scripts/gen_landing_loot_demo.py (from the repo
 root, with a real DATABASE_URL in the environment -- it needs a
@@ -133,15 +140,11 @@ def roll_table(rows, denom, rng):
 
 # Each NPC: always=[(name,qty), ...] (unconditional per-kill drops),
 # tables=[(rows, denom), ...] (independently-rolled weighted tables --
-# most NPCs have one, matching their wiki page's own single combined
-# table; the Leviathan has several, matching its wiki page listing
-# Supplies/Resources/Runes-and-ammunition as separate rolled tables),
-# tertiary=[(name, qty, probability), ...] (independent low-probability
-# per-kill rolls, each item's own absolute rate as the wiki states it --
-# including this dataset's few "exciting" flavor drops: Fangs of
-# Venenatis, Chromium ingot, and Leviathan's lure all happen to land at
-# loot_rng's seed of 9, picked for exactly that spread -- see this
-# file's own module docstring).
+# each of these four NPCs has just the one, matching their wiki page's
+# own single combined table), tertiary=[(name, qty, probability), ...]
+# (independent low-probability per-kill rolls, each item's own
+# absolute rate as the wiki states it -- nothing flashy in this
+# lower-level foursome, just the two NPCs' own ensouled-head drops).
 NPCS = {
     "Goblin": {
         "combat_level": 2,
@@ -193,98 +196,11 @@ NPCS = {
         )],
         "tertiary": [],
     },
-    "Green dragon": {
-        "combat_level": 79,
-        "always": [("Dragon bones", 1), ("Green dragonhide", 1)],
-        "tables": [T(
-            ("Steel platelegs", 1, 4), ("Steel battleaxe", 1, 3), ("Mithril axe", 1, 3),
-            ("Mithril spear", 1, 2), ("Mithril kiteshield", 1, 1), ("Adamant full helm", 1, 1),
-            ("Rune dagger", 1, 1), ("Water rune", 75, 8), ("Fire rune", 37, 1),
-            ("Nature rune", 15, 5), ("Law rune", 3, 3),
-            ("Coins", 44, 29), ("Coins", 132, 25), ("Coins", 200, 10), ("Coins", 11, 5), ("Coins", 440, 1),
-            ("Bass", 1, 3), ("Adamantite ore", 1, 3),
-            ("Grimy ranarr weed", 1, 6), ("Grimy irit leaf", 1, 5),
-            ("Uncut diamond", 1, 2), ("Uncut emerald", 1, 2),
-        )],
-        "tertiary": [("Ensouled dragon head", 1, 1 / 35)],
-    },
-    "Frost dragon": {
-        "combat_level": 172,
-        "always": [("Frost dragon bones", 1)],
-        "tables": [T(
-            ("Dragon metal sheet", 1, 1.3),
-            ("Rune 2h sword", 1, 2), ("Rune kiteshield", 1, 2), ("Rune longsword", 1, 2),
-            ("Rune pickaxe", 1, 2), ("Adamant platebody", 1, 4), ("Adamant warhammer", 1, 4),
-            ("Death rune", 25, 5), ("Water rune", 150, 10), ("Water rune", 500, 5),
-            ("Air rune", 150, 11), ("Blood rune", 15, 5), ("Chaos rune", 70, 8),
-            ("Mist rune", 50, 10), ("Nature rune", 15, 4), ("Dragon cannonball", 16, 2),
-            ("Rune cannonball", 27, 4), ("Rune knife", 15, 5), ("Dragon arrowtips", 7, 4),
-            ("Superior dragon bones", 1, 3), ("Runite ore", 1, 3), ("Adamantite ore", 1, 3),
-            ("Dragon nails", 15, 2), ("Coins", 75, 10), ("Coins", 350, 10), ("Apple pie", 1, 5),
-        )],
-        "tertiary": [("Draconic visage", 1, 1 / 10000)],
-    },
-    "Venenatis": {
-        "combat_level": 464,
-        "always": [("Big bones", 1)],
-        "tables": [T(
-            ("Mystic air staff", 4, 2), ("Rune pickaxe", 5, 8), ("Rune dart", 150, 3),
-            ("Rune knife", 150, 5), ("Rune platelegs", 4, 2), ("Rune sq shield", 4, 2),
-            ("Dragon dagger", 6, 2), ("Chaos rune", 500, 7), ("Death rune", 700, 7),
-            ("Blood rune", 900, 7), ("Diamond bolts (e)", 300, 5), ("Steel cannonball", 600, 4),
-            ("Uncut ruby", 50, 1), ("Uncut diamond", 25, 8), ("Gold ore", 675, 6),
-            ("Onyx bolt tips", 150, 5), ("Magic logs", 225, 5), ("Limpwurt root", 100, 5),
-            ("Coins", 50000, 10), ("Supercompost", 225, 4), ("Dark crab", 50, 5),
-            ("Battlestaff", 12, 2), ("Red spiders' eggs", 500, 3), ("Grimy ranarr weed", 45, 2),
-            ("Grimy snapdragon", 100, 2), ("Antidote++(4)", 20, 3), ("Super restore(4)", 10, 5),
-            ("Unicorn horn", 225, 2), ("Uncut dragonstone", 5, 2),
-        )],
-        "tertiary": [
-            ("Fangs of Venenatis", 1, 1 / 196), ("Dragon 2h sword", 1, 1 / 256),
-            ("Dragon pickaxe", 1, 1 / 256), ("Voidwaker gem", 1, 1 / 360),
-            ("Treasonous ring", 1, 1 / 512),
-        ],
-    },
-    "The Leviathan": {
-        "combat_level": 798,
-        # Ancient blood ornament kit is the wiki's one "Always" row, but
-        # footnoted as conditional rather than a flat per-kill drop --
-        # modeled here as a first-kill-only unlock instead (see the
-        # first_kill_done handling below), the same shape several other
-        # DT2 bosses' own guaranteed-first-kill uniques already take.
-        "always": [],
-        "tables": [
-            T(
-                ("Prayer potion(3)", 1, 1), ("Ranging potion(2)", 1, 1), ("Sea turtle", 4, 1),
-            ),
-            T(
-                ("Aether catalyst", 1875, 1), ("Iron ore", 71, 1), ("Silver ore", 71, 1),
-                ("Coal", 243, 8), ("Gold ore", 84, 8), ("Adamantite ore", 71, 1),
-                ("Runite ore", 33, 2), ("Sapphire", 31, 1), ("Emerald", 31, 1), ("Ruby", 31, 1),
-                ("Uncut ruby", 46, 5), ("Uncut diamond", 46, 5), ("Dragon javelin tips", 67, 8),
-                ("Dragon bolts (unf)", 187, 2), ("Onyx bolt tips", 112, 1),
-                ("Raw manta ray", 225, 1), ("Anglerfish", 5, 8),
-            ),
-            T(
-                ("Bronze arrow", 78, 1), ("Mithril arrow", 78, 1), ("Adamant arrow", 78, 1),
-                ("Rune arrow", 67, 8), ("Body rune", 225, 1), ("Earth rune", 225, 1),
-                ("Smoke rune", 375, 8), ("Soul rune", 750, 2),
-            ),
-        ],
-        "tertiary": [
-            ("Venator vestige", 1, 1 / 768), ("Chromium ingot", 1, 1 / 256),
-            ("Leviathan's lure", 1, 1 / 768), ("Virtus mask", 1, 1 / 2304),
-            ("Virtus robe top", 1, 1 / 2304), ("Virtus robe bottom", 1, 1 / 2304),
-            ("Scarred tablet", 1, 1 / 25.8), ("Awakener's orb", 1, 1 / 53.6),
-            ("Smoke quartz", 1, 1 / 206), ("Brimstone key", 1, 1 / 50),
-        ],
-    },
 }
 
-# Exactly the eight NPCs and kill counts the person asked for.
+# Exactly the four NPCs and kill counts the person asked to keep.
 KC = {
     "Goblin": 238, "Hill Giant": 109, "Turoth": 33, "Pyrelord": 83,
-    "Green dragon": 153, "Frost dragon": 255, "Venenatis": 56, "The Leviathan": 48,
 }
 
 
@@ -319,10 +235,14 @@ def build_events():
     blank_hours = {3, 4, 9, 20}
     active_hours = [h for h in range(24) if h not in blank_hours]  # 20 hours
 
+    # Roughly proportional to each NPC's own kill count (Goblin 238
+    # down to Turoth 33), same "a player sticks with one task for a
+    # couple hours, at different points across the day" shape as
+    # before, just spread across four NPCs' sessions instead of eight.
     session_plan = [
         ("Goblin", 3), ("Hill Giant", 2), ("Turoth", 1), ("Pyrelord", 2),
-        ("Green dragon", 3), ("Goblin", 2), ("Frost dragon", 4),
-        ("Hill Giant", 1), ("The Leviathan", 1), ("Venenatis", 1),
+        ("Goblin", 3), ("Hill Giant", 2), ("Pyrelord", 2),
+        ("Goblin", 2), ("Turoth", 1), ("Hill Giant", 2),
     ]
     assert sum(h for _, h in session_plan) == len(active_hours)
 
@@ -355,15 +275,11 @@ def build_events():
                 diff += 1
             i += 1
 
-        first_kill_done = False
         for hour, n in zip(hours, counts):
             offsets = sorted(rng.uniform(0, 3599) for _ in range(n))
             for off in offsets:
                 ts = base_date + dt.timedelta(hours=hour, seconds=off)
                 items = simulate_kill(npc, loot_rng)
-                if npc == "The Leviathan" and not first_kill_done:
-                    items.append(("Ancient blood ornament kit", 1))
-                    first_kill_done = True
                 events.append({
                     "source_name": npc,
                     "source_type": "npc",
