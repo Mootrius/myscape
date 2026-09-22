@@ -6185,11 +6185,42 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
         document.getElementById('mmSwitchBtn').style.cursor = 'default';
       }}
 
+      var previewEl = document.querySelector('.landing-mindmap-preview');
+
+      // Disables wheel/trackpad-scroll zooming here -- only the
+      // toolbar's own +/-/fit buttons should zoom this preview (per
+      // this preview's own follow-up request), unlike the real page,
+      // where scrolling over the canvas also zooms it (see the reused
+      // script's own canvasEl 'wheel' listener, added inside {script}
+      // just above). A capturing-phase listener on the whole preview
+      // wrapper -- not on #mmCanvas itself, where a listener added
+      // here would just run in registration order alongside that
+      // reused bubble-phase one rather than reliably before it, since
+      // same-element listeners fire in add order regardless of the
+      // capture flag -- intercepts the event before it ever reaches
+      // that target, so the reused listener's own zoom logic never
+      // runs at all for a plain scroll. The two cases that handler
+      // itself already carves out as "not really canvas-zoom" -- a
+      // wheel event over the goal-search suggestions dropdown, or a
+      // node's note textarea, both of which it deliberately hands off
+      // to their own scrolling (or, for the note, just swallows
+      // outright) instead of zooming -- are passed straight through
+      // here unchanged, so neither of those still-desired behaviors
+      // regresses.
+      if (previewEl) {{
+        previewEl.addEventListener('wheel', function (e) {{
+          if (!e.target.closest('#mmCanvas')) return;
+          if (e.target.closest('[data-role="popover"]')) return;
+          if (e.target.closest('[data-role="node-note-input"], .mm-node-note-text')) return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}, {{ capture: true, passive: false }});
+      }}
+
       // Same bottom-edge feather as the other two previews -- see
       // .landing-mindmap-preview/.landing-mindmap-preview--clipped in
       // mindmaps.css, and render_landing_loot_preview's own wrapper
       // script for the fuller comment this mirrors.
-      var previewEl = document.querySelector('.landing-mindmap-preview');
       if (previewEl) {{
         var checkClipped = function () {{
           var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
