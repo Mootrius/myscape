@@ -537,20 +537,58 @@
 /* Constrains the reused panel to fit inside one landing-page scroll-
    snap "slide" (see .landing-anchor in myscape.css, min-height: 100vh
    with no matching max) instead of growing past it the way a normal
-   page lets this same content grow tall on a small viewport -- an
-   internal scrollbar on the (rare) overflow case beats a landing-page
-   panel that's taller than the screen it's meant to occupy. 80px is
+   page lets this same content grow tall on a small viewport. 80px is
    .landing-anchor's own top+bottom padding (40px each), so this fills
    exactly the room that padding leaves rather than guessing a fixed
    height. svh layered after vh for the same mobile-address-bar reason
-   .landing-anchor itself already does. */
+   .landing-anchor itself already does.
+
+   Clipped (overflow: hidden), not scrolled -- matches how every other
+   .landing-anchor handles content taller than its own slide (see
+   e.g. anchor-storages.png, cropped and feathered at the source
+   rather than left scrollable): a scrollbar here would be the one
+   part of the landing page that scrolls independently of the page
+   itself, which read as out of place next to three flat marketing
+   images doing the same job by simply being shorter. The ::after
+   feather below fades the cut edge to the section's own background
+   instead of hard-cropping it, echoing that same source-image
+   treatment; see render_landing_loot_preview's own wrapper script for
+   the accessibility side of this (nothing focusable is left sitting
+   in the faded-out region). position: relative anchors that ::after
+   to this box specifically, not the page. */
 .landing-loot-preview {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
   max-height: calc(100vh - 80px);
   max-height: calc(100svh - 80px);
-  overflow-y: auto;
+  overflow: hidden;
+  position: relative;
+}
+/* Fades the last ~15% of the panel's own height to --bg, the same
+   flat color .landing-anchor itself sits on -- tall enough to read as
+   a deliberate feather (matching the static images' own crop) rather
+   than a stray gradient line, short enough that it's only ever
+   covering the bottom row or two of tiles, never eating into the
+   chart or search/sort controls above. pointer-events: none so it
+   never intercepts a click meant for whatever's still visible right
+   at its top edge.
+
+   Gated on the --clipped modifier class (see render_landing_loot_
+   preview's wrapper script, which toggles it via a ResizeObserver):
+   on a tall enough viewport this panel's content fits with room to
+   spare (max-height above is a cap, not a fixed height), and fading
+   out a fully-visible last row for no reason would read as a
+   rendering glitch, not a deliberate crop -- so the feather only ever
+   shows up on the (narrower-viewport) runs where there's actually
+   something sitting below the fold for it to hide. */
+.landing-loot-preview--clipped::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 15%;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
 }
 
 /* The range/date selector is explicitly non-interactive here (see

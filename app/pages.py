@@ -4854,6 +4854,33 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
         rangeBtn.replaceWith(rangeBtn.cloneNode(true));
         document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
       }}
+
+      // Toggles the bottom-edge feather (.landing-loot-preview--
+      // clipped, see loot-tracker.css) on only when this panel's
+      // content is actually taller than its own max-height and
+      // getting clipped by it -- on a tall enough viewport the whole
+      // thing fits with room to spare, and fading out a fully-visible
+      // last row there for no reason would read as a rendering
+      // glitch, not the deliberate crop this is meant to be.
+      var previewEl = document.querySelector('.landing-loot-preview');
+      if (previewEl) {{
+        var checkClipped = function () {{
+          // >2px of slop so ordinary layout rounding never flips this
+          // on for content that's really sitting flush with the edge.
+          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
+          previewEl.classList.toggle('landing-loot-preview--clipped', overflowing);
+        }};
+        checkClipped();
+        // Content height changes on every re-render (sort, search,
+        // NPC filter, and bar drill-down all replace the NPC/item
+        // panels' own children -- see rerenderChart/renderNpcRow/
+        // renderItemList in the reused script above) as well as on a
+        // window resize (this panel's own max-height is viewport-
+        // relative) -- observing the panel itself catches both in one
+        // place, without hooking into any of the reused script's own
+        // render functions.
+        new ResizeObserver(checkClipped).observe(previewEl);
+      }}
     }})();
     """
     return extra_head, body, wrapper_script
