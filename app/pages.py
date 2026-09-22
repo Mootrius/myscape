@@ -10600,19 +10600,24 @@ def render_goal_tracking(player: PlayerView) -> str:
           ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
       }
 
-      // Always-2-digit unit/letter pairs -- Year, Month, Week, Day,
-      // Hour, Minute -- each just the remainder left after peeling off
-      // every larger unit first (the same "greedy decomposition" any
-      // digital-clock countdown uses), using RECUR_UNIT_SECONDS' own
-      // fixed-duration units throughout so this never disagrees with
-      // recurInfoIconHtml's own end-of-period math below. A unit that's
-      // 0 is left out entirely (a goal with weeks left has no use for
-      // "00Y 00M" in front of it), except when every single one is --
-      // an about-to-roll goal still gets a "00M" rather than an empty
-      // string. Negative input (a period that's already technically
-      // over -- the 5s poll just hasn't caught the rollover yet) clamps
-      // to all-zeros (and so to that same "00M" floor) rather than
-      // printing a negative countdown.
+      // Plain (not zero-padded) unit/letter pairs -- Year, Month, Week,
+      // Day, Hour, Minute -- each just the remainder left after peeling
+      // off every larger unit first (the same "greedy decomposition"
+      // any digital-clock countdown uses), using RECUR_UNIT_SECONDS'
+      // own fixed-duration units throughout so this never disagrees
+      // with recurInfoIconHtml's own end-of-period math below. A unit
+      // that's 0 is left out entirely (a goal with weeks left has no
+      // use for "0Y 0M" in front of it), except when every single one
+      // is -- an about-to-roll goal still gets a "0M" rather than an
+      // empty string. Negative input (a period that's already
+      // technically over -- the 5s poll just hasn't caught the
+      // rollover yet) clamps to all-zeros (and so to that same "0M"
+      // floor) rather than printing a negative countdown. No pad2 here
+      // (unlike fmtIsoDateTimeLocal's own date/time digits) -- this
+      // reads as a duration, not a fixed-width clock face, so "3H" is
+      // correct and "03H" would just be a stray leading zero; a
+      // two-digit value like 10H still prints in full either way,
+      // since there's no padding to strip in the first place.
       function fmtRecurCountdown(totalSeconds) {
         var sec = Math.max(0, Math.round(totalSeconds));
         var y = Math.floor(sec / RECUR_UNIT_SECONDS.year); sec -= y * RECUR_UNIT_SECONDS.year;
@@ -10624,7 +10629,7 @@ def render_goal_tracking(player: PlayerView) -> str:
         var units = [[y, 'Y'], [mo, 'M'], [w, 'W'], [d, 'D'], [h, 'H'], [mi, 'M']];
         var shown = units.filter(function (u) { return u[0] !== 0; });
         if (!shown.length) shown = [units[units.length - 1]];
-        return shown.map(function (u) { return pad2(u[0]) + u[1]; }).join(' ');
+        return shown.map(function (u) { return u[0] + u[1]; }).join(' ');
       }
 
       // The little hoverable "i" that follows a recurring goal's own
