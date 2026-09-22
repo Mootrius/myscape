@@ -9702,10 +9702,15 @@ def render_goal_tracking(player: PlayerView) -> str:
 
     <div class="gt-card gt-list-card">
       <div class="gt-sort-tabs" id="gtSortTabs">
-        <button type="button" class="gt-sort-tab" data-sort="progress">Progress</button>
-        <button type="button" class="gt-sort-tab" data-sort="type">Type</button>
-        <button type="button" class="gt-sort-tab" data-sort="alpha">A-Z</button>
-        <button type="button" class="gt-sort-tab" data-sort="recent">Recent</button>
+        <button type="button" class="gt-sort-tab" data-sort="progress_desc" title="Progress, closest to done first">Progress &darr;</button>
+        <button type="button" class="gt-sort-tab" data-sort="progress_asc" title="Progress, furthest from done first">Progress &uarr;</button>
+        <button type="button" class="gt-sort-tab" data-sort="type_desc" title="Type, Item to KC">Type &darr;</button>
+        <button type="button" class="gt-sort-tab" data-sort="type_asc" title="Type, KC to Item">Type &uarr;</button>
+        <button type="button" class="gt-sort-tab" data-sort="reverse_alphabetical" title="Z to A">A-Z &darr;</button>
+        <button type="button" class="gt-sort-tab" data-sort="alphabetical" title="A to Z">A-Z &uarr;</button>
+        <button type="button" class="gt-sort-tab" data-sort="recent" title="Newest created first">Recent &darr;</button>
+        <button type="button" class="gt-sort-tab" data-sort="oldest" title="Oldest created first">Recent &uarr;</button>
+        <button type="button" class="gt-sort-tab" data-sort="custom">Custom</button>
       </div>
       <p class="gt-empty" id="gtEmpty" style="display:none;">Add a goal above to start tracking.</p>
       <div class="gt-goal-list" id="gtGoalList"></div>
@@ -9832,12 +9837,18 @@ def render_goal_tracking(player: PlayerView) -> str:
 
       var GT = {
         goals: [],
-        // Which of #gtSortTabs' own buttons is active -- 'alpha' (A-Z
-        // by name) was this list's only order before sorting existed,
-        // so it stays the default rather than silently reordering
-        // anyone's existing goal list on their first visit after this
-        // shipped. See sortGoals below for what each mode actually does.
-        sortMode: 'alpha',
+        // Which of #gtSortTabs' own buttons is active -- persisted
+        // server-side now (GameAccount.goal_sort_mode), remembered
+        // across refreshes/sessions the same way GoalReorderRequest's
+        // own custom order is (see setGoalSortMode/applyGoalsResponse
+        // below). This placeholder just covers the instant before the
+        // very first /api/goals response actually arrives -- it's
+        // overwritten from data.sort_mode on every load from then on,
+        // never read on its own. 'alphabetical' matches this list's
+        // own account-side default (see the migration that added
+        // goal_sort_mode) -- the only order it ever had before sorting
+        // existed. See sortGoals below for what each mode actually does.
+        sortMode: 'alphabetical',
         // 0 = collapsed (just the + box), 1 = pick one-time/recurring,
         // 2 = pick a type, 3 = pick a target + value, 4 = pick a
         // recurring goal's own cadence (recurring only -- a one-time
@@ -10551,7 +10562,7 @@ def render_goal_tracking(player: PlayerView) -> str:
         else if (g.goal_type === 'skill') base = (g.metric === 'xp') ? (cur + ' / ' + tgt + ' XP') : ('LVL ' + cur + ' / ' + tgt);
         else base = cur + ' / ' + tgt;
         var cadence = recurCadenceLabel(g);
-        return cadence ? (base + ' · ' + cadence) : base;
+        return cadence ? (base + ' · ' + cadence + recurInfoIconHtml(g)) : base;
       }
 
       // "EVERY WEEK" for an interval of 1, "EVERY 2 WEEKS" otherwise --
@@ -10567,6 +10578,75 @@ def render_goal_tracking(player: PlayerView) -> str:
         var unit = RECUR_UNIT_LABEL[g.recur_unit] || String(g.recur_unit || '').toUpperCase();
         if (g.recur_interval === 1) return 'EVERY ' + unit;
         return 'EVERY ' + fmtNum(g.recur_interval) + ' ' + unit + 'S';
+      }
+
+      // Mirrors app.goals._RECUR_UNIT_SECONDS exactly (see its own
+      // comment in app/goals.py) -- same fixed-duration, non-calendar-
+      // exact convention (a "month" is always 30 days, a "year" always
+      // 365), so a recurring goal's own next-cycle countdown lands on
+      // the same instant server and client agree the current period
+      // actually ends.
+      var RECUR_UNIT_SECONDS = { hour: 3600, day: 86400, week: 7 * 86400, month: 30 * 86400, year: 365 * 86400 };
+
+      function pad2(n) { return String(n).padStart(2, '0'); }
+
+      // "YYYY-MM-DD HH:MM" in the VIEWER's own local time (not UTC) --
+      // g's own recur_period_start arrives as a plain ISO timestamp,
+      // which `new Date(...)` already parses correctly either way, so
+      // this only has to control how it's READ back out.
+      function fmtIsoDateTimeLocal(iso) {
+        var d = new Date(iso);
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+          ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+      }
+
+      // Six ALWAYS-shown, always-2-digit unit/letter pairs -- Year,
+      // Month, Week, Day, Hour, Minute -- each just the remainder left
+      // after peeling off every larger unit first (the same "greedy
+      // decomposition" any digital-clock countdown uses), using
+      // RECUR_UNIT_SECONDS' own fixed-duration units throughout so
+      // this never disagrees with recurInfoIconHtml's own end-of-period
+      // math below. Negative input (a period that's already technically
+      // over -- the 5s poll just hasn't caught the rollover yet) clamps
+      // to all-zeros rather than printing a negative countdown.
+      function fmtRecurCountdown(totalSeconds) {
+        var sec = Math.max(0, Math.round(totalSeconds));
+        var y = Math.floor(sec / RECUR_UNIT_SECONDS.year); sec -= y * RECUR_UNIT_SECONDS.year;
+        var mo = Math.floor(sec / RECUR_UNIT_SECONDS.month); sec -= mo * RECUR_UNIT_SECONDS.month;
+        var w = Math.floor(sec / RECUR_UNIT_SECONDS.week); sec -= w * RECUR_UNIT_SECONDS.week;
+        var d = Math.floor(sec / RECUR_UNIT_SECONDS.day); sec -= d * RECUR_UNIT_SECONDS.day;
+        var h = Math.floor(sec / 3600); sec -= h * 3600;
+        var mi = Math.floor(sec / 60);
+        return pad2(y) + 'Y ' + pad2(mo) + 'M ' + pad2(w) + 'W ' + pad2(d) + 'D ' + pad2(h) + 'H ' + pad2(mi) + 'M';
+      }
+
+      // The little hoverable "i" that follows a recurring goal's own
+      // cadence tag (e.g. "EVERY 2 WEEKS") -- native title="..." is
+      // this whole codebase's only tooltip mechanism (see e.g. the
+      // "Hovering a bar..." comment in loot-tracker.css; there's no
+      // custom tooltip component anywhere to build one from), so this
+      // is a plain title attribute, not a floating element of its own.
+      // g.recur_period_start is the CURRENT period's own start (see
+      // GoalOut's own docstring in app/schemas.py), which is what both
+      // halves of the tooltip actually describe -- when this period
+      // began, and how much of it is left -- so recur_period_start plus
+      // its own recur_interval/recur_unit is all this needs; nothing
+      // here has to know current_value/target_value at all.
+      function recurInfoIconHtml(g) {
+        if (!g.is_recurring || !g.recur_period_start) return '';
+        var unitSeconds = RECUR_UNIT_SECONDS[g.recur_unit];
+        if (!unitSeconds) return '';
+        var periodStartMs = new Date(g.recur_period_start).getTime();
+        var periodEndMs = periodStartMs + g.recur_interval * unitSeconds * 1000;
+        var remainingSeconds = (periodEndMs - Date.now()) / 1000;
+        var tooltip = fmtIsoDateTimeLocal(g.recur_period_start) + ' · NEXT CYCLE IN ' + fmtRecurCountdown(remainingSeconds);
+        return '<span class="gt-goal-info-icon" title="' + escapeHtml(tooltip) + '">' +
+          '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+          '<circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>' +
+          '<path d="M8 7.3V11.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>' +
+          '<circle cx="8" cy="4.9" r="0.9" fill="currentColor"/>' +
+          '</svg>' +
+          '</span>';
       }
 
       // A kc goal's icon is its real boss sprite (app/static/boss-icons,
@@ -10604,7 +10684,15 @@ def render_goal_tracking(player: PlayerView) -> str:
       // "Are you sure?" confirm state via the gt-goal-delete--confirm
       // class rather than deleting anything, and only a second click
       // while in that state actually calls deleteGoal.
-      function goalRowHtml(g) {
+      //
+      // customMode (only true when GT.sortMode === 'custom', see
+      // renderGoalList) adds the same draggable/data-goal-id plumbing
+      // Purchase Goals' own "still to purchase" rows carry in ITS
+      // custom mode (see renderSummaryList/wireSummaryDrag) -- the
+      // whole row becomes the drag surface, with draggable="false" on
+      // the icon so starting a drag over it grabs the row underneath
+      // instead of the browser's own native image drag.
+      function goalRowHtml(g, customMode) {
         // g.progress_pct, not current_value/target_value divided here
         // -- for most goals that's the same ratio either way, but a
         // LEVEL-metric skill goal's current_value/target_value are
@@ -10617,9 +10705,11 @@ def render_goal_tracking(player: PlayerView) -> str:
         // type, so this can read it the same way regardless of type.
         var pct = g.progress_pct;
         var done = g.current_value >= g.target_value;
+        var rowCls = 'gt-goal-row' + (done ? ' gt-goal-done' : '') + (customMode ? ' draggable' : '');
+        var draggableAttr = customMode ? ' draggable="true"' : '';
         return '' +
-          '<div class="gt-goal-row' + (done ? ' gt-goal-done' : '') + '">' +
-          '  <img class="gt-goal-icon" src="' + goalIconSrc(g) + '" alt="" />' +
+          '<div class="' + rowCls + '" data-goal-id="' + g.id + '"' + draggableAttr + '>' +
+          '  <img class="gt-goal-icon" src="' + goalIconSrc(g) + '" alt="" draggable="false" />' +
           '  <div class="gt-goal-info">' +
           '    <div class="gt-goal-headline">' +
           '      <span class="gt-goal-name">' + escapeHtml(goalName(g)) + '</span>' +
@@ -10644,30 +10734,59 @@ def render_goal_tracking(player: PlayerView) -> str:
       // Never mutates the list it's given -- same "always sort a copy"
       // convention Loot Tracker's own sortEntries already follows, so
       // GT.goals itself stays in whatever order loadGoals last received
-      // it in.
-      //   'progress' -- closest to done first (progress_pct, already
-      //     computed server-side in xp for a level-metric skill goal --
-      //     see app.goals.progress_pct -- so this reads correctly for
-      //     every goal type without needing to know which one it is).
-      //   'type'     -- kc/skill/item, grouped in GOAL_TYPE_SORT_ORDER's
-      //     order, alphabetical by name within each group.
-      //   'alpha'    -- A-Z by name, case-insensitive. The original,
-      //     and still the default, order this list ever had.
-      //   'recent'   -- newest-created first.
+      // it in. See GOAL_SORT_MODES in app/schemas.py for the
+      // server-side twin of this same mode list.
+      //   'progress_desc'/'progress_asc' -- closest/furthest from done
+      //     (progress_pct, already computed server-side in xp for a
+      //     level-metric skill goal -- see app.goals.progress_pct -- so
+      //     this reads correctly for every goal type without needing to
+      //     know which one it is).
+      //   'type_asc'/'type_desc' -- kc/skill/item, grouped in
+      //     GOAL_TYPE_SORT_ORDER's order (or reversed), alphabetical by
+      //     name within each group either way.
+      //   'alphabetical'/'reverse_alphabetical' -- A-Z / Z-A by name,
+      //     case-insensitive. 'alphabetical' was this list's only order
+      //     before sorting existed, and still is the account-side
+      //     default for one that's never changed it.
+      //   'recent'/'oldest' -- newest-created first / oldest-created
+      //     first.
+      //   'custom' -- the player's own drag-and-drop order
+      //     (g.sort_order, see GoalOut's own docstring in
+      //     app/schemas.py) -- a goal that's never been dragged has a
+      //     null sort_order, which sorts after every goal that HAS one,
+      //     tied among themselves by created_at (oldest first) so a
+      //     freshly added goal lands at the end of a custom order
+      //     instead of jumping in at some arbitrary spot.
       function sortGoals(list, sortMode) {
         var out = list.slice();
-        if (sortMode === 'progress') {
+        function byNameAsc(a, b) { return goalName(a).toLowerCase().localeCompare(goalName(b).toLowerCase()); }
+        function byType(a, b) {
+          var byT = GOAL_TYPE_SORT_ORDER[a.goal_type] - GOAL_TYPE_SORT_ORDER[b.goal_type];
+          return byT !== 0 ? byT : byNameAsc(a, b);
+        }
+        if (sortMode === 'progress_desc') {
           out.sort(function (a, b) { return b.progress_pct - a.progress_pct; });
-        } else if (sortMode === 'type') {
-          out.sort(function (a, b) {
-            var byType = GOAL_TYPE_SORT_ORDER[a.goal_type] - GOAL_TYPE_SORT_ORDER[b.goal_type];
-            if (byType !== 0) return byType;
-            return goalName(a).toLowerCase().localeCompare(goalName(b).toLowerCase());
-          });
+        } else if (sortMode === 'progress_asc') {
+          out.sort(function (a, b) { return a.progress_pct - b.progress_pct; });
+        } else if (sortMode === 'type_asc') {
+          out.sort(byType);
+        } else if (sortMode === 'type_desc') {
+          out.sort(function (a, b) { return -byType(a, b); });
+        } else if (sortMode === 'reverse_alphabetical') {
+          out.sort(function (a, b) { return -byNameAsc(a, b); });
         } else if (sortMode === 'recent') {
           out.sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+        } else if (sortMode === 'oldest') {
+          out.sort(function (a, b) { return new Date(a.created_at) - new Date(b.created_at); });
+        } else if (sortMode === 'custom') {
+          out.sort(function (a, b) {
+            if (a.sort_order == null && b.sort_order == null) return new Date(a.created_at) - new Date(b.created_at);
+            if (a.sort_order == null) return 1;
+            if (b.sort_order == null) return -1;
+            return a.sort_order - b.sort_order;
+          });
         } else {
-          out.sort(function (a, b) { return goalName(a).toLowerCase().localeCompare(goalName(b).toLowerCase()); });
+          out.sort(byNameAsc);
         }
         return out;
       }
@@ -10681,6 +10800,22 @@ def render_goal_tracking(player: PlayerView) -> str:
         });
       }
 
+      // Shared by loadGoals/setGoalSortMode/commitGoalOrder below --
+      // all three hit an endpoint that returns the exact same
+      // GoalsResponse shape (goals + the account's own persisted
+      // sort_mode), so all three apply it to GT and re-render the same
+      // way rather than each repeating the same four lines.
+      function applyGoalsResponse(data) {
+        GT.goals = data.goals || [];
+        GT.sortMode = data.sort_mode || GT.sortMode;
+        updateSortTabs();
+        renderGoalList();
+      }
+
+      // Rows are only draggable in "custom" sort mode -- dragging one
+      // in any other mode would just get computed right back out from
+      // under you on the next poll, since every other mode is always
+      // re-sorted by its own live field rather than remembered.
       function renderGoalList() {
         var listEl = document.getElementById('gtGoalList');
         var emptyEl = document.getElementById('gtEmpty');
@@ -10693,16 +10828,32 @@ def render_goal_tracking(player: PlayerView) -> str:
         }
         emptyEl.style.display = 'none';
         sortTabsEl.style.display = '';
+        var customMode = GT.sortMode === 'custom';
         var sorted = sortGoals(GT.goals, GT.sortMode);
-        listEl.innerHTML = sorted.map(goalRowHtml).join('');
+        listEl.innerHTML = sorted.map(function (g) { return goalRowHtml(g, customMode); }).join('');
+        wireGoalDrag(customMode);
+      }
+
+      // Persists which #gtSortTabs button is active (GameAccount.
+      // goal_sort_mode), remembered across refreshes/sessions -- same
+      // "PUT it, then apply whatever the response says" shape
+      // setStillToPurchaseSort already uses for Purchase Goals' own
+      // sort tabs, rather than updating GT.sortMode optimistically
+      // before the request resolves.
+      async function setGoalSortMode(mode) {
+        var data = await apiCall('/api/goals/sort-mode', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sort_mode: mode }),
+        });
+        if (data) applyGoalsResponse(data);
       }
 
       document.getElementById('gtSortTabs').addEventListener('click', function (e) {
         var btn = e.target.closest('.gt-sort-tab');
         if (!btn) return;
-        GT.sortMode = btn.getAttribute('data-sort');
-        updateSortTabs();
-        renderGoalList();
+        var mode = btn.getAttribute('data-sort');
+        if (mode === GT.sortMode) return;
+        setGoalSortMode(mode);
       });
       updateSortTabs();
 
@@ -10743,6 +10894,129 @@ def render_goal_tracking(player: PlayerView) -> str:
         renderGoalList();
       }
 
+      // Nudges the CUSTOM sort tab, the same way Purchase Goals' own
+      // glowCustomSortButton nudges its own Custom button when a
+      // "still to purchase" row is clicked/dragged outside Custom mode
+      // -- a goal row only accepts a drag at all in "custom" sort mode
+      // (see wireGoalDrag below); in any other mode that gesture
+      // currently does nothing on its own, so this points at the
+      // control that would actually let it do something. Same
+      // remove-class/reflow/add-class dance as its Purchase Goals
+      // original, so a second attempt mid-glow restarts the pulse
+      // instead of being ignored because the class was already there.
+      function glowCustomSortTab() {
+        var btn = document.querySelector('#gtSortTabs .gt-sort-tab[data-sort="custom"]');
+        if (!btn) return;
+        btn.classList.remove('glow');
+        void btn.offsetWidth;
+        btn.classList.add('glow');
+      }
+
+      // Drag-and-drop reordering for "custom" sort mode -- same
+      // dragstart/dragover/drop/dragend shape (and the same FLIP-style
+      // animateReorder live preview) as Purchase Goals' own
+      // wireSummaryDrag for its "still to purchase" list, just keyed by
+      // g.id (data-goal-id) instead of a {slotType, slot} pair.
+      // draggedEl/dropped are scoped to this one call, which is fine
+      // since renderGoalList rebuilds every row's markup (and rewires
+      // this) from scratch every render.
+      function wireGoalDrag(customMode) {
+        var listEl = document.getElementById('gtGoalList');
+        if (!customMode) {
+          // Rows outside Custom mode carry no draggable attribute at
+          // all (see goalRowHtml), so a native HTML5 drag can never
+          // actually start on one -- the only gesture that can ever
+          // reach a row here is a plain press. pointerdown (not click)
+          // to match glowCustomSortTab's own trigger, and so this
+          // fires the instant a drag is attempted too, not only on a
+          // completed click.
+          listEl.querySelectorAll('.gt-goal-row').forEach(function (el) {
+            el.addEventListener('pointerdown', function () { glowCustomSortTab(); });
+          });
+          return;
+        }
+        var draggedEl = null;
+        var dropped = false;
+
+        function rowKey(row) { return row.getAttribute('data-goal-id'); }
+
+        function animateReorder(mutate) {
+          var rows = Array.prototype.slice.call(listEl.querySelectorAll('.gt-goal-row'));
+          var firstRects = {};
+          rows.forEach(function (row) { firstRects[rowKey(row)] = row.getBoundingClientRect(); });
+
+          mutate();
+
+          rows.forEach(function (row) {
+            if (row === draggedEl) return;
+            var first = firstRects[rowKey(row)];
+            var last = row.getBoundingClientRect();
+            var dy = first.top - last.top;
+            if (!dy) return;
+            row.style.transition = 'none';
+            row.style.transform = 'translateY(' + dy + 'px)';
+            row.getBoundingClientRect();
+            row.style.transition = 'transform 150ms ease';
+            row.style.transform = '';
+            row.addEventListener('transitionend', function handler() {
+              row.style.transition = '';
+              row.removeEventListener('transitionend', handler);
+            });
+          });
+        }
+
+        // The live preview above already leaves the DOM in exactly the
+        // order a drop should save -- no separate source/target diffing
+        // needed, just read the rows back out in their current order.
+        async function commitDomOrder() {
+          var order = Array.prototype.slice.call(listEl.querySelectorAll('.gt-goal-row')).map(rowKey);
+          var data = await apiCall('/api/goals/reorder', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: order }),
+          });
+          if (data) applyGoalsResponse(data);
+        }
+
+        listEl.querySelectorAll('.gt-goal-row').forEach(function (el) {
+          el.addEventListener('dragstart', function (e) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', el.getAttribute('data-goal-id'));
+            draggedEl = el;
+            dropped = false;
+            el.classList.add('dragging');
+          });
+          el.addEventListener('dragend', function () {
+            el.classList.remove('dragging');
+            draggedEl = null;
+            // A drag that ends without a drop (dropped outside the
+            // list, or cancelled with Escape) leaves the live-preview
+            // DOM order sitting there with nothing saved server-side to
+            // back it up -- a plain re-render from the untouched
+            // GT.goals state snaps it straight back to the last real
+            // order.
+            if (!dropped) renderGoalList();
+          });
+          el.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (!draggedEl || draggedEl === el) return;
+            var rect = el.getBoundingClientRect();
+            var before = e.clientY < rect.top + rect.height / 2;
+            var alreadyBefore = el.previousElementSibling === draggedEl;
+            var alreadyAfter = el.nextElementSibling === draggedEl;
+            if (before ? alreadyBefore : alreadyAfter) return;
+            animateReorder(function () {
+              listEl.insertBefore(draggedEl, before ? el : el.nextSibling);
+            });
+          });
+          el.addEventListener('drop', function (e) {
+            e.preventDefault();
+            dropped = true;
+            commitDomOrder();
+          });
+        });
+      }
+
       // ---- Load + poll (same 5s cadence as PG.pollTimer/loadSummary,
       // render_purchase_goals/render_possessions) -- one endpoint
       // serves both the initial paint and every refresh after it. -----
@@ -10750,8 +11024,7 @@ def render_goal_tracking(player: PlayerView) -> str:
       async function loadGoals() {
         var data = await apiCall('/api/goals');
         if (!data) return;
-        GT.goals = data.goals || [];
-        renderGoalList();
+        applyGoalsResponse(data);
       }
 
       loadGoals();

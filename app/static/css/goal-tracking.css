@@ -468,12 +468,21 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
    own CSS file" convention every page here already follows. Hidden
    whenever the list itself is (see renderGoalList) -- sorting an
    empty list has nothing to show for it. */
-.gt-sort-tabs { display: flex; gap: 5px; margin-bottom: 14px; }
+/* 9 buttons now (8 direction-paired + Custom) instead of the original
+   4 unpaired ones -- see the body's own #gtSortTabs markup -- so this
+   wraps instead of squeezing a 9th tab into one ever-thinner row the
+   way loot-tracker.css's own single-row .loot-sort-tabs does for its
+   8 (7 sort tabs + the eye toggle). flex-basis: 20% on each tab packs
+   5 per row before wrapping (5 * 20% = 100%), landing Custom alone at
+   the end of a second, shorter row of 4 -- flex-grow: 1 then lets
+   those 4 stretch out to fill that row evenly instead of sitting
+   flush left. */
+.gt-sort-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
 
 .gt-sort-tab {
-  flex: 1;
+  flex: 1 1 20%;
   padding: 5px 3px;
-  font-size: 10px;
+  font-size: 9.5px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -486,6 +495,19 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
 
 .gt-sort-tab:hover { border-color: var(--gold-dim); color: var(--text); }
 .gt-sort-tab.active { border-color: var(--gold); color: var(--gold); }
+
+/* Nudge pulse for the CUSTOM tab -- fires when a goal row is
+   clicked/dragged in any OTHER sort mode (see glowCustomSortTab in
+   the script), identical shape to Purchase Goals' own
+   sort-btn-custom-glow (see its comment in purchase-goals.css) just
+   under this page's own tab class and gold token. Kept as its own
+   local copy rather than shared, same "each page owns its own CSS
+   file" convention every page here already follows. */
+@keyframes gt-sort-tab-custom-glow {
+  0%, 100% { box-shadow: none; border-color: var(--border); color: var(--text-dim); }
+  50% { box-shadow: 0 0 8px 2px var(--gold); border-color: var(--gold); color: var(--gold); }
+}
+.gt-sort-tab.glow { animation: gt-sort-tab-custom-glow 0.6s ease-in-out 2; }
 
 .gt-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 30px 10px; }
 
@@ -504,6 +526,20 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
 }
 
 .gt-goal-list .gt-goal-row:last-child { border-bottom: none; }
+
+/* Drag-to-reorder, "custom" sort mode only (see wireGoalDrag in the
+   script) -- identical shape to Purchase Goals' own
+   .gear-summary-row.draggable/.dragging (see their own comments in
+   purchase-goals.css): .dragging fades the row being picked up, rows
+   physically slide out of the way to preview a drop (animateReorder)
+   rather than drawing a drop-target ring, and user-select: none stops
+   a grab-and-drag from just selecting the row's text instead. Rows
+   outside Custom mode carry none of this -- see .gt-goal-row's own
+   plain (non-draggable) styling above, which needs no hover treatment
+   since those rows aren't grabbable at all. */
+.gt-goal-row.draggable { cursor: grab; user-select: none; }
+.gt-goal-row.draggable:hover { background-color: rgb(51, 51, 54); }
+.gt-goal-row.draggable.dragging { opacity: 0.4; cursor: grabbing; }
 
 .gt-goal-icon {
   width: 30px;
@@ -575,6 +611,23 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
    the same done-state green .gt-goal-progress used to carry on its
    own before that separate column was folded into this line. */
 .gt-goal-done .gt-goal-sub { color: var(--green); }
+
+/* The little hoverable "i" that follows a recurring goal's own cadence
+   tag (see recurInfoIconHtml in the script) -- native title="..." is
+   its whole tooltip, so this only needs to look hoverable/clickable-
+   adjacent, not host any tooltip UI of its own. Inline-flex so the
+   icon centers on the cadence text's own line instead of sitting on
+   its own baseline the way a plain inline SVG would. Muted like the
+   cadence text itself at rest, brightening to gold on hover as the
+   only feedback that it's interactive at all (there's nothing to
+   click -- just hover -- so no cursor/active state beyond that). */
+.gt-goal-info-icon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 3px;
+  color: var(--text-faint);
+}
+.gt-goal-info-icon:hover { color: var(--gold); }
 
 /* Taller than before (5px -> 9px) -- folding the progress text onto
    the name's own line (see .gt-goal-headline above) freed up the

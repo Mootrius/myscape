@@ -1644,8 +1644,18 @@ class GoalOut(BaseModel):
     needs to know is_recurring to render the progress bar/text
     correctly; is_recurring/recur_interval/recur_unit are exposed
     purely so the goal list can show its own cadence tag (e.g. "EVERY 2
-    WEEKS") next to it. recur_period_start/recur_baseline_value stay
-    server-side -- nothing in the UI needs either one directly."""
+    WEEKS") next to it. recur_period_start is exposed too now, purely
+    for the info icon that cadence tag grows (see recurInfoIconHtml in
+    app/pages.py) -- it needs the CURRENT period's own start time to
+    say when it began and count down to the next one.
+    recur_baseline_value stays server-side either way -- nothing in the
+    UI needs it directly, unlike recur_period_start.
+
+    sort_order is this goal's own position in the player's custom
+    drag-and-drop order (see Goal.sort_order's own docstring in
+    app/models.py) -- null for a goal that's never been manually
+    placed, which the client's own sortGoals treats as "sorts after
+    every goal that has one, by created_at among themselves"."""
 
     id: uuid.UUID
     goal_type: str
@@ -1659,8 +1669,62 @@ class GoalOut(BaseModel):
     is_recurring: bool
     recur_interval: Optional[int] = None
     recur_unit: Optional[str] = None
+    recur_period_start: Optional[datetime] = None
+    sort_order: Optional[float] = None
     created_at: datetime
 
 
 class GoalsResponse(BaseModel):
+    """sort_mode is the player's own persisted #gtSortTabs choice (see
+    GameAccount.goal_sort_mode in app/models.py) -- returned alongside
+    the list itself so the page's first paint can select the right tab
+    without a second round-trip, same reasoning
+    setup.stillToPurchaseSort rides along on Purchase Goals' own
+    state responses for."""
+
     goals: List[GoalOut]
+    sort_mode: str
+
+
+# Each of #gtSortTabs' own nine buttons (see app/pages.py) -- one
+# "high"/"low" (or equivalent) pair per field the list can sort by
+# (progress, type, name, recency), same one-label-two-arrows pattern
+# STILL_TO_PURCHASE_SORT_MODES above already uses, plus "custom" at
+# the end for a player's own drag-and-drop order (Goal.sort_order).
+# "alphabetical"/"reverse_alphabetical"/"custom" reuse those exact
+# values on purpose -- same field, same meaning, as Purchase Goals'
+# own still-to-purchase sort.
+GOAL_SORT_MODES = (
+    "progress_desc", "progress_asc",
+    "type_asc", "type_desc",
+    "alphabetical", "reverse_alphabetical",
+    "recent", "oldest",
+    "custom",
+)
+
+
+class SetGoalSortModeRequest(BaseModel):
+    """Switches Goal Tracking's own list between GOAL_SORT_MODES' nine
+    modes -- see GameAccount.goal_sort_mode in app/models.py. Same
+    shape as SetStillToPurchaseSortRequest above, just this page's own
+    field/mode set."""
+
+    sort_mode: str
+
+    @field_validator("sort_mode")
+    @classmethod
+    def check_sort_mode(cls, value: str) -> str:
+        if value not in GOAL_SORT_MODES:
+            raise ValueError(f"sort_mode must be one of {GOAL_SORT_MODES}")
+        return value
+
+
+class GoalReorderRequest(BaseModel):
+    """The full new order of a player's goal list after a drag-and-drop
+    reorder in "custom" sort mode -- always the complete list of goal
+    ids as currently displayed, not a delta, same full-replacement
+    convention SetGearSetupOrderRequest above already follows for a
+    gear setup LIST's own reorder. See Goal.sort_order in
+    app/models.py."""
+
+    order: List[str]

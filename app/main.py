@@ -152,6 +152,7 @@ from app.schemas import (
     GEAR_SETUP_EQUIPMENT_SLOTS,
     GoalCreateRequest,
     GoalOut,
+    GoalReorderRequest,
     GoalsResponse,
     HideLootItemRequest,
     HideLootNpcRequest,
@@ -214,6 +215,7 @@ from app.schemas import (
     SetGearSetupIconRequest,
     SetGearSetupOrderRequest,
     SetGearSlotRequest,
+    SetGoalSortModeRequest,
     SetPossessionViewOrderRequest,
     SetStillToPurchaseOrderRequest,
     SetStillToPurchaseSortRequest,
@@ -2499,6 +2501,8 @@ def _goal_out(goal: Goal, context: dict) -> GoalOut:
         is_recurring=goal.is_recurring,
         recur_interval=goal.recur_interval,
         recur_unit=goal.recur_unit,
+        recur_period_start=goal.recur_period_start,
+        sort_order=goal.sort_order,
         created_at=goal.created_at,
     )
 
@@ -2517,6 +2521,15 @@ def list_goals(
     a goal's progress bar without a manual refresh, same pattern as the
     live KC column before this redesign.
 
+    Always returned in this same created_at order regardless of
+    game_account.goal_sort_mode -- the client re-sorts locally per
+    whichever #gtSortTabs mode is actually active (see sortGoals in
+    app/pages.py), same architecture every one of its nine modes
+    (custom included) already shares, so this endpoint doesn't need to
+    know or care which one that is. sort_mode rides along on the
+    response purely so the page's first paint can select the right tab
+    without a second round-trip.
+
     Also where a recurring goal's own period actually rolls forward
     (goals_module.maybe_roll_recurring_period) -- every poll of this
     same endpoint, before its progress is read, so recur_period_start/
@@ -2533,7 +2546,77 @@ def list_goals(
             rolled = True
     if rolled:
         db.commit()
-    return GoalsResponse(goals=[_goal_out(goal, context) for goal in goals])
+    return GoalsResponse(
+        goals=[_goal_out(goal, context) for goal in goals],
+        sort_mode=game_account.goal_sort_mode,
+    )
+
+
+@app.put("/api/goals/sort-mode", response_model=GoalsResponse)
+def set_goal_sort_mode(
+    payload: SetGoalSortModeRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Switches which of #gtSortTabs' nine buttons is active, remembered
+    across refreshes/sessions (GameAccount.goal_sort_mode) -- same
+    "persist which sort tab is picked" shape
+    set_still_to_purchase_sort above already gives Purchase Goals'
+    own sort tabs. Doesn't touch Goal.sort_order at all -- switching
+    to "custom" here just replays whatever custom order was already
+    saved from the last time someone dragged a row (see set_goal_order
+    below), the same way switching Purchase Goals back to "custom"
+    doesn't lose a previously-dragged order either."""
+    game_account.goal_sort_mode = payload.sort_mode
+    db.commit()
+    goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
+    context = goals_module.build_progress_context(db, game_account)
+    return GoalsResponse(
+        goals=[_goal_out(goal, context) for goal in goals],
+        sort_mode=game_account.goal_sort_mode,
+    )
+
+
+@app.put("/api/goals/reorder", response_model=GoalsResponse)
+def set_goal_order(
+    payload: GoalReorderRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Saves a drag-and-drop reorder of the goal list in "custom" sort
+    mode -- payload.order is the complete list of goal ids in their new
+    order, not a delta, same convention set_gear_setup_order already
+    follows for reordering a gear setup LIST. Every goal this account
+    owns gets a fresh sort_order (its plain 0-based position in
+    payload.order) in one pass; any of the account's own goal ids
+    payload.order left out (a stale client, or a goal deleted mid-drag)
+    keeps whatever sort_order it already had rather than erroring the
+    whole request out, and any id in payload.order that ISN'T one of
+    this account's own goals is silently ignored -- the same defensive
+    stance set_gear_setup_order already takes, just applied per-goal
+    instead of per-setup.
+
+    Also switches the account into "custom" sort mode if it wasn't
+    already there -- dragging a row is only ever possible in "custom"
+    mode client-side (see renderGoalList in app/pages.py), so this is a
+    defensive backstop, not something a well-behaved client should
+    ever rely on."""
+    owned_goals = {
+        str(g.id): g
+        for g in db.query(Goal).filter(Goal.game_account_id == game_account.id).all()
+    }
+    for index, goal_id in enumerate(payload.order):
+        goal = owned_goals.get(goal_id)
+        if goal is not None:
+            goal.sort_order = float(index)
+    game_account.goal_sort_mode = "custom"
+    db.commit()
+    goals = sorted(owned_goals.values(), key=lambda g: g.created_at)
+    context = goals_module.build_progress_context(db, game_account)
+    return GoalsResponse(
+        goals=[_goal_out(goal, context) for goal in goals],
+        sort_mode=game_account.goal_sort_mode,
+    )
 
 
 @app.post("/api/goals", response_model=GoalOut, status_code=status.HTTP_201_CREATED)

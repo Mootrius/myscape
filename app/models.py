@@ -241,6 +241,15 @@ class GameAccount(Base):
     # now (_MIN_ACCOUNT_REFRESH_SECONDS) rather than anything Goal
     # Tracking's UI reads directly any more.
     hiscores_synced_at = Column(DateTime(timezone=True), nullable=True)
+    # Which of Goal Tracking's own #gtSortTabs buttons is active (see
+    # app.goals.GOAL_SORT_MODES) -- one value per account, not per-goal,
+    # since the whole list shares one sort at a time, same reasoning
+    # GearSetup.still_to_purchase_sort_mode already applies one level
+    # down (per setup instead of per account). Always a real value
+    # ("alphabetical" for a fresh account, same default the goal list
+    # always sorted by before this column existed), never null, so the
+    # UI never has to guess what an unset preference means.
+    goal_sort_mode = Column(String, nullable=False, default="alphabetical")
 
     account = relationship("Account", back_populates="game_accounts")
 
@@ -1104,6 +1113,24 @@ class Goal(Base):
     recur_period_start = Column(DateTime(timezone=True), nullable=True)
     recur_baseline_value = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    # The player's own drag-and-drop order for the goal list in
+    # "custom" sort mode (GameAccount.goal_sort_mode == "custom") --
+    # works exactly like GearSetup.sort_order/PossessionView.sort_order
+    # (see either one's own docstring for the fuller writeup): nullable,
+    # left NULL until a player actually reorders something, rewritten
+    # to plain float positions (0.0, 1.0, 2.0, ...) on every reorder
+    # (see PUT /api/goals/reorder in app/main.py) rather than fractional
+    # single-row inserts. The client's own sortGoals falls back to
+    # created_at (oldest first) for any goal whose sort_order is still
+    # NULL, so a freshly created goal that's never been dragged lands
+    # at the end of a custom order without needing this backfilled at
+    # creation time. The list itself is never queried in this order
+    # server-side -- GET /api/goals always returns it in plain
+    # created_at order and the client re-sorts
+    # locally per whichever #gtSortTabs mode is active, "custom"
+    # included (see sortGoals in app/pages.py), the same as every
+    # other sort mode that page offers.
+    sort_order = Column(Float, nullable=True)
 
     game_account = relationship("GameAccount", back_populates="goals")
 
