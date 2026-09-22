@@ -5133,13 +5133,16 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
     setup (no setup selector, no new/rename/delete -- see the
     .pg-header CSS override in purchase-goals.css), no "Purchase
     Goals" heading (also CSS -- .page-title), and nothing in the gear
-    doll/inventory grid is clickable at all (no add/remove/move, no
-    setup-icon picker) -- a visitor can look and sort, never edit.
-    Sorting the "Still to Purchase" list (including dragging rows in
-    Custom mode) is the one thing that's genuinely interactive here,
-    tracked entirely in this wrapper's own local state (currentSort/
-    customOrder below), the same "real but local, never hits the
-    genuine endpoint" treatment Loot Tracker's hide/unhide got.
+    doll/inventory grid can be ADDED, REMOVED, or MOVED (no setup-icon
+    picker either) -- a visitor can look, sort, and click through to
+    the wiki, never edit. A plain click on a FILLED slot is the one
+    exception (see point 2 below): same as the real page, it just
+    opens that item's wiki page in a new tab. Sorting the "Still to
+    Purchase" list (including dragging rows in Custom mode) is the
+    other genuinely interactive thing here, tracked entirely in this
+    wrapper's own local state (currentSort/customOrder below), the
+    same "real but local, never hits the genuine endpoint" treatment
+    Loot Tracker's hide/unhide got.
 
     1. A `fetch` shim, scoped to just this wrapper (a local `var
        fetch` inside its own IIFE, never touching window.fetch),
@@ -5155,8 +5158,8 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
        same discipline as the loot preview) gets a harmless failure
        response instead of ever reaching the real API with a visitor's
        own session cookie.
-    2. Every click/mousedown/dragstart originating anywhere inside the
-       gear doll + inventory grid (#pgGearFrame) is caught and
+    2. mousedown/dragstart originating anywhere inside the gear doll +
+       inventory grid (#pgGearFrame) are unconditionally caught and
        swallowed by one capturing-phase listener attached to that
        element once, up front -- see the comment further down for why
        that's the one reliable way to neuter this particular part of
@@ -5165,7 +5168,15 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
        range button below, or Loot Tracker's, which are wired once),
        so a one-time cloneNode+replaceWith strip (which only ever
        catches whatever's wired at that instant) would just get
-       silently undone the next time the panel re-renders.
+       silently undone the next time the panel re-renders. A CLICK
+       gets the same capturing-phase treatment, but filtered rather
+       than blanket-blocked: it's swallowed for a shift-click, a click
+       on the hover "x" remove button, or a click on an EMPTY slot
+       (would open the add-item picker), but let through untouched for
+       a plain click on a FILLED slot -- wireSlotClicks' own listener
+       for that exact case (further down in the reused script) already
+       does nothing but window.open() the item's wiki page, so there's
+       nothing to block there in the first place.
     3. The setup-display-icon trigger (#pgIconTrigger) IS wired only
        once, on script load (see render_purchase_goals's own script),
        so that one small edit affordance -- unrelated to any single
@@ -5342,30 +5353,59 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
         document.getElementById('pgIconTrigger').style.cursor = 'default';
       }}
 
-      // Swallows every click/mousedown/dragstart anywhere inside the
-      // gear doll + inventory grid before wireSlotClicks' own (freshly
-      // re-wired every render -- see this function's own doc comment,
-      // point 2) listeners ever see it: a capturing-phase listener
-      // fires top-down, before any bubbling-phase listener on the
-      // element itself, and #pgGearFrame's own identity survives every
-      // render (renderContent only ever replaces its innerHTML, never
-      // the element itself -- see that function in the reused script
+      // Swallows every mousedown/dragstart anywhere inside the gear
+      // doll + inventory grid, and every CLICK except the one case
+      // that's actually allowed here -- a plain click directly on a
+      // FILLED slot's item, which wireSlotClicks' own click handler
+      // (below, in the reused script) already treats as nothing more
+      // than a link out to the wiki (window.open(itemWikiUrl(...))),
+      // never a mutation -- see that handler's own "a filled slot's
+      // item is now a link out to the wiki instead of an editor"
+      // comment. Everything else stays blocked exactly as before:
+      // clicking an EMPTY slot (would open the add-item picker), the
+      // hover "x" remove button, and a shift-click (starts/extends the
+      // multi-select-and-apply group) all still get swallowed here,
+      // before wireSlotClicks' own (freshly re-wired every render --
+      // see this function's own doc comment, point 2) listeners ever
+      // see them.
+      //
+      // A capturing-phase listener fires top-down, before any
+      // bubbling-phase listener on the element itself, and
+      // #pgGearFrame's own identity survives every render
+      // (renderContent only ever replaces its innerHTML, never the
+      // element itself -- see that function in the reused script
       // above), so this one registration -- made once, right here --
       // keeps working no matter how many times the doll/grid inside it
-      // gets rebuilt from scratch. stopImmediatePropagation is what
-      // actually matters (it keeps the event from ever reaching
-      // wireSlotClicks' own listeners on the slot underneath);
-      // preventDefault alongside it also blocks a drag from starting
-      // at all, so dragover/drop on some OTHER slot never gets
-      // meaningful data to act on either.
+      // gets rebuilt from scratch. mousedown/dragstart are blocked
+      // unconditionally (neither one is ever needed for a wiki-link
+      // click, and blocking dragstart is what actually prevents a
+      // drag-to-move from ever starting -- preventDefault there stops
+      // the browser's own native drag regardless of mousedown); click
+      // is filtered instead of blanket-blocked, per the paragraph
+      // above. stopImmediatePropagation is what actually matters on
+      // whichever ones this DOES block (it keeps the event from ever
+      // reaching wireSlotClicks' own listeners on the slot
+      // underneath); preventDefault alongside it also blocks a drag
+      // from starting at all on mousedown/dragstart, so dragover/drop
+      // on some OTHER slot never gets meaningful data to act on
+      // either.
       var gearFrame = document.getElementById('pgGearFrame');
       if (gearFrame) {{
-        ['click', 'mousedown', 'dragstart'].forEach(function (evt) {{
+        ['mousedown', 'dragstart'].forEach(function (evt) {{
           gearFrame.addEventListener(evt, function (e) {{
             e.stopImmediatePropagation();
             e.preventDefault();
           }}, true);
         }});
+        gearFrame.addEventListener('click', function (e) {{
+          if (e.shiftKey) {{ e.stopImmediatePropagation(); e.preventDefault(); return; }}
+          if (e.target.closest('.gear-slot-remove')) {{ e.stopImmediatePropagation(); e.preventDefault(); return; }}
+          var slotEl = e.target.closest('.gear-slot');
+          if (!slotEl || !slotEl.classList.contains('filled')) {{ e.stopImmediatePropagation(); e.preventDefault(); return; }}
+          // Filled slot, plain click, not the remove button -- let it
+          // through to wireSlotClicks' own listener below, which opens
+          // the wiki in a new tab and does nothing else.
+        }}, true);
       }}
 
       // Same bottom-edge feather as Loot Tracker's own preview -- see

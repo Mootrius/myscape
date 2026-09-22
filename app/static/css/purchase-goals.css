@@ -655,12 +655,17 @@ button.primary#pgNameSave, .pg-setup-form-save {
   display: none;
 }
 
-/* Nothing in the gear doll/inventory grid is interactive here (see
-   render_landing_purchase_preview's own docstring, point 2) --
-   default cursor rather than whatever .gear-slot/.gear-slot-remove
-   normally hint at (pointer, hover states), so it doesn't invite a
-   click that's already been swallowed before it can do anything. */
-.landing-purchase-preview .gear-slot,
+/* Add/remove/move are all still swallowed in the gear doll/inventory
+   grid (see render_landing_purchase_preview's own docstring, point
+   2) -- default cursor rather than whatever .gear-slot/
+   .gear-slot-remove normally hint at (pointer), so neither an EMPTY
+   slot nor the hover "x" remove button invites a click that's already
+   been swallowed before it can do anything. A FILLED slot is the one
+   exception (below) -- it's genuinely clickable here (opens the
+   item's wiki page, same as the real page), so it keeps its base
+   cursor: pointer from .gear-slot's own rule instead of being
+   overridden to default like this. */
+.landing-purchase-preview .gear-slot:not(.filled),
 .landing-purchase-preview .gear-slot-remove {
   cursor: default;
 }
