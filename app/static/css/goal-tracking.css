@@ -443,10 +443,14 @@
    anything for a level goal, so it's not clickable (pointer-events:
    none, no click handler even wired up) and reads as visibly
    unavailable (dimmed via opacity) rather than looking identical to
-   its normal, interactive state. Whichever button was active stays
-   showing as active underneath the dimming -- GT.targetMode itself is
-   never force-reset (see its own comment where it's declared) -- so
-   flipping back to XP un-dims the same choice instead of resetting it. */
+   its normal, interactive state. Neither button carries .active while
+   this class is present either (see wireTargetModeToggle's own
+   applies && check) -- .gt-target-mode-btn's plain, un-highlighted
+   look (gray border, muted text) is what both buttons fall back to,
+   so nothing reads as "chosen" on a goal type where that choice isn't
+   real yet. Switching to XP re-wires this toggle from scratch with
+   GAIN selected (see the metric toggle's own click handler) rather
+   than restoring whatever was dimmed here. */
 .gt-target-mode-toggle--disabled { opacity: 0.4; pointer-events: none; }
 
 /* Stage 4 (recurring goals only) -- just the interval field now; its

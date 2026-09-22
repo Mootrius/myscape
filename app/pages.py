@@ -9870,14 +9870,18 @@ def render_goal_tracking(player: PlayerView) -> str:
         // likely more common than "reach a lifetime total of 50 kc" --
         // see Goal.baseline_value's own docstring in app/models.py for
         // what each one actually means server-side). Only ever READ
-        // when targetModeApplies() is true (see wizardAddGoal); left
-        // untouched -- not force-reset -- whenever the toggle doesn't
-        // currently apply, whether that means it's hidden entirely
-        // (switching to an item goal) or just showing disabled
-        // (switching a skill goal's own Lvl/Xp toggle to Lvl -- see
-        // targetModeVisible/wireTargetModeToggle), so a player's own
-        // GAIN/REACH pick survives a brief detour either way, the same
-        // way GT.type/wizardTarget already survive a Back-then-Forward.
+        // when targetModeApplies() is true (see wizardAddGoal). Left
+        // untouched -- not force-reset -- switching away from kc/skill
+        // entirely (an item goal, or leaving stage 3 altogether) hides
+        // this toggle without resetting it, so a player's own pick
+        // survives a Back-then-Forward the same way GT.type/
+        // wizardTarget already do. A skill goal's own Lvl<->Xp toggle
+        // is the one exception: switching LEVEL -> XP resets this to
+        // 'gain' every time (see that toggle's own click handler),
+        // since GAIN/REACH isn't a real choice yet on LEVEL -- there's
+        // nothing there for a pick to "survive" from, only a stale
+        // leftover value from some earlier visit to XP that GAIN's own
+        // default is meant to replace.
         targetMode: 'gain',
         recurInterval: '', // stage 4's own text field, kept here so re-rendering that stage (e.g. after Back then forward again) doesn't lose it
         recurUnit: 'day', // stage 4's own segmented-control selection
@@ -10334,10 +10338,15 @@ def render_goal_tracking(player: PlayerView) -> str:
       // .gt-target-mode-toggle--disabled added (dims it via CSS and
       // turns off pointer-events, see goal-tracking.css) and no click
       // handler wired up at all, rather than one that would silently
-      // no-op. GT.targetMode itself is left alone either way (not
-      // force-reset to 'reach') so a player's own GAIN/REACH pick
-      // survives a detour through LEVEL and is still showing, just
-      // dimmed, when they flip back to XP.
+      // no-op. Neither button gets .active while disabled either (see
+      // the applies && below) -- GAIN/REACH isn't a real choice yet on
+      // LEVEL, so nothing should read as chosen; both just show the
+      // plain gray-bordered look .gt-target-mode-btn already has at
+      // rest. GT.targetMode itself gets reset to 'gain' -- see the
+      // metric toggle's own click handler above, right where LEVEL
+      // switches to XP -- so GAIN is always what a player finds
+      // selected the moment this toggle becomes usable again, rather
+      // than whatever it happened to be left on before.
       function wireTargetModeToggle() {
         var field = document.getElementById('gtTargetModeField');
         if (!field) return;
@@ -10351,7 +10360,7 @@ def render_goal_tracking(player: PlayerView) -> str:
         var toggleEl = document.getElementById('gtTargetModeToggle');
         toggleEl.classList.toggle('gt-target-mode-toggle--disabled', !applies);
         document.querySelectorAll('#gtTargetModeToggle .gt-target-mode-btn').forEach(function (btn) {
-          btn.classList.toggle('active', btn.getAttribute('data-mode') === GT.targetMode);
+          btn.classList.toggle('active', applies && btn.getAttribute('data-mode') === GT.targetMode);
           if (!applies) return;
           btn.addEventListener('click', function () {
             var newMode = btn.getAttribute('data-mode');
@@ -10577,6 +10586,19 @@ def render_goal_tracking(player: PlayerView) -> str:
                     );
                   }
                 }
+                // Switching onto XP is what makes GAIN/REACH go from
+                // disabled to actually usable (see targetModeApplies) --
+                // GAIN is this toggle's own default (see GT.targetMode's
+                // declaration above for why), so resetting it here is
+                // what guarantees GAIN is always what a player finds
+                // selected the moment it becomes usable again, rather
+                // than whatever REACH/GAIN choice happened to be sitting
+                // there from a previous visit to XP. Only on the LEVEL
+                // -> XP direction -- switching XP -> LEVEL disables the
+                // toggle (see wireTargetModeToggle) without touching
+                // GT.targetMode at all, since there's no "becomes usable"
+                // moment on that side to reset for.
+                if (newMetric === 'xp') GT.targetMode = 'gain';
                 GT.skillMetric = newMetric;
               }
               document.querySelectorAll('.gt-metric-btn').forEach(function (b) {
