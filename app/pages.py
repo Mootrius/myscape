@@ -4776,13 +4776,19 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
        read, a bucket-click's own scoped read (matched by that bucket's
        `start` timestamp against the snapshot's precomputed per-bucket
        payloads -- see gen_landing_loot_demo.py), and the per-tile
-       hide/unhide POST/DELETE calls (answered with a no-op success,
-       since there's no real account here for a hide to persist
-       against -- critically, this also means those calls never reach
-       the REAL endpoint with a visitor's own real session cookie,
-       which plain unmodified fetch() would otherwise do for a logged-
-       in visitor who followed the header's own ?home=1 logo link back
-       to this page).
+       hide/unhide POST/DELETE calls, which this shim actually tracks
+       (two in-memory Sets, gone on refresh -- there's no real account
+       here for a hide to persist against) rather than just no-opping,
+       so hiding something here visibly moves the chart bars and header
+       kc/gp totals the same way it would on the real page -- see
+       recomputeAggregates/applyHiddenFlags below for exactly how much
+       of build_loot_state's own hidden-NPC/hidden-item math that reuses
+       versus redoes, and why. Critically, this shim being hit at all
+       (for every one of these calls) also means none of them ever
+       reach the REAL endpoint with a visitor's own real session
+       cookie, which plain unmodified fetch() would otherwise do for a
+       logged-in visitor who followed the header's own ?home=1 logo
+       link back to this page.
     2. The range/date selector neutered right after the reused script
        finishes its own wiring -- explicitly asked to be non-
        interactive here, since a fixed one-day snapshot has no other
@@ -4801,10 +4807,18 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
     extra_head, body, script = _loot_tracker_panel_markup()
     demo_json = json.dumps(demo["full"])
     bucket_states_json = json.dumps(demo["buckets"])
+    hide_breakdown_json = json.dumps(demo["hideBreakdown"])
     wrapper_script = f"""
     (function () {{
       var DEMO_STATE = {demo_json};
       var DEMO_BUCKET_STATES = {bucket_states_json};
+      // One entry per hour -- {{npcName: {{killCount, items: {{itemHideKey: value}}}}}}
+      // for whichever NPCs killed something that hour -- see
+      // scripts/gen_landing_loot_demo.py's own module docstring for
+      // exactly how this was built (the same _resolve_loot_items
+      // pricing build_loot_state itself calls, not re-derived here).
+      var HIDE_BREAKDOWN = {hide_breakdown_json};
+      var ALL_HOUR_INDICES = HIDE_BREAKDOWN.map(function (_, i) {{ return i; }});
 
       // The demo's own client-side hide/unhide state -- the real
       // hidden set lives in the HiddenLootEntry table (app/models.py)
@@ -4818,24 +4832,73 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
       function itemHideKey(itemId, itemName) {{
         return itemId != null ? ('id:' + itemId) : ('name:' + (itemName || '').trim().toLowerCase());
       }}
-      // Patches just the per-entry "hidden" flags a GET response
-      // carries (see build_loot_state's own docstring in app/loot.py
-      // for the full real shape) onto a deep clone of the static
-      // snapshot, using the two Sets above -- deliberately NOT
-      // recomputing the bucket/windowValue/windowKills exclusion a
-      // real hidden NPC/item also triggers server-side (that needs
-      // the full aggregation build_loot_state does, which is exactly
-      // the reimplementation this whole preview was built to avoid --
-      // see this function's own doc comment, point 1). The eye
-      // buttons still do something real and visible this way -- the
-      // tile dims, its icon flips to "unhide", the panel's own "show
-      // hidden" toggle filters it in/out -- just without the header
-      // GP/KC totals ticking down to match, a gap a demo visitor
-      // clicking an eye button to see what it does is in no position
-      // to notice.
-      function applyHiddenFlags(payload) {{
+
+      // Recomputes exactly the parts of a GET response that a hide/
+      // unhide actually changes server-side (see build_loot_state's
+      // own docstring in app/loot.py): a hidden NPC's kills drop out
+      // of the buckets/windowValue/windowKills entirely, a hidden
+      // item's own value drops out of every total it fed (bucket/
+      // window/NPC alike) without touching kill counts -- everything
+      // else (item names/icons/quantities, an NPC's own kill count,
+      // every bucket's start/end) is exactly what build_loot_state
+      // already computed and never needs redoing. `hourIndices` is
+      // which absolute hour(s) (0-23) this payload's own buckets
+      // correspond to, in order -- all 24 for the full-day view,
+      // exactly one for an hour drilled into (see bucketUrl's own
+      // comment in the reused script above for why that's always a
+      // single bucket).
+      function recomputeAggregates(hourIndices) {{
+        var buckets = [];
+        var npcBucketValues = {{}};
+        var npcTotalValue = {{}};
+        hourIndices.forEach(function (hourIdx, i) {{
+          var hourData = HIDE_BREAKDOWN[hourIdx] || {{}};
+          var bucketValue = 0, bucketKills = 0;
+          Object.keys(hourData).forEach(function (npcName) {{
+            var entry = hourData[npcName];
+            var visibleValue = 0;
+            Object.keys(entry.items).forEach(function (key) {{
+              if (!hiddenItemKeys.has(key)) visibleValue += entry.items[key];
+            }});
+            if (!npcBucketValues[npcName]) npcBucketValues[npcName] = hourIndices.map(function () {{ return 0; }});
+            npcBucketValues[npcName][i] = visibleValue;
+            npcTotalValue[npcName] = (npcTotalValue[npcName] || 0) + visibleValue;
+            // This NPC's own tile/bar always reflects its real kill
+            // count and item-hidden-filtered value, whether or not
+            // the NPC itself is hidden -- only the chart/header
+            // totals below skip a hidden NPC's contribution entirely.
+            if (!hiddenNpcs.has(npcHideKey(npcName))) {{
+              bucketValue += visibleValue;
+              bucketKills += entry.killCount;
+            }}
+          }});
+          buckets.push({{ value: bucketValue, killCount: bucketKills }});
+        }});
+        var windowValue = buckets.reduce(function (s, b) {{ return s + b.value; }}, 0);
+        var windowKills = buckets.reduce(function (s, b) {{ return s + b.killCount; }}, 0);
+        return {{ buckets: buckets, npcBucketValues: npcBucketValues, npcTotalValue: npcTotalValue, windowValue: windowValue, windowKills: windowKills }};
+      }}
+
+      // Clones the static snapshot, patches every "hidden" flag (item
+      // names/icons/quantities and an NPC's own kill count stay
+      // exactly as precomputed -- see this function's own doc comment,
+      // point 1, for why those never change), and overlays the live
+      // recomputation above onto the fields that do.
+      function applyHiddenFlags(payload, hourIndices) {{
         var out = JSON.parse(JSON.stringify(payload));
-        (out.windowNpcs || []).forEach(function (n) {{ n.hidden = hiddenNpcs.has(npcHideKey(n.sourceName)); }});
+        var agg = recomputeAggregates(hourIndices);
+        out.buckets.forEach(function (b, i) {{ b.value = agg.buckets[i].value; b.killCount = agg.buckets[i].killCount; }});
+        out.windowValue = agg.windowValue;
+        out.windowKills = agg.windowKills;
+        (out.windowNpcs || []).forEach(function (n) {{
+          n.hidden = hiddenNpcs.has(npcHideKey(n.sourceName));
+          if (agg.npcTotalValue.hasOwnProperty(n.sourceName)) n.value = agg.npcTotalValue[n.sourceName];
+        }});
+        if (out.npcBucketValues) {{
+          Object.keys(out.npcBucketValues).forEach(function (name) {{
+            if (agg.npcBucketValues.hasOwnProperty(name)) out.npcBucketValues[name] = agg.npcBucketValues[name];
+          }});
+        }}
         (out.windowItems || []).forEach(function (it) {{ it.hidden = hiddenItemKeys.has(itemHideKey(it.itemId, it.itemName)); }});
         if (out.npcItems) {{
           Object.keys(out.npcItems).forEach(function (name) {{
@@ -4864,13 +4927,14 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
 
         if (path === '/api/players/me/loot' && method === 'GET') {{
           var payload = DEMO_STATE;
+          var hourIndices = ALL_HOUR_INDICES;
           if (params.get('range') === 'custom' && params.get('start')) {{
             var startParam = params.get('start');
             for (var i = 0; i < DEMO_STATE.buckets.length; i++) {{
-              if (DEMO_STATE.buckets[i].start === startParam) {{ payload = DEMO_BUCKET_STATES[i]; break; }}
+              if (DEMO_STATE.buckets[i].start === startParam) {{ payload = DEMO_BUCKET_STATES[i]; hourIndices = [i]; break; }}
             }}
           }}
-          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(applyHiddenFlags(payload)); }} }});
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(applyHiddenFlags(payload, hourIndices)); }} }});
         }}
         if (path === '/api/players/me/loot/hidden-npcs') {{
           var npcBody = opts.body ? JSON.parse(opts.body) : {{}};

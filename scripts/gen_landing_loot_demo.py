@@ -33,6 +33,21 @@ app/data/ -- see e.g. scripts/fetch_npc_names.py's own docstring),
 never automatically, matching the "fixed, not randomized every page
 load" choice this preview was built around.
 
+Also writes a third top-level key, "hideBreakdown" -- one entry per
+hour, each {npcName: {killCount, items: {itemHideKey: value}}} for
+whichever NPCs actually killed something that hour -- alongside the
+two build_loot_state outputs above. This is what lets the preview's
+own hide/unhide eye buttons (see render_landing_loot_preview's wrapper
+script) actually move the chart bars and header kc/gp totals instead
+of just dimming a tile: build_loot_state's own hidden-NPC/hidden-item
+exclusion math (see its own docstring) is simple enough -- sum values,
+skip a hidden NPC's kills entirely, skip a hidden item's own value --
+that redoing just that part client-side, off data this precise, isn't
+the reimplementation-drift risk avoiding the rest of build_loot_state
+was about; the values folded into it are still resolved through
+_resolve_loot_items below, the same pricing/mapping code build_loot_
+state itself calls, not re-derived by hand.
+
 Two separate random.Random instances, both seeded but independently
 so (see `rng`/`loot_rng` below): one lays out the day's schedule (how
 kills split across hours), the other rolls each kill's own loot --
@@ -59,8 +74,9 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from app.database import SessionLocal
-from app.loot import build_loot_state
+from app.loot import build_loot_state, item_hide_key, _resolve_loot_items
 from app.models import Account, GameAccount, LootEvent
+from app.purchase_goals import get_latest_prices, get_mapping
 
 OUTPUT_PATH = _REPO_ROOT / "app" / "data" / "landing_loot_demo.json"
 DEMO_MARKER_EMAIL = "landing-demo-internal@myscape.invalid"
@@ -352,9 +368,40 @@ def main():
             b_end = dt.datetime.fromisoformat(b["end"]) - dt.timedelta(milliseconds=1)
             bucket_states.append(build_loot_state(db, ga, b_start, b_end))
 
+        # hideBreakdown -- see this module's own docstring for what it's
+        # for. Built straight off `events` (this script's own simulated
+        # kills, still in hand from build_events() above) rather than
+        # querying LootEvent back out of the DB, and resolved through
+        # the exact same _resolve_loot_items build_loot_state itself
+        # calls -- get_mapping()/get_latest_prices() are both cached at
+        # module level (see app/purchase_goals.py), so calling them
+        # again here returns the identical mapping/prices already used
+        # for full_state/bucket_states above, not a second live fetch
+        # that could disagree with them.
+        mapping, _mapping_error = get_mapping()
+        prices, _prices_error = get_latest_prices()
+        hide_breakdown = [dict() for _ in range(24)]
+        for e in events:
+            if e["source_type"] != "npc":
+                continue  # only NPCs ever get an eye button -- see build_loot_state's own "By NPC" row being npc-only
+            hour_idx = int((e["occurred_at"] - base_date).total_seconds() // 3600)
+            if not (0 <= hour_idx < 24):
+                continue
+            resolved_items, _ = _resolve_loot_items(e["items"], mapping, prices, set())
+            npc_bucket = hide_breakdown[hour_idx].setdefault(
+                e["source_name"], {"killCount": 0, "items": {}}
+            )
+            npc_bucket["killCount"] += 1
+            for it in resolved_items:
+                key = item_hide_key(it["itemId"], it["itemName"])
+                npc_bucket["items"][key] = npc_bucket["items"].get(key, 0) + it["value"]
+
         OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(OUTPUT_PATH, "w") as f:
-            json.dump({"full": full_state, "buckets": bucket_states}, f, separators=(",", ":"))
+            json.dump(
+                {"full": full_state, "buckets": bucket_states, "hideBreakdown": hide_breakdown},
+                f, separators=(",", ":"),
+            )
         print(f"wrote {OUTPUT_PATH} ({OUTPUT_PATH.stat().st_size} bytes)")
 
         # This demo account/game_account/its events only ever existed
