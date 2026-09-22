@@ -458,11 +458,15 @@ def _shell(
 
 
 def render_landing(player: Optional[PlayerView]) -> str:
-    # Renders for a logged-in player too now (see root() in main.py) --
-    # the header's "myscape" logo/nav and the footer's own linked-status
-    # note (both from _shell/player below) already handle either case
-    # correctly on their own, so this needs nothing extra here to
-    # support it.
+    # root() (main.py) redirects a logged-in player to /dashboard
+    # before this ever runs, so in practice this only ever renders for
+    # a logged-out visitor now. It still takes player and handles both
+    # cases correctly regardless -- same Optional[PlayerView] signature
+    # every other render_* function here has, and the header's
+    # "myscape" logo/nav plus the footer's own linked-status note (both
+    # from _shell/player below) already needed to handle either case on
+    # their own anyway -- rather than assuming its one caller will
+    # never change.
     # The footer's own "ARE YOU READY?" call to action (see _footer()'s
     # extra param and _shell()'s footer_extra) -- deliberately rendered
     # *inside* <footer> rather than as one more .landing-anchor, so it

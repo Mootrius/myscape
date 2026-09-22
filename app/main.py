@@ -452,15 +452,18 @@ def on_startup():
 
 @app.get("/", response_class=HTMLResponse)
 def root(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
-    # Used to redirect a logged-in player straight to /dashboard, on the
-    # theory that they'd have no reason to want the landing page once
-    # they're already a user -- but that also meant the header's own
-    # "myscape" logo link (plain href="/", same as it's always been)
-    # could never actually take a logged-in player back to the landing
-    # page itself, only bounce them right back to whatever dashboard
-    # page they were already on. render_landing is player-aware (see
-    # its own docstring) specifically so it can render properly either
-    # way now.
+    # A logged-in player lands straight on /dashboard, same as every
+    # other logged-out-only page on the site already does (see
+    # signup_page/login_page/forgot_password_page just below) -- they'd
+    # have no reason to want the marketing landing page once they're
+    # already a user, whether they typed myscape.io in fresh or clicked
+    # a stale link (including the header's own "myscape" logo, plain
+    # href="/") back to it. This one whole-site behavior covers both:
+    # a request never reaches render_landing at all once a player's
+    # logged in, so there's no separate "which page do they land on"
+    # decision to make per entry point.
+    if player:
+        return RedirectResponse("/dashboard", status_code=302)
     return render_landing(player)
 
 
