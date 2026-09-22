@@ -458,6 +458,35 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
 
 /* ---- Goal list --------------------------------------------------- */
 
+/* Same look as Loot Tracker's own .loot-sort-tabs/.loot-sort-tab
+   (loot-tracker.css) -- a row of equal-width buttons, one active at a
+   time (see updateSortTabs in the script), each just a short label
+   (no arrows -- unlike Loot Tracker's GP/count/alpha pairs, none of
+   these four is a high/low or A-Z/Z-A pair, just one fixed direction
+   each, so there's nothing a second button per mode would add). Kept
+   as its own local copy rather than shared, same "each page owns its
+   own CSS file" convention every page here already follows. Hidden
+   whenever the list itself is (see renderGoalList) -- sorting an
+   empty list has nothing to show for it. */
+.gt-sort-tabs { display: flex; gap: 5px; margin-bottom: 14px; }
+
+.gt-sort-tab {
+  flex: 1;
+  padding: 5px 3px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+}
+
+.gt-sort-tab:hover { border-color: var(--gold-dim); color: var(--text); }
+.gt-sort-tab.active { border-color: var(--gold); color: var(--gold); }
+
 .gt-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 30px 10px; }
 
 .gt-goal-list { display: flex; flex-direction: column; }
@@ -486,21 +515,60 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
 
 .gt-goal-info { flex: 1 1 auto; min-width: 0; }
 
+/* Name + progress text on one line now, instead of the progress text
+   getting its own line below the name -- see goalRowHtml in the
+   script. align-items: baseline lines up the two differently-sized
+   texts on their text baseline rather than their box tops/middles,
+   the same way two differently-sized inline texts naturally would.
+   Room for .gt-goal-delete (which overlays the row's top-right corner
+   rather than sitting in flow) moved here from .gt-goal-name alone --
+   sized for its widest state, the "Are you sure?" confirm label, so a
+   long name/progress-text pair's own overflow never runs under it.
+   The bar below doesn't need this: the button doesn't reach down
+   that far. */
+.gt-goal-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-right: 92px;
+}
+
 .gt-goal-name {
   color: var(--text);
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* Room for .gt-goal-delete, which overlays the row's top-right corner
-     rather than sitting in flow -- sized for its widest state, the "Are
-     you sure?" confirm label, so a long goal name's ellipsis never runs
-     under it. The sub-line and bar below don't need this: the button
-     doesn't reach down that far. */
-  padding-right: 92px;
+  /* flex-grow: 0 (not 1) -- this shouldn't stretch to fill the row's
+     leftover width the way a lone flex child normally would, or the
+     progress text beside it would just get shoved out to the row's
+     far edge instead of sitting right after the name the way it's
+     meant to. Shrinks first (not .gt-goal-sub beside it) when the two
+     don't both fit -- an ellipsized name still reads fine, but a
+     truncated "13,034,4... / 200,000,000 XP" progress readout
+     wouldn't. */
+  flex: 0 1 auto;
+  /* A floor, not 0 -- .gt-goal-sub beside it never shrinks (see its
+     own comment), so on a narrow screen with a long recurring-cadence
+     sub ("13,363 / 100,000 XP · EVERY 2 WEEKS") this would otherwise
+     get squeezed all the way down to nothing, leaving a row with no
+     name at all, just a progress readout and an icon to guess from. */
+  min-width: 48px;
 }
 
-.gt-goal-sub { color: var(--text-faint); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; margin-top: 1px; font-variant-numeric: tabular-nums; }
+.gt-goal-sub {
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  /* Never shrinks or wraps (see .gt-goal-name's own comment on why it,
+     not this, gives way first) and never claims more than its own
+     text needs, so it doesn't steal width from the name that isn't
+     actually necessary. */
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 
 /* Now doubles as the progress readout (current/target, in the goal's
    own unit -- see goalProgressLabel in the script), so it picks up
@@ -508,9 +576,14 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
    own before that separate column was folded into this line. */
 .gt-goal-done .gt-goal-sub { color: var(--green); }
 
+/* Taller than before (5px -> 9px) -- folding the progress text onto
+   the name's own line (see .gt-goal-headline above) freed up the
+   vertical space that used to be its own separate line, and a
+   thicker bar reads as a more deliberate focal point for the row than
+   the old hairline did, rather than just leaving that space empty. */
 .gt-goal-bar {
   width: 100%;
-  height: 5px;
+  height: 9px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   margin-top: 6px;

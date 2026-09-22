@@ -9701,6 +9701,12 @@ def render_goal_tracking(player: PlayerView) -> str:
     </div>
 
     <div class="gt-card gt-list-card">
+      <div class="gt-sort-tabs" id="gtSortTabs">
+        <button type="button" class="gt-sort-tab" data-sort="progress">Progress</button>
+        <button type="button" class="gt-sort-tab" data-sort="type">Type</button>
+        <button type="button" class="gt-sort-tab" data-sort="alpha">A-Z</button>
+        <button type="button" class="gt-sort-tab" data-sort="recent">Recent</button>
+      </div>
       <p class="gt-empty" id="gtEmpty" style="display:none;">Add a goal above to start tracking.</p>
       <div class="gt-goal-list" id="gtGoalList"></div>
     </div>
@@ -9723,6 +9729,12 @@ def render_goal_tracking(player: PlayerView) -> str:
         skill: '/static/img/icon-goal-skill.png',
         item: '/static/img/icon-goal-item.png',
       };
+      // The "Type" sort tab's own grouping order -- same kc/skill/item
+      // sequence TYPE_ICON above already uses, so a type-sorted list
+      // reads in the same order the wizard's own stage-2 type picker
+      // and every other type-keyed lookup on this page already agree
+      // on, rather than introducing a second, different ordering.
+      var GOAL_TYPE_SORT_ORDER = { kc: 0, skill: 1, item: 2 };
       // Bounds mirror app.mindmaps' own MIN/MAX_SKILL_LEVEL, just for
       // this field's own live validation (see validateTargetField
       // below) -- the server re-validates against its own copy of
@@ -9820,6 +9832,12 @@ def render_goal_tracking(player: PlayerView) -> str:
 
       var GT = {
         goals: [],
+        // Which of #gtSortTabs' own buttons is active -- 'alpha' (A-Z
+        // by name) was this list's only order before sorting existed,
+        // so it stays the default rather than silently reordering
+        // anyone's existing goal list on their first visit after this
+        // shipped. See sortGoals below for what each mode actually does.
+        sortMode: 'alpha',
         // 0 = collapsed (just the + box), 1 = pick one-time/recurring,
         // 2 = pick a type, 3 = pick a target + value, 4 = pick a
         // recurring goal's own cadence (recurring only -- a one-time
@@ -10603,8 +10621,10 @@ def render_goal_tracking(player: PlayerView) -> str:
           '<div class="gt-goal-row' + (done ? ' gt-goal-done' : '') + '">' +
           '  <img class="gt-goal-icon" src="' + goalIconSrc(g) + '" alt="" />' +
           '  <div class="gt-goal-info">' +
-          '    <div class="gt-goal-name">' + escapeHtml(goalName(g)) + '</div>' +
-          '    <div class="gt-goal-sub">' + goalProgressLabel(g) + '</div>' +
+          '    <div class="gt-goal-headline">' +
+          '      <span class="gt-goal-name">' + escapeHtml(goalName(g)) + '</span>' +
+          '      <span class="gt-goal-sub">' + goalProgressLabel(g) + '</span>' +
+          '    </div>' +
           '    <div class="gt-goal-bar"><div class="gt-goal-bar-fill" style="width:' + pct + '%"></div></div>' +
           '  </div>' +
           '  <button type="button" class="gt-goal-delete" data-goal-id="' + g.id + '" title="Delete goal" aria-label="Delete goal">' +
@@ -10620,21 +10640,71 @@ def render_goal_tracking(player: PlayerView) -> str:
           '</div>';
       }
 
-      // Alphabetical by target name, case-insensitive, regardless of
-      // goal type -- the same alphabetize-it convention this redesign
-      // applies to the dashboard's own card order, applied here too so
-      // a growing goal list stays easy to scan rather than just
-      // reading back in creation order.
+      // Powers #gtSortTabs (see the body's own markup and GT.sortMode).
+      // Never mutates the list it's given -- same "always sort a copy"
+      // convention Loot Tracker's own sortEntries already follows, so
+      // GT.goals itself stays in whatever order loadGoals last received
+      // it in.
+      //   'progress' -- closest to done first (progress_pct, already
+      //     computed server-side in xp for a level-metric skill goal --
+      //     see app.goals.progress_pct -- so this reads correctly for
+      //     every goal type without needing to know which one it is).
+      //   'type'     -- kc/skill/item, grouped in GOAL_TYPE_SORT_ORDER's
+      //     order, alphabetical by name within each group.
+      //   'alpha'    -- A-Z by name, case-insensitive. The original,
+      //     and still the default, order this list ever had.
+      //   'recent'   -- newest-created first.
+      function sortGoals(list, sortMode) {
+        var out = list.slice();
+        if (sortMode === 'progress') {
+          out.sort(function (a, b) { return b.progress_pct - a.progress_pct; });
+        } else if (sortMode === 'type') {
+          out.sort(function (a, b) {
+            var byType = GOAL_TYPE_SORT_ORDER[a.goal_type] - GOAL_TYPE_SORT_ORDER[b.goal_type];
+            if (byType !== 0) return byType;
+            return goalName(a).toLowerCase().localeCompare(goalName(b).toLowerCase());
+          });
+        } else if (sortMode === 'recent') {
+          out.sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+        } else {
+          out.sort(function (a, b) { return goalName(a).toLowerCase().localeCompare(goalName(b).toLowerCase()); });
+        }
+        return out;
+      }
+
+      // Toggles which #gtSortTabs button looks active -- same pattern
+      // Loot Tracker's own updateSortTabs already uses for its two
+      // sort-tab rows, just the one container here.
+      function updateSortTabs() {
+        document.querySelectorAll('#gtSortTabs .gt-sort-tab').forEach(function (b) {
+          b.classList.toggle('active', b.getAttribute('data-sort') === GT.sortMode);
+        });
+      }
+
       function renderGoalList() {
         var listEl = document.getElementById('gtGoalList');
         var emptyEl = document.getElementById('gtEmpty');
-        if (!GT.goals.length) { listEl.innerHTML = ''; emptyEl.style.display = ''; return; }
+        var sortTabsEl = document.getElementById('gtSortTabs');
+        if (!GT.goals.length) {
+          listEl.innerHTML = '';
+          emptyEl.style.display = '';
+          sortTabsEl.style.display = 'none';
+          return;
+        }
         emptyEl.style.display = 'none';
-        var sorted = GT.goals.slice().sort(function (a, b) {
-          return goalName(a).toLowerCase().localeCompare(goalName(b).toLowerCase());
-        });
+        sortTabsEl.style.display = '';
+        var sorted = sortGoals(GT.goals, GT.sortMode);
         listEl.innerHTML = sorted.map(goalRowHtml).join('');
       }
+
+      document.getElementById('gtSortTabs').addEventListener('click', function (e) {
+        var btn = e.target.closest('.gt-sort-tab');
+        if (!btn) return;
+        GT.sortMode = btn.getAttribute('data-sort');
+        updateSortTabs();
+        renderGoalList();
+      });
+      updateSortTabs();
 
       // Delegated on the list container itself (not per-button, since
       // renderGoalList rebuilds the whole list's innerHTML every poll --
