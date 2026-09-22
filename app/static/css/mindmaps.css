@@ -784,9 +784,14 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-popover-actions {
   display: flex; flex-direction: row; gap: 8px; width: 100%; justify-content: center;
 }
+/* height: 25px matches the site-wide button height (see .loot-sort-tab
+   in loot-tracker.css, where that number comes from) -- scoped to just
+   these two buttons rather than raising .btn-secondary's own 32px
+   default, since mmNameCancel/.mm-add-shared-child-btn elsewhere in
+   this file share that base class but weren't part of this pass. */
 .mm-popover-actions .mm-goal-save-btn,
 .mm-popover-actions .mm-color-popover-delete {
-  flex: 1 1 0; width: auto; height: 26px;
+  flex: 1 1 0; width: auto; height: 25px;
 }
 .mm-popover-actions:has(.mm-color-popover-delete:only-child) .mm-color-popover-delete {
   flex: 0 1 auto; padding: 0 20px;
@@ -807,7 +812,7 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 
 /* Shorter than .btn-secondary's own default 32px -- this one sits in
    a small popover, not a row of full-size buttons. */
-.mm-color-popover-delete { width: auto; height: 22px; align-self: center; }
+.mm-color-popover-delete { width: auto; height: 25px; align-self: center; }
 .mm-delete-btn:hover { border-color: var(--red); color: var(--red); }
 .mm-delete-btn:disabled:hover { border-color: var(--border); color: var(--text-dim); }
 
@@ -975,10 +980,15 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
    .mm-type-btn-label needs it: without this, "Easy"/"Medium"/"Hard"/
    "Elite" would render in plain title case instead of matching the
    rest of the popover's all-caps look. */
+/* height: 25px matches the site-wide button height (see .loot-sort-tab
+   in loot-tracker.css) -- display: flex + align-items/justify-content:
+   center is what keeps each label centered at that height regardless
+   of its own font-size, rather than relying on padding math. */
 .mm-segment-btn {
-  flex: 1 1 0; background: #100e0b; border: none; border-right: 1px solid var(--border);
+  flex: 1 1 0; height: 25px; background: #100e0b; border: none; border-right: 1px solid var(--border);
   color: var(--text-dim); font-family: inherit; font-size: 10.5px; letter-spacing: 0.02em;
-  padding: 7px 4px; cursor: pointer; text-align: center; text-transform: uppercase;
+  padding: 0 4px; cursor: pointer; text-align: center; text-transform: uppercase;
+  display: flex; align-items: center; justify-content: center;
 }
 .mm-segment-btn:last-child { border-right: none; }
 .mm-segment-btn:hover { color: var(--text); }
@@ -987,11 +997,14 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 /* The skill goal's own row -- the skill search box and its LVL/XP
    segmented toggle sit side by side here (rather than the toggle
    stacked on its own full-width line below), the search box taking
-   whatever room the toggle doesn't need. */
-.mm-goal-skill-row { display: flex; flex-direction: row; gap: 6px; width: 100%; align-items: stretch; }
+   whatever room the toggle doesn't need. align-items: center (not
+   stretch, which this used to be) is what keeps the toggle -- 25px,
+   the site-wide button height, shorter than the search box's own 30px
+   -- vertically centered against it instead of stretched to match. */
+.mm-goal-skill-row { display: flex; flex-direction: row; gap: 6px; width: 100%; align-items: center; }
 .mm-goal-skill-row .mm-search-wrap { flex: 1 1 auto; width: auto; min-width: 0; }
 .mm-goal-skill-row .mm-segment-group { flex: 0 0 auto; width: auto; }
-.mm-goal-skill-row .mm-segment-btn { flex: 0 0 auto; padding: 7px 10px; }
+.mm-goal-skill-row .mm-segment-btn { flex: 0 0 auto; padding: 0 10px; }
 
 /* ---- Inline field validation (validateSkillTarget) --------------------
    The skill goal's target field -- shown directly under that one

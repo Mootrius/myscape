@@ -7223,9 +7223,14 @@ def render_mindmaps(player: PlayerView) -> str:
         // itself, not anything this popover saves -- only its NAME
         // saves here).
         var showSave = !!goalType;
+        // Delete before Save (not after) -- same secondary-action-
+        // first, primary-action-last ordering the Goal Tracking
+        // wizard's own Back/Cancel/Save row uses, so Save reads as the
+        // one gold "primary" action sitting rightmost regardless of
+        // which page you're on.
         var actionsHtml = '<div class="mm-popover-actions" data-role="popover-actions">' +
-          (showSave ? '<button type="button" class="btn-secondary mm-goal-save-btn" data-role="goal-save">SAVE</button>' : '') +
           '<button type="button" class="btn-secondary mm-delete-btn mm-color-popover-delete" data-role="delete">Delete</button>' +
+          (showSave ? '<button type="button" class="btn-secondary mm-goal-save-btn" data-role="goal-save">SAVE</button>' : '') +
           '</div>';
         // A trackable type's own "you're missing something" error
         // (server-validated -- see saveNodeGoal/showGoalSaveError and

@@ -45,11 +45,15 @@
    goals.css) -- deliberately re-declared here rather than shared
    across files, per this project's per-page-CSS convention. Multi-
    select: each button toggles independently and all start on. Fixed
-   32px height (rather than sizing purely off padding) so every button
-   lines up with the search box beside it regardless of font
-   rendering. */
+   25px height (the site-wide button height -- see .loot-sort-tab in
+   loot-tracker.css) rather than sizing purely off padding, so every
+   button lines up with every other button on the site regardless of
+   font rendering; .pm-controls-row/.pm-control-group's own
+   align-items: center is what keeps it vertically centered against
+   the taller 32px search box beside it now that they no longer match
+   heights outright. */
 .pm-filter-btn {
-  height: 32px; padding: 0 10px; box-sizing: border-box;
+  height: 25px; padding: 0 10px; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
@@ -463,6 +467,16 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
    still declares it win," which for this shared base class is
    Clear's red). */
 .pm-filter-clear-btn.pm-view-cancel-btn:hover { border-color: var(--gold-dim); color: var(--text-dim); }
+/* The Save View popover's own Save/Cancel drop to the site-wide 25px
+   button height (see .loot-sort-tab in loot-tracker.css) -- scoped to
+   just .pm-view-save-popover (not the general
+   .pm-filter-popover-actions button rule above) so the per-column
+   filter popover's own Apply/Clear, which shares that same base class,
+   stays at its own 28px untouched. They sit on their own row below the
+   view-name input here (see .pm-view-save-popover's own flex-direction:
+   column), not beside it, so there's no taller neighbor to center
+   against. */
+.pm-view-save-popover .pm-filter-popover-actions button { height: 25px; }
 
 /* ---- Saved views strip (drag-and-drop reorderable, sits directly
    above the table headers -- see PossessionView in app/models.py and
@@ -477,8 +491,14 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
    -- always draggable, no separate "custom mode" gate, same reasoning
    as that row: reordering a short named list is never anything other
    than a drag. */
+/* height: 25px is the site-wide button height (see .loot-sort-tab in
+   loot-tracker.css) -- .pm-views-row's own align-items: center is what
+   keeps this and .pm-view-add-btn below lined up on their shared
+   vertical middle even where one runs slightly taller than the other
+   (the delete "x" and drag-handle padding aren't pixel-identical
+   between the two). */
 .pm-view-chip {
-  height: 30px; padding: 0 6px 0 10px; box-sizing: border-box;
+  height: 25px; padding: 0 6px 0 10px; box-sizing: border-box;
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 12px; color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
@@ -499,7 +519,7 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 }
 .pm-view-delete:hover { color: var(--red); }
 .pm-view-add-btn {
-  height: 30px; padding: 0 10px; box-sizing: border-box;
+  height: 25px; padding: 0 10px; box-sizing: border-box;
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-dim);
   background: none; border: 1px dashed var(--border); border-radius: var(--radius);

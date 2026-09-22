@@ -54,9 +54,15 @@
    plain dropdown menu, same open/close-on-outside-click pattern as
    Purchase Goals' own .tracker-menu-wrap/#setupMenu. ---------- */
 .loot-chart-range { position: relative; z-index: 2; }
+/* height: 25px pins this to the same site-wide button height
+   .loot-sort-tab below already renders at naturally (that's where the
+   25px number itself comes from) -- explicit here rather than left to
+   padding math, so it can't drift out of sync with every other
+   button/segmented-control-button on the site that now shares it. */
 .loot-range-btn {
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 10px;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  height: 25px;
+  padding: 0 10px;
   font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
@@ -367,9 +373,18 @@
    padding/font-size down a notch from what fewer, wordier tabs
    needed. */
 .loot-sort-tabs { display: flex; gap: 5px; }
+/* 25px is THE site-wide button height -- every other button and
+   segmented-control button across the whole site (goal-tracking.css,
+   mindmaps.css, purchase-goals.css, possessions.css) is pinned to
+   match this one exactly, since this is where that number originally
+   came from (this rule used to size itself by padding alone; pinned
+   explicitly now so it can't quietly drift out of sync with
+   everything now matching it). */
 .loot-sort-tab {
   flex: 1;
-  padding: 5px 3px;
+  height: 25px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
   font-size: 10px; letter-spacing: 0.02em; text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
@@ -393,8 +408,9 @@
    hide anything itself, so there's no second state to draw. */
 .loot-hide-toggle {
   flex: 0 0 26px;
+  height: 25px;
   display: flex; align-items: center; justify-content: center;
-  padding: 5px 0;
+  padding: 0;
   color: var(--text-dim);
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
