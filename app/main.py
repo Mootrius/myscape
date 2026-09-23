@@ -140,6 +140,8 @@ from app.schemas import (
     BoatCargoItemOut,
     BoatCargoSyncRequest,
     BoatCargoSyncResponse,
+    CharacterSummarySyncRequest,
+    CharacterSummarySyncResponse,
     CreateGearSetupRequest,
     CreateMindMapRequest,
     DashboardCardOrderRequest,
@@ -1456,6 +1458,64 @@ def read_diaries(game_account: GameAccount = Depends(get_current_verified_game_a
     return {"diaryTiers": game_account.diary_tiers or {}}
 
 
+@app.post("/api/players/me/character-summary", response_model=CharacterSummarySyncResponse)
+def sync_character_summary(
+    payload: CharacterSummarySyncRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
+):
+    """Full replace of Character Overview's summary row -- see
+    GameAccount.character_summary_* columns' own comment in
+    app/models.py and MyscapeClient#syncCharacterSummary in the
+    Mootrius/myscape-plugin repo for how these seven stats are actually
+    read (InterfaceID.AccountSummarySidepanel's dynamic children, at
+    fixed indices confirmed with a live widget dump). stat_count is
+    always 11 on success -- there's only ever one summary to send, so
+    unlike every other sync* endpoint's count this isn't counting
+    anything meaningful, just satisfying MyscapeClient#syncPayload's
+    shared countField contract (see that method's own comment)."""
+    game_account.character_summary_combat_level = payload.combat_level
+    game_account.character_summary_total_level = payload.total_level
+    game_account.character_summary_total_xp = payload.total_xp
+    game_account.character_summary_quests_completed = payload.quests_completed
+    game_account.character_summary_quests_total = payload.quests_total
+    game_account.character_summary_achievements_completed = payload.achievements_completed
+    game_account.character_summary_achievements_total = payload.achievements_total
+    game_account.character_summary_combat_tasks_completed = payload.combat_tasks_completed
+    game_account.character_summary_combat_tasks_total = payload.combat_tasks_total
+    game_account.character_summary_collections_completed = payload.collections_completed
+    game_account.character_summary_collections_total = payload.collections_total
+    game_account.character_summary_synced_at = datetime.now(timezone.utc)
+    db.commit()
+    return CharacterSummarySyncResponse(stat_count=11)
+
+
+@app.get("/api/character-overview/summary")
+def character_overview_summary(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """Character Overview's own summary-row payload -- session-
+    authenticated like /api/possessions/summary below, since only the
+    website UI calls this. The seven Character Summary stats are read
+    straight off GameAccount as last synced by POST
+    /api/players/me/character-summary above; null for any stat (or all
+    seven, on an account that's never opened that in-game tab with the
+    plugin running) renders as an em dash rather than a wrong number --
+    see render_character_overview in app/pages.py."""
+    return {
+        "combatLevel": game_account.character_summary_combat_level,
+        "totalLevel": game_account.character_summary_total_level,
+        "totalXp": game_account.character_summary_total_xp,
+        "questsCompleted": game_account.character_summary_quests_completed,
+        "questsTotal": game_account.character_summary_quests_total,
+        "achievementsCompleted": game_account.character_summary_achievements_completed,
+        "achievementsTotal": game_account.character_summary_achievements_total,
+        "combatTasksCompleted": game_account.character_summary_combat_tasks_completed,
+        "combatTasksTotal": game_account.character_summary_combat_tasks_total,
+        "collectionsCompleted": game_account.character_summary_collections_completed,
+        "collectionsTotal": game_account.character_summary_collections_total,
+        "syncedAt": game_account.character_summary_synced_at.isoformat() if game_account.character_summary_synced_at else None,
+    }
+
+
 @app.post("/api/players/me/hiscores/sync")
 def sync_hiscores(
     db: Session = Depends(get_db),
@@ -1697,8 +1757,8 @@ def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_curre
 @app.get("/dashboard/character-overview", response_class=HTMLResponse)
 def character_overview_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     """Same login/verified gate as every other /dashboard/* page above --
-    render_character_overview itself is just a blank placeholder for
-    now (see its own docstring in app/pages.py)."""
+    see render_character_overview's own docstring in app/pages.py for
+    the summary row this now renders."""
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:

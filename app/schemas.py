@@ -1048,6 +1048,33 @@ class DiariesSyncResponse(BaseModel):
     area_count: int
 
 
+class CharacterSummarySyncRequest(BaseModel):
+    """The seven stats the myscape-plugin repo reads straight off the
+    in-game "Character Summary" tab -- see GameAccount's own
+    character_summary_* columns in app/models.py for what each field
+    means and why questsCompleted/questsTotal stands in for quest
+    points. Always a full replace, like every other current-state sync
+    here (skills/quests/diaries above) -- there's no incremental update
+    for any of these, since the plugin always reads (and sends) the
+    whole panel in one pass."""
+
+    combat_level: float
+    total_level: int
+    total_xp: int
+    quests_completed: int
+    quests_total: int
+    achievements_completed: int
+    achievements_total: int
+    combat_tasks_completed: int
+    combat_tasks_total: int
+    collections_completed: int
+    collections_total: int
+
+
+class CharacterSummarySyncResponse(BaseModel):
+    stat_count: int
+
+
 # -- Item search (backs the gear-setup slot picker's search box). ---------
 
 class ItemSearchResult(BaseModel):

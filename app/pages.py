@@ -6,6 +6,7 @@ grows past "a handful," that tradeoff is worth revisiting.
 """
 import json
 import os
+import urllib.parse
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -109,6 +110,16 @@ try:
     _LOOT_TRACKER_CSS_VERSION = int(os.path.getmtime(_LOOT_TRACKER_CSS_PATH))
 except OSError:
     _LOOT_TRACKER_CSS_VERSION = 0
+
+# Same cache-busting trick again, for the Character Overview page's own
+# stylesheet.
+_CHARACTER_OVERVIEW_CSS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "css", "character-overview.css"
+)
+try:
+    _CHARACTER_OVERVIEW_CSS_VERSION = int(os.path.getmtime(_CHARACTER_OVERVIEW_CSS_PATH))
+except OSError:
+    _CHARACTER_OVERVIEW_CSS_VERSION = 0
 
 # The landing page's own interactive Loot Tracker preview (see
 # render_landing_loot_preview below) is backed by a static, curated
@@ -1068,6 +1079,33 @@ _ICON_MAX_CAPE = item_icon_url(13280)
 _ICON_CHARACTER_OVERVIEW = "/static/img/icon-character-overview.png"
 
 
+def _wiki_icon_url(filename: str) -> str:
+    """Routed through /icon-cache/<filename> (app/icon_cache.py), same
+    as npc_icon_url in app/loot.py -- a direct wiki hotlink here is
+    exactly what trips the wiki's rate limiting (see that module's own
+    top-of-file comment). Used only by the eight Character Overview
+    summary-row icons below, none of which are real OSRS items (so
+    item_icon_url's RuneLite-CDN-by-item-id route above doesn't apply)
+    -- they're UI chrome straight off the wiki's own Character Summary
+    documentation."""
+    return "/icon-cache/" + urllib.parse.quote(filename)
+
+
+# The Character Overview summary row's eight icons (see
+# render_character_overview below) -- one wiki filename per stat, as
+# given directly by the wiki's own /images/<filename>?<hash> URLs (the
+# hash is a cache-busting suffix on that direct path, irrelevant to
+# Special:FilePath's own redirect resolution -- see app/icon_cache.py).
+_ICON_SUMMARY_GE_VALUE = _wiki_icon_url("Guide_prices.png")
+_ICON_SUMMARY_COMBAT_LEVEL = _wiki_icon_url("Character_Summary_-_Combat_Level_icon.png")
+_ICON_SUMMARY_TOTAL_LEVEL = _wiki_icon_url("Character_Summary_-_Total_Level.png")
+_ICON_SUMMARY_TOTAL_XP = _wiki_icon_url("Character_Summary_-_Total_XP_icon.png")
+_ICON_SUMMARY_QUESTS = _wiki_icon_url("Quest_List_tab_icon.png")
+_ICON_SUMMARY_ACHIEVEMENTS = _wiki_icon_url("Achievement_Diaries_tab_icon.png")
+_ICON_SUMMARY_COMBAT_TASKS = _wiki_icon_url("Character_Summary_-_Combat_Tasks_Completed_icon.png")
+_ICON_SUMMARY_COLLECTIONS = _wiki_icon_url("Character_Summary_-_Collections_Logged_icon.png")
+
+
 def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
     """One dashboard feature card -- an icon chip on the left, heading and
     description stacked on the right. Both current cards describe features
@@ -1391,18 +1429,120 @@ def render_dashboard(player: PlayerView) -> str:
     return _shell(title="Dashboard — myscape", player=player, body=body, extra_script=script)
 
 
+_SUMMARY_STATS = (
+    # (element key, icon, alt text, label) -- geValue is computed
+    # client-side from /api/possessions/summary (the same GE-priced
+    # snapshot Storages Viewer's own section 3 uses, see
+    # build_possessions_summary in app/possessions.py) rather than
+    # anything GameAccount stores; the other seven come from
+    # /api/character-overview/summary, i.e. GameAccount.character_summary_*
+    # as last synced by MyscapeClient#syncCharacterSummary in the
+    # Mootrius/myscape-plugin repo (see that endpoint's own comment in
+    # app/main.py, and GameAccount's own comment in app/models.py for
+    # why "Quests Completed" stands in for quest points).
+    ("geValue", _ICON_SUMMARY_GE_VALUE, "Grand Exchange value", "GE Value"),
+    ("combatLevel", _ICON_SUMMARY_COMBAT_LEVEL, "Combat level", "Combat Level"),
+    ("totalLevel", _ICON_SUMMARY_TOTAL_LEVEL, "Total level", "Total Level"),
+    ("totalXp", _ICON_SUMMARY_TOTAL_XP, "Total XP", "Total XP"),
+    ("quests", _ICON_SUMMARY_QUESTS, "Quests completed", "Quests Completed"),
+    ("achievements", _ICON_SUMMARY_ACHIEVEMENTS, "Achievement diaries completed", "Achievements Completed"),
+    ("combatTasks", _ICON_SUMMARY_COMBAT_TASKS, "Combat tasks completed", "Combat Tasks Completed"),
+    ("collections", _ICON_SUMMARY_COLLECTIONS, "Collections logged", "Collections Logged"),
+)
+
+
 def render_character_overview(player: PlayerView) -> str:
-    """The dashboard's newest card (see character_overview in
-    render_dashboard/DASHBOARD_CARD_KEYS above) -- a deliberately blank
-    page for now, same page-title-only shape every other dashboard tool
-    page starts from (Purchase Goals/Loot Tracker/Mindmaps/Storages
-    Viewer/Goal Tracking all began this way too), just without any of
-    their own panel markup/script below it yet. Whatever Character
-    Overview actually ends up showing gets built out here later."""
-    body = """
+    """Character Overview's summary row -- a single row of eight
+    icon+stat tiles (see _SUMMARY_STATS above), every icon the same
+    uniform size (.co-stat-icon in myscape.css) regardless of each
+    wiki image's own native dimensions. Every value starts as an em
+    dash and is filled in by the script below once its fetch resolves
+    -- server-rendered rather than server-computed, since geValue needs
+    a live GE-price pass over the player's whole inventory (already
+    exactly what /api/possessions/summary does for Storages Viewer) and
+    the other seven are already a simple session-authenticated GET away
+    (see /api/character-overview/summary in app/main.py) -- no reason
+    to duplicate either computation here just to embed a number
+    server-side that a fresh page load re-fetches from the exact same
+    place a moment later anyway. An account that's never synced one of
+    these (no Storages Viewer data yet, or the plugin's Character
+    Summary tab has never been opened) simply leaves that tile's em
+    dash showing, same as every other "nothing synced yet" spot in this
+    app."""
+    stat_tiles = "\n      ".join(
+        f"""<div class="co-stat">
+        <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" />
+        <div class="co-stat-text">
+          <div class="co-stat-value" id="co-{key}">&mdash;</div>
+          <div class="co-stat-label">{escape(label)}</div>
+        </div>
+      </div>"""
+        for key, icon, alt, label in _SUMMARY_STATS
+    )
+
+    body = f"""
     <h2 class="page-title">Character Overview</h2>
+
+    <div class="co-summary-row" id="coSummaryRow">
+      {stat_tiles}
+    </div>
     """
-    return _shell(title="Character Overview — myscape", player=player, body=body)
+
+    script = """
+    (function () {
+      function formatInt(n) {
+        return Math.round(n || 0).toLocaleString('en-US');
+      }
+      function setStat(key, text) {
+        var el = document.getElementById('co-' + key);
+        if (el) el.textContent = text;
+      }
+      function setFraction(key, completed, total) {
+        if (completed == null || total == null) return;
+        setStat(key, formatInt(completed) + ' / ' + formatInt(total));
+      }
+
+      fetch('/api/character-overview/summary')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          if (data.combatLevel != null) setStat('combatLevel', data.combatLevel.toFixed(1));
+          if (data.totalLevel != null) setStat('totalLevel', formatInt(data.totalLevel));
+          if (data.totalXp != null) setStat('totalXp', formatInt(data.totalXp));
+          setFraction('quests', data.questsCompleted, data.questsTotal);
+          setFraction('achievements', data.achievementsCompleted, data.achievementsTotal);
+          setFraction('combatTasks', data.combatTasksCompleted, data.combatTasksTotal);
+          setFraction('collections', data.collectionsCompleted, data.collectionsTotal);
+        })
+        .catch(function () { /* leave this row's em dashes showing */ });
+
+      // Same GE-priced item list Storages Viewer's section 3 renders
+      // (build_possessions_summary in app/possessions.py) -- summed
+      // here rather than added as a second server-side total, so this
+      // tile always matches whatever Storages Viewer itself would add
+      // up to a keystroke later.
+      fetch('/api/possessions/summary')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || !Array.isArray(data.items)) return;
+          var total = 0;
+          data.items.forEach(function (item) {
+            if (item.gePrice != null) total += item.total * item.gePrice;
+          });
+          setStat('geValue', formatInt(total) + ' gp');
+        })
+        .catch(function () { /* leave the em dash showing */ });
+    })();
+    """
+
+    extra_head = f'<link rel="stylesheet" href="/static/css/character-overview.css?v={_CHARACTER_OVERVIEW_CSS_VERSION}" />'
+    return _shell(
+        title="Character Overview — myscape",
+        player=player,
+        body=body,
+        extra_head=extra_head,
+        extra_script=script,
+    )
 
 
 def render_account(player: PlayerView) -> str:

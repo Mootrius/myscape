@@ -29,7 +29,7 @@ account inherit history that isn't theirs.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -265,6 +265,41 @@ class GameAccount(Base):
     # always sorted by before this column existed), never null, so the
     # UI never has to guess what an unset preference means.
     goal_sort_mode = Column(String, nullable=False, default="alphabetical")
+
+    # Character Overview's summary row (POST
+    # /api/players/me/character-summary) -- the seven stats the
+    # myscape-plugin repo reads straight off the in-game "Character
+    # Summary" tab (InterfaceID.AccountSummarySidepanel), since none of
+    # them are derivable from anything else this app already syncs (see
+    # that endpoint's own docstring in app/main.py). All eight are null
+    # until the player has actually opened that tab at least once with
+    # the plugin running -- render_character_overview (app/pages.py)
+    # treats a null the same way every other never-synced stat in this
+    # app is treated, an em dash rather than a wrong number. Unlike
+    # skills/completed_quests/diary_tiers above, none of these seven has
+    # a companion "current progress" UI that would need incremental
+    # per-field updates -- each sync fully replaces all seven together,
+    # since the plugin always reads (and the endpoint always sends) the
+    # whole panel in one pass.
+    #
+    # questsCompleted/questsTotal stands in for quest points -- the
+    # panel itself doesn't surface a raw QP number, only this completion
+    # count (see MyscapeClient.CharacterSummaryItem's own doc in the
+    # Mootrius/myscape-plugin repo).
+    character_summary_combat_level = Column(Float, nullable=True)
+    character_summary_total_level = Column(Integer, nullable=True)
+    # BigInteger, not Integer: a maxed account's total XP (24 skills x
+    # 200M cap each) comfortably exceeds Integer's ~2.1 billion ceiling.
+    character_summary_total_xp = Column(BigInteger, nullable=True)
+    character_summary_quests_completed = Column(Integer, nullable=True)
+    character_summary_quests_total = Column(Integer, nullable=True)
+    character_summary_achievements_completed = Column(Integer, nullable=True)
+    character_summary_achievements_total = Column(Integer, nullable=True)
+    character_summary_combat_tasks_completed = Column(Integer, nullable=True)
+    character_summary_combat_tasks_total = Column(Integer, nullable=True)
+    character_summary_collections_completed = Column(Integer, nullable=True)
+    character_summary_collections_total = Column(Integer, nullable=True)
+    character_summary_synced_at = Column(DateTime(timezone=True), nullable=True)
 
     account = relationship("Account", back_populates="game_accounts")
 
