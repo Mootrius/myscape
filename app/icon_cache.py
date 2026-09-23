@@ -132,6 +132,24 @@ same cache path future requests already check first), and it's a
 general fallback rather than a hydra-specific patch, so any other NPC
 hitting the same multi-version-portrait issue self-heals the same way
 without needing its own fix.
+
+A second, different way that same guess can 404 forever: the bare
+in-game name RuneLite reports isn't always even the title of a real
+content page -- e.g. "Greater Skeleton Hellhound" (Vet'ion and
+Calvar'ion each summon their own differently-skinned one, with no
+shared plain page for either) is on the wiki only as a #REDIRECT to
+"Skeleton Hellhound (disambiguation)", a plain list of links with no
+infobox image of its own at all. _first_infobox_image now follows one
+redirect hop before giving up, and -- landing on a disambiguation-
+style page with still no infobox image to find -- falls through to
+picking the first link on THAT page whose own title starts with the
+name originally being resolved (never just "the first link on the
+page", which for this exact example would wrongly land on the plain
+quest-only "Skeleton Hellhound", not any "Greater" one) and tries
+its infobox image instead, one hop further and no more. Same
+"general fallback, not a per-NPC patch" reasoning as the multi-version
+-infobox case above -- any other bare name the wiki can't settle on
+one page for self-heals the same way.
 """
 import json
 import os
@@ -265,15 +283,18 @@ _INFOBOX_IMAGE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Matches a page that's nothing but a redirect -- "#REDIRECT [[Target]]"
+# (optionally "#REDIRECT: [[Target]]") -- and captures Target. Anchored
+# to the start of the wikitext (`match`, not `search`): a real content
+# page's infobox can itself contain the literal substring "#REDIRECT"
+# nowhere relevant, so this only ever fires on a page that IS one.
+_REDIRECT_RE = re.compile(r"^\s*#REDIRECT\s*:?\s*\[\[\s*([^|\]#]+)", re.IGNORECASE)
 
-def _first_infobox_image(page_title: str) -> Optional[str]:
-    """Only called once a guessed "<page_title>.png" has already 404d.
-    Looks up that wiki page's own infobox wikitext and returns
-    whichever image it lists first -- i.e. whatever the wiki itself
-    treats as that NPC's primary/first version, the same one a visitor
-    landing on the page would see first. None if the page has no
-    infobox image at all (a genuinely missing/renamed icon, not the
-    multiple-combat-forms case this exists for) or can't be reached."""
+
+def _fetch_wikitext(page_title: str) -> Optional[str]:
+    """The actual GET, shared by every step of _first_infobox_image
+    below -- one page's raw wikitext, or None if it doesn't exist/has
+    none (a redlink, or a title this API call otherwise can't resolve)."""
     url = (
         WIKI_API_BASE
         + "?action=parse&prop=wikitext&format=json&page="
@@ -282,10 +303,75 @@ def _first_infobox_image(page_title: str) -> Optional[str]:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT_SECONDS) as resp:
         payload = json.loads(resp.read())
-    wikitext = (payload.get("parse") or {}).get("wikitext", {}).get("*")
+    return (payload.get("parse") or {}).get("wikitext", {}).get("*")
+
+
+def _first_wikilink_starting_with(wikitext: str, prefix: str) -> Optional[str]:
+    """Used only by _first_infobox_image's own disambiguation-page
+    fallback below -- the first `[[Target]]`/`[[Target|Display]]` link
+    anywhere in `wikitext` whose own Target starts with `prefix`
+    (case-insensitively), in document order. Deliberately narrower than
+    "the first link on the page": a disambiguation page mixes in
+    plenty of same-topic-but-wrong entries (see this function's own
+    caller for a concrete example), and only a link that's actually a
+    "<prefix>..." variant of what was being looked up in the first
+    place is a safe guess for its icon."""
+    for match in re.finditer(r"\[\[\s*([^|\]#]+?)\s*(?:\|[^\]]*)?\]\]", wikitext):
+        target = match.group(1).strip()
+        if target.lower().startswith(prefix.lower()):
+            return target
+    return None
+
+
+def _first_infobox_image(page_title: str) -> Optional[str]:
+    """Only called once a guessed "<page_title>.png" has already 404d.
+    Looks up that wiki page's own infobox wikitext and returns
+    whichever image it lists first -- i.e. whatever the wiki itself
+    treats as that NPC's primary/first version, the same one a visitor
+    landing on the page would see first. None if nothing usable turns
+    up anywhere below (a genuinely missing/renamed icon) or the wiki
+    can't be reached.
+
+    Two different shapes of "no single canonical portrait under this
+    exact name" this handles, in order:
+
+    1. Multiple combat forms on ONE page (e.g. the Alchemical Hydra's
+       four elemental phases) -- that page's own infobox lists several
+       image1/image2/... parameters instead of a plain `image`, and
+       the _INFOBOX_IMAGE_RE search below just finds whichever one
+       comes first, same as it always has.
+    2. The bare name isn't even a content page at all -- e.g. "Greater
+       Skeleton Hellhound" (Vet'ion and Calvar'ion each summon their
+       own differently-skinned one, with no single plain page for
+       either) is on the wiki only as a #REDIRECT to "Skeleton
+       Hellhound (disambiguation)", a plain list of links with no
+       infobox image of its own. Followed here (one hop) before
+       falling through to case 1 against wherever it leads; landing on
+       a genuine disambiguation page (still no infobox image to find
+       even after that) falls through once more to
+       _first_wikilink_starting_with, picking the first link there
+       that's actually a "<page_title>..." variant and trying ITS
+       infobox image instead -- one hop further, and no more than
+       that."""
+    wikitext = _fetch_wikitext(page_title)
     if not wikitext:
         return None
+
+    redirect_match = _REDIRECT_RE.match(wikitext)
+    if redirect_match:
+        wikitext = _fetch_wikitext(redirect_match.group(1).strip()) or wikitext
+
     match = _INFOBOX_IMAGE_RE.search(wikitext)
+    if match:
+        return match.group(1).strip()
+
+    disambig_target = _first_wikilink_starting_with(wikitext, page_title)
+    if not disambig_target or disambig_target.lower() == page_title.lower():
+        return None
+    disambig_wikitext = _fetch_wikitext(disambig_target)
+    if not disambig_wikitext:
+        return None
+    match = _INFOBOX_IMAGE_RE.search(disambig_wikitext)
     return match.group(1).strip() if match else None
 
 
