@@ -899,6 +899,27 @@ input[type="text"].invalid { border-color: var(--red); }
    the tagline below takes over as this preview's own "title". */
 .landing-goal-tracking-preview .page-title { display: none; }
 
+/* The reused body's own "Add goal" wizard (#gtWizard -- the collapsed
+   button, and the wizard itself once expanded) -- hidden the same
+   way, not stripped from the markup, so _goal_tracking_panel_markup
+   stays untouched and its own script (which still runs
+   getElementById('gtWizardAddBtn').addEventListener(...) on load,
+   unmodified) never errors even though there's nothing left to click.
+   Creating a goal always ends in this demo's own graceful "Not
+   available in this preview" failure anyway (see this file's own
+   fetch shim, POST /api/goals) -- keeping the button around just to
+   lead every visitor to that dead end wasn't earning its keep, so the
+   demo now leads with what actually works here: sorting, deleting,
+   and dragging a genuine custom reorder. display: none rather than
+   visibility: hidden so #gtWizard's own margin-bottom (goal-tracking.
+   css's plain, unscoped .gt-wizard rule -- shared with the real page,
+   so not editable here) collapses away with it instead of leaving a
+   dead gap behind -- the goal list card (.gt-card.gt-list-card,
+   nothing above it now but this hidden button and the equally
+   display:none-by-default #gtError) ends up sitting flush against the
+   hero row's own bottom edge instead. */
+.landing-goal-tracking-preview #gtWizard { display: none; }
+
 /* A plain flex row, tagline's own wrap FIRST in source order and the
    character SECOND -- the mirror image of .loot-preview-hero's own
    DOM order (loot-tracker.css), which puts the character first. Flex

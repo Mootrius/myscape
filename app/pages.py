@@ -13339,7 +13339,22 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
 
     Sort tabs, delete (with its own "Are you sure?" confirm), and
     custom-mode drag-reorder all genuinely work here, the same as the
-    real page:
+    real page. The add-goal wizard is the one piece of the reused
+    markup NOT offered here -- #gtWizard (the "Add goal" button, and
+    the wizard itself once expanded) is hidden outright by this
+    preview's own CSS (.landing-goal-tracking-preview #gtWizard in
+    goal-tracking.css), not merely left to fail gracefully once
+    opened: a new goal's starting progress comes from the player's
+    actual live boss/skill/item totals (see create_goal's own
+    build_progress_context call in app/main.py), which this demo has
+    no real account behind it to supply, so every path through that
+    wizard was always going to end in Save silently going nowhere --
+    better to lead with what this demo actually delivers (sorting,
+    deleting, dragging a genuine custom reorder) than dangle a button
+    that can't. See that CSS rule's own comment for how hiding it
+    (rather than stripping it from the markup) also closes up the gap
+    its own margin used to leave, so the goal list sits flush under
+    the hero row instead.
 
     1. A `fetch` shim, scoped to just this wrapper, that:
        - Answers GET /api/goals out of DEMO_GOALS/DEMO_SORT_MODE --
@@ -13358,25 +13373,23 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
          app/main.py).
        - Implements DELETE /api/goals/{id} against DEMO_GOALS for
          real.
-       - Implements GET /api/items/search?q=... off the same curated,
-         176-item pool Mindmaps' own preview already bundles (see
-         _get_landing_mindmap_search_pools_data) -- an obscure item
-         won't turn up here the way it would on the real page, same
-         caveat as that pool's own.
-       - POST /api/goals (the add-goal wizard's own Save) is the one
-         real feature deliberately left unsupported, same scoping
-         choice render_landing_storages_preview made for editing what
-         you own: a new goal's starting progress comes from the
-         player's actual live boss/skill/item totals (see
-         create_goal's own build_progress_context call in
-         app/main.py), which this demo has no real account behind it
-         to supply -- faking a number would just be a different kind
-         of wrong. Falls into the catch-all below instead, same
-         graceful "Not available in this preview" failure the reused
-         script's own apiCall already shows through #gtError for any
-         failed request, wizard left open rather than losing whatever
-         was typed.
-       - Anything else gets that same graceful failure.
+       - GET /api/items/search?q=... (off the same curated, 176-item
+         pool Mindmaps' own preview already bundles -- see
+         _get_landing_mindmap_search_pools_data) and POST /api/goals
+         (the wizard's own Save, gracefully failing) are both now
+         unreachable in practice with #gtWizard hidden -- kept here
+         rather than pulled out, same as DEMO_ITEMS_POOL/
+         localSearchItems below, since they're harmless dead code and
+         this shim staying a complete, faithful stand-in for every
+         request the reused script could ever issue is worth more than
+         trimming a path CSS happens to make unreachable today.
+       - Anything else (including that unreachable POST /api/goals)
+         gets the same graceful "Not available in this preview"
+         failure the reused script's own apiCall already shows through
+         #gtError for any failed request -- were #gtWizard ever
+         unhidden again, the wizard would stay open rather than losing
+         whatever was typed, same as the other previews' own
+         catch-alls.
     2. No localStorage shadowing needed here -- this page's own script
        never reads or writes it.
     3. Same bottom-edge feather as the other four previews.
