@@ -1089,8 +1089,8 @@ def render_dashboard(player: PlayerView) -> str:
             "Clueless scroll",
             "Mindmaps",
             "Organize your goals into a mindmap! Start from one goal and branch "
-            "out with parent, child, and sibling nodes — all with autodetecting "
-            "completion functionality.",
+            "out with parent, child, and sibling nodes — all with "
+            "auto-detecting completion functionality.",
         )
         + "</a>"
     )
