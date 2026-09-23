@@ -11841,6 +11841,15 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         targetMode: 'gain',
         recurInterval: '', // stage 4's own text field, kept here so re-rendering that stage (e.g. after Back then forward again) doesn't lose it
         recurUnit: 'day', // stage 4's own segmented-control selection
+        // sortMode + a JSON snapshot of whatever GT.goals last actually
+        // got rendered with (see applyGoalsResponse/renderGoalList) --
+        // null until the first render. Exists purely so
+        // applyGoalsResponse can skip renderGoalList's own full
+        // listEl.innerHTML rebuild when a poll comes back with nothing
+        // actually different from what's already on screen, instead of
+        // doing that rebuild unconditionally on every single 5-second
+        // tick the way this used to.
+        renderKey: null,
       };
       // Cached once rather than recomputed on every keystroke -- both
       // are small (71/24 entries) fixed lists, not endpoints, so the
@@ -13087,16 +13096,50 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // in any other mode would just get computed right back out from
       // under you on the next poll, since every other mode is always
       // re-sorted by its own live field rather than remembered.
+      //
+      // Skips its own rebuild entirely when GT.sortMode + GT.goals are
+      // byte-for-byte the same as what's already on screen (GT.
+      // renderKey, set at the bottom of a real rebuild) -- loadGoals'
+      // own 5-second poll (see below) calls applyGoalsResponse ->
+      // renderGoalList on every single tick regardless of whether
+      // anything actually changed, and listEl.innerHTML = ... always
+      // used to tear down and recreate every row's <img> from scratch
+      // even when it was about to render pixel-identical markup, which
+      // is what was actually causing the reported flicker -- a
+      // perfectly cached, same-URL <img> still repaints from nothing
+      // for a frame when its element is destroyed and recreated,
+      // whether or not the browser has to touch the network for it.
+      // Same reasoning applies to the interactive landing preview,
+      // which reuses this exact function unmodified (see
+      // render_landing_goal_tracking_preview's own docstring in
+      // app/pages.py) -- its own DEMO_GOALS answer GET /api/goals with
+      // literally the same array every 5 seconds, so this was the
+      // worst-case version of the same bug: 100% of its polls were
+      // pure no-op rebuilds. A real, currently-changing goal (recurring
+      // kc/xp ticking up from active hiscores) still renders normally
+      // -- its own JSON differs tick to tick, so its renderKey misses
+      // and the rebuild goes ahead exactly as before. The one thing
+      // that goes stale while a poll's rebuild is skipped is the
+      // recur-countdown tooltip text baked into goalInfoIconHtml's own
+      // title attribute (computed from Date.now() at render time, not
+      // from anything in the response) -- minute-granularity, hover-
+      // only, and it catches back up the moment the underlying goal
+      // data next actually changes, so this was judged not worth
+      // keeping the flicker for.
       function renderGoalList() {
         var listEl = document.getElementById('gtGoalList');
         var emptyEl = document.getElementById('gtEmpty');
         var sortTabsEl = document.getElementById('gtSortTabs');
         if (!GT.goals.length) {
+          GT.renderKey = GT.sortMode + '|[]';
           listEl.innerHTML = '';
           emptyEl.style.display = '';
           sortTabsEl.style.display = 'none';
           return;
         }
+        var renderKey = GT.sortMode + '|' + JSON.stringify(GT.goals);
+        if (renderKey === GT.renderKey) return;
+        GT.renderKey = renderKey;
         emptyEl.style.display = 'none';
         sortTabsEl.style.display = '';
         var customMode = GT.sortMode === 'custom';
