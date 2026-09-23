@@ -331,15 +331,20 @@ def _clue_tier_from_source_name(source_name: Optional[str]) -> Optional[str]:
 
 def clue_casket_icon_url(tier: str) -> str:
     """A closed reward casket's own portrait for the given tier ("Hard"
-    -> "Reward casket (hard).png", the wiki's own real filename for the
-    literal casket ITEM of that tier, e.g. what a player would see sitting
-    in their inventory before opening it -- confirmed directly against
-    the wiki, unlike npc_icon_url above this never needs
-    app/icon_cache.py's redirect/disambiguation fallback since all six
-    tiers resolve on the first guess). Routed through the same
-    /icon-cache/<filename> route as npc_icon_url, for the same rate-
-    limiting reason."""
-    filename = f"Reward casket ({tier.lower()}).png"
+    -> "Reward casket (hard) detail.png", the wiki's own real filename
+    for the "detail" render of that tier's casket item -- the larger,
+    smoothly-shaded image the wiki's own item infobox uses (~27KB),
+    rather than the small flat inventory icon this used to point at
+    (the plain "Reward casket (hard).png", ~600 bytes -- still a real
+    file on the wiki, just not what this picks any more since the
+    detail version reads far better at the size loot-tracker.css
+    actually renders these tiles). Confirmed directly against the
+    wiki like the plain version before it -- unlike npc_icon_url above
+    this never needs app/icon_cache.py's redirect/disambiguation
+    fallback since all six tiers' detail images resolve on the first
+    guess too. Routed through the same /icon-cache/<filename> route as
+    npc_icon_url, for the same rate-limiting reason."""
+    filename = f"Reward casket ({tier.lower()}) detail.png"
     return "/icon-cache/" + urllib.parse.quote(filename)
 
 
