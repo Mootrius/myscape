@@ -13131,7 +13131,55 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         var customMode = GT.sortMode === 'custom';
         var sorted = sortGoals(GT.goals, GT.sortMode);
         listEl.innerHTML = sorted.map(function (g) { return goalRowHtml(g, customMode); }).join('');
+        fixGoalNameMinWidths(listEl);
         wireGoalDrag(customMode);
+      }
+
+      // Keeps the gap between a goal's title and its progress readout
+      // (the "754 / 1,000 KC" text right after it -- see
+      // .gt-goal-headline/.gt-goal-name/.gt-goal-sub in goal-
+      // tracking.css) a consistent visual distance from the end of
+      // the title, no matter how short the title is. .gt-goal-name's
+      // own min-width: 48px exists purely so a LONG title squeezed by
+      // a narrow row/long recurring-cadence sub still shows a few
+      // characters and an ellipsis rather than disappearing entirely
+      // -- but per the flexbox sizing algorithm, a flex item's
+      // hypothetical size is clamped UP to its min-width before the
+      // browser even checks whether any shrinking is needed at all,
+      // so a SHORT title (plenty of OSRS names render well under
+      // 48px in this bitmap font -- "Vorkath" is barely 30px) was
+      // padded out to that full 48px floor regardless, leaving dead
+      // space inside its own box that the flex `gap` after it then
+      // added on top of -- while a title already wider than 48px
+      // never picked up any of that padding. Same 8px gap either way,
+      // but a different total VISUAL distance from each title's own
+      // rendered end, which is exactly the inconsistency being fixed
+      // here.
+      //
+      // Fixed by narrowing (never widening) that floor, per row, down
+      // to the title's own true rendered width whenever that's
+      // smaller than 48px -- measured with a reused canvas 2D context
+      // (never an actual <canvas> element on the page) using the
+      // element's own computed font, rather than guessing from
+      // character count, which this bitmap font's own per-glyph
+      // widths make unreliable (a lowercase "i" and a capital "W"
+      // aren't remotely the same width here). A title already at or
+      // past 48px keeps exactly that floor -- same squeeze protection
+      // as before, no behavior change there. Run once per render
+      // right after the list's own innerHTML is rebuilt (both here
+      // and, unmodified, in the landing preview that reuses this same
+      // script) -- inline styles set here survive wireGoalDrag's own
+      // custom-mode reordering afterward since that only ever moves
+      // these same row elements around, never recreates them.
+      var goalNameMeasureCtx = document.createElement('canvas').getContext('2d');
+      var GT_GOAL_NAME_MIN_WIDTH = 48; // matches .gt-goal-name's own min-width in goal-tracking.css
+      function fixGoalNameMinWidths(listEl) {
+        listEl.querySelectorAll('.gt-goal-name').forEach(function (el) {
+          var cs = getComputedStyle(el);
+          goalNameMeasureCtx.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+          var natural = goalNameMeasureCtx.measureText(el.textContent).width;
+          el.style.minWidth = Math.min(GT_GOAL_NAME_MIN_WIDTH, natural) + 'px';
+        });
       }
 
       // Persists which #gtSortTabs button is active (GameAccount.

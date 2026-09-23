@@ -727,7 +727,20 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
      own comment), so on a narrow screen with a long recurring-cadence
      sub ("13,363 / 100,000 XP · EVERY 2 WEEKS") this would otherwise
      get squeezed all the way down to nothing, leaving a row with no
-     name at all, just a progress readout and an icon to guess from. */
+     name at all, just a progress readout and an icon to guess from.
+     This is only ever a CEILING on how far fixGoalNameMinWidths (the
+     script below) narrows this per row, though, not the floor every
+     row actually gets: a flex item's hypothetical size clamps UP to
+     min-width before the browser even checks whether shrinking is
+     needed at all, so left as a flat 48px this padded every title
+     shorter than that out to the full 48px regardless -- dead space
+     inside its own box that the flex gap below then added ON TOP of,
+     while a title already wider than 48px picked up none of it, so
+     the same 8px gap after each ended up sitting a different visual
+     distance from different titles' own actual rendered ends. See
+     that function's own comment for the fix -- this value is still
+     the one long/narrow-row protection reads from, so it has to stay
+     in sync with GT_GOAL_NAME_MIN_WIDTH there. */
   min-width: 48px;
 }
 
