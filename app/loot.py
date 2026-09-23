@@ -58,18 +58,23 @@ This is a first pass, not the full old feature set:
   pairs it with that casket's own LootReceived event (see
   MyscapePlugin#onChatMessage/onLootReceived in the Mootrius/
   myscape-plugin repo), relabeling it "Clue Scroll (<Tier>)" before it
-  is ever synced here -- see CLUE_TIERS/_clue_tier_from_source_name and
-  the "Clue Scrolls" row in build_loot_state below for the tier-scoped
-  breakdown (its own count/value/items per tier, plus a casket icon per
-  tier via clue_casket_icon_url) this now makes possible. Still just
-  "Casket", untiered, for any older event synced before that plugin
+  is ever synced here. build_loot_state below (see
+  CLUE_TIERS/_clue_tier_from_source_name/clue_casket_icon_url) then
+  treats a tiered clue event as an honorary NPC: it shows up in the
+  "By NPC" row itself, under the display name "Reward casket (<tier>)"
+  (the wiki/in-game item's own real name, confirmed against the wiki)
+  with that tier's own casket icon -- searchable, sortable, hideable,
+  and click-to-filter-the-chart, exactly like Vorkath or any other real
+  NPC, and its own items fold into the combined "ALL NPCs" item panel
+  the same way. Still just the bare "Casket", with no NPC-like
+  identity at all, for any older event synced before that plugin
   update, or the rarer case where the chat line and the loot event
   landed too far apart to pair (see CLUE_TIER_MAX_TICK_GAP in the
   plugin) -- those still count toward the chart's own totals exactly as
-  before, just don't contribute to the tier breakdown. Caskets (tiered
-  or not) and anything else that isn't source_type "npc" still never
-  show up in the "By NPC" row or its per-hour breakdown -- that one's
-  NPCs only, by design (see build_loot_state below).
+  before, just can't show up as their own tile with no tier to name it
+  by. A pickpocket (or anything else that isn't source_type "npc" and
+  isn't a tiered clue event) still never shows up in the "By NPC" row
+  either, same as before this feature existed.
 - Computed fresh from this player's LootEvent rows in the selected
   range on every read (the DB query itself is windowed, not just the
   totals), same as Purchase Goals computes fresh from every bank/
@@ -283,13 +288,11 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
     return "/icon-cache/" + urllib.parse.quote(filename)
 
 
-# The six clue tiers this app knows how to break casket rewards out by,
-# in their natural easy-to-hard order -- both the canonical display
-# name CLUE_TIER_RE's captured word gets normalized to (see
-# _clue_tier_from_source_name below, which is case-insensitive on the
-# way in specifically so it isn't at the mercy of whatever exact casing
-# the plugin/chat line used) and the order clueTiers in build_loot_state
-# below lists them in, when more than one appears in range.
+# The six clue tiers this app knows how to recognize a casket by -- the
+# canonical display name _CLUE_TIER_RE's captured word gets normalized
+# to (see _clue_tier_from_source_name below, which is case-insensitive
+# on the way in specifically so it isn't at the mercy of whatever exact
+# casing the plugin/chat line used).
 CLUE_TIERS = ["Beginner", "Easy", "Medium", "Hard", "Elite", "Master"]
 
 # Matches this app's own tiered clue-reward event name -- "Clue Scroll
@@ -351,11 +354,14 @@ def clue_casket_icon_url(tier: str) -> str:
 
 
 def npc_hide_key(name: Optional[str]) -> str:
-    """An NPC's identity for hiding purposes -- loot events carry no
-    numeric NPC id to key off (see LootEvent's docstring in
-    app/models.py), so this is the same sourceName build_loot_state
-    already groups kills by, just trimmed/lowercased so a hide made
-    against one casing still matches a kill logged with another."""
+    """An NPC's identity for hiding purposes -- or a tiered clue
+    casket's, now that build_loot_state treats "Reward casket (<tier>)"
+    as an honorary NPC too (see that function's own comment on
+    npc_totals). Loot events carry no numeric NPC id to key off (see
+    LootEvent's docstring in app/models.py), so this is the same
+    sourceName-or-casket-display-name build_loot_state already groups
+    kills/opens by, just trimmed/lowercased so a hide made against one
+    casing still matches an entry logged with another."""
     return (name or "").strip().lower()
 
 
@@ -596,27 +602,24 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
     # Per-NPC totals/per-bucket/item breakdown for the "By NPC" row, its
     # click-to-filter overlay on the chart, and the item panel beside it
     # -- npc_bucket_values[name][i] is always <= buckets[i]["value"],
-    # since it's that same bucket's NPC-only subset, and the same is
-    # true of each NPC's own item quantities against window_items below.
-    # Deliberately npc-only (source_type == "npc") -- see the module
-    # docstring for why caskets/pickpockets still count toward buckets
-    # but never show up in any of this.
+    # since it's that same bucket's own subset, and the same is true of
+    # each entry's own item quantities against window_items below. Not
+    # npc_totals's real source_type "npc" alone any more, though: a
+    # tiered clue-reward event (see _clue_tier_from_source_name) folds
+    # in here too now, under the display name "Reward casket (<tier>)"
+    # -- the OSRS wiki/in-game item's own real name (confirmed against
+    # the wiki), lowercase tier and all -- so it shows up, is searched,
+    # sorted, hidden, and clicked exactly like any other NPC tile; see
+    # npc_like_name/npc_like_icon just below the events loop starts.
+    # Still never anything for an UNTIERED "Casket" (the plugin
+    # couldn't pair it with a tier in time -- see this module's own
+    # docstring) or a pickpocket -- those still just count toward
+    # buckets/windowValue/windowKills below and nothing else, same as
+    # before this feature existed.
     npc_totals: Dict[str, dict] = {}
     npc_bucket_values: Dict[str, List[int]] = {}
     npc_items: Dict[str, Dict[object, dict]] = {}
     window_item_totals: Dict[object, dict] = {}
-
-    # Parallel structure to npc_totals/npc_items above, for the "Clue
-    # Scrolls" row (see render_loot_tracker in app/pages.py) -- one
-    # entry per tier actually opened in range, keyed by that tier's own
-    # canonical name off CLUE_TIERS. A tiered clue event is its own
-    # source_type "event", same as the untiered "Casket" it used to
-    # always come through as (see _clue_tier_from_source_name), so it
-    # already counts toward buckets/windowValue/windowKills above like
-    # any other non-NPC event -- this dict only ever ADDS a tier-scoped
-    # breakdown on top, it never changes what those totals already were.
-    clue_totals: Dict[str, dict] = {}
-    clue_items: Dict[str, Dict[object, dict]] = {}
 
     for event in events:
         if event.occurred_at is None:
@@ -643,24 +646,44 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
         # numbers are the same computation, just added to different
         # places.
         visible_value = sum(it["value"] for it in items if not it["hidden"])
-        is_npc = event.source_type == "npc"
-        npc_hidden = is_npc and npc_hide_key(event.source_name) in hidden_npcs
 
-        # A hidden NPC's kill is excluded from the chart/header totals
-        # entirely (see this function's own docstring) -- a non-NPC
-        # event (no NPC identity to hide) always lands here instead,
+        # A real NPC kill uses its own source_name/portrait as always;
+        # a tiered clue-reward event (see _clue_tier_from_source_name)
+        # now gets treated exactly the same way, just under the
+        # casket's own display name/icon instead of an NPC's -- see
+        # npc_totals's own comment above for why. Anything else
+        # (an untiered "Casket", a pickpocket, ...) has no NPC-like
+        # identity at all: npc_like_name stays None, same as source_type
+        # != "npc" always meant before this feature existed.
+        tier = _clue_tier_from_source_name(event.source_name)
+        if event.source_type == "npc":
+            npc_like_name = event.source_name
+            npc_like_icon = npc_icon_url(npc_like_name)
+        elif tier is not None:
+            npc_like_name = f"Reward casket ({tier.lower()})"
+            npc_like_icon = clue_casket_icon_url(tier)
+        else:
+            npc_like_name = None
+            npc_like_icon = None
+        is_npc = npc_like_name is not None
+        npc_hidden = is_npc and npc_hide_key(npc_like_name) in hidden_npcs
+
+        # A hidden NPC's (or hidden clue tier's) kill/open is excluded
+        # from the chart/header totals entirely (see this function's
+        # own docstring) -- anything with no NPC-like identity at all
+        # (no way to hide it specifically) always lands here instead,
         # same as before this feature existed.
         if not npc_hidden:
             buckets[idx]["value"] += visible_value
             buckets[idx]["killCount"] += 1
 
         if is_npc:
-            name = event.source_name
+            name = npc_like_name
             totals = npc_totals.get(name)
             if totals is None:
                 totals = {
                     "sourceName": name,
-                    "icon": npc_icon_url(name),
+                    "icon": npc_like_icon,
                     "combatLevel": event.combat_level,
                     "killCount": 0,
                     "value": 0,
@@ -670,55 +693,29 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
                 npc_totals[name] = totals
                 npc_bucket_values[name] = [0] * num_buckets
                 npc_items[name] = {}
-            # This NPC's OWN tile always reflects its real kill count
-            # and (item-hidden-filtered) value, whether or not the NPC
-            # itself is hidden -- so revealing it via the eye toggle
-            # shows real numbers, not zeroes, to decide whether to
-            # unhide it. Only the chart/header totals above skip a
-            # hidden NPC's contribution.
+            # This NPC's (or casket tier's) OWN tile always reflects its
+            # real kill/open count and (item-hidden-filtered) value,
+            # whether or not it's itself hidden -- so revealing it via
+            # the eye toggle shows real numbers, not zeroes, to decide
+            # whether to unhide it. Only the chart/header totals above
+            # skip a hidden entry's contribution.
             totals["killCount"] += 1
             totals["value"] += visible_value
             npc_bucket_values[name][idx] += visible_value
 
-            # This NPC's own item breakdown always gets every item
+            # This entry's own item breakdown always gets every item
             # (hidden or not -- see _add_item_totals, which now carries
             # each item's own "hidden" flag through untouched) so
-            # drilling into a hidden NPC, or one with some items
+            # drilling into a hidden NPC/tier, or one with some items
             # hidden, still shows its full picture. The combined
-            # "ALL NPCs" view below is different: a hidden NPC's items
-            # don't fold into it at all, matching how its kills don't
-            # fold into the chart/header totals above -- hiding an NPC
-            # removes it from the combined picture outright, not just
-            # dims it there.
+            # "ALL NPCs" view below is different: a hidden entry's
+            # items don't fold into it at all, matching how its kills/
+            # opens don't fold into the chart/header totals above --
+            # hiding it removes it from the combined picture outright,
+            # not just dims it there.
             _add_item_totals(npc_items[name], items, event.occurred_at)
             if not npc_hidden:
                 _add_item_totals(window_item_totals, items, event.occurred_at)
-
-        # A tiered clue-reward event (see _clue_tier_from_source_name)
-        # is source_type "event", so (like every non-NPC event, before
-        # and after this feature) it never touches npc_totals/
-        # window_item_totals above -- this is purely an extra, ADDITIVE,
-        # tier-scoped breakdown alongside that, never hideable on its
-        # own (no per-tier eye toggle exists, unlike NPCs/items -- see
-        # this function's own docstring for why that's out of scope for
-        # this first pass), so unlike npc_hidden above there's no
-        # visibility gate here at all.
-        tier = _clue_tier_from_source_name(event.source_name)
-        if tier is not None:
-            tier_totals = clue_totals.get(tier)
-            if tier_totals is None:
-                tier_totals = {
-                    "tier": tier,
-                    "icon": clue_casket_icon_url(tier),
-                    "openCount": 0,
-                    "value": 0,
-                    "lastOpenedAt": event.occurred_at,
-                }
-                clue_totals[tier] = tier_totals
-                clue_items[tier] = {}
-            tier_totals["openCount"] += 1
-            tier_totals["value"] += visible_value
-            _add_item_totals(clue_items[tier], items, event.occurred_at)
 
     # Same sort as the old tool's own "monsters" list: most-killed
     # first, value as the tiebreaker. The frontend re-sorts this itself
@@ -727,15 +724,6 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
     window_npcs = sorted(npc_totals.values(), key=lambda n: (-n["killCount"], -n["value"]))
     for n in window_npcs:
         n["lastKillAt"] = n["lastKillAt"].isoformat()
-
-    # Sorted by CLUE_TIERS' own easy-to-hard order (not by count/value
-    # like window_npcs above) -- a tier row reads naturally left-to-right
-    # by difficulty, same as the range menu's own presets read shortest-
-    # to-longest, rather than jumping around by whichever tier happened
-    # to get opened most.
-    window_clue_tiers = [clue_totals[t] for t in CLUE_TIERS if t in clue_totals]
-    for c in window_clue_tiers:
-        c["lastOpenedAt"] = c["lastOpenedAt"].isoformat()
 
     return {
         "buckets": buckets,
@@ -748,8 +736,6 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
         "npcBucketValues": npc_bucket_values,
         "windowItems": _finalize_items(window_item_totals),
         "npcItems": {name: _finalize_items(items) for name, items in npc_items.items()},
-        "clueTiers": window_clue_tiers,
-        "clueItems": {tier: _finalize_items(items) for tier, items in clue_items.items()},
         "pricesError": prices_error,
         "mappingError": mapping_error,
     }
