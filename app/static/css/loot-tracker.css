@@ -499,6 +499,59 @@
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
 
+/* ---------- Clue Scrolls -- its own small card below the NPC/item
+   panels above, one tile per tier actually opened in the selected
+   range (see clueTiers in build_loot_state, app/loot.py, and
+   renderClueRow in the script above), with that tier's own item
+   breakdown appearing below the row once a tile's clicked (see
+   renderClueItems). Same translucent-card treatment as .loot-chart-
+   card/.loot-panel above, not a third .loot-panel itself -- there's
+   no search/sort row here (see renderClueRow's own comment for why),
+   so it doesn't need that class's padding-for-controls shape. ---------- */
+.loot-clue-section {
+  background: var(--panel-translucent); border: 1px solid var(--border);
+  padding: 16px 18px; margin-top: 18px;
+}
+.loot-clue-title {
+  font-size: 13px; font-weight: normal; letter-spacing: 0.04em; margin: 0 0 12px;
+  text-transform: uppercase; color: var(--text-dim);
+}
+.loot-clue-row { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Same fixed-size-tile approach as .loot-npc-box-wrap above, just
+   without a separate wrap element -- a clue tile has no per-tile eye
+   button (see build_loot_state's own comment on why clue totals have
+   no per-tier hide/unhide), so there's nothing that needs to be a DOM
+   sibling of it, and the button itself can carry its own sizing
+   directly. At most 6 tiles ever exist (one per CLUE_TIERS entry) vs.
+   an NPC row's potentially much longer list, so this sizes to a flat
+   96px rather than .loot-npc-box-wrap's row-relative cqw formula --
+   a handful of tiles reads better as a compact, left-aligned cluster
+   than stretched to fill the panel's full width. */
+.loot-clue-tile {
+  width: 96px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 8px; cursor: pointer;
+}
+.loot-clue-tile:hover { background-color: rgb(51, 51, 54); }
+.loot-clue-tile.active { border-color: var(--gold); }
+.loot-clue-tile-icon { width: 40px; height: 40px; object-fit: contain; image-rendering: pixelated; }
+.loot-clue-tile-name {
+  font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.15; text-transform: uppercase;
+}
+.loot-clue-tile.active .loot-clue-tile-name { color: var(--text); }
+.loot-clue-tile-count { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.loot-clue-tile-value { font-size: 10.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
+.loot-clue-tile.active .loot-clue-tile-value { color: var(--gold); }
+/* The selected tier's own item breakdown -- reuses .loot-item-box/
+   .loot-item-box-icon/-qty/-value exactly as-is (see renderClueItems
+   in the script above, which builds the same markup shape minus the
+   eye-button wrap, since these items have no per-item hide control of
+   their own here either), just needs this flex row itself and some
+   breathing room above it. */
+.loot-clue-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.loot-clue-items .loot-item-box { width: 64px; height: 64px; flex: 0 0 auto; }
+
 /* ---------- the per-tile hide/unhide control -- one of these lives in
    every .loot-npc-box-wrap and .loot-item-box-wrap (see both above),
    absolutely positioned into that wrap's own top-right corner. A plain

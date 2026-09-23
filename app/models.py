@@ -1184,12 +1184,23 @@ class LootEvent(Base):
 
     source_type is RuneLite's own LootRecordType, lowercased ("npc",
     "player", "event", "pickpocket", "unknown") -- "event" covers clue
-    scroll caskets and other non-NPC rewards, but RuneLite's bundled
+    scroll caskets and other non-NPC rewards. RuneLite's own bundled
     Loot Tracker plugin (the actual source of this data -- see
-    MyscapePlugin#onLootReceived) reports every clue casket's
-    source_name as the bare word "Casket", with no tier -- a known,
-    real limitation of the event this reads, not a bug here, and not
-    yet worked around (see app/loot.py's module docstring).
+    MyscapePlugin#onLootReceived) still reports every clue casket's own
+    LootReceived event with source_name as the bare word "Casket", with
+    no tier -- a known, real limitation of that specific event, not a
+    bug here. MyscapePlugin works around it independently, though,
+    rather than relying on RuneLite to ever fix it: it detects a
+    completed trail's own tier itself, off the chatbox's "You have
+    completed N <tier> Treasure Trails." line, and relabels that
+    casket's source_name "Clue Scroll (<Tier>)" before syncing it here
+    whenever it manages to pair the two up in time (see
+    onChatMessage/onLootReceived in the Mootrius/myscape-plugin repo,
+    and app/loot.py's own module docstring for the tier-scoped "Clue
+    Scrolls" breakdown this makes possible server-side). Still just the
+    bare "Casket", untiered, for any event synced before that plugin
+    update existed, or the rarer case where the two couldn't be paired
+    in time.
 
     items is a list of {"item_id": int, "item_name": str|None,
     "quantity": int} -- same shape as the other item-source tables'

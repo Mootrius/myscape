@@ -3543,6 +3543,11 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           <div class="loot-item-list" id="lootItemList"></div>
         </div>
       </div>
+      <div class="loot-clue-section" id="lootClueSection" style="display:none;">
+        <h3 class="loot-clue-title">Clue Scrolls</h3>
+        <div class="loot-clue-row" id="lootClueRow"></div>
+        <div class="loot-clue-items" id="lootClueItems" style="display:none;"></div>
+      </div>
     </div>
     """
     script = """
@@ -3580,6 +3585,14 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         // out actually gone from its panel, not just dimmed -- see
         // visibleNpcEntries/visibleItemEntries below.
         npcShowHidden: false, itemShowHidden: false,
+        // The clicked tier ("Hard", etc.) in the Clue Scrolls row
+        // further down, or null when none is -- entirely independent
+        // of selectedNpcs/selectedBucket above (see renderClueRow/
+        // currentClueItems below): this section is its own separate
+        // card with its own separate item breakdown, not another mode
+        // of the chart/NPC-panel/item-panel above, so there's no
+        // mutual exclusivity to enforce with any of that.
+        selectedClueTier: null,
       };
       var lastData = null;
       // The scoped payload for state.selectedBucket, kept separate
@@ -3776,6 +3789,22 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return mergedNpcItems(npcItems, state.selectedNpcs);
         }
         return lastData.windowItems || [];
+      }
+
+      // The Clue Scrolls section's own item breakdown -- just the
+      // selected tier's items (lastData.clueItems, keyed by tier name,
+      // see build_loot_state's clueItems in app/loot.py), or none while
+      // nothing's selected. Deliberately not folded into currentItems
+      // above -- see selectedClueTier's own comment on state for why
+      // this section stays entirely separate from the chart/NPC panel/
+      // item panel's own selection state, including bucket clicks
+      // (a clue tier's own breakdown is always for the FULL selected
+      // range, same as windowItems, never scoped down to one clicked
+      // bar the way currentItems is).
+      function currentClueItems() {
+        if (!lastData || !state.selectedClueTier) return [];
+        var clueItems = lastData.clueItems || {};
+        return clueItems[state.selectedClueTier] || [];
       }
 
       function fmtGp(n) {
@@ -4453,6 +4482,108 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         });
       }
 
+      // ---- Clue Scrolls (see clueTiers/clueItems in build_loot_state,
+      // app/loot.py) -- its own small self-contained section below the
+      // NPC/item panels above, deliberately NOT wired into any of
+      // currentNpcs/currentItems/renderBarChart's own selection state
+      // (see selectedClueTier's own comment on state for why): a tier
+      // box only ever toggles state.selectedClueTier and re-renders
+      // these two functions, nothing else on the page reacts to it.
+      // No search/sort/hide here either, unlike the NPC/item panels --
+      // at most 6 tiers ever exist at all, so a search box has nothing
+      // real to filter, and hiding a tier outright isn't offered (see
+      // build_loot_state's own comment on why clue totals have no
+      // per-tier eye toggle).
+
+      var lastClueKey = null;
+
+      function renderClueRow(tiers) {
+        var sectionEl = document.getElementById('lootClueSection');
+        var rowEl = document.getElementById('lootClueRow');
+        if (!tiers.length) {
+          // No clue caskets at all in this range -- the whole section
+          // hides rather than showing an empty "Clue Scrolls" card with
+          // nothing in it (same reasoning as the NPC panel would if it
+          // had no roster to fall back to, just applied to the whole
+          // section here instead of one empty-state message, since
+          // there's no fixed 6-tile roster to always show placeholders
+          // for -- a tier a player has never opened in ANY range simply
+          // never appears, same as an NPC never killed never does).
+          sectionEl.style.display = 'none';
+          state.selectedClueTier = null;
+          lastClueKey = null;
+          return;
+        }
+        sectionEl.style.display = '';
+
+        function tileTitle(c) {
+          return 'Clue Scroll (' + c.tier + ') \\u2014 ' + fmtGp(c.value) + ' gp \\u00b7 ' + c.openCount + ' opened';
+        }
+
+        var key = state.selectedClueTier + '\\u0001' + tiers.map(function (c) { return c.tier + ':' + c.openCount + ':' + c.value; }).join('|');
+        if (key === lastClueKey) return;
+        lastClueKey = key;
+
+        var html = tiers.map(function (c) {
+          var active = state.selectedClueTier === c.tier;
+          return '<button type="button" class="loot-clue-tile' + (active ? ' active' : '') + '" data-tier="' +
+            escapeHtml(c.tier) + '" title="' + escapeHtml(tileTitle(c)) + '">' +
+            iconImg(c.icon, c.tier, 'loot-clue-tile-icon') +
+            '<div class="loot-clue-tile-name">' + escapeHtml(c.tier) + '</div>' +
+            '<div class="loot-clue-tile-count">' + c.openCount + ' opened</div>' +
+            '<div class="loot-clue-tile-value">' + fmtGpCompact(c.value) + ' gp</div>' +
+          '</button>';
+        }).join('');
+        preloadIcons(tiers.map(function (c) { return c.icon; })).then(function () {
+          rowEl.innerHTML = html;
+        });
+      }
+
+      function renderClueItems(items) {
+        var wrapEl = document.getElementById('lootClueItems');
+        if (!state.selectedClueTier) {
+          wrapEl.style.display = 'none';
+          wrapEl.innerHTML = '';
+          return;
+        }
+        wrapEl.style.display = '';
+        if (!items.length) {
+          wrapEl.innerHTML = '<p class="loot-column-empty">No items from ' + escapeHtml(state.selectedClueTier) + ' caskets in this range.</p>';
+          return;
+        }
+        var sorted = items.slice().sort(function (a, b) { return b.value - a.value; });
+        var html = sorted.map(function (it) {
+          return '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" title="' +
+            escapeHtml(it.itemName + ' \\u00d7' + fmtGp(it.quantity) + ' \\u2014 ' + fmtGp(it.value) + ' gp') + '">' +
+            iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
+            '<div class="loot-item-box-qty">\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
+            '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
+          '</a>';
+        }).join('');
+        preloadIcons(sorted.map(function (it) { return it.icon; })).then(function () {
+          wrapEl.innerHTML = html;
+        });
+      }
+
+      document.getElementById('lootClueRow').addEventListener('click', function (e) {
+        var tile = e.target.closest('.loot-clue-tile');
+        if (!tile || !lastData) return;
+        var tier = tile.getAttribute('data-tier');
+        // Plain toggle -- clicking the already-selected tier clears it,
+        // same convention as re-clicking an already-sole-selected NPC
+        // box above (no shift-click multi-select here, unlike NPCs:
+        // there's no chart bar to overlay a combined fill onto, so
+        // there's nothing a multi-tier selection would actually change
+        // about what's shown beyond the item list, which just sums
+        // however many tiers were multi-selected -- not offered in
+        // this first pass, see build_loot_state's own module docstring
+        // in app/loot.py).
+        state.selectedClueTier = (state.selectedClueTier === tier) ? null : tier;
+        lastClueKey = null;
+        renderClueRow(lastData.clueTiers || []);
+        renderClueItems(currentClueItems());
+      });
+
       // ---- Hiding/unhiding an NPC or item (see the eye button baked
       // into every box above, and the panel-level "show hidden" toggle
       // wired up further below) -- each just calls the matching
@@ -4937,6 +5068,15 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return stillPresent && (state.npcShowHidden || !npcEffectiveHidden(stillPresent));
           });
 
+          // Same aging-out fallback as selectedNpcs just above, for the
+          // Clue Scrolls section's own selection -- a selected tier's
+          // last casket in range can fall off the back of a rolling
+          // preset exactly the same way an NPC's last kill can.
+          var rangeClueTiers = data.clueTiers || [];
+          if (state.selectedClueTier && !rangeClueTiers.some(function (c) { return c.tier === state.selectedClueTier; })) {
+            state.selectedClueTier = null;
+          }
+
           // A selected bar stays pinned to its own position (index)
           // rather than the instant it was clicked -- a rolling
           // preset's buckets all drift forward a little on every 10s
@@ -4972,6 +5112,8 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           rerenderChart(data);
           renderNpcRow(currentNpcs());
           renderItemList(currentItems());
+          renderClueRow(rangeClueTiers);
+          renderClueItems(currentClueItems());
           // Keeps the selected bucket's own panel data on the same
           // 10s cadence as everything else -- see loadBucketData's
           // own doc comment for why this stays quiet on failure.

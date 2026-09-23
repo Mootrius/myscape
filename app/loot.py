@@ -49,12 +49,26 @@ This is a first pass, not the full old feature set:
   version of that view -- built on top of the same LootEvent rows and
   a wiki-fetched drop table -- is a natural next refinement once
   there's a UI for picking which source to focus on.
-- Every clue casket comes through as source_name "Casket" with no
-  tier, whatever tier it actually was -- a real limitation of the
-  RuneLite event this reads (see LootEvent's docstring), not something
-  this module works around yet. Caskets (and anything else that isn't
-  source_type "npc") still count toward the chart's own totals, just
-  never toward the "By NPC" row or its per-hour breakdown -- that one's
+- A clue casket USED to always come through as the bare source_name
+  "Casket" with no tier at all -- a real limitation of RuneLite's own
+  LootReceived event, still true today (see LootEvent's docstring in
+  app/models.py). MyscapePlugin now works around it itself, though:
+  it independently detects a completed trail's own tier off the
+  chatbox's "You have completed N <tier> Treasure Trails." line and
+  pairs it with that casket's own LootReceived event (see
+  MyscapePlugin#onChatMessage/onLootReceived in the Mootrius/
+  myscape-plugin repo), relabeling it "Clue Scroll (<Tier>)" before it
+  is ever synced here -- see CLUE_TIERS/_clue_tier_from_source_name and
+  the "Clue Scrolls" row in build_loot_state below for the tier-scoped
+  breakdown (its own count/value/items per tier, plus a casket icon per
+  tier via clue_casket_icon_url) this now makes possible. Still just
+  "Casket", untiered, for any older event synced before that plugin
+  update, or the rarer case where the chat line and the loot event
+  landed too far apart to pair (see CLUE_TIER_MAX_TICK_GAP in the
+  plugin) -- those still count toward the chart's own totals exactly as
+  before, just don't contribute to the tier breakdown. Caskets (tiered
+  or not) and anything else that isn't source_type "npc" still never
+  show up in the "By NPC" row or its per-hour breakdown -- that one's
   NPCs only, by design (see build_loot_state below).
 - Computed fresh from this player's LootEvent rows in the selected
   range on every read (the DB query itself is windowed, not just the
@@ -266,6 +280,63 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
     if not name:
         return None
     filename = name if _ICON_EXT_RE.search(name) else name + ".png"
+    return "/icon-cache/" + urllib.parse.quote(filename)
+
+
+# The six clue tiers this app knows how to break casket rewards out by,
+# in their natural easy-to-hard order -- both the canonical display
+# name CLUE_TIER_RE's captured word gets normalized to (see
+# _clue_tier_from_source_name below, which is case-insensitive on the
+# way in specifically so it isn't at the mercy of whatever exact casing
+# the plugin/chat line used) and the order clueTiers in build_loot_state
+# below lists them in, when more than one appears in range.
+CLUE_TIERS = ["Beginner", "Easy", "Medium", "Hard", "Elite", "Master"]
+
+# Matches this app's own tiered clue-reward event name -- "Clue Scroll
+# (Hard)", etc. -- as MyscapePlugin#onLootReceived now sends it once it
+# manages to pair a casket's LootReceived event with the chatbox's own
+# "You have completed N <tier> Treasure Trails." line that fires
+# alongside it (see that plugin's onChatMessage/onLootReceived for the
+# full pairing logic, and this module's own docstring for why RuneLite's
+# LootReceived event can't be trusted to carry a tier on its own).
+# Case-insensitive since nothing server-side forces the plugin's own
+# capitalization choice to stay byte-for-byte in sync with this regex
+# forever -- _clue_tier_from_source_name below re-normalizes whatever
+# case actually matched against CLUE_TIERS.
+_CLUE_TIER_RE = re.compile(r"^Clue Scroll \((Beginner|Easy|Medium|Hard|Elite|Master)\)$", re.IGNORECASE)
+
+
+def _clue_tier_from_source_name(source_name: Optional[str]) -> Optional[str]:
+    """None for anything that isn't one of this app's own tiered clue-
+    reward event names (an NPC kill, a pickpocket, a plain untiered
+    "Casket" -- still the source_name for a clue casket the plugin
+    couldn't pair with a tier in time, e.g. the chatbox line and the
+    loot event landing too far apart -- or any other non-clue event),
+    else that tier's own canonical, properly-cased name off CLUE_TIERS
+    (never whatever raw case _CLUE_TIER_RE happened to match)."""
+    if not source_name:
+        return None
+    match = _CLUE_TIER_RE.match(source_name.strip())
+    if not match:
+        return None
+    matched = match.group(1).lower()
+    for tier in CLUE_TIERS:
+        if tier.lower() == matched:
+            return tier
+    return None
+
+
+def clue_casket_icon_url(tier: str) -> str:
+    """A closed reward casket's own portrait for the given tier ("Hard"
+    -> "Reward casket (hard).png", the wiki's own real filename for the
+    literal casket ITEM of that tier, e.g. what a player would see sitting
+    in their inventory before opening it -- confirmed directly against
+    the wiki, unlike npc_icon_url above this never needs
+    app/icon_cache.py's redirect/disambiguation fallback since all six
+    tiers resolve on the first guess). Routed through the same
+    /icon-cache/<filename> route as npc_icon_url, for the same rate-
+    limiting reason."""
+    filename = f"Reward casket ({tier.lower()}).png"
     return "/icon-cache/" + urllib.parse.quote(filename)
 
 
@@ -535,6 +606,18 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
     npc_items: Dict[str, Dict[object, dict]] = {}
     window_item_totals: Dict[object, dict] = {}
 
+    # Parallel structure to npc_totals/npc_items above, for the "Clue
+    # Scrolls" row (see render_loot_tracker in app/pages.py) -- one
+    # entry per tier actually opened in range, keyed by that tier's own
+    # canonical name off CLUE_TIERS. A tiered clue event is its own
+    # source_type "event", same as the untiered "Casket" it used to
+    # always come through as (see _clue_tier_from_source_name), so it
+    # already counts toward buckets/windowValue/windowKills above like
+    # any other non-NPC event -- this dict only ever ADDS a tier-scoped
+    # breakdown on top, it never changes what those totals already were.
+    clue_totals: Dict[str, dict] = {}
+    clue_items: Dict[str, Dict[object, dict]] = {}
+
     for event in events:
         if event.occurred_at is None:
             continue
@@ -611,6 +694,32 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
             if not npc_hidden:
                 _add_item_totals(window_item_totals, items, event.occurred_at)
 
+        # A tiered clue-reward event (see _clue_tier_from_source_name)
+        # is source_type "event", so (like every non-NPC event, before
+        # and after this feature) it never touches npc_totals/
+        # window_item_totals above -- this is purely an extra, ADDITIVE,
+        # tier-scoped breakdown alongside that, never hideable on its
+        # own (no per-tier eye toggle exists, unlike NPCs/items -- see
+        # this function's own docstring for why that's out of scope for
+        # this first pass), so unlike npc_hidden above there's no
+        # visibility gate here at all.
+        tier = _clue_tier_from_source_name(event.source_name)
+        if tier is not None:
+            tier_totals = clue_totals.get(tier)
+            if tier_totals is None:
+                tier_totals = {
+                    "tier": tier,
+                    "icon": clue_casket_icon_url(tier),
+                    "openCount": 0,
+                    "value": 0,
+                    "lastOpenedAt": event.occurred_at,
+                }
+                clue_totals[tier] = tier_totals
+                clue_items[tier] = {}
+            tier_totals["openCount"] += 1
+            tier_totals["value"] += visible_value
+            _add_item_totals(clue_items[tier], items, event.occurred_at)
+
     # Same sort as the old tool's own "monsters" list: most-killed
     # first, value as the tiebreaker. The frontend re-sorts this itself
     # per its own sort tabs (high/low/alphabetical/recent) -- this
@@ -618,6 +727,15 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
     window_npcs = sorted(npc_totals.values(), key=lambda n: (-n["killCount"], -n["value"]))
     for n in window_npcs:
         n["lastKillAt"] = n["lastKillAt"].isoformat()
+
+    # Sorted by CLUE_TIERS' own easy-to-hard order (not by count/value
+    # like window_npcs above) -- a tier row reads naturally left-to-right
+    # by difficulty, same as the range menu's own presets read shortest-
+    # to-longest, rather than jumping around by whichever tier happened
+    # to get opened most.
+    window_clue_tiers = [clue_totals[t] for t in CLUE_TIERS if t in clue_totals]
+    for c in window_clue_tiers:
+        c["lastOpenedAt"] = c["lastOpenedAt"].isoformat()
 
     return {
         "buckets": buckets,
@@ -630,6 +748,8 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
         "npcBucketValues": npc_bucket_values,
         "windowItems": _finalize_items(window_item_totals),
         "npcItems": {name: _finalize_items(items) for name, items in npc_items.items()},
+        "clueTiers": window_clue_tiers,
+        "clueItems": {tier: _finalize_items(items) for tier, items in clue_items.items()},
         "pricesError": prices_error,
         "mappingError": mapping_error,
     }
@@ -696,9 +816,19 @@ def kc_counts_by_player(db: Session, game_account: GameAccount) -> Dict[Tuple[st
     an NPC kill or a pickpocket is one row per occurrence, so a key's
     list length is a real kill/pickpocket count; a clue casket or
     minigame reward is also one row per occurrence, so it's a real
-    open/reward count too, just without a way to split a clue casket
-    count by tier (see LootEvent's docstring in app/models.py for
-    why)."""
+    open/reward count too. A clue casket's own source_name is now
+    "Clue Scroll (<Tier>)" whenever the plugin managed to pair its
+    tier (see this module's own docstring and CLUE_TIERS/
+    _clue_tier_from_source_name above), so a Mindmaps "kc" goal CAN be
+    scoped to one specific tier now, just by naming that exact
+    sourceName -- "Clue Scroll (Hard)" only counts hard caskets, same
+    as this always worked for any other source_name. A goal that still
+    wants every tier lumped together has no single key to ask for
+    that under any more (source_name is the whole key here, not a
+    prefix match), and the older bare "Casket" source_name (still what
+    a casket the plugin couldn't tier gets sent as -- see this
+    module's own docstring) is its own separate key too, uncounted by
+    any tier-specific goal."""
     rows = (
         db.query(LootEvent.source_type, LootEvent.source_name, LootEvent.occurred_at)
         .filter(LootEvent.game_account_id == game_account.id)
