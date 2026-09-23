@@ -1114,8 +1114,7 @@ def render_dashboard(player: PlayerView) -> str:
             "Goal Tracking",
             "Visualize your goals by setting time-based or one-off quotas "
             "for yourself to meet, complete with auto-detecting and "
-            "updating progress bars. Supports items, boss KC, and skill "
-            "levels and xp.",
+            "updating progress bars.",
         )
         + "</a>"
     )
