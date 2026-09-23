@@ -998,6 +998,17 @@ footer {
   align-items: flex-start;
 }
 
+/* Same top-anchoring, same reasoning, for the Goal Tracking preview
+   (render_landing_goal_tracking_preview) -- switching sort tabs,
+   deleting a goal, or dragging a custom-mode reorder can change the
+   panel's own content height same as the other four previews' own
+   interactions can, so this panel gets the same fix for the same
+   reason. See .landing-goal-tracking-preview in goal-tracking.css for
+   its own feather. */
+.landing-anchor--goal-tracking-preview {
+  align-items: flex-start;
+}
+
 /* The logo/tagline panel shares a single stop with the header above
    it (see body.landing header in the scroll-snap rules up top)
    instead of being its own separate one, but it's still pinned to

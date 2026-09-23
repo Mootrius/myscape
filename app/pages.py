@@ -243,6 +243,35 @@ def _get_landing_storages_demo_data() -> Optional[dict]:
             return None
     return _landing_storages_demo_data
 
+# Same idea a fifth time for the landing page's own Goal Tracking
+# preview (render_landing_goal_tracking_preview): one real, one-time
+# GET /api/goals pull of the account's own real current goals --
+# every goal exactly as the real page would show it -- with two
+# numbers nudged by hand afterward (Monkey nuts' own current_value,
+# and the recurring Sailing goal's own current_value, each with
+# progress_pct recomputed to match -- see that function's own
+# docstring for the exact values) purely so the demo has a goal
+# that's neither empty nor already complete to show off a progress
+# bar with. See render_landing_storages_preview's own docstring just
+# above for how the rest of the page (sort tabs/delete/drag-reorder/
+# the add-goal wizard) stays genuinely interactive against this one
+# frozen snapshot.
+_LANDING_GOAL_TRACKING_DEMO_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "landing_goal_tracking_demo.json"
+)
+_landing_goal_tracking_demo_data = None
+
+
+def _get_landing_goal_tracking_demo_data() -> Optional[dict]:
+    global _landing_goal_tracking_demo_data
+    if _landing_goal_tracking_demo_data is None:
+        try:
+            with open(_LANDING_GOAL_TRACKING_DEMO_PATH, "r") as f:
+                _landing_goal_tracking_demo_data = json.load(f)
+        except (OSError, ValueError):
+            return None
+    return _landing_goal_tracking_demo_data
+
 # Same cache-busting trick again, for the Mindmaps page's own stylesheet.
 _MINDMAPS_CSS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "static", "css", "mindmaps.css"
@@ -753,6 +782,42 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <img src="/static/img/anchor-storages.png" alt="Storage viewing -- see everything you own, in one place.">
         </picture>
       </section>"""
+    # Same idea a fifth time for Goal Tracking (see
+    # render_landing_goal_tracking_preview) -- replaces that same
+    # pre-composited marketing panel below with a live, genuinely
+    # interactive (sort tabs/delete-with-confirm/custom-mode drag-
+    # reorder/item search in the add-goal wizard all actually work)
+    # look at the account's own real current goals -- only the add-
+    # goal wizard's own final Save is out of scope, same as Storages
+    # Viewer's own scoped-out live-account-only features. Falls back
+    # to the plain image, same as the four above, if the curated
+    # snapshot isn't there to read.
+    goal_tracking_preview = render_landing_goal_tracking_preview()
+    if goal_tracking_preview:
+        goal_tracking_preview_head, goal_tracking_preview_body, goal_tracking_preview_script = goal_tracking_preview
+        goal_tracking_anchor_section = f"""
+      <section class="landing-anchor landing-anchor--goal-tracking-preview">
+        <div class="landing-goal-tracking-preview">
+          {goal_tracking_preview_body}
+        </div>
+      </section>"""
+    else:
+        # Unlike the four above, Goal Tracking never had its own
+        # pre-composited marketing anchor image to begin with (it
+        # wasn't on the landing page at all before this preview) -- so
+        # there's no separate "anchor-goal-tracking.png" to fall back
+        # to here. Reuses this same preview's own character crop
+        # instead (already shipped either way, see
+        # render_landing_goal_tracking_preview) rather than a static
+        # asset that would only ever exist for this one dead branch.
+        goal_tracking_preview_head, goal_tracking_preview_script = "", ""
+        goal_tracking_anchor_section = """
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/landing-goal-tracking-preview-char.webp" type="image/webp">
+          <img src="/static/img/landing-goal-tracking-preview-char.png" alt="Goal tracking -- for those days when you need some dopamine.">
+        </picture>
+      </section>"""
     # The remaining "anchor" panels -- pre-composited marketing art
     # (one per showcased feature -- except loot tracking, purchase
     # goals, mindmaps, and storages viewing now, see
@@ -787,6 +852,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
       {purchase_anchor_section}
       {mindmap_anchor_section}
       {storages_anchor_section}
+      {goal_tracking_anchor_section}
     </div>
     """
     # CSS scroll-snap (myscape.css) is the baseline -- it's what
@@ -909,7 +975,13 @@ def render_landing(player: Optional[PlayerView]) -> str:
     # and render_landing_purchase_preview) just tack onto the end here --
     # an empty string, and a no-op, for either one that was None above
     # (the static-image fallback needs no script of its own).
-    script += loot_preview_script + purchase_preview_script + mindmap_preview_script + storages_preview_script
+    script += (
+        loot_preview_script
+        + purchase_preview_script
+        + mindmap_preview_script
+        + storages_preview_script
+        + goal_tracking_preview_script
+    )
     # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
     # every other page keeps its ordinary, un-snapped scrolling.
@@ -918,7 +990,13 @@ def render_landing(player: Optional[PlayerView]) -> str:
         player=player,
         body=body,
         extra_script=script,
-        extra_head=loot_preview_head + purchase_preview_head + mindmap_preview_head + storages_preview_head,
+        extra_head=(
+            loot_preview_head
+            + purchase_preview_head
+            + mindmap_preview_head
+            + storages_preview_head
+            + goal_tracking_preview_head
+        ),
         body_class="landing",
         footer_extra=landing_cta,
         # The one page on the whole site actually meant to be found --
@@ -11541,48 +11619,18 @@ def render_possessions(player: PlayerView) -> str:
     )
 
 
-def render_goal_tracking(player: PlayerView) -> str:
-    """The Goal Tracking page -- a plain, player-built list of targets
-    (a boss kill count, a skill level/xp, or an item quantity), each
-    tracked toward completion with live progress that's always already
-    current by the time this renders (no stale "as of my last visit"
-    numbers). Superseded the old 71-boss reference table this page used
-    to be (see git history) once app/goals.py's own CRUD endpoints
-    existed to build a real goal-creation form against instead.
-
-    Deliberately NOT server-rendered with the player's actual goal list
-    -- PlayerView (this file's per-request "everything render_* needs"
-    struct, built once in app/auth.py) has no goals field of its own,
-    and adding one just for this page's first paint would mean a fresh
-    query on every request whether or not Goal Tracking is even the
-    page being loaded. Instead this follows the exact same shape
-    Purchase Goals and Possessions already use (see render_purchase_goals/
-    render_possessions): an empty shell on load, filled in by GET
-    /api/goals the instant the page's own script runs, then kept
-    current after that by polling the very same endpoint every 5
-    seconds -- one endpoint serves both the initial paint and the live
-    refresh, so a kill/xp drop/item pickup made mid-session shows up in
-    a goal's progress bar within a few seconds, without a reload,
-    exactly like every other page on this site that stays live.
-
-    Not linked (player.account_hash is None) skips the add-goal form
-    and goal list entirely and shows a one-line prompt to link instead
-    -- GET/POST/DELETE /api/goals all require a verified, linked
-    GameAccount (see get_current_verified_game_account_from_session in
-    app/main.py), so there's nothing this page could usefully show or
-    let an unlinked visitor do yet.
-    """
+def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
+    """Builds Goal Tracking's (extra_head, body, script) triple --
+    split out from render_goal_tracking below (same reasoning, and the
+    same split _purchase_goals_panel_markup/_loot_tracker_panel_markup/
+    _mindmaps_panel_markup/_possessions_panel_markup already went
+    through) so the landing page's own interactive preview
+    (render_landing_goal_tracking_preview, just below) can reuse this
+    exact body/script -- unmodified -- without also pulling in the
+    is_linked gate render_goal_tracking itself needs (the demo's own
+    frozen goal list stands in for a real linked account) or the
+    _shell wrapper a real, logged-in-or-not page visit needs."""
     extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
-    is_linked = player.account_hash is not None
-
-    if not is_linked:
-        body = """
-        <h2 class="page-title">Goal Tracking</h2>
-        <div class="gt-card">
-          <p class="gt-link-note">Link your RuneLite account to start tracking goals.</p>
-        </div>
-        """
-        return _shell(title="Goal Tracking — myscape", player=player, body=body, extra_head=extra_head)
 
     # A kc goal's own icon (see goalRowHtml in the script below) is its
     # real boss sprite, not the generic KC badge -- every HISCORE_BOSSES
@@ -13270,6 +13318,260 @@ def render_goal_tracking(player: PlayerView) -> str:
     })();
     """
     )
+    return extra_head, body, script
+
+
+def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
+    """The landing page's own interactive Goal Tracking preview -- same
+    reuse-the-real-script pattern as the other four (reuses
+    _goal_tracking_panel_markup's body/script completely unmodified,
+    layering demo-only behavior on top from the outside in a wrapper
+    script), backed by one real, curated snapshot: app/data/
+    landing_goal_tracking_demo.json is a one-time GET /api/goals pull
+    of the account's own real current goals -- every goal exactly as
+    the real page would show it -- with two numbers nudged by hand
+    afterward (see _get_landing_goal_tracking_demo_data's own comment
+    for exactly which and why) so the demo has a goal that's neither
+    empty nor already complete to show off a progress bar with.
+    Returns (extra_head, body, script) for render_landing to splice
+    into its own markup, same as the other four, or None if the
+    snapshot isn't there to read.
+
+    Sort tabs, delete (with its own "Are you sure?" confirm), and
+    custom-mode drag-reorder all genuinely work here, the same as the
+    real page:
+
+    1. A `fetch` shim, scoped to just this wrapper, that:
+       - Answers GET /api/goals out of DEMO_GOALS/DEMO_SORT_MODE --
+         plain, directly-mutated in-memory state, not a frozen replay
+         of the snapshot's own original values -- so a delete, a
+         sort-tab change, or a custom-mode drag survives the real
+         page's own 5-second poll (loadGoals re-fetches and replaces
+         GT.goals wholesale on every tick -- see
+         _goal_tracking_panel_markup's own docstring) instead of
+         silently reverting a few seconds later.
+       - Implements PUT /api/goals/sort-mode and PUT /api/goals/reorder
+         against that same state, both returning the real endpoints'
+         own {goals, sort_mode} shape (reorder also switches
+         DEMO_SORT_MODE to "custom" itself, same as the real one does
+         server-side -- see set_goal_order's own docstring in
+         app/main.py).
+       - Implements DELETE /api/goals/{id} against DEMO_GOALS for
+         real.
+       - Implements GET /api/items/search?q=... off the same curated,
+         176-item pool Mindmaps' own preview already bundles (see
+         _get_landing_mindmap_search_pools_data) -- an obscure item
+         won't turn up here the way it would on the real page, same
+         caveat as that pool's own.
+       - POST /api/goals (the add-goal wizard's own Save) is the one
+         real feature deliberately left unsupported, same scoping
+         choice render_landing_storages_preview made for editing what
+         you own: a new goal's starting progress comes from the
+         player's actual live boss/skill/item totals (see
+         create_goal's own build_progress_context call in
+         app/main.py), which this demo has no real account behind it
+         to supply -- faking a number would just be a different kind
+         of wrong. Falls into the catch-all below instead, same
+         graceful "Not available in this preview" failure the reused
+         script's own apiCall already shows through #gtError for any
+         failed request, wizard left open rather than losing whatever
+         was typed.
+       - Anything else gets that same graceful failure.
+    2. No localStorage shadowing needed here -- this page's own script
+       never reads or writes it.
+    3. Same bottom-edge feather as the other four previews.
+
+    The 5-second poll (setInterval(loadGoals, 5000), inside the reused
+    script itself) is left running rather than neutralized, same
+    reasoning as the other previews' own polls.
+    """
+    demo = _get_landing_goal_tracking_demo_data()
+    if demo is None:
+        return None
+    search_pools = _get_landing_mindmap_search_pools_data()
+    items_pool = (search_pools or {}).get("items") or []
+    extra_head, body, script = _goal_tracking_panel_markup()
+
+    # Landing-preview-only hero row -- tagline's own wrap FIRST this
+    # time, character SECOND (so he lands on the RIGHT, per this
+    # preview's own explicit "put him on the right, with the text on
+    # the left" request) -- same flex row/bottom-align treatment as
+    # the other four previews' own hero rows, just under this
+    # preview's own class names since its markup/CSS are Goal
+    # Tracking's, not any other page's. This is the same left-to-right
+    # order Loot Tracker's and Mindmaps' own hero rows already use
+    # (see .loot-preview-hero/.mindmap-preview-hero's own markup) --
+    # Purchase Goals and Storages Viewer are the two that put the
+    # character first instead, per THEIR own explicit requests. The
+    # reused body's own "Goal Tracking" <h2> is hidden via CSS
+    # (.landing-goal-tracking-preview .page-title), same as the other
+    # four.
+    hero_markup = """
+    <div class="gt-preview-hero">
+      <div class="gt-preview-tagline-wrap">
+        <p class="gt-preview-tagline">
+          <span class="gt-preview-tagline-gold">GOAL TRACKING</span> <span class="gt-preview-tagline-white">for those days when you need some dopamine.</span>
+        </p>
+      </div>
+      <picture class="gt-preview-char">
+        <source srcset="/static/img/landing-goal-tracking-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-goal-tracking-preview-char.png" alt="" />
+      </picture>
+    </div>
+    """
+    body = hero_markup + body
+
+    goals_json = json.dumps(demo.get("goals") or [])
+    sort_mode_json = json.dumps(demo.get("sort_mode") or "alphabetical")
+    items_pool_json = json.dumps(items_pool)
+    wrapper_script = f"""
+    (function () {{
+      // The captured, hand-nudged snapshot itself (see
+      // _get_landing_goal_tracking_demo_data's own comment) -- a plain
+      // array of goals, each already shaped exactly like the real GET
+      // /api/goals response's own `goals` entries. Directly mutated
+      // (not re-derived) by the delete/sort-mode/reorder handlers
+      // below, so GET always answers with whatever this visitor has
+      // actually done so far.
+      var DEMO_GOALS = {goals_json};
+      var DEMO_SORT_MODE = {sort_mode_json};
+      // Same curated item pool Mindmaps' own preview bundles -- see
+      // this function's own docstring.
+      var DEMO_ITEMS_POOL = {items_pool_json};
+      var ITEM_ICON_CDN_BASE = 'https://static.runelite.net/cache/item/icon/';
+
+      // Same startswith-then-contains ranking localSearchItems already
+      // uses inside Mindmaps' own preview wrapper, ported here rather
+      // than shared -- each preview's wrapper is self-contained, same
+      // as the rest of this pattern.
+      function localSearchItems(query) {{
+        var q = String(query || '').trim().toLowerCase();
+        if (!q) return [];
+        var starts = [], contains = [];
+        DEMO_ITEMS_POOL.forEach(function (item) {{
+          var lname = item.name.toLowerCase();
+          if (lname.indexOf(q) === 0) starts.push(item);
+          else if (lname.indexOf(q) !== -1) contains.push(item);
+        }});
+        starts.sort(function (a, b) {{ return a.name.length - b.name.length; }});
+        contains.sort(function (a, b) {{ return a.name.length - b.name.length; }});
+        return starts.concat(contains).slice(0, 20).map(function (item) {{
+          return {{ id: item.id, name: item.name, icon: ITEM_ICON_CDN_BASE + item.id + '.png' }};
+        }});
+      }}
+
+      // ---- fetch shim -----------------------------------------------------
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+        var params = new URLSearchParams(qIndex === -1 ? '' : url.slice(qIndex + 1));
+        function ok(data) {{ return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(data); }} }}); }}
+        function fail(detail) {{ return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{ detail: detail }}); }} }}); }}
+
+        if (path === '/api/goals' && method === 'GET') {{
+          return ok({{ goals: DEMO_GOALS, sort_mode: DEMO_SORT_MODE }});
+        }}
+        if (path === '/api/items/search' && method === 'GET') {{
+          return ok({{ results: localSearchItems(params.get('q')) }});
+        }}
+        if (path === '/api/goals/sort-mode' && method === 'PUT') {{
+          var modeBody = {{}};
+          try {{ modeBody = opts.body ? JSON.parse(opts.body) : {{}}; }} catch (e) {{ modeBody = {{}}; }}
+          if (modeBody.sort_mode) DEMO_SORT_MODE = modeBody.sort_mode;
+          return ok({{ goals: DEMO_GOALS, sort_mode: DEMO_SORT_MODE }});
+        }}
+        if (path === '/api/goals/reorder' && method === 'PUT') {{
+          var reorderBody = {{}};
+          try {{ reorderBody = opts.body ? JSON.parse(opts.body) : {{}}; }} catch (e) {{ reorderBody = {{}}; }}
+          var order = reorderBody.order || [];
+          var byId = {{}};
+          DEMO_GOALS.forEach(function (g) {{ byId[g.id] = g; }});
+          order.forEach(function (id, index) {{
+            if (byId[id]) byId[id].sort_order = index;
+          }});
+          DEMO_SORT_MODE = 'custom';
+          return ok({{ goals: DEMO_GOALS, sort_mode: DEMO_SORT_MODE }});
+        }}
+        if (path.indexOf('/api/goals/') === 0 && method === 'DELETE') {{
+          var delId = decodeURIComponent(path.slice('/api/goals/'.length));
+          DEMO_GOALS = DEMO_GOALS.filter(function (g) {{ return g.id !== delId; }});
+          return ok({{}});
+        }}
+
+        // The add-goal wizard's own Save (POST /api/goals) -- and
+        // anything else this script doesn't otherwise call. Graceful
+        // failure, never the real network -- see this function's own
+        // docstring for why creating a goal specifically isn't
+        // supported here.
+        return fail('Not available in this preview.');
+      }};
+
+      {script}
+
+      // Same bottom-edge feather as the other four previews -- see
+      // .landing-goal-tracking-preview/.landing-goal-tracking-preview--clipped
+      // in goal-tracking.css, and render_landing_loot_preview's own
+      // wrapper script for the fuller comment this mirrors.
+      var previewEl = document.querySelector('.landing-goal-tracking-preview');
+      if (previewEl) {{
+        var checkClipped = function () {{
+          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
+          previewEl.classList.toggle('landing-goal-tracking-preview--clipped', overflowing);
+        }};
+        checkClipped();
+        new ResizeObserver(checkClipped).observe(previewEl);
+      }}
+    }})();
+    """
+    return extra_head, body, wrapper_script
+
+
+def render_goal_tracking(player: PlayerView) -> str:
+    """The Goal Tracking page -- a plain, player-built list of targets
+    (a boss kill count, a skill level/xp, or an item quantity), each
+    tracked toward completion with live progress that's always already
+    current by the time this renders (no stale "as of my last visit"
+    numbers). Superseded the old 71-boss reference table this page used
+    to be (see git history) once app/goals.py's own CRUD endpoints
+    existed to build a real goal-creation form against instead.
+
+    Deliberately NOT server-rendered with the player's actual goal list
+    -- PlayerView (this file's per-request "everything render_* needs"
+    struct, built once in app/auth.py) has no goals field of its own,
+    and adding one just for this page's first paint would mean a fresh
+    query on every request whether or not Goal Tracking is even the
+    page being loaded. Instead this follows the exact same shape
+    Purchase Goals and Possessions already use (see render_purchase_goals/
+    render_possessions): an empty shell on load, filled in by GET
+    /api/goals the instant the page's own script runs, then kept
+    current after that by polling the very same endpoint every 5
+    seconds -- one endpoint serves both the initial paint and the live
+    refresh, so a kill/xp drop/item pickup made mid-session shows up in
+    a goal's progress bar within a few seconds, without a reload,
+    exactly like every other page on this site that stays live.
+
+    Not linked (player.account_hash is None) skips the add-goal form
+    and goal list entirely and shows a one-line prompt to link instead
+    -- GET/POST/DELETE /api/goals all require a verified, linked
+    GameAccount (see get_current_verified_game_account_from_session in
+    app/main.py), so there's nothing this page could usefully show or
+    let an unlinked visitor do yet.
+    """
+    extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
+    is_linked = player.account_hash is not None
+
+    if not is_linked:
+        body = """
+        <h2 class="page-title">Goal Tracking</h2>
+        <div class="gt-card">
+          <p class="gt-link-note">Link your RuneLite account to start tracking goals.</p>
+        </div>
+        """
+        return _shell(title="Goal Tracking — myscape", player=player, body=body, extra_head=extra_head)
+
+    extra_head, body, script = _goal_tracking_panel_markup()
     return _shell(
         title="Goal Tracking — myscape",
         player=player,

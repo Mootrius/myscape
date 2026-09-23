@@ -861,3 +861,95 @@ input[type="text"].invalid { border-color: var(--red); }
   .gt-metric-toggle { width: 92px; }
   .gt-target-mode-toggle { width: 108px; }
 }
+
+/* ---------- Landing-page-only interactive preview
+   (render_landing_goal_tracking_preview) -- container/feather, then
+   the hero row (character + tagline, replacing the reused page's own
+   "Goal Tracking" heading). Everything here is scoped under
+   .landing-goal-tracking-preview so none of it reaches the real,
+   authenticated Goal Tracking page, which still gets its plain
+   .page-title heading and none of this markup at all. Mirrors
+   .landing-loot-preview/.loot-preview-hero in loot-tracker.css --
+   same container sizing, same feather, same hero-row layout -- except
+   the hero row's own DOM order (see this file's own comment on
+   .gt-preview-hero below) puts the tagline first and the character
+   second, so he lands on the RIGHT rather than the left, per this
+   preview's own explicit request. ---------- */
+
+.landing-goal-tracking-preview {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100svh - 80px);
+  overflow: hidden;
+  position: relative;
+}
+.landing-goal-tracking-preview--clipped::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 15%;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+
+/* The reused body's own heading -- hidden rather than stripped from
+   the markup itself, so _goal_tracking_panel_markup stays untouched;
+   the tagline below takes over as this preview's own "title". */
+.landing-goal-tracking-preview .page-title { display: none; }
+
+/* A plain flex row, tagline's own wrap FIRST in source order and the
+   character SECOND -- the mirror image of .loot-preview-hero's own
+   DOM order (loot-tracker.css), which puts the character first. Flex
+   items lay out in source order by default, so this is the entire
+   difference between "he's on the left" and "he's on the right" --
+   no flex-direction/order override needed. align-items: flex-end
+   bottom-aligns both children flush with the row's own bottom edge,
+   same as every other preview's own hero row, so the character's own
+   bottom edge lands exactly on the goal list's top border below with
+   no overlap and no gap either side. */
+.gt-preview-hero {
+  display: flex;
+  align-items: flex-end;
+}
+.gt-preview-tagline-wrap {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.gt-preview-tagline {
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gt-preview-tagline-gold { color: var(--gold); }
+.gt-preview-tagline-white { color: var(--text); }
+
+/* Same 157px standardized height every other preview character is
+   sized to (see .loot-preview-char's own comment in loot-tracker.css
+   for exactly why 157px) -- reads as the same size figure next to
+   the other four previews despite this source image's own different
+   aspect ratio (425x410, already cropped to its own upper half). */
+.gt-preview-char {
+  flex: 0 0 auto;
+  height: 157px;
+  line-height: 0;
+}
+.landing-goal-tracking-preview .gt-preview-char img {
+  display: block;
+  height: 100%;
+  max-height: none;
+  width: auto;
+  max-width: none;
+}
