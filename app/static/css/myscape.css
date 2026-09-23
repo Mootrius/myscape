@@ -779,49 +779,42 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 }
 
 /* Reorder plumbing (see _dash_card_wrap/wireDashboardDrag in
-   app/pages.py) around the actual card below -- position: relative so
-   .dash-card-drag-handle can overlay this card's own corner instead of
-   claiming space in its layout, same relative-host/absolute-overlay
-   pairing .gt-goal-row/.gt-goal-delete already use in
-   goal-tracking.css. .dragging (added only on the card currently being
-   dragged, not its handle) fades it in place while animateReorder
-   slides the others out of the way -- identical to .gt-goal-row.dragging/
-   .gear-summary-row.dragging elsewhere on the site. */
-.dash-card-wrap { position: relative; }
-.dash-card-wrap.dragging { opacity: 0.4; }
+   app/pages.py) around the actual card below. The whole wrapper is
+   what's draggable="true" (set in the markup, not here) -- pressing
+   and dragging anywhere on a card, not just some dedicated handle,
+   picks THIS element up (see _dash_card_wrap's own docstring for why
+   its <a>/<img> are each explicitly draggable="false" so neither one
+   steals that gesture into its own native link-/image-drag instead).
+   cursor: grab signals that anywhere on the card, same "the whole
+   thing is what you'd grab" affordance a Trello-style card list gives;
+   :active flips to grabbing for the press itself, and .dragging (added
+   only on the card actually being picked up) fades it in place while
+   animateReorder slides the others out of the way -- identical to
+   .gt-goal-row.draggable/.dragging's own cursor/opacity pair in
+   goal-tracking.css. user-select: none stops a press-and-drag from
+   also selecting/highlighting the card's title/description text
+   underneath it, same reasoning .gt-goal-row.draggable already has. */
+.dash-card-wrap { cursor: grab; user-select: none; }
+.dash-card-wrap:active { cursor: grabbing; }
+.dash-card-wrap.dragging { opacity: 0.4; cursor: grabbing; }
 
-.dash-card-link { display: block; color: inherit; text-decoration: none; }
-
-/* Deliberately NOT nested inside .dash-card-link's own <a> -- see
-   _dash_card_wrap's docstring for why a sibling button, not something
-   inside the link, is what this whole feature has to be draggable from.
-   Styled like .gt-goal-delete's own corner-overlay button (same
-   transparent-until-hovered chrome, same rough size), just top-LEFT
-   instead of top-right since a dashboard card has no other control
-   competing for that corner the way a goal row's own title text does. */
-.dash-card-drag-handle {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 2;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  color: var(--text-faint);
-  line-height: 1;
-  padding: 5px 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: grab;
-  /* Stops a press-and-drag on the handle from also selecting/highlighting
-     the card's own title/description text underneath it, same reasoning
-     .gt-goal-row.draggable's own user-select: none already gives Goal
-     Tracking's rows. */
-  user-select: none;
+/* :hover repeated explicitly, not just relying on the plain rule above
+   -- the site-wide `a:hover { color: var(--gold); text-decoration:
+   underline; }` (near the top of this file) has higher specificity
+   (element+pseudo-class) than a single class alone, so without this it
+   would win over .dash-card-link's own color/text-decoration the
+   moment a card is hovered, turning its title/description into a
+   plain underlined text link instead of the whole styled card reading
+   as hoverable via .dash-card:hover's background alone. The original
+   version of this link avoided the whole issue with an inline style
+   (inline styles always win regardless of specificity); moving that to
+   a real class for the reorder feature's sake needs this instead. */
+.dash-card-link,
+.dash-card-link:hover {
+  display: block;
+  color: inherit;
+  text-decoration: none;
 }
-.dash-card-drag-handle:hover { color: var(--gold); background-color: rgb(64, 64, 68); }
-.dash-card-drag-handle:active { cursor: grabbing; }
 
 .dash-card {
   display: flex;
@@ -831,12 +824,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 22px 24px 24px;
-  /* Room for .dash-card-drag-handle overlaid on the top-left corner
-     above -- keeps its icon chip from sitting half-hidden under it,
-     same "pad the row so an overlaid control never covers real content"
-     move .gt-goal-headline's own padding-right makes for
-     .gt-goal-delete. */
-  padding-left: 44px;
 }
 /* Each card is a single clickable link out to its own page (see
    purchase_goals_card/loot_tracker_card in app/pages.py), so unlike

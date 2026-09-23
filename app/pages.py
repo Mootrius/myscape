@@ -1064,10 +1064,18 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
     """One dashboard feature card -- an icon chip on the left, heading and
     description stacked on the right. Both current cards describe features
     that aren't live yet, but their copy explains what's coming rather than
-    just saying "coming soon" now that there's something to say about them."""
+    just saying "coming soon" now that there's something to say about them.
+
+    draggable="false" on the icon <img> -- an <img> is a natively
+    draggable element by default (same as an <a href>, see
+    _dash_card_wrap's own comment on the link below), so without this a
+    press-and-drag starting right on the icon would kick off the
+    browser's own native image-drag instead of the whole card's reorder
+    drag it should defer to. Same guard, same reason,
+    .gt-goal-icon/.gear-slot-icon already carry elsewhere on the site."""
     return f"""
     <div class="dash-card">
-      <div class="dash-card-icon"><img src="{escape(icon_src)}" alt="{escape(icon_alt)}" /></div>
+      <div class="dash-card-icon"><img src="{escape(icon_src)}" alt="{escape(icon_alt)}" draggable="false" /></div>
       <div class="dash-card-body">
         <h3>{escape(title)}</h3>
         <p class="subtitle">{escape(description)}</p>
@@ -1076,34 +1084,24 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
     """
 
 
-# 6-dot grip glyph for the drag handle _dash_card_wrap below renders on
-# every card -- same inline-SVG-string, currentColor-stroke/fill,
-# aria-hidden convention goalRowHtml's own gt-goal-delete-icon already
-# uses, just fill (solid dots) instead of stroke (an outline) since a
-# grip icon reads fine solid at this size.
-_DASH_CARD_DRAG_HANDLE_ICON = (
-    '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" '
-    'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
-    '<circle cx="5" cy="3" r="1.3"/><circle cx="5" cy="8" r="1.3"/><circle cx="5" cy="13" r="1.3"/>'
-    '<circle cx="11" cy="3" r="1.3"/><circle cx="11" cy="8" r="1.3"/><circle cx="11" cy="13" r="1.3"/>'
-    "</svg>"
-)
-
-
 def _dash_card_wrap(key: str, href: str, icon_src: str, icon_alt: str, title: str, description: str) -> str:
     """One dashboard card, plus the drag-and-drop plumbing wireDashboardDrag
-    (render_dashboard's own script, below) needs to let a player reorder it.
+    (render_dashboard's own script, below) needs to let a player reorder it
+    by pressing and dragging anywhere on the card -- not just some
+    dedicated handle.
 
-    The drag handle is a sibling BUTTON, not something nested inside the
-    card's own <a> -- that's deliberate, not incidental: draggable="true"
-    lives on the card's <a> would still let a plain click navigate (a
-    click alone, with no pointer movement, never starts a native HTML5
-    drag), but the *handle itself* would also be swallowed by that same
-    <a>'s click, sending a press meant to just grab the card straight to
-    its target page instead. A sibling button has no such link to
-    accidentally trigger, so it can be the one and only thing this card
-    is ever dragged by, while the <a> stays exactly as click-only as
-    every other page's link.
+    draggable="true" lives on THIS wrapper div, not the card's own <a>
+    directly, and the <a> itself carries draggable="false" to match --
+    an <a href> is a natively draggable element by default (same as
+    <img>, see _dash_card's own comment on its icon above), so leaving
+    it draggable would let the browser treat the anchor itself as the
+    drag source (its own native link-drag) rather than deferring to
+    this wrapper. With the anchor's own native drag switched off, a
+    press-and-move starting anywhere inside it -- the icon, the title,
+    anywhere -- correctly bubbles up and picks up THIS element instead,
+    while a plain click (no pointer movement at all) never starts an
+    HTML5 drag in the first place, so it still just navigates like any
+    other link, completely unaffected.
 
     data-card-key on the wrapper is both this card's drag payload and
     the same key DASHBOARD_CARD_KEYS/resolve_dashboard_card_order below
@@ -1111,11 +1109,8 @@ def _dash_card_wrap(key: str, href: str, icon_src: str, icon_alt: str, title: st
     which is what wireDashboardDrag's own commitDomOrder posts this
     list of keys to after a drop."""
     return f"""
-    <div class="dash-card-wrap" data-card-key="{escape(key)}">
-      <button type="button" class="dash-card-drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder the {escape(title)} card">
-        {_DASH_CARD_DRAG_HANDLE_ICON}
-      </button>
-      <a href="{escape(href)}" class="dash-card-link">
+    <div class="dash-card-wrap" data-card-key="{escape(key)}" draggable="true">
+      <a href="{escape(href)}" class="dash-card-link" draggable="false">
         {_dash_card(icon_src, icon_alt, title, description)}
       </a>
     </div>
@@ -1236,10 +1231,13 @@ def render_dashboard(player: PlayerView) -> str:
       // dragstart/dragover/drop/dragend shape (and the same FLIP-style
       // animateReorder live preview) as Goal Tracking's own wireGoalDrag/
       // Purchase Goals' wireSummaryDrag, just keyed by data-card-key
-      // (see _dash_card_wrap in app/pages.py) instead of a goal id, and
-      // with the drag itself only ever startable from each card's own
-      // .dash-card-drag-handle rather than the whole card (see that
-      // function's own docstring for why).
+      // (see _dash_card_wrap in app/pages.py) instead of a goal id.
+      // Every .dash-card-wrap carries draggable="true" itself (with its
+      // own <a>/<img> both explicitly draggable="false", so neither one
+      // hijacks the browser's own native link-/image-drag instead) --
+      // see that function's own docstring for why a press-and-drag
+      // starting anywhere on a card, not just some dedicated handle,
+      // still correctly picks up the card as a whole.
       //
       // Unlike those two, there's no in-memory source-of-truth array to
       // re-render from if a drag ends without a drop -- this page's
@@ -1314,27 +1312,19 @@ def render_dashboard(player: PlayerView) -> str:
       }
 
       wraps().forEach(function (wrap) {
-        var handle = wrap.querySelector('.dash-card-drag-handle');
-        if (!handle) return;
-
-        handle.addEventListener('dragstart', function (e) {
+        wrap.addEventListener('dragstart', function (e) {
           e.dataTransfer.effectAllowed = 'move';
           e.dataTransfer.setData('text/plain', wrapKey(wrap));
           draggedEl = wrap;
           dropped = false;
           wrap.classList.add('dragging');
         });
-        handle.addEventListener('dragend', function () {
+        wrap.addEventListener('dragend', function () {
           wrap.classList.remove('dragging');
           draggedEl = null;
           if (!dropped) restoreOriginalOrder();
         });
 
-        // dragover/drop listen on the whole card, not just its handle --
-        // once a drag is underway (only ever startable from a handle,
-        // per above) it should be droppable anywhere over a target card,
-        // the same reach a mid-drag hover gets in every other reorderable
-        // list on the site.
         wrap.addEventListener('dragover', function (e) {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
