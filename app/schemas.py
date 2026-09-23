@@ -1744,3 +1744,14 @@ class GoalReorderRequest(BaseModel):
     app/models.py."""
 
     order: List[str]
+
+
+class DashboardCardOrderRequest(BaseModel):
+    """The full new order of the dashboard's own cards after a drag-
+    and-drop reorder -- always the complete list of card keys as
+    currently displayed, not a delta, same full-replacement convention
+    GoalReorderRequest above already follows for a goal list's own
+    reorder. See Account.dashboard_card_order and DASHBOARD_CARD_KEYS
+    in app/pages.py."""
+
+    order: List[str]

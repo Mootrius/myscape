@@ -105,6 +105,21 @@ class Account(Base):
     # start out unverified.
     email_verified_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
+    # The player's own drag-and-drop order for their dashboard's cards
+    # (see DASHBOARD_CARD_KEYS/resolve_dashboard_card_order in
+    # app/pages.py) -- a JSON list of card keys, e.g.
+    # ["mindmaps", "loot_tracker", ...]. Nullable, and left NULL until a
+    # player actually drags a card -- render_dashboard falls back to
+    # DASHBOARD_CARD_KEYS' own fixed order (today's hardcoded layout)
+    # whenever this is NULL, same "nothing saved yet -> today's default"
+    # stance still_to_purchase_custom_order/GameAccount.sort_order (see
+    # below) already take. Doesn't need its own sort-mode column the way
+    # Goal Tracking's #gtSortTabs does -- there's only ever "the default
+    # order" or "whatever this list says," no other modes to choose
+    # between. Account, not GameAccount, because the dashboard itself is
+    # a signed-in-website-login concern, reachable (and reorderable)
+    # even before any OSRS character is linked.
+    dashboard_card_order = Column(JSONB, nullable=True)
 
     game_accounts = relationship("GameAccount", back_populates="account", cascade="all, delete-orphan")
     password_reset_tokens = relationship("PasswordResetToken", back_populates="account", cascade="all, delete-orphan")

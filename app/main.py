@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import (
     get_current_game_account_from_api_key,
+    get_current_verified_account_from_session,
     get_current_verified_game_account_from_session,
     get_optional_current_account_from_session,
     get_optional_current_game_account_from_session,
@@ -84,6 +85,7 @@ from app.models import (
 )
 from app.pages import (
     _SITE_URL,
+    DASHBOARD_CARD_KEYS,
     PlayerView,
     build_player_view,
     render_account,
@@ -101,6 +103,7 @@ from app.pages import (
     render_signup,
     render_verify_email,
     render_verify_email_required,
+    resolve_dashboard_card_order,
 )
 from app.possessions import (
     build_possession_views,
@@ -138,6 +141,7 @@ from app.schemas import (
     BoatCargoSyncResponse,
     CreateGearSetupRequest,
     CreateMindMapRequest,
+    DashboardCardOrderRequest,
     DiariesSyncRequest,
     DiariesSyncResponse,
     EquipmentOut,
@@ -572,6 +576,44 @@ def dashboard_page(player: Optional[PlayerView] = Depends(get_optional_current_p
     if not player.email_verified_at:
         return RedirectResponse("/verify-email-required", status_code=302)
     return render_dashboard(player)
+
+
+@app.put("/api/dashboard/card-order")
+def set_dashboard_card_order(
+    payload: DashboardCardOrderRequest,
+    db: Session = Depends(get_db),
+    account: Account = Depends(get_current_verified_account_from_session),
+):
+    """Saves a drag-and-drop reorder of the dashboard's own cards
+    (Account.dashboard_card_order) -- payload.order is the complete
+    list of card keys in their new order, not a delta, same convention
+    set_goal_order/set_gear_setup_order already follow for reordering a
+    LIST. Account, not GameAccount -- see that column's own docstring
+    in app/models.py for why the dashboard is a signed-in-website-login
+    concern rather than a linked-character one, so this alone (unlike
+    virtually every other feature endpoint in this file) only needs a
+    verified Account, no linked game account required.
+
+    Any key in payload.order that isn't one of DASHBOARD_CARD_KEYS'
+    real cards is silently dropped (a stale client, or a card retired
+    since), and any duplicate keeps only its first occurrence -- same
+    defensive, don't-error-the-whole-request-out stance set_goal_order
+    already takes toward ids it doesn't recognize. Doesn't need to
+    backfill in whichever cards the client's own list left OUT, unlike
+    that defensive dropping -- resolve_dashboard_card_order already
+    does that at render time, so storing the player's own list exactly
+    (just cleaned of anything invalid) is enough; a card their list
+    predates still lands in the right spot on their next page load
+    without this endpoint needing to know that in advance."""
+    seen = set()
+    cleaned = []
+    for key in payload.order:
+        if key in DASHBOARD_CARD_KEYS and key not in seen:
+            seen.add(key)
+            cleaned.append(key)
+    account.dashboard_card_order = cleaned
+    db.commit()
+    return {"order": resolve_dashboard_card_order(cleaned)}
 
 
 @app.get("/account", response_class=HTMLResponse)
