@@ -4264,6 +4264,19 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kc';
         }
 
+        // A tiered clue casket's own sourceName is always exactly
+        // "Reward casket (<tier>)" (see build_loot_state in
+        // app/loot.py, npc_like_name) -- never a real NPC's name, so
+        // this can't false-positive on an actual monster. Used below
+        // to give the casket's own icon a dedicated class (see
+        // .loot-npc-box-icon-casket in loot-tracker.css) since the
+        // wiki's "detail" casket render (much bigger/more ornate than
+        // a real NPC's own portrait) reads a little large at the same
+        // 56px this box already sizes every other NPC icon at.
+        function isCasketNpc(n) {
+          return /^Reward casket \(/i.test(n.sourceName);
+        }
+
         // hiddenFlags folds into the key alongside everything else that
         // already forces a rebuild (search/sort/toggle/the set itself)
         // -- a hide/unhide can change WHICH entries are dimmed without
@@ -4300,7 +4313,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon') +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +

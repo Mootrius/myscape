@@ -301,6 +301,17 @@
 .loot-npc-box:hover { background-color: rgb(51, 51, 54); }
 .loot-npc-box.active { border-color: var(--gold); }
 .loot-npc-box-icon { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
+/* A clue tier's own casket tile (see isCasketNpc/loot-npc-box-icon-casket
+   in the script below) uses the wiki's much larger, more ornate
+   "detail" render (see clue_casket_icon_url in app/loot.py) rather
+   than a real NPC's own portrait -- at this box's shared 56px sizing
+   that read a bit oversized next to the smaller NPC portraits beside
+   it, so this tier alone gets scaled down to 70% (56 * 0.7 = ~39px).
+   object-fit: contain above still applies (this only narrows the box
+   the image is fit into), and .loot-npc-box's own centering (align-
+   items: center) keeps it centered in the same slot a full-size icon
+   would occupy, so the kc/value text underneath doesn't shift. */
+.loot-npc-box-icon-casket { width: 39px; height: 39px; }
 .loot-npc-box-kc {
   font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.15;
   font-variant-numeric: tabular-nums;
