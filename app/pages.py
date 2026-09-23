@@ -1112,9 +1112,10 @@ def render_dashboard(player: PlayerView) -> str:
             _ICON_MAX_CAPE,
             "Max cape",
             "Goal Tracking",
-            "Visualize your goals by setting time-based quotas for yourself "
-            "to meet, complete with auto-detecting progress bars, "
-            "historical data, and more.",
+            "Visualize your goals by setting time-based or one-off quotas "
+            "for yourself to meet, complete with auto-detecting and "
+            "updating progress bars. Supports items, boss KC, and skill "
+            "levels and xp.",
         )
         + "</a>"
     )
