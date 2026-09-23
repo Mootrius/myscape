@@ -6325,12 +6325,25 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
       // same as a wheel event anywhere else on it. Every other event
       // type this or any later code registers on the canvas passes
       // through to the real addEventListener untouched.
+      //
+      // One exception to all of the above (per this preview's own
+      // follow-up request): once fullscreen (see setFullscreen/
+      // .mm-fullscreen further down) the canvas fills the whole
+      // browser window over top of the landing page entirely -- there
+      // is no page left behind it to scroll-snap out from under a
+      // wheel gesture any more, so the real page's own reason to
+      // swallow this event (above) no longer applies, and scroll-to-
+      // zoom is let through to the reused listener exactly like the
+      // real Mindmaps page. Checked fresh on every wheel event (not
+      // just once at listener-registration time) since a single
+      // preview session can enter/exit fullscreen any number of times.
       var mmCanvasForWheelPatch = document.getElementById('mmCanvas');
       if (mmCanvasForWheelPatch) {{
         var mmRealAddEventListener = mmCanvasForWheelPatch.addEventListener.bind(mmCanvasForWheelPatch);
         mmCanvasForWheelPatch.addEventListener = function (type, listener, opts) {{
           if (type !== 'wheel') return mmRealAddEventListener(type, listener, opts);
           return mmRealAddEventListener('wheel', function (e) {{
+            if (mmCanvasForWheelPatch.classList.contains('mm-fullscreen')) return listener(e);
             if (e.target.closest('[data-role="node-note-input"], .mm-node-note-text')) return listener(e);
             if (e.target.closest('[data-role="popover"]')) return listener(e);
           }}, opts);
@@ -13372,19 +13385,22 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
       margin used to leave, so the goal list sits flush under the
       hero row instead.
     - Each row's own delete button -- .gt-goal-delete is left fully
-      visible (still the same trash icon, same position) but made
-      inert (.landing-goal-tracking-preview .gt-goal-delete in
-      goal-tracking.css, pointer-events: none) rather than hidden:
-      unlike the wizard, delete actually WORKS against this demo's own
-      in-memory snapshot (see the fetch shim below), so this isn't
-      about papering over something broken -- it's simply not
-      something a passerby idly clicking around a marketing page
-      should be able to do to goals that read as "yours." A click
-      that lands on the icon's own footprint just passes through to
-      the row underneath it (same as clicking anywhere else on the
-      row -- see wireGoalDrag's own pointerdown listener/
-      glowCustomSortTab in _goal_tracking_panel_markup's script), it
-      just can never arm or confirm the delete anymore.
+      visible and hoverable (still the same trash icon, same position,
+      still lights up red on hover exactly like the real page -- see
+      this preview's own capture-phase click interceptor further down,
+      NOT pointer-events: none any more, which used to suppress that
+      hover along with everything else) but made inert: unlike the
+      wizard, delete actually WORKS against this demo's own in-memory
+      snapshot (see the fetch shim below), so this isn't about
+      papering over something broken -- it's simply not something a
+      passerby idly clicking around a marketing page should be able to
+      do to goals that read as "yours." A click on the icon itself
+      never reaches the reused script's own delegated listener (see
+      the capture-phase interceptor below), so it can never arm or
+      confirm the delete; a click anywhere else on the row -- selecting
+      it, starting a custom-mode drag (see wireGoalDrag's own
+      pointerdown listener/glowCustomSortTab in
+      _goal_tracking_panel_markup's script) -- is completely untouched.
 
     1. A `fetch` shim, scoped to just this wrapper, that:
        - Answers GET /api/goals out of DEMO_GOALS/DEMO_SORT_MODE --
@@ -13402,14 +13418,13 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
          server-side -- see set_goal_order's own docstring in
          app/main.py).
        - Implements DELETE /api/goals/{id} against DEMO_GOALS for
-         real -- unreachable in practice now that
-         .landing-goal-tracking-preview .gt-goal-delete's own
-         pointer-events: none (goal-tracking.css) means the row-level
-         click delegation this reused script wires up
-         (document.getElementById('gtGoalList')'s own listener) can
-         never find a .gt-goal-delete in e.target.closest's path to
-         arm or confirm from. Left in rather than pulled out, same
-         reasoning as the two below.
+         real -- unreachable in practice now that this preview's own
+         capture-phase click interceptor (below the reused script)
+         stops a click on .gt-goal-delete from ever reaching the
+         row-level click delegation the reused script wires up
+         (document.getElementById('gtGoalList')'s own listener), so it
+         can never arm or confirm a delete to begin with. Left in
+         rather than pulled out, same reasoning as the two below.
        - GET /api/items/search?q=... (off the same curated, 176-item
          pool Mindmaps' own preview already bundles -- see
          _get_landing_mindmap_search_pools_data) and POST /api/goals
@@ -13559,6 +13574,28 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
       }};
 
       {script}
+
+      // Neutralizes each row's own delete button -- runs after the
+      // reused script above has already wired its own delegated click
+      // listener on #gtGoalList (see goalRowHtml/that listener in
+      // _goal_tracking_panel_markup's script), so rather than stopping
+      // .gt-goal-delete from being clicked at all (pointer-events:
+      // none, this preview's first pass at this -- see this function's
+      // own docstring), this instead lets it be clicked, hovered, AND
+      // focused completely normally, right up until the delegated
+      // listener would actually see it: a CAPTURING-phase listener on
+      // the same #gtGoalList element fires on the way down, before the
+      // event ever reaches the button and bubbles back up to that
+      // reused bubble-phase listener, so calling stopPropagation here
+      // halts the whole dispatch and the reused listener never runs at
+      // all -- never arming the "Are you sure?" confirm state, never
+      // calling deleteGoal. Scoped to just .gt-goal-delete (via
+      // e.target.closest, same check the reused listener itself uses)
+      // so a click anywhere else on the row -- selecting it, starting
+      // a custom-mode drag -- passes through completely untouched.
+      document.getElementById('gtGoalList').addEventListener('click', function (e) {{
+        if (e.target.closest('.gt-goal-delete')) e.stopPropagation();
+      }}, true);
 
       // Same fixed-height container + always-on bottom-edge feather as
       // the other four previews -- see .landing-goal-tracking-preview

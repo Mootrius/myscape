@@ -932,22 +932,22 @@ input[type="text"].invalid { border-color: var(--red); }
 .landing-goal-tracking-preview #gtWizard { display: none; }
 
 /* Each row's own delete button (the trash icon in its top-right
-   corner) stays fully visible here -- same icon, same spot, same look
-   -- but pointer-events: none takes it out of hit-testing entirely,
-   so it can never be armed or confirmed (see
-   render_landing_goal_tracking_preview's own docstring for why: a
-   passerby idly clicking around a marketing page shouldn't be able to
-   delete goals that read as someone's real progress, even though the
-   underlying DELETE /api/goals/{id} shim this preview wires up would
-   otherwise happily go along with it). No cursor: default needed on
-   top of that -- pointer-events: none already drops the pointer
-   cursor along with every other pointer interaction (:hover included,
-   so .gt-goal-delete:hover's red tint below never triggers here
-   either). A click that lands on the icon's own footprint just passes
-   through to the row underneath it instead, same as clicking anywhere
-   else on the row already does (see .gt-goal-row's own pointerdown
-   listener in _goal_tracking_panel_markup's script). */
-.landing-goal-tracking-preview .gt-goal-delete { pointer-events: none; }
+   corner) stays fully visible AND fully hoverable here -- same icon,
+   same spot, same red .gt-goal-delete:hover tint below as the real
+   page (per this preview's own follow-up request) -- so it can still
+   be armed or confirmed, so a passerby idly clicking around a
+   marketing page shouldn't be able to delete goals that read as
+   someone's real progress, even though the underlying DELETE
+   /api/goals/{id} shim this preview wires up would otherwise happily
+   go along with it, is instead stopped in JS (a capture-phase click
+   interceptor on #gtGoalList, see render_landing_goal_tracking_
+   preview's own wrapper script below the reused one) rather than
+   here -- pointer-events: none was this preview's first pass at this,
+   but that took the button out of hit-testing entirely, which
+   suppressed the hover along with the click. cursor: default alone is
+   all this rule needs now, so the pointer cursor a clickable button
+   normally gets doesn't imply this one still is. */
+.landing-goal-tracking-preview .gt-goal-delete { cursor: default; }
 
 /* A plain flex row, tagline's own wrap FIRST in source order and the
    character SECOND -- the mirror image of .loot-preview-hero's own

@@ -622,12 +622,14 @@
 
 /* The range/date selector is explicitly non-interactive here (see
    render_landing_loot_preview's own fetch shim -- a fixed one-day
-   snapshot has no other range to switch to) -- no caret, no hover
-   state, and a default cursor rather than the pointer .loot-range-btn
-   normally gets, so it reads as the plain "24 HOURS" label it now is
-   rather than a dropdown a visitor might try to click. */
+   snapshot has no other range to switch to) -- no caret, and a
+   default cursor rather than the pointer .loot-range-btn normally
+   gets, so it reads as a label a visitor won't expect to be able to
+   click. It still lights up on hover exactly like the real, clickable
+   button, though (per this preview's own follow-up request) -- simply
+   leaving .loot-range-btn:hover above unoverridden here does that,
+   since nothing in this rule touches border-color/color any more. */
 .loot-range-btn--static { cursor: default; }
-.loot-range-btn--static:hover { border-color: var(--border); color: var(--text-dim); }
 .loot-range-btn--static .loot-range-caret { display: none; }
 
 /* ---------- Landing-preview-only hero row: character + tagline,
