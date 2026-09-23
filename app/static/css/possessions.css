@@ -619,12 +619,23 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  max-height: calc(100vh - 80px);
-  max-height: calc(100svh - 80px);
+  /* A fixed height now (was max-height, a cap content could come in
+     under) -- see .landing-loot-preview's own comment in loot-
+     tracker.css for why: a filter that leaves a panel shorter than
+     this used to shrink the whole container to fit, taking the bottom
+     feather below with it since that used to be gated on whether
+     content was actually overflowing. Pinning this box at a fixed
+     height regardless of how much is currently inside it is what
+     keeps the feather in the same screen position always. */
+  height: calc(100vh - 80px);
+  height: calc(100svh - 80px);
   overflow: hidden;
   position: relative;
 }
-.landing-storages-preview--clipped::after {
+/* Unconditional now -- no --clipped modifier class to gate it (see
+   .landing-loot-preview::after's own comment in loot-tracker.css for
+   the fuller reasoning this mirrors). */
+.landing-storages-preview::after {
   content: '';
   position: absolute;
   left: 0; right: 0; bottom: 0;

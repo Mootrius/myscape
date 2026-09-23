@@ -5288,32 +5288,16 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
         document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
       }}
 
-      // Toggles the bottom-edge feather (.landing-loot-preview--
-      // clipped, see loot-tracker.css) on only when this panel's
-      // content is actually taller than its own max-height and
-      // getting clipped by it -- on a tall enough viewport the whole
-      // thing fits with room to spare, and fading out a fully-visible
-      // last row there for no reason would read as a rendering
-      // glitch, not the deliberate crop this is meant to be.
-      var previewEl = document.querySelector('.landing-loot-preview');
-      if (previewEl) {{
-        var checkClipped = function () {{
-          // >2px of slop so ordinary layout rounding never flips this
-          // on for content that's really sitting flush with the edge.
-          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
-          previewEl.classList.toggle('landing-loot-preview--clipped', overflowing);
-        }};
-        checkClipped();
-        // Content height changes on every re-render (sort, search,
-        // NPC filter, and bar drill-down all replace the NPC/item
-        // panels' own children -- see rerenderChart/renderNpcRow/
-        // renderItemList in the reused script above) as well as on a
-        // window resize (this panel's own max-height is viewport-
-        // relative) -- observing the panel itself catches both in one
-        // place, without hooking into any of the reused script's own
-        // render functions.
-        new ResizeObserver(checkClipped).observe(previewEl);
-      }}
+      // The bottom-edge feather itself (.landing-loot-preview::after)
+      // is a plain, unconditional CSS rule now -- see loot-tracker.
+      // css's own comment on that selector for why this preview no
+      // longer needs any JS here to toggle it on/off: the container is
+      // pinned to a fixed height (that same CSS rule) rather than
+      // shrinking to fit whatever's currently inside it, so the
+      // feather -- and everything else about this box's own size and
+      // position -- stays put regardless of how a filter (an NPC box
+      // click down in #lootNpcRow, a search, a bar drill-down) changes
+      // how much content is actually in it.
     }})();
     """
     return extra_head, body, wrapper_script
@@ -5622,19 +5606,11 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
         }}, true);
       }}
 
-      // Same bottom-edge feather as Loot Tracker's own preview -- see
-      // .landing-purchase-preview/.landing-purchase-preview--clipped
-      // in purchase-goals.css, and render_landing_loot_preview's own
-      // wrapper script for the fuller comment this mirrors.
-      var previewEl = document.querySelector('.landing-purchase-preview');
-      if (previewEl) {{
-        var checkClipped = function () {{
-          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
-          previewEl.classList.toggle('landing-purchase-preview--clipped', overflowing);
-        }};
-        checkClipped();
-        new ResizeObserver(checkClipped).observe(previewEl);
-      }}
+      // Same fixed-height container + always-on bottom-edge feather as
+      // Loot Tracker's own preview -- see .landing-purchase-preview in
+      // purchase-goals.css, and render_landing_loot_preview's own
+      // wrapper script for the fuller comment this mirrors. No JS
+      // needed here any more either, for the same reason.
     }})();
     """
     return extra_head, body, wrapper_script
@@ -5739,9 +5715,9 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
        fullscreen, and Edit Mode itself -- is left completely alone,
        exactly as the player asked ("have the actual buttons available
        in the normal mindmap editor").
-    4. Same bottom-edge feather as the other two previews (a
-       .landing-mindmap-preview--clipped toggle off a ResizeObserver),
-       even though .mm-canvas already has its own fixed height --
+    4. Same fixed-height container + always-on bottom-edge feather as
+       the other two previews (.landing-mindmap-preview in mindmaps.
+       css), even though .mm-canvas already has its own fixed height --
        between the hero row above it and the toolbar, the WHOLE panel
        can still exceed a short viewport, same reasoning as the other
        two.
@@ -6363,20 +6339,11 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
         document.getElementById('mmSwitchBtn').style.cursor = 'default';
       }}
 
-      var previewEl = document.querySelector('.landing-mindmap-preview');
-
-      // Same bottom-edge feather as the other two previews -- see
-      // .landing-mindmap-preview/.landing-mindmap-preview--clipped in
+      // Same fixed-height container + always-on bottom-edge feather as
+      // the other previews -- see .landing-mindmap-preview in
       // mindmaps.css, and render_landing_loot_preview's own wrapper
-      // script for the fuller comment this mirrors.
-      if (previewEl) {{
-        var checkClipped = function () {{
-          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
-          previewEl.classList.toggle('landing-mindmap-preview--clipped', overflowing);
-        }};
-        checkClipped();
-        new ResizeObserver(checkClipped).observe(previewEl);
-      }}
+      // script for the fuller comment this mirrors. No JS needed here
+      // any more either, for the same reason.
     }})();
     """
     return extra_head, body, wrapper_script
@@ -11435,8 +11402,9 @@ def render_landing_storages_preview() -> Optional[Tuple[str, str, str]]:
          ever reaching the real API.
     2. No localStorage shadowing needed here (unlike Mindmaps) -- this
        page's own script never reads or writes it.
-    3. Same bottom-edge feather as the other three previews (a
-       .landing-storages-preview--clipped toggle off a ResizeObserver).
+    3. Same fixed-height container + always-on bottom-edge feather as
+       the other three previews (.landing-storages-preview in
+       possessions.css).
 
     Every item row is still a real, plain <a> out to the OSRS Wiki
     (wikiItemUrl in the reused script) -- a public, unauthenticated
@@ -11584,19 +11552,11 @@ def render_landing_storages_preview() -> Optional[Tuple[str, str, str]]:
 
       {script}
 
-      // Same bottom-edge feather as the other three previews -- see
-      // .landing-storages-preview/.landing-storages-preview--clipped
-      // in possessions.css, and render_landing_loot_preview's own
-      // wrapper script for the fuller comment this mirrors.
-      var previewEl = document.querySelector('.landing-storages-preview');
-      if (previewEl) {{
-        var checkClipped = function () {{
-          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
-          previewEl.classList.toggle('landing-storages-preview--clipped', overflowing);
-        }};
-        checkClipped();
-        new ResizeObserver(checkClipped).observe(previewEl);
-      }}
+      // Same fixed-height container + always-on bottom-edge feather as
+      // the other three previews -- see .landing-storages-preview in
+      // possessions.css, and render_landing_loot_preview's own wrapper
+      // script for the fuller comment this mirrors. No JS needed here
+      // any more either, for the same reason.
     }})();
     """
     return extra_head, body, wrapper_script
@@ -13587,19 +13547,11 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
 
       {script}
 
-      // Same bottom-edge feather as the other four previews -- see
-      // .landing-goal-tracking-preview/.landing-goal-tracking-preview--clipped
+      // Same fixed-height container + always-on bottom-edge feather as
+      // the other four previews -- see .landing-goal-tracking-preview
       // in goal-tracking.css, and render_landing_loot_preview's own
-      // wrapper script for the fuller comment this mirrors.
-      var previewEl = document.querySelector('.landing-goal-tracking-preview');
-      if (previewEl) {{
-        var checkClipped = function () {{
-          var overflowing = previewEl.scrollHeight - previewEl.clientHeight > 2;
-          previewEl.classList.toggle('landing-goal-tracking-preview--clipped', overflowing);
-        }};
-        checkClipped();
-        new ResizeObserver(checkClipped).observe(previewEl);
-      }}
+      // wrapper script for the fuller comment this mirrors. No JS
+      // needed here any more either, for the same reason.
     }})();
     """
     return extra_head, body, wrapper_script

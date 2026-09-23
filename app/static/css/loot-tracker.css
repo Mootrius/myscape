@@ -560,29 +560,42 @@
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  max-height: calc(100vh - 80px);
-  max-height: calc(100svh - 80px);
+  /* A fixed height now, not a cap content can come in under -- see
+     this rule's own history: it used to be max-height, so a filter
+     that left the panel with only a row or two (e.g. clicking a
+     single NPC box down in #lootNpcRow, which re-scopes #lootItemList
+     to just that NPC's own drops) would shrink the whole container to
+     fit, and the bottom feather below (gated on whether content was
+     actually overflowing) would blink out along with it -- the
+     reported bug this replaced. Pinning the box at this exact height
+     regardless of how much content is currently inside it is what
+     keeps the feather sitting in the same screen position always,
+     filtered down to two rows or not. */
+  height: calc(100vh - 80px);
+  height: calc(100svh - 80px);
   overflow: hidden;
   position: relative;
 }
-/* Fades the last ~15% of the panel's own height to --bg, the same
-   flat color .landing-anchor itself sits on -- tall enough to read as
-   a deliberate feather (matching the static images' own crop) rather
-   than a stray gradient line, short enough that it's only ever
-   covering the bottom row or two of tiles, never eating into the
-   chart or search/sort controls above. pointer-events: none so it
-   never intercepts a click meant for whatever's still visible right
-   at its top edge.
+/* Fades the last ~15% of the panel's own (now fixed) height to --bg,
+   the same flat color .landing-anchor itself sits on -- tall enough
+   to read as a deliberate feather (matching the static images' own
+   crop) rather than a stray gradient line, short enough that it's
+   only ever covering the bottom row or two of tiles, never eating
+   into the chart or search/sort controls above. pointer-events: none
+   so it never intercepts a click meant for whatever's still visible
+   right at its top edge.
 
-   Gated on the --clipped modifier class (see render_landing_loot_
-   preview's wrapper script, which toggles it via a ResizeObserver):
-   on a tall enough viewport this panel's content fits with room to
-   spare (max-height above is a cap, not a fixed height), and fading
-   out a fully-visible last row for no reason would read as a
-   rendering glitch, not a deliberate crop -- so the feather only ever
-   shows up on the (narrower-viewport) runs where there's actually
-   something sitting below the fold for it to hide. */
-.landing-loot-preview--clipped::after {
+   Unconditional now -- no --clipped modifier class to gate it (see
+   render_landing_loot_preview's own wrapper script for where that
+   ResizeObserver used to live). With the container above pinned to a
+   fixed height instead of shrinking to fit its content, there's
+   nothing left for that class to have ever toggled on a genuinely
+   short result (a filtered #lootItemList, say) other than adding dead
+   space under the feather that already matches the section's own
+   background -- so always painting it here is simpler and gives every
+   run of this preview the same fixed bottom edge, whether or not
+   there's really anything hidden beneath it to fade. */
+.landing-loot-preview::after {
   content: '';
   position: absolute;
   left: 0; right: 0; bottom: 0;
