@@ -99,6 +99,42 @@
    this site is meant to scroll sideways in the first place. */
 html { overflow-x: hidden; }
 
+/* The browser's own scrollbar, recolored to match the site's dark
+   panels + gold accent instead of each visitor's stock OS/browser
+   chrome (usually a stark light-gray bar that clashes hardest right
+   on the landing page's own vertical scroll-snap). scrollbar-color/
+   scrollbar-width are the standard, cross-browser property pair
+   (Firefox, Chromium, and current Safari all read them). scrollbar-
+   color genuinely inherits (confirmed against a real nested scrolling
+   box -- the mindmap canvas's own pan/zoom surface -- so setting it
+   once on :root is enough for every scrollable element on the site,
+   no per-element rule needed), but scrollbar-width does NOT actually
+   cascade down the same way in testing despite being spec'd as
+   inherited too -- an element with its own overflow (that same
+   mindmap canvas, the loot tracker's range-preset dropdown) still
+   computed plain "auto" from just a :root rule, back to each
+   browser's own default (usually much thicker) width. Written on the
+   universal selector instead so every element gets it directly rather
+   than counting on inheritance for it. The ::-webkit-scrollbar-*
+   pseudo-elements below layer on top for Chromium/WebKit specifically
+   (Firefox has no equivalent and simply ignores these) -- scrollbar-
+   color/-width alone already get every browser a correctly-colored,
+   correctly-thin bar, this on top just gets Chromium/WebKit's own
+   extra bit of polish (a hover state brightening dim gold to full
+   gold, same "dim until hovered" convention .loot-range-btn/
+   .gt-goal-delete etc. already use elsewhere) that the standard pair
+   doesn't expose a way to control. border-radius: var(--radius) (0px
+   site-wide) keeps the thumb's own corners exactly as square as every
+   other box on the site, rather than the soft, rounded pill shape
+   most sites default to here. */
+:root { scrollbar-color: var(--gold-dim) var(--bg); }
+* { scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: var(--radius); }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+::-webkit-scrollbar-corner { background: var(--bg); }
+
 /* Scroll-snap for the landing page's anchor panels (see
    render_landing() in app/pages.py and .landing-anchor below) --
    scoped to just that page via body.landing (set through _shell()'s
