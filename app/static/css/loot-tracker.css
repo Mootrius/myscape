@@ -225,11 +225,16 @@
    label -- identity is icon + tooltip only (same as the Purchase
    Goals version), with kill count and gp value as the two visible
    lines instead. ---------- */
-.loot-npc-row { display: flex; flex-wrap: wrap; gap: 10px; }
+/* gap: 8px -- matches .loot-item-list's own gap below exactly (used to
+   be 10px here, a small mismatch nobody had asked to fix until now)
+   so the cushioning between cards reads identically in both panels,
+   not just the cards' own sizing. */
+.loot-npc-row { display: flex; flex-wrap: wrap; gap: 8px; }
 /* A fixed size, not a stretchy one -- flex-basis is calc()'d as
-   exactly one quarter of the row's own width (minus the three 10px
-   gaps a row of 4 needs), so four boxes always line up flush edge to
-   edge across the panel. flex-grow/shrink: 0 keeps that size constant
+   exactly one quarter of the row's own width (minus the three 8px
+   gaps a row of 4 needs, matching gap above), so four boxes always
+   line up flush edge to edge across the panel. flex-grow/shrink: 0
+   keeps that size constant
    whether the current row has 1 box or 8 -- a lightly-filled row just
    ends early and leaves empty space, rather than the boxes growing to
    fill it (that stretchy behavior is what this replaces).
@@ -263,7 +268,7 @@
    this wrap is now .loot-npc-row's actual flex child; .loot-npc-box
    just fills whatever box this reserves. position: relative anchors
    .loot-eye-btn's absolute positioning to this wrap, not the page. */
-.loot-npc-box-wrap { flex: 0 0 calc((100% - 30px) / 4); box-sizing: border-box; position: relative; }
+.loot-npc-box-wrap { flex: 0 0 calc((100% - 24px) / 4); box-sizing: border-box; position: relative; }
 @supports not (container-type: inline-size) {
   .loot-npc-box-wrap { aspect-ratio: 3 / 4; }
 }
