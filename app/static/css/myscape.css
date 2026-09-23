@@ -26,6 +26,23 @@
 }
 
 :root {
+  /* Tells the browser this page IS a dark UI, not a light one it's
+     failing to theme -- without this, a few bits of native browser
+     chrome the site doesn't (and can't) draw itself default to their
+     own light-mode look regardless of every dark color declared below:
+     an autofill dropdown's own background, a native <input type="date">
+     picker, the default focus ring color on some browsers, and --most
+     visibly on a phone-- the light gray "rubber-band" overscroll area
+     a lot of mobile browsers paint past the very top/bottom of the
+     page while bouncing past its natural scroll limits. One plain
+     "dark" (not "light dark", which would let the browser pick either)
+     since the site itself has no light theme to fall back to. Pairs
+     with <meta name="theme-color"> in _shell(), app/pages.py, which
+     covers the browser's own toolbar/status bar chrome instead of its
+     in-page native form/scroll UI -- together the two are what let the
+     page blend into the browser around it rather than sitting inside
+     a mismatched light frame. */
+  color-scheme: dark;
   --bg: #0f0f10;
   --panel: #1d1d1f;
   --panel-translucent: rgba(29, 29, 31, 0.82);

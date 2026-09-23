@@ -597,6 +597,20 @@ def _shell(
        different request from the @font-face one, so the browser
        fetches the file twice instead of reusing this one. -->
   <link rel="preload" href="/static/fonts/RuneScapePlain11.otf" as="font" type="font/otf" crossorigin />
+  <!-- Tints the BROWSER'S OWN chrome around the page -- Chrome/Edge's
+       toolbar on Android, Safari's tab bar/status bar on iOS -- to
+       this same #0f0f10 (myscape.css's --bg) so the page and the
+       browser's own UI read as one continuous dark surface instead of
+       a dark page floating inside whatever stock light/gray toolbar
+       the visitor's browser normally shows. Desktop Chrome/Firefox/
+       Edge/Safari deliberately do NOT repaint their real window/tab-
+       strip chrome from a page's own theme-color for a plain, not-
+       installed page like this one -- letting arbitrary sites redraw
+       actual browser UI would make it trivial to spoof, so every
+       desktop browser ignores this tag there on purpose. One plain,
+       unconditional value (not a light/dark media-query pair) since
+       the site itself has no light theme to switch to. -->
+  <meta name="theme-color" content="#0f0f10" />
   <link rel="icon" href="/static/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png" />
