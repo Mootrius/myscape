@@ -4,9 +4,11 @@
    purchase-goals.css/loot-tracker.css/goal-tracking.css: none of this
    applies anywhere else on the site.
 
-   Eight stat tiles (.co-stat), one per icon+number pair the summary
-   row shows -- see _SUMMARY_STATS in app/pages.py for what each one
-   is and where its value comes from. flex-wrap rather than a fixed
+   One long shared box (.co-summary-row) holding all eight icon+number
+   pairs (.co-stat) at the same positions/spacing they'd have had as
+   individually-boxed tiles -- see _SUMMARY_STATS in app/pages.py for
+   what each one is and where its value comes from -- just without each
+   one's own separate background/border. flex-wrap rather than a fixed
    8-column grid: a genuinely single row is the common case at normal
    page widths, but nothing here forces an overflow-scroll or a
    squeezed unreadable tile on a narrower one -- the row just wraps to
@@ -17,6 +19,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 8px 12px;
   margin-bottom: 28px;
 }
 
@@ -28,10 +34,6 @@
   align-items: center;
   text-align: center;
   gap: 8px;
-  background: var(--panel-translucent);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 8px 12px;
 }
 .co-stat:hover { background-color: rgb(51, 51, 54); }
 
@@ -53,24 +55,8 @@
   display: block;
 }
 
-.co-stat-text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-
 .co-stat-value {
   font-size: 15px;
   color: var(--gold);
-  white-space: nowrap;
-}
-
-.co-stat-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   white-space: nowrap;
 }

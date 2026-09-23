@@ -1430,54 +1430,66 @@ def render_dashboard(player: PlayerView) -> str:
 
 
 _SUMMARY_STATS = (
-    # (element key, icon, alt text, label) -- geValue is computed
-    # client-side from /api/possessions/summary (the same GE-priced
-    # snapshot Storages Viewer's own section 3 uses, see
-    # build_possessions_summary in app/possessions.py) rather than
-    # anything GameAccount stores; the other seven come from
-    # /api/character-overview/summary, i.e. GameAccount.character_summary_*
-    # as last synced by MyscapeClient#syncCharacterSummary in the
-    # Mootrius/myscape-plugin repo (see that endpoint's own comment in
-    # app/main.py, and GameAccount's own comment in app/models.py for
-    # why "Quests Completed" stands in for quest points).
-    ("geValue", _ICON_SUMMARY_GE_VALUE, "Grand Exchange value", "GE Value"),
-    ("combatLevel", _ICON_SUMMARY_COMBAT_LEVEL, "Combat level", "Combat Level"),
-    ("totalLevel", _ICON_SUMMARY_TOTAL_LEVEL, "Total level", "Total Level"),
-    ("totalXp", _ICON_SUMMARY_TOTAL_XP, "Total XP", "Total XP"),
-    ("quests", _ICON_SUMMARY_QUESTS, "Quests completed", "Quests Completed"),
-    ("achievements", _ICON_SUMMARY_ACHIEVEMENTS, "Achievement diaries completed", "Achievements Completed"),
-    ("combatTasks", _ICON_SUMMARY_COMBAT_TASKS, "Combat tasks completed", "Combat Tasks Completed"),
-    ("collections", _ICON_SUMMARY_COLLECTIONS, "Collections logged", "Collections Logged"),
+    # (element key, icon, alt text) -- geValue is computed client-side
+    # from /api/possessions/summary (the same GE-priced snapshot
+    # Storages Viewer's own section 3 uses, see build_possessions_summary
+    # in app/possessions.py) rather than anything GameAccount stores;
+    # the other seven come from /api/character-overview/summary, i.e.
+    # GameAccount.character_summary_* as last synced by
+    # MyscapeClient#syncCharacterSummary in the Mootrius/myscape-plugin
+    # repo (see that endpoint's own comment in app/main.py, and
+    # GameAccount's own comment in app/models.py for why "Quests
+    # Completed" stands in for quest points). alt text is the only
+    # label left anywhere for these -- there's no visible per-stat
+    # caption on the page any more (see render_character_overview's own
+    # comment), just each icon's hover tooltip.
+    ("geValue", _ICON_SUMMARY_GE_VALUE, "Grand Exchange value"),
+    ("combatLevel", _ICON_SUMMARY_COMBAT_LEVEL, "Combat level"),
+    ("totalLevel", _ICON_SUMMARY_TOTAL_LEVEL, "Total level"),
+    ("totalXp", _ICON_SUMMARY_TOTAL_XP, "Total XP"),
+    ("quests", _ICON_SUMMARY_QUESTS, "Quests completed"),
+    ("achievements", _ICON_SUMMARY_ACHIEVEMENTS, "Achievement diaries completed"),
+    ("combatTasks", _ICON_SUMMARY_COMBAT_TASKS, "Combat tasks completed"),
+    ("collections", _ICON_SUMMARY_COLLECTIONS, "Collections logged"),
 )
 
 
 def render_character_overview(player: PlayerView) -> str:
-    """Character Overview's summary row -- a single row of eight
-    icon+stat tiles (see _SUMMARY_STATS above), every icon the same
-    uniform size (.co-stat-icon in myscape.css) regardless of each
-    wiki image's own native dimensions. Every value starts as an em
-    dash and is filled in by the script below once its fetch resolves
-    -- server-rendered rather than server-computed, since geValue needs
-    a live GE-price pass over the player's whole inventory (already
-    exactly what /api/possessions/summary does for Storages Viewer) and
-    the other seven are already a simple session-authenticated GET away
-    (see /api/character-overview/summary in app/main.py) -- no reason
-    to duplicate either computation here just to embed a number
-    server-side that a fresh page load re-fetches from the exact same
-    place a moment later anyway. An account that's never synced one of
-    these (no Storages Viewer data yet, or the plugin's Character
-    Summary tab has never been opened) simply leaves that tile's em
-    dash showing, same as every other "nothing synced yet" spot in this
-    app."""
+    """Character Overview's summary row -- one long shared box (.co-
+    summary-row in character-overview.css) holding all eight icon+stat
+    pairs (see _SUMMARY_STATS above) at the same positions/spacing a
+    per-stat box would have had, just without each one's own individual
+    background/border -- and every icon the same uniform size
+    (.co-stat-icon) regardless of each wiki image's own native
+    dimensions. No caption under each value any more (was "GE VALUE" /
+    "COMBAT LEVEL" / etc.) -- each icon's alt text is still there as a
+    hover tooltip, just not printed on the page. Every value starts as
+    an em dash and is filled in by the script below once its fetch
+    resolves -- server-rendered rather than server-computed, since
+    geValue needs a live GE-price pass over the player's whole
+    inventory (already exactly what /api/possessions/summary does for
+    Storages Viewer) and the other seven are already a simple session-
+    authenticated GET away (see /api/character-overview/summary in
+    app/main.py) -- no reason to duplicate either computation here just
+    to embed a number server-side that a fresh page load re-fetches
+    from the exact same place a moment later anyway. An account that's
+    never synced one of these (no Storages Viewer data yet, or the
+    plugin's Character Summary tab has never been opened) simply leaves
+    that tile's em dash showing, same as every other "nothing synced
+    yet" spot in this app.
+
+    Combat level is shown rounded to a whole number (126, not 126.1 --
+    the in-game panel's own decimal-precision option) and total level
+    plain with no thousands separator (2376, not 2,376) -- both
+    deliberately different from formatInt's normal comma-grouped
+    output, which total XP and GE value still use. total XP gets a
+    trailing " xp" the same way GE value already gets " gp"."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
-        <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" />
-        <div class="co-stat-text">
-          <div class="co-stat-value" id="co-{key}">&mdash;</div>
-          <div class="co-stat-label">{escape(label)}</div>
-        </div>
+        <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
+        <div class="co-stat-value" id="co-{key}">&mdash;</div>
       </div>"""
-        for key, icon, alt, label in _SUMMARY_STATS
+        for key, icon, alt in _SUMMARY_STATS
     )
 
     body = f"""
@@ -1493,6 +1505,13 @@ def render_character_overview(player: PlayerView) -> str:
       function formatInt(n) {
         return Math.round(n || 0).toLocaleString('en-US');
       }
+      // Same rounding as formatInt above, just without the thousands
+      // separators -- used only for combat level/total level, which
+      // this row shows as plain whole numbers (see this function's own
+      // top-of-file comment).
+      function formatIntPlain(n) {
+        return String(Math.round(n || 0));
+      }
       function setStat(key, text) {
         var el = document.getElementById('co-' + key);
         if (el) el.textContent = text;
@@ -1506,9 +1525,9 @@ def render_character_overview(player: PlayerView) -> str:
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (!data) return;
-          if (data.combatLevel != null) setStat('combatLevel', data.combatLevel.toFixed(1));
-          if (data.totalLevel != null) setStat('totalLevel', formatInt(data.totalLevel));
-          if (data.totalXp != null) setStat('totalXp', formatInt(data.totalXp));
+          if (data.combatLevel != null) setStat('combatLevel', formatIntPlain(data.combatLevel));
+          if (data.totalLevel != null) setStat('totalLevel', formatIntPlain(data.totalLevel));
+          if (data.totalXp != null) setStat('totalXp', formatInt(data.totalXp) + ' xp');
           setFraction('quests', data.questsCompleted, data.questsTotal);
           setFraction('achievements', data.achievementsCompleted, data.achievementsTotal);
           setFraction('combatTasks', data.combatTasksCompleted, data.combatTasksTotal);
