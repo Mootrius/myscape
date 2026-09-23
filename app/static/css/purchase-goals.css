@@ -182,16 +182,19 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 .overlay-side { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .overlay-side.overlay-target { flex-direction: row-reverse; }
-.overlay-icon { width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0; }
-/* #pgOverlayIconImg (see app/pages.py) is the one .overlay-icon that's
-   ever a real RuneLite CDN item icon -- the Coins icon just above it
-   in the markup is always the bundled /static/img/icon-coins.png, not
-   from the CDN, so it doesn't get this. Same built-in-canvas-padding
-   translate as .loot-item-box-icon in loot-tracker.css (see its own
-   comment for the numbers), targeted by id rather than a shared class
-   since the two icons share one CSS class but only one of them needs
-   this. */
-#pgOverlayIconImg { transform: translate(5.5%, -1%); }
+/* Both of this card's .overlay-icon <img>s (see app/pages.py) are real
+   RuneLite CDN item icons now -- the Coins icon (item id 995, via
+   _ICON_COINS/item_icon_url) used to be the one exception, a bundled
+   /static/img/icon-coins.png rather than a CDN hit, until it was
+   switched over to match #pgOverlayIconImg (the setup's own custom
+   display icon) below it. Same built-in-canvas-padding translate as
+   .loot-item-box-icon in loot-tracker.css (see its own comment for the
+   numbers) applies to both now, so it lives on the shared class rather
+   than #pgOverlayIconImg alone the way it used to need to. */
+.overlay-icon {
+  width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0;
+  transform: translate(5.5%, -1%);
+}
 .overlay-amount { font-size: 23px; font-weight: normal; color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .overlay-progress { flex: 1; min-width: 60px; }
 .progress-track { height: 9px; background: #100e0b; border-radius: 0; overflow: hidden; border: 1px solid var(--border); }

@@ -2143,7 +2143,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
     extra_head = (
         f'<link rel="stylesheet" href="/static/css/purchase-goals.css?v={_PURCHASE_GOALS_CSS_VERSION}" />'
     )
-    body = """
+    body = f"""
     <h2 class="page-title">Purchase Goals</h2>
     <div class="pg-header">
       <div class="tracker-icon-row" id="setupIconRow"></div>
@@ -2166,7 +2166,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
     </div>
     <div class="overlay-card" id="pgOverlay" style="display:none;">
       <div class="overlay-side overlay-source">
-        <img class="overlay-icon" src="/static/img/icon-coins.png" alt="Coins" />
+        <img class="overlay-icon" src="{_ICON_COINS}" alt="Coins" />
         <span class="overlay-amount" id="pgCoinsAmount">0 gp</span>
       </div>
       <div class="overlay-progress">
@@ -2209,8 +2209,6 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
     """
     script = """
     (function () {
-      var COINS_ICON = '/static/img/icon-coins.png';
-
       var PG = {
         data: null,
         activeSetupId: null,
