@@ -13337,24 +13337,38 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
     into its own markup, same as the other four, or None if the
     snapshot isn't there to read.
 
-    Sort tabs, delete (with its own "Are you sure?" confirm), and
-    custom-mode drag-reorder all genuinely work here, the same as the
-    real page. The add-goal wizard is the one piece of the reused
-    markup NOT offered here -- #gtWizard (the "Add goal" button, and
-    the wizard itself once expanded) is hidden outright by this
-    preview's own CSS (.landing-goal-tracking-preview #gtWizard in
-    goal-tracking.css), not merely left to fail gracefully once
-    opened: a new goal's starting progress comes from the player's
-    actual live boss/skill/item totals (see create_goal's own
-    build_progress_context call in app/main.py), which this demo has
-    no real account behind it to supply, so every path through that
-    wizard was always going to end in Save silently going nowhere --
-    better to lead with what this demo actually delivers (sorting,
-    deleting, dragging a genuine custom reorder) than dangle a button
-    that can't. See that CSS rule's own comment for how hiding it
-    (rather than stripping it from the markup) also closes up the gap
-    its own margin used to leave, so the goal list sits flush under
-    the hero row instead.
+    Sort tabs and custom-mode drag-reorder genuinely work here, the
+    same as the real page. Two pieces of the reused markup are
+    deliberately NOT offered, both disabled by this preview's own CSS
+    rather than by touching the reused markup/script themselves:
+
+    - The add-goal wizard -- #gtWizard (the "Add goal" button, and the
+      wizard itself once expanded) is hidden outright
+      (.landing-goal-tracking-preview #gtWizard in goal-tracking.css):
+      a new goal's starting progress comes from the player's actual
+      live boss/skill/item totals (see create_goal's own
+      build_progress_context call in app/main.py), which this demo
+      has no real account behind it to supply, so every path through
+      that wizard was always going to end in Save silently going
+      nowhere -- better to lead with what this demo actually delivers
+      than dangle a button that can't. Hiding it (rather than
+      stripping it from the markup) also closes up the gap its own
+      margin used to leave, so the goal list sits flush under the
+      hero row instead.
+    - Each row's own delete button -- .gt-goal-delete is left fully
+      visible (still the same trash icon, same position) but made
+      inert (.landing-goal-tracking-preview .gt-goal-delete in
+      goal-tracking.css, pointer-events: none) rather than hidden:
+      unlike the wizard, delete actually WORKS against this demo's own
+      in-memory snapshot (see the fetch shim below), so this isn't
+      about papering over something broken -- it's simply not
+      something a passerby idly clicking around a marketing page
+      should be able to do to goals that read as "yours." A click
+      that lands on the icon's own footprint just passes through to
+      the row underneath it (same as clicking anywhere else on the
+      row -- see wireGoalDrag's own pointerdown listener/
+      glowCustomSortTab in _goal_tracking_panel_markup's script), it
+      just can never arm or confirm the delete anymore.
 
     1. A `fetch` shim, scoped to just this wrapper, that:
        - Answers GET /api/goals out of DEMO_GOALS/DEMO_SORT_MODE --
@@ -13372,7 +13386,14 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
          server-side -- see set_goal_order's own docstring in
          app/main.py).
        - Implements DELETE /api/goals/{id} against DEMO_GOALS for
-         real.
+         real -- unreachable in practice now that
+         .landing-goal-tracking-preview .gt-goal-delete's own
+         pointer-events: none (goal-tracking.css) means the row-level
+         click delegation this reused script wires up
+         (document.getElementById('gtGoalList')'s own listener) can
+         never find a .gt-goal-delete in e.target.closest's path to
+         arm or confirm from. Left in rather than pulled out, same
+         reasoning as the two below.
        - GET /api/items/search?q=... (off the same curated, 176-item
          pool Mindmaps' own preview already bundles -- see
          _get_landing_mindmap_search_pools_data) and POST /api/goals
