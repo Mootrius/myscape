@@ -89,6 +89,7 @@ from app.pages import (
     PlayerView,
     build_player_view,
     render_account,
+    render_character_overview,
     render_dashboard,
     render_forgot_password,
     render_goal_tracking,
@@ -1691,6 +1692,18 @@ def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_curre
     if not player.email_verified_at:
         return RedirectResponse("/verify-email-required", status_code=302)
     return render_goal_tracking(player)
+
+
+@app.get("/dashboard/character-overview", response_class=HTMLResponse)
+def character_overview_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
+    """Same login/verified gate as every other /dashboard/* page above --
+    render_character_overview itself is just a blank placeholder for
+    now (see its own docstring in app/pages.py)."""
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    if not player.email_verified_at:
+        return RedirectResponse("/verify-email-required", status_code=302)
+    return render_character_overview(player)
 
 
 @app.get("/api/possessions/search-items", response_model=ItemSearchResponse)

@@ -1058,6 +1058,14 @@ _ICON_BONES = item_icon_url(536)
 _ICON_CLUELESS_SCROLL = item_icon_url(20249)
 _ICON_HEAVY_CASKET = item_icon_url(19941)
 _ICON_MAX_CAPE = item_icon_url(13280)
+# Not item_icon_url like every icon above -- there's no real OSRS item
+# that reads as "your character," so this one's a small bundled PNG
+# (a player head portrait) instead of a RuneLite CDN hit, same
+# not-every-icon-is-an-item exception /static/img/icon-coins.png used
+# to be before it moved to the CDN (see purchase-goals.css's own
+# comment on that) and /static/img/icon-home-teleport.png (the 404
+# page) still is.
+_ICON_CHARACTER_OVERVIEW = "/static/img/icon-character-overview.png"
 
 
 def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
@@ -1121,15 +1129,27 @@ def _dash_card_wrap(key: str, href: str, icon_src: str, icon_alt: str, title: st
 # its own title/route/copy (so a title tweak like the Goal Tracking
 # description edits earlier never orphans a player's saved order) --
 # and, in this same tuple, TODAY'S DEFAULT ORDER: Loot Tracker, Purchase
-# Goals, Mindmaps, Storages Viewer, Goal Tracking, the same deliberate
-# (not alphabetical, not declaration-order) sequence this used to be
-# hardcoded as directly in render_dashboard's own body string. Doing
-# double duty like this is exactly what makes "add a new card" and "a
-# player who's never dragged anything sees today's order" the same
-# single fact instead of two things that could drift apart -- see
-# resolve_dashboard_card_order right below for the other half: what
-# happens to this order once a player HAS saved one of their own.
-DASHBOARD_CARD_KEYS = ("loot_tracker", "purchase_goals", "mindmaps", "possessions", "goal_tracking")
+# Goals, Mindmaps, Storages Viewer, Goal Tracking, Character Overview,
+# the same deliberate (not alphabetical, not declaration-order)
+# sequence this used to be hardcoded as directly in render_dashboard's
+# own body string. Doing double duty like this is exactly what makes
+# "add a new card" and "a player who's never dragged anything sees
+# today's order" the same single fact instead of two things that could
+# drift apart -- see resolve_dashboard_card_order right below for the
+# other half: what happens to this order once a player HAS saved one
+# of their own. Character Overview, appended here after the original
+# five, is the first real card this "a new one always takes the last
+# spot" rule has actually had to prove itself on -- both halves of that
+# promise (today's default AND anyone's existing custom order) fall
+# out of it landing last in this tuple, nothing else to update.
+DASHBOARD_CARD_KEYS = (
+    "loot_tracker",
+    "purchase_goals",
+    "mindmaps",
+    "possessions",
+    "goal_tracking",
+    "character_overview",
+)
 
 
 def resolve_dashboard_card_order(stored: Optional[list]) -> list:
@@ -1211,6 +1231,19 @@ def render_dashboard(player: PlayerView) -> str:
             "Visualize your goals by setting time-based or one-off quotas "
             "for yourself to meet, complete with auto-detecting and "
             "updating progress bars.",
+        ),
+        # Placeholder copy -- render_character_overview itself is a blank
+        # page for now too (see its own docstring), so there's nothing
+        # real to describe here yet.
+        "character_overview": _dash_card_wrap(
+            "character_overview",
+            "/dashboard/character-overview",
+            _ICON_CHARACTER_OVERVIEW,
+            "Character overview icon",
+            "Character Overview",
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+            "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. "
+            "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.",
         ),
     }
 
@@ -1356,6 +1389,20 @@ def render_dashboard(player: PlayerView) -> str:
     })();
     """
     return _shell(title="Dashboard — myscape", player=player, body=body, extra_script=script)
+
+
+def render_character_overview(player: PlayerView) -> str:
+    """The dashboard's newest card (see character_overview in
+    render_dashboard/DASHBOARD_CARD_KEYS above) -- a deliberately blank
+    page for now, same page-title-only shape every other dashboard tool
+    page starts from (Purchase Goals/Loot Tracker/Mindmaps/Storages
+    Viewer/Goal Tracking all began this way too), just without any of
+    their own panel markup/script below it yet. Whatever Character
+    Overview actually ends up showing gets built out here later."""
+    body = """
+    <h2 class="page-title">Character Overview</h2>
+    """
+    return _shell(title="Character Overview — myscape", player=player, body=body)
 
 
 def render_account(player: PlayerView) -> str:
