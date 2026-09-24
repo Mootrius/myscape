@@ -116,6 +116,49 @@ RANGE_PRESETS: Dict[str, timedelta] = {
 # would still ask for "monthly" granularity, e.g. hundreds of bars).
 _MAX_BUCKETS = 400
 
+# NPCs that never surface in the Loot Tracker at all, for any player --
+# per explicit instruction. The Wilderness rework's "Crystalline" and
+# "Corrupted" reskins of its own dungeon NPCs (wolf, bear, rat, dark
+# beast, ...) are excluded outright here, both sides of the pair.
+# Deliberately NOT the same mechanism as HiddenLootEntry/npc_hide_key
+# below -- that's a per-player, reversible choice made from the eye-
+# toggle on an NPC's own tile in the UI, and a hidden NPC still gets a
+# tile (just dimmed, still countable by unhiding it -- see
+# build_loot_state's own docstring). An excluded NPC gets none of
+# that: build_loot_state's events loop skips a match here before doing
+# anything else with it, so it never touches buckets/windowValue/
+# windowKills, never gets its own windowNpcs tile, and its items never
+# fold into windowItems -- the same "as if it never happened" treatment
+# a hidden NPC only gets for the chart/header totals, extended to cover
+# its own tile and item breakdown too, and with no per-player toggle to
+# turn it back on. Matched the same case-insensitive, trimmed way
+# npc_hide_key normalizes a real hide (see that function's own
+# comment), so a casing difference in how the plugin reports a name
+# can't slip one through.
+_EXCLUDED_NPC_NAMES = frozenset(
+    name.lower()
+    for name in (
+        "Crystalline Bat",
+        "Crystalline Rat",
+        "Crystalline Spider",
+        "Crystalline Unicorn",
+        "Crystalline Scorpion",
+        "Crystalline Wolf",
+        "Crystalline Bear",
+        "Crystalline Dragon",
+        "Crystalline Dark Beast",
+        "Corrupted Bat",
+        "Corrupted Spider",
+        "Corrupted Rat",
+        "Corrupted Unicorn",
+        "Corrupted Scorpion",
+        "Corrupted Wolf",
+        "Corrupted Bear",
+        "Corrupted Dragon",
+        "Corrupted Dark Beast",
+    )
+)
+
 
 def resolve_range(range_key: Optional[str], start: Optional[datetime], end: Optional[datetime]) -> Tuple[datetime, datetime]:
     """Turns GET /api/players/me/loot's ?range=/&start=/&end= query
@@ -558,6 +601,12 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
     breakdown for when nothing is selected -- see the module docstring
     for what this covers today and what's still to come.
 
+    An NPC in _EXCLUDED_NPC_NAMES above is skipped before any of the
+    below even sees it -- no bucket/window contribution, no windowNpcs
+    tile, no item breakdown, for any player, with no way to turn it
+    back on. That's a stronger, permanent version of the per-player
+    hidden-NPC treatment described next.
+
     A hidden NPC's kills are excluded from buckets/windowValue/
     windowKills entirely, as if they'd never happened -- but its own
     entry in windowNpcs is still built normally (just flagged
@@ -628,6 +677,15 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
 
     for event in events:
         if event.occurred_at is None:
+            continue
+        # A permanently-excluded NPC (see _EXCLUDED_NPC_NAMES above)
+        # is skipped before anything else below even looks at it --
+        # unlike a per-player hidden NPC (npc_hidden further down),
+        # which still gets its own windowNpcs tile and still counts
+        # toward its OWN totals, just not the chart/header ones, an
+        # excluded NPC gets none of that: no tile, no item breakdown,
+        # no contribution to any total at all, for any player.
+        if (event.source_name or "").strip().lower() in _EXCLUDED_NPC_NAMES:
             continue
         # The DB query above already excludes anything outside the
         # range, but not a client clock skewed past `end` -- this still
