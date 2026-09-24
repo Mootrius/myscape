@@ -1507,21 +1507,27 @@ def render_character_overview(player: PlayerView) -> str:
     output, which total XP and GE value still use. total XP gets a
     trailing " xp" the same way GE value already gets " gp".
 
-    Right underneath that, the skill levels card (.skills-card): a 3x8
-    grid of icon+level cells, one per skill, in _SKILL_GRID_ORDER above.
-    Modeled on the real in-game Levels tab for its layout, but not its
-    exact contents -- each cell shows only the plain real level (99, not
-    the in-game panel's boosted/real "99/99" pair), and there's no
-    "Total level" footer bar, both per explicit instruction. Icons are
-    this app's own bundled skill-icons assets (app/static/skill-icons,
-    already used by Mindmaps/Goal Tracking's skill-goal picker) rather
-    than anything wiki-fetched, so there's no icon-cache round trip for
-    this card at all. Data comes from GET /api/players/me/skills, i.e.
-    GameAccount.skills, the same JSONB column Mindmaps reads -- fetched
-    client-side same as the summary row above, for the same reason (no
-    point embedding server-side a number a fresh load re-fetches a
-    moment later anyway). A skill this account has never synced simply
-    leaves that cell's em dash showing."""
+    Right underneath that, the skill levels card: its own outer box
+    (.skills-card, styled like .co-summary-row above -- same panel-
+    translucent background/border) containing a 3x8 grid (.skills-grid)
+    of smaller individually-boxed cells (.skill-cell), one per skill, in
+    _SKILL_GRID_ORDER above. Modeled on the real in-game Levels tab for
+    its layout, but not its exact contents -- each cell shows only the
+    plain real level in white (99, not the in-game panel's gold/white
+    boosted-vs-real "99/99" pair), and there's no "Total level" footer
+    bar, both per explicit instruction. The whole card is a third of the
+    summary row's width and left-aligned under it (both are unindented
+    children of the page's own .wrap, and neither has side margins, so
+    lining up their left edges needs nothing beyond that shared parent).
+    Icons are this app's own bundled skill-icons assets (app/static/
+    skill-icons, already used by Mindmaps/Goal Tracking's skill-goal
+    picker) rather than anything wiki-fetched, so there's no icon-cache
+    round trip for this card at all. Data comes from GET /api/players/
+    me/skills, i.e. GameAccount.skills, the same JSONB column Mindmaps
+    reads -- fetched client-side same as the summary row above, for the
+    same reason (no point embedding server-side a number a fresh load
+    re-fetches a moment later anyway). A skill this account has never
+    synced simply leaves that cell's em dash showing."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
         <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
@@ -1546,7 +1552,9 @@ def render_character_overview(player: PlayerView) -> str:
     </div>
 
     <div class="skills-card" id="skillsCard">
-      {skill_cells}
+      <div class="skills-grid">
+        {skill_cells}
+      </div>
     </div>
     """
 

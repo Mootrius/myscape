@@ -62,24 +62,31 @@
 }
 
 /* Skill levels card (render_character_overview's second section, right
-   under the summary row above) -- a 3-column x 8-row grid of icon+
-   level cells, one per skill, in _SKILL_GRID_ORDER (app/pages.py).
-   Individually-bordered/backgrounded cells with a gap between them,
-   the same convention as .gear-slot/.inventory-grid in purchase-
-   goals.css, rather than one shared box like .co-summary-row above --
-   this grid is naturally two-dimensional (three columns) where the
-   summary row is naturally one, so per-cell framing reads better here.
-   No border/background on .skills-card itself, same reasoning as
-   .inventory-grid: the grid is just a layout container, every visible
-   edge belongs to a cell. repeat(3, 1fr) rather than a fixed pixel
-   width so the card fills the same width as .co-summary-row above (and
-   its left edge lines up with that row for free -- both are direct,
-   unindented children of the page's own .wrap container). */
+   under the summary row above) -- its own outer box (.skills-card,
+   same panel-translucent/border/radius treatment as .co-summary-row
+   above) containing a 3-column x 8-row grid (.skills-grid) of smaller
+   individually-bordered/backgrounded cells (.skill-cell), one per
+   skill, in _SKILL_GRID_ORDER (app/pages.py) -- unlike .co-summary-row,
+   which puts its stats directly in the outer box with no per-tile
+   framing, this card's cells get their own box (.gear-slot/.inventory-
+   grid's convention in purchase-goals.css) nested inside the card's.
+   One third the width of .co-summary-row above and left-aligned under
+   it: both are unindented children of the page's own .wrap, and
+   neither has side margins, so a plain percentage width keeps this
+   card flush against that row's own left edge without anything extra. */
 .skills-card {
+  width: 33%;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  margin-bottom: 28px;
+}
+
+.skills-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-bottom: 28px;
 }
 
 .skill-cell {
@@ -103,5 +110,5 @@
 
 .skill-cell-level {
   font-size: 15px;
-  color: var(--gold);
+  color: var(--text);
 }
