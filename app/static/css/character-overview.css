@@ -72,100 +72,124 @@
 /* Wraps the skill and hiscores cards side by side, skills on the left
    (flush with .co-summary-row's own left edge above, same as before
    this row existed) and hiscores to its right, per explicit
-   instruction. flex, not grid -- these two cards are wildly different
-   natural heights (8 rows of skills vs. up to 12 of bosses, see
-   .hiscores-grid below), and flex's align-items: flex-start is what
-   keeps the shorter one (skills) pinned to the top instead of
-   stretching to match the taller one's height the way a plain grid
-   row would. gap/margin-bottom both 18px -- the same between-sections
-   number .co-summary-row's own comment explains, now doing double
-   duty as both the horizontal gap between these two cards AND the
-   vertical gap before whatever comes next, so every card-to-card gap
-   on this page reads as the same size regardless of axis.
+   instruction. flex, not grid -- these two cards can land at very
+   different natural heights (see .hiscores-grid below), and flex's
+   align-items: flex-start is what keeps the shorter one (skills)
+   pinned to the top instead of stretching to match the taller one's
+   height the way a plain grid row would. gap/margin-bottom both 18px
+   -- the same between-sections number .co-summary-row's own comment
+   explains, now doing double duty as both the horizontal gap between
+   these two cards AND the vertical gap before whatever comes next, so
+   every card-to-card gap on this page reads as the same size
+   regardless of axis.
 
-   flex-wrap: nowrap, not wrap -- an earlier round let a narrow enough
-   viewport stack hiscores back under skills instead of overflowing,
-   the site's usual "no @media queries, let flex/wrap handle it"
-   fallback (see .co-summary-row's own comment); reverted per explicit
-   instruction that these two stay side by side always, not just above
-   some width. overflow-x: auto is what makes "always" actually safe
-   rather than just clipping or spilling out of .wrap on a viewport too
-   narrow for both cards' full (static, see .skills-card/.hiscores-
-   card's own width: fit-content) width -- a scrollbar on this one row
-   specifically, not the "nothing on this site scrolls sideways"
-   html { overflow-x: hidden } rule near the top of myscape.css, which
-   is about the page as a whole, not a single section that's now
-   deliberately exempted from wrapping. flex-shrink: 0 on both cards
-   below is the other half of this: without it, a too-narrow viewport
-   would squeeze each card's grid rather than triggering this scroll,
-   clipping or overlapping cells instead of just showing a
-   horizontally-scrollable row. */
+   flex-wrap: nowrap -- these two stay side by side at every width, per
+   explicit instruction, not just above some width the way every other
+   section on this page relies on flex-wrap for. Two earlier rounds
+   tried to make "always side by side" safe on a narrow viewport first
+   by keeping both cards' own width static and letting THIS row scroll
+   horizontally when they didn't both fit, then reverted that too --
+   overflow-x: auto avoided clipping, but a scrollbar was still
+   explicitly ruled out. What actually makes nowrap safe with no
+   scrollbar at all is .skills-card/.hiscores-card no longer having a
+   fixed width in the first place -- see their own comments -- so
+   there's nothing left that could fail to fit. */
 .co-cards-row {
   display: flex;
   align-items: flex-start;
   flex-wrap: nowrap;
-  overflow-x: auto;
   gap: 18px;
   margin-bottom: 18px;
 }
 
 /* Skill levels card (inside .co-cards-row, left-hand side) -- its own
    outer box (.skills-card, same panel-translucent/border/radius
-   treatment as .co-summary-row above) containing a 3-column x 8-row
-   grid (.skills-grid) of smaller individually-bordered/backgrounded
-   cells (.skill-cell), one per skill, in _SKILL_GRID_ORDER
-   (app/pages.py) -- unlike .co-summary-row, which puts its stats
-   directly in the outer box with no per-tile framing, this card's
-   cells get their own box (.gear-slot/.inventory-grid's convention in
-   purchase-goals.css) nested inside the card's.
+   treatment as .co-summary-row above) containing a reflowing grid
+   (.skills-grid) of smaller individually-bordered/backgrounded cells
+   (.skill-cell), one per skill, in _SKILL_GRID_ORDER (app/pages.py) --
+   unlike .co-summary-row, which puts its stats directly in the outer
+   box with no per-tile framing, this card's cells get their own box
+   (.gear-slot/.inventory-grid's convention in purchase-goals.css)
+   nested inside the card's.
 
-   Back to width: fit-content -- a few rounds went through flex-grow +
-   justify-content: space-between on both this card and .hiscores-card
-   to land flush at ANY width, which worked, but only by stretching
-   each grid's horizontal gaps to fill whatever width flex-grow gave
-   the card -- vertical gap (row-to-row) had no matching mechanism (a
-   grid's height is just whatever its rows need, so there's no
-   equivalent leftover space for align-content to distribute the way
-   justify-content had leftover WIDTH to work with), so horizontal and
-   vertical cushioning could never match while that was live-computed.
-   Squaring "flush" with "horizontal cushioning equals vertical" at
-   every possible width isn't achievable in plain CSS at all -- doing
-   both needs picking ONE known width to solve for, same tradeoff the
-   very first flush attempt (a single static gap value) made, just
-   with .skill-cell-level/.boss-cell-kc widened slightly on top of it
-   this time so the solved gap comes out to an actual clean, already-
-   established number (10px, same as .co-summary-row's own gap) rather
-   than an odd decimal. Solved for the page's normal 880px width
-   (.wrap's own cap, myscape.css) -- exactly flush there and at every
-   viewport wide enough to hit it (confirmed by rendering this exact
-   page in a headless browser and measuring it), same graceful
-   flex-wrap fallback as everywhere else on this page below that. No
+   flex: 1 1 290px, not width: fit-content -- several earlier rounds
+   tried pinning this card's own width (fixed, a solved-for-one-width
+   flush fit, flex-grow computed from .hiscores-card's own) so it would
+   land flush with .co-summary-row's right edge -- all reverted now
+   that "always side by side, never a scrollbar" is the explicit
+   priority: a FIXED-width card is exactly what forced the earlier
+   choice between wrapping to a second line or scrolling once the
+   viewport got too narrow for both cards' full width side by side.
+   flex-basis 290px (.hiscores-card is 572px -- see that rule's own
+   comment for where both numbers come from), not flex-basis 0 with a
+   grow-factor ratio -- a basis-0 + disproportionate-grow-factor
+   version of this was tried first and landed a few px off target
+   (295.89/566.11 instead of 290/572): giving a grid-containing flex
+   item a basis of 0 still lets its content (here, .skills-grid's own
+   auto-fill track sizing) pull the browser's flex-resolution algorithm
+   off a clean proportional split by a few px, even with min-width: 0
+   set below. Anchoring each card's flex-basis directly at its own real
+   target width sidesteps that: with both cards' true widths already
+   equal to their basis, the row's free space comes out to exactly 0px
+   at the page's normal ~880px width (880 total - 290 - 572 - 18px gap
+   = 0), so neither flex-grow nor flex-shrink has anything left to do
+   and both cards render at EXACTLY 290 and 572 -- confirmed directly
+   by measuring the rendered boxes, not just computed from the CSS.
+   Those two numbers aren't an arbitrary 1:2 split -- they're this
+   card's and hiscores-card's own exact border-box widths at 3 and 6
+   columns respectively (3*84 + 2*10 gaps + 8+8 padding + 1+1 border =
+   290; see hiscores-card's own comment for its 554+18=572), so 3 and 6
+   columns, flush to both edges, is exactly what renders at the page's
+   normal width -- the same as every round of this page before "let it
+   reflow" was asked for. Narrower than that (once .wrap's own 880px
+   cap stops capping the row), flex-shrink: 1 on both takes over,
+   shrinking each card down from its 290/572 basis roughly in
+   proportion to that same basis, so auto-fill (see .skills-grid below)
+   just picks whatever whole column count fits each at that narrower
+   width -- .wrap's cap means the row is never wider than 880px in the
+   first place, so flex-grow here never actually has anything to do,
+   but is still declared (1, not 0) so a case that somehow gave this
+   row more than 880px to work with wouldn't leave dead space on the
+   right of either card. min-width: 0 overrides a flex item's own
+   default min-width: auto
+   (effectively its content's own minimum size), which would otherwise
+   still refuse to shrink this card below its natural content width and
+   defeat the entire point of the flex split -- .skills-grid below is
+   what turns this now-fluid width into a whole number of columns
+   instead of stretching or squeezing individual cells to fit it. No
    margin-bottom here any more -- .co-cards-row's own gap/margin-bottom
-   above now carries both the space between this card and hiscores-
-   card to its right AND the space below the row as a whole. */
+   above now carries both the space between this card and hiscores-card
+   to its right AND the space below the row as a whole. */
 .skills-card {
-  width: fit-content;
-  flex-shrink: 0;
+  flex: 1 1 290px;
+  min-width: 0;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
 }
 
-/* max-content columns -- these three size to their widest cell's
-   actual content (icon + level number + padding), same as before.
-   gap: 10px, not 6px -- see .skills-card's own comment above for why:
-   solved together with .skill-cell/.boss-cell's own widened min-width
-   below so a single, uniform gap value (this one, reused as-is for
-   .hiscores-grid too) lands both this card's right edge AND
-   .hiscores-card's flush with .co-summary-row's, while also being the
-   same number used for the vertical gap between rows -- gap (the
-   shorthand) always sizes both axes equally, so getting the number
-   right here is what makes horizontal and vertical cushioning actually
-   match, not a happy accident. */
+/* repeat(auto-fill, 84px), not a fixed repeat(3, max-content) -- with
+   .skills-card's own width now fluid (see that rule's own comment),
+   a fixed column count would eventually either overflow a narrow
+   width or leave an ever-growing gap on a wide one. auto-fill instead
+   recomputes, continuously, exactly how many 84px columns (.skill-
+   cell's own fixed min-width, matched to .boss-cell's -- see both
+   cells' own comments) fit the card's current width at this same 10px
+   gap, adding or dropping a whole column as needed rather than ever
+   resizing the cells or the gaps themselves -- which is the one thing
+   explicitly asked to stay fixed here: the cards can reflow, the boxes
+   and the cushioning between them can't. 84px, a definite length, not
+   max-content -- auto-fill needs a concrete size to count columns
+   against, which max-content (this card's own natural content size)
+   can't give it without creating a circular "how wide is the card"
+   question. gap: 10px is unchanged from before -- see the section
+   this used to open with for why that number in particular, still
+   true here since it's still the same shared, uniform value making
+   horizontal and vertical cushioning equal within each card. */
 .skills-grid {
   display: grid;
-  grid-template-columns: repeat(3, max-content);
+  grid-template-columns: repeat(auto-fill, 84px);
   gap: 10px;
 }
 
@@ -188,14 +212,18 @@
    the cell shows it, not only the small icon inside it. min-width:
    84px is a touch past this cell's own natural content size (icon +
    gap + .skill-cell-level's 5ch + padding + border, ~82.8px) -- the
-   "wiggle room" .skills-grid/.hiscores-grid's shared 10px gap above is
+   "wiggle room" .skills-grid/.hiscores-grid's shared 10px gap is
    solved against, widening every cell by about 1.2px so that gap comes
    out to a clean, already-used number instead of an odd decimal. The
    sliver of extra room this leaves inside the cell just sits as blank
    space after .skill-cell-level -- same min-width-floor tradeoff as
    that span's own 5ch, just one level up. Matched by .boss-cell's own
    min-width below, same number, so the two cell types stay exactly the
-   same size this was explicitly instructed to be. */
+   same size this was explicitly instructed to be -- now doing double
+   duty as the fixed 84px both grids' repeat(auto-fill, 84px) reflows
+   columns against (see .skills-grid's own comment), so this number
+   staying fixed is what keeps the boxes themselves fixed too even as
+   the column count around them changes. */
 .skill-cell,
 .skill-cell:hover {
   display: flex;
@@ -242,35 +270,56 @@
 }
 
 /* Hiscores card (inside .co-cards-row, right of .skills-card) -- same
-   panel-translucent/border/radius/padding/width: fit-content/flex-
-   shrink: 0 treatment as .skills-card above (see that rule's own
-   comment for why this went back to static sizing rather than
-   flex-grow, and for what "solved for the page's normal 880px width"
-   and flex-shrink: 0 mean here). */
+   panel-translucent/border/radius/padding treatment as .skills-card
+   above, and the same flex: 1 1 <basis>px / min-width: 0 pattern --
+   see that rule's own comment for the full reasoning on both,
+   including why an anchored flex-basis was used instead of a plain
+   flex-grow ratio (a plain 2:1 grow-factor split was tried first and
+   landed a few px short, at 568.67px -- just short of what six 84px
+   columns plus their gaps and this card's own padding/border actually
+   need, quietly dropping to 5 columns with dead space on the right).
+   572px is this card's own exact border-box width at 6 columns (6*84
+   + 5*10 gaps + 8+8 padding + 1+1 border), paired with skills-card's
+   own exact 290px target for 3 columns, so at the page's normal
+   ~880px row width the two bases already sum to the full 880px (with
+   .co-cards-row's own 18px gap between them: 290 + 572 + 18 = 880),
+   leaving flex-grow/flex-shrink nothing to do and both cards landing
+   on exactly 290/572 -- 3 and 6 columns, flush to both edges, same as
+   every round of this page before "let it reflow" was asked for.
+   572/290 is roughly a 2:1 ratio (about 1.97:1, not exactly 2:1),
+   which is why the plain 2:1 shorthand looked right but wasn't quite
+   -- app.bosses.HISCORE_BOSSES (71 entries) being roughly 3x
+   _SKILL_GRID_ORDER's 24 is what put this grid at 6 columns to
+   .skills-grid's 3 back when both were fixed-column grids in the
+   first place. Narrower than 880px, flex-shrink: 1 on both takes over
+   and shrinks each card down from its own basis, and auto-fill (see
+   .hiscores-grid below) picks whatever whole column count that
+   narrower width actually fits, per explicit instruction that the
+   column counts moving is fine as long as the cells and the gaps
+   between them don't change. */
 .hiscores-card {
-  width: fit-content;
-  flex-shrink: 0;
+  flex: 1 1 572px;
+  min-width: 0;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
 }
 
-/* Still 6 fixed columns of max-content (i.e. .boss-cell's own natural
-   size, widened to match .skill-cell -- see both cells' own min-width
-   comments), same static sizing .skills-grid's 3 columns use. gap:
-   10px, the same solved-for-flush, shared-with-.skills-grid number --
-   see .skills-grid's own comment for the full reasoning; it's repeated
-   here rather than factored into one shared rule only because nothing
-   else on this page shares a CSS class across two otherwise-independent
-   grids like that. A partial last row (71 isn't divisible by 6) simply
-   leaves its unused trailing column slot blank at that row's own gap
-   spacing -- column tracks are shared down the whole grid, not
-   recomputed per row, so every row's spacing stays identical
-   regardless of how many cells are actually in it. */
+/* repeat(auto-fill, 84px), same reasoning as .skills-grid's own
+   comment -- this card's width is fluid now too, so a fixed repeat(6,
+   ...) is replaced by continuously recomputing how many 84px columns
+   (matched to .skill-cell's own, unchanged) fit at the same 10px gap,
+   rather than ever resizing the cells or the gaps themselves. Whatever
+   the resulting column count, a partial last row (71 isn't evenly
+   divisible by most column counts) simply leaves its unused trailing
+   slots blank at that row's own gap spacing -- column tracks are
+   shared down the whole grid, not recomputed per row, so every row's
+   spacing stays identical regardless of how many cells are actually in
+   it. */
 .hiscores-grid {
   display: grid;
-  grid-template-columns: repeat(6, max-content);
+  grid-template-columns: repeat(auto-fill, 84px);
   gap: 10px;
 }
 
