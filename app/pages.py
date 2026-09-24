@@ -1511,29 +1511,42 @@ def render_character_overview(player: PlayerView) -> str:
     (.skills-card, styled like .co-summary-row above -- same panel-
     translucent background/border) containing a 3x8 grid (.skills-grid)
     of smaller individually-boxed cells (.skill-cell), one per skill, in
-    _SKILL_GRID_ORDER above. Modeled on the real in-game Levels tab for
-    its layout, but not its exact contents -- each cell shows only the
-    plain real level in white (99, not the in-game panel's gold/white
-    boosted-vs-real "99/99" pair), and there's no "Total level" footer
-    bar, both per explicit instruction. The whole card is a third of the
-    summary row's width and left-aligned under it (both are unindented
-    children of the page's own .wrap, and neither has side margins, so
-    lining up their left edges needs nothing beyond that shared parent).
-    Icons are this app's own bundled skill-icons assets (app/static/
-    skill-icons, already used by Mindmaps/Goal Tracking's skill-goal
-    picker) rather than anything wiki-fetched, so there's no icon-cache
-    round trip for this card at all. Data comes from GET /api/players/
-    me/skills, i.e. GameAccount.skills, the same JSONB column Mindmaps
-    reads -- fetched client-side same as the summary row above, for the
-    same reason (no point embedding server-side a number a fresh load
-    re-fetches a moment later anyway). A skill this account has never
-    synced simply leaves that cell's em dash showing.
+    _SKILL_GRID_ORDER above -- sized to fit its contents (width: fit-
+    content, grid columns: max-content) rather than stretching to fill
+    the page, but each .skill-cell-level is a fixed 3ch wide regardless
+    of its actual digit count, so a 1-2 digit level doesn't make its box
+    narrower than a 3-digit one -- every cell ends up the same width,
+    wide enough for "126". Modeled on the real in-game Levels tab for
+    its layout, but not its exact contents -- each cell shows the
+    player's VIRTUAL level (see levelForXp in the script below, the
+    same xp(L) formula/table Mindmaps' own goal-field LVL/XP toggle
+    already implements, just duplicated here rather than shared since
+    neither script is loaded on the other's page) rather than the real,
+    99-capped one -- 126, not 99, once a skill is maxed. No boosted-vs-
+    real "99/99" pair and no "Total level" footer bar, both per
+    explicit instruction. Left-aligned under the summary row above:
+    both are unindented children of the page's own .wrap and neither
+    has side margins. Icons are this app's own bundled skill-icons
+    assets (app/static/skill-icons, already used by Mindmaps/Goal
+    Tracking's skill-goal picker) rather than anything wiki-fetched, so
+    there's no icon-cache round trip for this card at all. Data comes
+    from GET /api/players/me/skills, i.e. GameAccount.skills, the same
+    JSONB column Mindmaps reads -- fetched client-side same as the
+    summary row above, for the same reason (no point embedding server-
+    side a number a fresh load re-fetches a moment later anyway). A
+    skill this account has never synced simply leaves that cell's em
+    dash showing.
 
-    Each cell's title attribute (set on the whole .skill-cell, not just
-    its icon, so hovering anywhere on the cell triggers it) starts out
-    as just the capitalized skill name and gets XP appended once the
-    skills fetch resolves (setSkillTooltip in the script below) -- e.g.
-    "Attack" becomes "Attack — 13,034,431 xp"."""
+    Each cell is itself a link to that skill's wiki page (https://
+    oldschool.runescape.wiki/w/<Capitalized skill name>, opened in a
+    new tab -- same target=_blank/rel=noopener convention as every
+    other outbound wiki link on this site, e.g. wikiItemUrl's own
+    callers). Its title attribute (set on the whole cell, not just its
+    icon, so hovering anywhere on it triggers the tooltip -- and so the
+    link's own native hover target covers the whole cell too) starts
+    out as just the capitalized skill name and gets XP appended once
+    the skills fetch resolves (setSkillTooltip in the script below) --
+    e.g. "Attack" becomes "Attack — 13,034,431 xp"."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
         <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
@@ -1543,10 +1556,10 @@ def render_character_overview(player: PlayerView) -> str:
     )
 
     skill_cells = "\n      ".join(
-        f"""<div class="skill-cell" id="skill-cell-{key}" title="{key.capitalize()}">
+        f"""<a class="skill-cell" id="skill-cell-{key}" title="{key.capitalize()}" href="https://oldschool.runescape.wiki/w/{key.capitalize()}" target="_blank" rel="noopener">
         <img class="skill-cell-icon" src="/static/skill-icons/{key}.png" alt="{key.capitalize()}" />
         <span class="skill-cell-level" id="skill-{key}">&mdash;</span>
-      </div>"""
+      </a>"""
         for key in _SKILL_GRID_ORDER
     )
 
@@ -1584,9 +1597,40 @@ def render_character_overview(player: PlayerView) -> str:
         if (completed == null || total == null) return;
         setStat(key, formatInt(completed) + ' / ' + formatInt(total));
       }
-      function setSkillLevel(key, level) {
+      // The OSRS xp-per-level curve, levels 1-126 including the
+      // "virtual" levels above the real level-99 cap -- see
+      // https://oldschool.runescape.wiki/w/Experience for the formula
+      // this implements exactly: xp(L) = floor(1/4 * sum[l=1..L-1] of
+      // floor(l + 300*2^(l/7))). Same table/formula as SKILL_XP_TABLE
+      // in Mindmaps' own goal-field LVL/XP toggle above -- duplicated
+      // rather than shared, since neither page's script loads on the
+      // other. SKILL_XP_TABLE[L] is the total xp needed for level L;
+      // index 0 is unused (levels are 1-indexed) and
+      // SKILL_XP_TABLE[1] is always 0.
+      var SKILL_XP_TABLE = (function () {
+        var table = [0, 0];
+        var cumulative = 0;
+        for (var l = 1; l < 126; l++) {
+          cumulative += Math.floor(l + 300 * Math.pow(2, l / 7));
+          table[l + 1] = Math.floor(cumulative / 4);
+        }
+        return table;
+      })();
+      // The (virtual) level a given amount of xp has actually reached
+      // -- the LARGEST level whose own requirement is at or below it,
+      // same as levelForXp in Mindmaps' script above. This card shows
+      // this, not GameAccount.skills' own capped "level" field, so a
+      // maxed skill reads 126 instead of stopping at 99.
+      function levelForXp(xp) {
+        for (var l = 126; l >= 1; l--) {
+          if (xp >= SKILL_XP_TABLE[l]) return l;
+        }
+        return 1;
+      }
+      function setSkillLevel(key, xp) {
+        if (xp == null) return;
         var el = document.getElementById('skill-' + key);
-        if (el) el.textContent = String(Math.round(level));
+        if (el) el.textContent = String(levelForXp(xp));
       }
       // The skill name + XP tooltip lives on the whole cell (title=
       // capitalized key initially, see skill_cells in app/pages.py) so
@@ -1640,7 +1684,7 @@ def render_character_overview(player: PlayerView) -> str:
           Object.keys(data.skills).forEach(function (key) {
             var entry = data.skills[key];
             if (!entry) return;
-            if (entry.level != null) setSkillLevel(key, entry.level);
+            setSkillLevel(key, entry.xp);
             setSkillTooltip(key, entry.xp);
           });
         })

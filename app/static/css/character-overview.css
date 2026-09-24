@@ -44,7 +44,6 @@
   text-align: center;
   gap: 8px;
 }
-.co-stat:hover { background-color: rgb(51, 51, 54); }
 
 /* Every icon here is a different native size straight off the wiki
    (a tab icon, a level icon, a completion-count icon, ...) -- the
@@ -112,10 +111,17 @@
   gap: 6px;
 }
 
-/* Each cell's title attribute is the hover tooltip (skill name + XP,
-   see setSkillTooltip in render_character_overview's script) -- set on
-   this whole box, not just its icon, so hovering anywhere on the cell
-   triggers it, not only the small icon inside it. */
+/* Each cell is itself a link (<a>, not <div> -- see skill_cells in
+   app/pages.py) to that skill's wiki page, so its own base/hover link
+   color and underline (see the site-wide `a`/`a:hover` rules near the
+   top of myscape.css) are reset here rather than left to bleed through
+   onto the icon/level text below -- color: inherit alone would still
+   leave a:hover's own higher-specificity color/underline winning on
+   hover, hence the explicit :hover override on .skill-cell-level too.
+   title is the hover tooltip (skill name + XP, see setSkillTooltip in
+   render_character_overview's script) -- set on this whole box, not
+   just its icon, so hovering anywhere on the cell shows it, not only
+   the small icon inside it. */
 .skill-cell {
   display: flex;
   align-items: center;
@@ -123,8 +129,11 @@
   background: var(--panel-2);
   border: 1px solid var(--border);
   padding: 6px 10px;
+  color: inherit;
+  text-decoration: none;
 }
 .skill-cell:hover { background-color: rgb(51, 51, 54); }
+.skill-cell:hover .skill-cell-level { color: var(--text); text-decoration: none; }
 
 /* Smaller than .co-stat-icon's 28px above -- shrinking the icon (not
    the 15px level text next to it, which stays the same size as every
@@ -139,7 +148,15 @@
   flex: none;
 }
 
+/* 3ch, not auto -- wide enough for "126" (the highest virtual level,
+   see levelForXp in the script above) regardless of how many digits
+   this particular skill's actual level has, so every cell in the grid
+   ends up the same width instead of a 1- or 2-digit level's box
+   shrinking to fit only that skill's own shorter number. inline-block
+   because a plain inline <span> ignores min-width. */
 .skill-cell-level {
+  display: inline-block;
+  min-width: 3ch;
   font-size: 15px;
   color: var(--text);
 }
