@@ -73,7 +73,7 @@
    (flush with .co-summary-row's own left edge above, same as before
    this row existed) and hiscores to its right, per explicit
    instruction. flex, not grid -- these two cards are wildly different
-   natural heights (8 rows of skills vs. up to 12 of bosses, see
+   natural heights (8 rows of skills vs. up to 15 of bosses, see
    .hiscores-grid below), and flex's align-items: flex-start is what
    keeps the shorter one (skills) pinned to the top instead of
    stretching to match the taller one's height the way a plain grid
@@ -178,66 +178,53 @@
   flex: none;
 }
 
-/* 3ch, not auto -- wide enough for "126" (the highest virtual level,
-   see levelForXp in the script above) regardless of how many digits
-   this particular skill's actual level has, so every cell in the grid
-   ends up the same width instead of a 1- or 2-digit level's box
-   shrinking to fit only that skill's own shorter number. inline-block
-   because a plain inline <span> ignores min-width. */
+/* 5ch, not the 3ch "126" (the highest virtual level, see levelForXp in
+   the script above) alone would need -- matched to .boss-cell-kc's own
+   5ch instead, per explicit instruction that the skill and hiscores
+   cells read as the same size. Either box on its own would pick a
+   different number (3ch here, 5ch there -- see that rule's own
+   comment for why it needs the extra room), so this is deliberately
+   sized for the OTHER card's content, not this one's -- a plain 1- or
+   2-digit level just sits in a wider box than it strictly needs, the
+   same tradeoff every min-width floor on this page already makes.
+   inline-block because a plain inline <span> ignores min-width. */
 .skill-cell-level {
   display: inline-block;
-  min-width: 3ch;
+  min-width: 5ch;
   font-size: 15px;
   color: var(--text);
 }
 
 /* Hiscores card (inside .co-cards-row, right of .skills-card) -- same
-   panel-translucent/border/radius/padding treatment as .skills-card
-   above, but NOT width: fit-content -- unlike that card, this one is
-   meant to end flush with the right edge of .co-summary-row above
-   (which itself spans .wrap's full width, its .co-stat tiles laid out
-   with flex: 1 1 0 -- see that rule's own comment), per explicit
-   instruction, not just be as wide as its own contents happen to need.
-   flex: 1 1 380px on .co-cards-row (skills-card stays flex: 0 0 auto,
-   its own fixed content width) is what does that: this card grows to
-   soak up every pixel .co-summary-row's row leaves after skills-card
-   and the row's own 18px gap, landing its own right edge exactly on
-   .wrap's -- same edge .co-summary-row's own last tile already sits
-   flush against. flex-basis 380px (not 0) is a floor, not the normal
-   size: below roughly that much leftover room the row wraps this card
-   onto its own line instead of squeezing it into something narrower
-   than a couple of columns can meaningfully show, same "let flex-wrap
-   handle narrow viewports instead of a media query" approach
-   .co-summary-row's own comment already uses. */
+   panel-translucent/border/radius/padding/width: fit-content treatment
+   as .skills-card above. An earlier round made this one grow (flex: 1)
+   to fill whatever width skills-card left in the row, landing flush on
+   .wrap's right edge -- reverted per explicit instruction: this card's
+   size should be static and independent of skills-card's, not
+   computed from it, so it's back to sizing itself off its own grid
+   (see .hiscores-grid below) the same way .skills-card always has. */
 .hiscores-card {
-  flex: 1 1 380px;
+  width: fit-content;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
 }
 
-/* auto-fill + minmax(<cell>, 1fr), not a fixed repeat(N, max-content)
-   the way .skills-grid above does it -- .hiscores-card's own width is
-   no longer fixed (see that rule's comment), so a fixed column count
-   would either leave a ragged gap on the right on a wide viewport or
-   overflow on a narrower one. auto-fill instead fits as many columns
-   as the card's actual current width allows at their natural content
-   size (icon + KC text + padding, ~83px measured with .boss-cell-kc's
-   own 5ch below), then 1fr grows every one of those columns evenly by
-   whatever's left over -- which, combined with .hiscores-card's own
-   flex-grow filling the row up to .wrap's right edge, is exactly the
-   "base width, plus whatever extra it takes to land flush on the
-   right" split per explicit instruction, applied evenly across
-   columns rather than as one lopsided trailing gap. auto-fill (not
-   auto-fit) so a partial last row's cells stay each other's natural
-   size instead of stretching to fill the row alone -- there's always
-   more bosses to fill full rows above it, so this only ever matters
-   for the last, and keeping every cell the same size there reads
-   better than a handful of oversized ones. */
+/* 5 columns, fixed (repeat(5, max-content), not the auto-fill +
+   minmax(_, 1fr) an earlier round used to grow this grid to fill
+   .hiscores-card's own flex-grown width) -- that card is back to
+   width: fit-content above, so its width is just whatever 5 columns of
+   .boss-cell actually need, same static sizing .skills-grid's own 3
+   columns already use. Measured (rendering this exact page in a
+   headless browser, not estimated) at ~752px combined with
+   .skills-card and the row's 18px gap -- comfortable headroom under
+   .wrap's 880px cap even on a narrower-than-usual browser window, not
+   the razor's-edge fit 6 columns of these now-wider (matched to
+   .skill-cell-level's own 5ch) cells landed at. */
 .hiscores-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(83px, 1fr));
+  grid-template-columns: repeat(5, max-content);
   gap: 6px;
 }
 
@@ -274,17 +261,18 @@
   flex: none;
 }
 
-/* 5ch, not .skill-cell-level's 3ch -- "9,999" (4 digits + 1 comma) is
-   the widest a plain comma-grouped count ever gets now: _format_
-   boss_kc (app/pages.py) switches anything 10,000 and up to a
-   truncated "<thousands>K" instead (e.g. "15,742" -> "15K") specifically
-   so this column never needs a 5th digit -- per explicit instruction,
-   both the width here and that formatting cutoff are the same design,
-   not independent choices. A "###K" value can still run past 5
-   characters for a genuinely huge outlier (a seven-figure KC would be
-   "####K"), same as any min-width floor -- see .skill-cell-level's own
-   comment for that tradeoff. inline-block for the same min-width-on-a-
-   span reason as .skill-cell-level. */
+/* 5ch -- "9,999" (4 digits + 1 comma) is the widest a plain
+   comma-grouped count ever gets now: _format_boss_kc (app/pages.py)
+   switches anything 10,000 and up to a truncated "<thousands>K"
+   instead (e.g. "15,742" -> "15K") specifically so this column never
+   needs a 5th digit -- the width here and that formatting cutoff are
+   the same design, not independent choices. Also what .skill-cell-
+   level's own min-width is set to now, per explicit instruction that
+   the skill and hiscores cells be the same size -- see that rule's own
+   comment. A "###K" value can still run past 5 characters for a
+   genuinely huge outlier (a seven-figure KC would be "####K"), same as
+   any min-width floor. inline-block for the same min-width-on-a-span
+   reason as .skill-cell-level. */
 .boss-cell-kc {
   display: inline-block;
   min-width: 5ch;

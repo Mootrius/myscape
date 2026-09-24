@@ -1596,7 +1596,9 @@ def render_character_overview(player: PlayerView) -> str:
     geValue/skills above do. A boss never in that dict (account never
     linked/synced) shows an em dash, same "nothing synced yet"
     convention as everywhere else on this page; one already a key --
-    even at 0 -- shows its real, comma-grouped count."""
+    even at 0 -- shows its real count (see _format_boss_kc above for
+    the comma-grouped-vs-"K" display cutoff, sized to match .boss-
+    cell-kc's own width in character-overview.css)."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
         <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
