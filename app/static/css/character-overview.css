@@ -202,17 +202,28 @@
   padding: 8px;
 }
 
-/* 6 columns, not 3 -- app.bosses.HISCORE_BOSSES is ~3x _SKILL_GRID_
+/* 5 columns, not 3 -- app.bosses.HISCORE_BOSSES is ~3x _SKILL_GRID_
    ORDER's 24 entries, and 3 columns of that many rows would tower over
-   .skills-card's own 8; 6 keeps this card's overall shape closer to a
-   rectangle instead of a tall narrow strip, without ballooning its
-   width either. Same max-content reasoning as .skills-grid's own
-   comment otherwise -- columns size to their widest cell's content, so
+   .skills-card's own 8; more columns keeps this card's overall shape
+   closer to a rectangle instead of a tall narrow strip. Capped at 5,
+   not 6 -- .wrap's own 880px max-width (myscape.css) is a hard ceiling
+   .co-cards-row's two fit-content cards both have to fit under
+   together, and 6 columns of these wider (7ch-KC) cells measured out
+   to just a hair over that budget: skills-card (~239px) + the row's
+   18px gap + a 6-column hiscores-card (~624px) landed at ~881px,
+   ~1px over 880 -- close enough that flex-wrap wrapped this card
+   under skills-card every time regardless of viewport width, since
+   .wrap is pinned at 880px on anything wide enough to hit that cap in
+   the first place (confirmed by rendering this exact page in a
+   headless browser and measuring it, not just estimated). 5 columns
+   leaves real headroom instead of relitigating that same razor's-edge
+   fit. Same max-content reasoning as .skills-grid's own comment
+   otherwise -- columns size to their widest cell's content, so
    .hiscores-card's own width: fit-content above actually does
    something. */
 .hiscores-grid {
   display: grid;
-  grid-template-columns: repeat(6, max-content);
+  grid-template-columns: repeat(5, max-content);
   gap: 6px;
 }
 
