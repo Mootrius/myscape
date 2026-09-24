@@ -69,34 +69,57 @@
   white-space: nowrap;
 }
 
-/* Skill levels card (render_character_overview's second section, right
-   under the summary row above) -- its own outer box (.skills-card,
-   same panel-translucent/border/radius treatment as .co-summary-row
-   above) containing a 3-column x 8-row grid (.skills-grid) of smaller
-   individually-bordered/backgrounded cells (.skill-cell), one per
-   skill, in _SKILL_GRID_ORDER (app/pages.py) -- unlike .co-summary-row,
-   which puts its stats directly in the outer box with no per-tile
-   framing, this card's cells get their own box (.gear-slot/.inventory-
-   grid's convention in purchase-goals.css) nested inside the card's.
-   width: fit-content (an earlier round tried pinning this to a fixed
-   percentage of .co-summary-row's width, then tried leaving it
-   unconstrained and letting it stretch full width like that row --
-   both since reverted) shrinks the whole card down to whatever its
-   three columns of cells actually need, rather than stretching to
-   fill .wrap the way a plain block element would. Still left-aligned
-   under that row: fit-content doesn't center a block box, it just
-   caps its width, so it still starts at .wrap's own left edge. */
+/* Wraps the skill and hiscores cards side by side, skills on the left
+   (flush with .co-summary-row's own left edge above, same as before
+   this row existed) and hiscores to its right, per explicit
+   instruction. flex, not grid -- these two cards are wildly different
+   natural heights (8 rows of skills vs. up to 12 of bosses, see
+   .hiscores-grid below), and flex's align-items: flex-start is what
+   keeps the shorter one (skills) pinned to the top instead of
+   stretching to match the taller one's height the way a plain grid
+   row would. gap/margin-bottom both 18px -- the same between-sections
+   number .co-summary-row's own comment explains, now doing double
+   duty as both the horizontal gap between these two cards AND the
+   vertical gap before whatever comes next, so every card-to-card gap
+   on this page reads as the same size regardless of axis. flex-wrap so
+   a narrow enough viewport stacks hiscores back under skills instead
+   of overflowing -- this site's usual "no @media queries, let flex/
+   wrap handle it" approach (see .co-summary-row's own comment). */
+.co-cards-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+/* Skill levels card (inside .co-cards-row, left-hand side) -- its own
+   outer box (.skills-card, same panel-translucent/border/radius
+   treatment as .co-summary-row above) containing a 3-column x 8-row
+   grid (.skills-grid) of smaller individually-bordered/backgrounded
+   cells (.skill-cell), one per skill, in _SKILL_GRID_ORDER
+   (app/pages.py) -- unlike .co-summary-row, which puts its stats
+   directly in the outer box with no per-tile framing, this card's
+   cells get their own box (.gear-slot/.inventory-grid's convention in
+   purchase-goals.css) nested inside the card's. width: fit-content (an
+   earlier round tried pinning this to a fixed percentage of
+   .co-summary-row's width, then tried leaving it unconstrained and
+   letting it stretch full width like that row -- both since reverted)
+   shrinks the whole card down to whatever its three columns of cells
+   actually need, rather than stretching to fill its flex parent the
+   way a plain block element would -- .co-cards-row's own flex layout
+   already keeps this from growing past its content either way, but
+   this is what keeps it from doing so if that ever changes back to a
+   block/grid parent. No margin-bottom here any more -- .co-cards-row's
+   own gap/margin-bottom above now carries both the space between this
+   card and hiscores-card to its right AND the space below the row as
+   a whole. */
 .skills-card {
   width: fit-content;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
-  /* Same 18px between-sections gap as .co-summary-row's own -- see
-     that rule's comment above. There's nothing below this card yet,
-     but this keeps both boxes' outer spacing consistent rather than
-     each picking its own number. */
-  margin-bottom: 18px;
 }
 
 /* max-content, not 1fr -- each of the three columns sizes to its
@@ -164,6 +187,80 @@
 .skill-cell-level {
   display: inline-block;
   min-width: 3ch;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* Hiscores card (inside .co-cards-row, right of .skills-card) -- same
+   outer-box treatment as .skills-card above, right down to width:
+   fit-content for the same reason. */
+.hiscores-card {
+  width: fit-content;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+
+/* 6 columns, not 3 -- app.bosses.HISCORE_BOSSES is ~3x _SKILL_GRID_
+   ORDER's 24 entries, and 3 columns of that many rows would tower over
+   .skills-card's own 8; 6 keeps this card's overall shape closer to a
+   rectangle instead of a tall narrow strip, without ballooning its
+   width either. Same max-content reasoning as .skills-grid's own
+   comment otherwise -- columns size to their widest cell's content, so
+   .hiscores-card's own width: fit-content above actually does
+   something. */
+.hiscores-grid {
+  display: grid;
+  grid-template-columns: repeat(6, max-content);
+  gap: 6px;
+}
+
+/* Same link-cell treatment as .skill-cell/:hover above, including the
+   same a/a:hover specificity fix and the same reasoning for it -- see
+   that rule's own comment. title is the hover tooltip (the boss's
+   plain display name, see boss_cells in app/pages.py); unlike
+   .skill-cell, there's no separate tooltip upgrade on data arriving --
+   the kill count is already server-rendered by the time this card
+   exists at all (see render_character_overview's own docstring), so
+   there's nothing left to fill in after the fact. */
+.boss-cell,
+.boss-cell:hover {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.boss-cell:hover { background-color: rgb(51, 51, 54); }
+.boss-cell:hover .boss-cell-kc { color: var(--text); text-decoration: none; }
+
+/* Same 20px as .skill-cell-icon above, for the same "smaller than the
+   summary row's 28px is what makes this read as compact" reason. */
+.boss-cell-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  display: block;
+  flex: none;
+}
+
+/* 7ch, not .skill-cell-level's 3ch -- a kill count has no single clean
+   cap the way a virtual level tops out at 126; "999,999" (7 characters
+   with its thousands separator) comfortably covers every realistic KC
+   without padding every ordinary boss's box out for a number nobody
+   will ever reach. A genuinely 7-digit outlier just grows its own box
+   past this floor -- min-width, not width -- same tradeoff
+   .skill-cell-level's own 3ch already makes, just sized for a value
+   with no true maximum instead of one that does. inline-block for the
+   same min-width-on-a-span reason as .skill-cell-level. */
+.boss-cell-kc {
+  display: inline-block;
+  min-width: 7ch;
   font-size: 15px;
   color: var(--text);
 }

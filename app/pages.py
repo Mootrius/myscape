@@ -1546,7 +1546,36 @@ def render_character_overview(player: PlayerView) -> str:
     link's own native hover target covers the whole cell too) starts
     out as just the capitalized skill name and gets XP appended once
     the skills fetch resolves (setSkillTooltip in the script below) --
-    e.g. "Attack" becomes "Attack — 13,034,431 xp"."""
+    e.g. "Attack" becomes "Attack — 13,034,431 xp".
+
+    To the skill card's right, the hiscores card (.hiscores-card): same
+    panel-translucent outer box, same per-cell (.boss-cell) styling and
+    hover/link behavior as .skill-cell -- an <a> to that boss's own
+    wiki page, title tooltip, class+:hover specificity fix, the works
+    -- just built from app.bosses.HISCORE_BOSSES instead of
+    _SKILL_GRID_ORDER, in that module's own order (already the
+    canonical hiscores ordering Goal Tracking's own reference table
+    uses). Filtered to has_icon entries (every current one, per that
+    module's docstring, but kept defensive in case Jagex ever adds a
+    boss before this app has a sprite for it). Icons are this app's own
+    bundled boss-icons assets (app/static/boss-icons, the same RuneLite
+    sprites Goal Tracking's own kc-goal icon picker already uses --
+    BOSS_SLUG_BY_NAME below), not wiki-fetched, so -- like the skill
+    icons -- there's no icon-cache round trip for this card either.
+
+    Unlike the skill card, this one is rendered fully server-side, no
+    client fetch: player.boss_kill_counts (PlayerView, above) is
+    already exactly this -- a session-fresh {display_name: kill count}
+    snapshot built by build_player_view on every request, kept current
+    by the same two writers Goal Tracking's own KC column reads (a
+    one-time hiscores pull at link time, then live chatbox updates the
+    rest of the time -- see GameAccount.boss_kill_counts's own
+    docstring in app/models.py) -- nothing here duplicates a
+    computation a fresh load would just re-fetch a moment later the way
+    geValue/skills above do. A boss never in that dict (account never
+    linked/synced) shows an em dash, same "nothing synced yet"
+    convention as everywhere else on this page; one already a key --
+    even at 0 -- shows its real, comma-grouped count."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
         <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
@@ -1563,6 +1592,23 @@ def render_character_overview(player: PlayerView) -> str:
         for key in _SKILL_GRID_ORDER
     )
 
+    # (slug, display_name, kill count-or-None) per hiscores boss this
+    # app has a bundled sprite for -- see this function's own docstring
+    # above for why player.boss_kill_counts is read directly here
+    # rather than fetched client-side the way skills/summary-row are.
+    boss_rows = [
+        (slug, name, player.boss_kill_counts.get(name))
+        for slug, name, has_icon in HISCORE_BOSSES
+        if has_icon
+    ]
+    boss_cells = "\n      ".join(
+        f"""<a class="boss-cell" title="{escape(name)}" href="https://oldschool.runescape.wiki/w/{urllib.parse.quote(name)}" target="_blank" rel="noopener">
+        <img class="boss-cell-icon" src="/static/boss-icons/{slug}.png" alt="{escape(name)}" />
+        <span class="boss-cell-kc">{"{:,}".format(kc) if kc is not None else "&mdash;"}</span>
+      </a>"""
+        for slug, name, kc in boss_rows
+    )
+
     body = f"""
     <h2 class="page-title">Character Overview</h2>
 
@@ -1570,9 +1616,17 @@ def render_character_overview(player: PlayerView) -> str:
       {stat_tiles}
     </div>
 
-    <div class="skills-card" id="skillsCard">
-      <div class="skills-grid">
-        {skill_cells}
+    <div class="co-cards-row">
+      <div class="skills-card" id="skillsCard">
+        <div class="skills-grid">
+          {skill_cells}
+        </div>
+      </div>
+
+      <div class="hiscores-card" id="hiscoresCard">
+        <div class="hiscores-grid">
+          {boss_cells}
+        </div>
       </div>
     </div>
     """
