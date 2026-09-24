@@ -101,54 +101,55 @@
    (app/pages.py) -- unlike .co-summary-row, which puts its stats
    directly in the outer box with no per-tile framing, this card's
    cells get their own box (.gear-slot/.inventory-grid's convention in
-   purchase-goals.css) nested inside the card's. flex: 2 1 auto, not
-   width: fit-content (an earlier round tried pinning this to a fixed
-   percentage of .co-summary-row's width, then tried leaving it
-   unconstrained and letting it stretch full width like that row, then
-   tried this exact fit-content -- all since reverted): .hiscores-
-   card's own flex-grow is what makes IT land flush with .co-summary-
-   row's right edge (see that rule's own comment), and leaving this
-   card at a fixed width while only that one grows made the two cards
-   read as mismatched -- this one packed tight at its own 6px gaps,
-   that one stretched loose to cover the rest of the row alone. flex-
-   grow: 2 here and 5 on .hiscores-card is instead proportional to each
-   card's own internal gap COUNT (2 gaps between .skills-grid's 3
-   columns, 5 between .hiscores-grid's 6 -- see both rules' own
-   comments), so the row's total leftover space splits across BOTH
-   cards in proportion to how many gaps each one has to spread it
-   across, landing every gap in either grid at close to the same final
-   width instead of one card's gaps staying tight while the other's
-   stretch alone. flex-basis: auto (not a fixed number) starts each
-   card at its own natural content size before that growth is applied,
-   same width this always rendered at with zero surplus to distribute
-   (e.g. a narrow enough browser window before the row wraps at all,
-   .co-summary-row's own comment). No margin-bottom here any more --
-   .co-cards-row's own gap/margin-bottom above now carries both the
-   space between this card and hiscores-card to its right AND the
-   space below the row as a whole. */
+   purchase-goals.css) nested inside the card's.
+
+   Back to width: fit-content -- a few rounds went through flex-grow +
+   justify-content: space-between on both this card and .hiscores-card
+   to land flush at ANY width, which worked, but only by stretching
+   each grid's horizontal gaps to fill whatever width flex-grow gave
+   the card -- vertical gap (row-to-row) had no matching mechanism (a
+   grid's height is just whatever its rows need, so there's no
+   equivalent leftover space for align-content to distribute the way
+   justify-content had leftover WIDTH to work with), so horizontal and
+   vertical cushioning could never match while that was live-computed.
+   Squaring "flush" with "horizontal cushioning equals vertical" at
+   every possible width isn't achievable in plain CSS at all -- doing
+   both needs picking ONE known width to solve for, same tradeoff the
+   very first flush attempt (a single static gap value) made, just
+   with .skill-cell-level/.boss-cell-kc widened slightly on top of it
+   this time so the solved gap comes out to an actual clean, already-
+   established number (10px, same as .co-summary-row's own gap) rather
+   than an odd decimal. Solved for the page's normal 880px width
+   (.wrap's own cap, myscape.css) -- exactly flush there and at every
+   viewport wide enough to hit it (confirmed by rendering this exact
+   page in a headless browser and measuring it), same graceful
+   flex-wrap fallback as everywhere else on this page below that. No
+   margin-bottom here any more -- .co-cards-row's own gap/margin-bottom
+   above now carries both the space between this card and hiscores-
+   card to its right AND the space below the row as a whole. */
 .skills-card {
-  flex: 2 1 auto;
+  width: fit-content;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
 }
 
-/* max-content columns, same reasoning as .hiscores-grid's own comment
-   -- these three size to their widest cell's actual content (icon +
-   level number + padding), not to whatever width the grid happens to
-   have, so the cells themselves stay exactly the same static size as
-   .boss-cell regardless of how wide .skills-card's own flex-grow above
-   makes the card. justify-content: space-between is what actually
-   spends that extra width, the same way .hiscores-grid's own does --
-   handed to the 2 gaps BETWEEN these 3 columns rather than left as
-   dead space past the third one, so this card's cells fill its own
-   flex-grown width edge to edge too. */
+/* max-content columns -- these three size to their widest cell's
+   actual content (icon + level number + padding), same as before.
+   gap: 10px, not 6px -- see .skills-card's own comment above for why:
+   solved together with .skill-cell/.boss-cell's own widened min-width
+   below so a single, uniform gap value (this one, reused as-is for
+   .hiscores-grid too) lands both this card's right edge AND
+   .hiscores-card's flush with .co-summary-row's, while also being the
+   same number used for the vertical gap between rows -- gap (the
+   shorthand) always sizes both axes equally, so getting the number
+   right here is what makes horizontal and vertical cushioning actually
+   match, not a happy accident. */
 .skills-grid {
   display: grid;
   grid-template-columns: repeat(3, max-content);
-  justify-content: space-between;
-  gap: 6px;
+  gap: 10px;
 }
 
 /* Each cell is itself a link (<a>, not <div> -- see skill_cells in
@@ -167,7 +168,17 @@
    block level span otherwise. title is the hover tooltip (skill name +
    XP, see setSkillTooltip in render_character_overview's script) --
    set on this whole box, not just its icon, so hovering anywhere on
-   the cell shows it, not only the small icon inside it. */
+   the cell shows it, not only the small icon inside it. min-width:
+   84px is a touch past this cell's own natural content size (icon +
+   gap + .skill-cell-level's 5ch + padding + border, ~82.8px) -- the
+   "wiggle room" .skills-grid/.hiscores-grid's shared 10px gap above is
+   solved against, widening every cell by about 1.2px so that gap comes
+   out to a clean, already-used number instead of an odd decimal. The
+   sliver of extra room this leaves inside the cell just sits as blank
+   space after .skill-cell-level -- same min-width-floor tradeoff as
+   that span's own 5ch, just one level up. Matched by .boss-cell's own
+   min-width below, same number, so the two cell types stay exactly the
+   same size this was explicitly instructed to be. */
 .skill-cell,
 .skill-cell:hover {
   display: flex;
@@ -176,6 +187,7 @@
   background: var(--panel-2);
   border: 1px solid var(--border);
   padding: 6px 10px;
+  min-width: 84px;
   color: inherit;
   text-decoration: none;
 }
@@ -213,58 +225,34 @@
 }
 
 /* Hiscores card (inside .co-cards-row, right of .skills-card) -- same
-   panel-translucent/border/radius/padding treatment as .skills-card
-   above, and the same flex: <n> 1 auto pattern -- grow proportional to
-   this grid's own 5 internal gaps, shrink allowed, starting from its
-   natural content size (see .skills-card's own comment for the full
-   reasoning on both the split and why auto, not a fixed basis). Grow
-   factor 5 (vs. skills-card's 2) is what makes this card claim 5/7 of
-   the row's total leftover space to skills-card's 2/7 -- proportional
-   to gap count rather than an even 1:1 split, so a gap in this grid
-   and a gap in .skills-grid end up close to the same final width
-   instead of this card (5 gaps to spread its share across) reading
-   tighter than skills-card (only 2) would at an even split. Together
-   with .co-summary-row's own last tile and this card's own growth,
-   this is what lands its right edge exactly on .co-summary-row's, at
-   any width, not one specific width solved for. Resizes only the
-   CARD, not its cells -- see .hiscores-grid below for how the extra
-   width this creates gets absorbed by the gaps between .boss-cell
-   instead of the cells themselves, which is what keeps them the same
-   static size as .skill-cell even though this card's own width
-   moves. */
+   panel-translucent/border/radius/padding/width: fit-content treatment
+   as .skills-card above (see that rule's own comment for why this went
+   back to static sizing rather than flex-grow, and for what "solved
+   for the page's normal 880px width" means here). */
 .hiscores-card {
-  flex: 5 1 auto;
+  width: fit-content;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
 }
 
-/* Still 6 fixed columns of max-content (i.e. .boss-cell's own natural,
-   .skill-cell-level-matched size -- unchanged, static, same as
-   .skills-grid's 3 columns), but justify-content: space-between now
-   does the work a hardcoded gap number used to approximate: with
-   .hiscores-card above free to grow wider than these 6 columns'
-   combined natural width, space-between hands every pixel of that
-   difference to the 5 gaps BETWEEN them (none before the first column
-   or after the last), stretching this row out to exactly fill the
-   card's own width edge to edge -- which, combined with the card
-   itself filling exactly out to .co-summary-row's right edge above, is
-   what lands the last column flush there exactly, at any width, not
-   just the one this used to be solved for. Base gap 6px is the floor
-   space-between distributes on top of, same number .skills-grid uses,
-   so a genuinely cramped width (little to distribute) still reads like
-   an ordinary grid rather than cells jammed edge to edge. A partial
-   last row (71 isn't divisible by 6) simply leaves its unused trailing
-   column slot blank at that row's own gap spacing -- column tracks are
-   shared down the whole grid, not recomputed per row, so every row's
-   spacing stays identical regardless of how many cells are actually in
-   it. */
+/* Still 6 fixed columns of max-content (i.e. .boss-cell's own natural
+   size, widened to match .skill-cell -- see both cells' own min-width
+   comments), same static sizing .skills-grid's 3 columns use. gap:
+   10px, the same solved-for-flush, shared-with-.skills-grid number --
+   see .skills-grid's own comment for the full reasoning; it's repeated
+   here rather than factored into one shared rule only because nothing
+   else on this page shares a CSS class across two otherwise-independent
+   grids like that. A partial last row (71 isn't divisible by 6) simply
+   leaves its unused trailing column slot blank at that row's own gap
+   spacing -- column tracks are shared down the whole grid, not
+   recomputed per row, so every row's spacing stays identical
+   regardless of how many cells are actually in it. */
 .hiscores-grid {
   display: grid;
   grid-template-columns: repeat(6, max-content);
-  justify-content: space-between;
-  gap: 6px;
+  gap: 10px;
 }
 
 /* Same link-cell treatment as .skill-cell/:hover above, including the
@@ -274,7 +262,9 @@
    .skill-cell, there's no separate tooltip upgrade on data arriving --
    the kill count is already server-rendered by the time this card
    exists at all (see render_character_overview's own docstring), so
-   there's nothing left to fill in after the fact. */
+   there's nothing left to fill in after the fact. min-width: 84px
+   matches .skill-cell's own -- see that rule's own comment for what
+   it's solved against and why. */
 .boss-cell,
 .boss-cell:hover {
   display: flex;
@@ -283,6 +273,7 @@
   background: var(--panel-2);
   border: 1px solid var(--border);
   padding: 6px 10px;
+  min-width: 84px;
   color: inherit;
   text-decoration: none;
 }
