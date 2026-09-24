@@ -60,3 +60,48 @@
   color: var(--gold);
   white-space: nowrap;
 }
+
+/* Skill levels card (render_character_overview's second section, right
+   under the summary row above) -- a 3-column x 8-row grid of icon+
+   level cells, one per skill, in _SKILL_GRID_ORDER (app/pages.py).
+   Individually-bordered/backgrounded cells with a gap between them,
+   the same convention as .gear-slot/.inventory-grid in purchase-
+   goals.css, rather than one shared box like .co-summary-row above --
+   this grid is naturally two-dimensional (three columns) where the
+   summary row is naturally one, so per-cell framing reads better here.
+   No border/background on .skills-card itself, same reasoning as
+   .inventory-grid: the grid is just a layout container, every visible
+   edge belongs to a cell. repeat(3, 1fr) rather than a fixed pixel
+   width so the card fills the same width as .co-summary-row above (and
+   its left edge lines up with that row for free -- both are direct,
+   unindented children of the page's own .wrap container). */
+.skills-card {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.skill-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+}
+.skill-cell:hover { background-color: rgb(51, 51, 54); }
+
+.skill-cell-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  display: block;
+  flex: none;
+}
+
+.skill-cell-level {
+  font-size: 15px;
+  color: var(--gold);
+}

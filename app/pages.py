@@ -1443,7 +1443,7 @@ _SUMMARY_STATS = (
     # label left anywhere for these -- there's no visible per-stat
     # caption on the page any more (see render_character_overview's own
     # comment), just each icon's hover tooltip.
-    ("geValue", _ICON_SUMMARY_GE_VALUE, "Grand Exchange value"),
+    ("geValue", _ICON_SUMMARY_GE_VALUE, "Net worth"),
     ("combatLevel", _ICON_SUMMARY_COMBAT_LEVEL, "Combat level"),
     ("totalLevel", _ICON_SUMMARY_TOTAL_LEVEL, "Total level"),
     ("totalXp", _ICON_SUMMARY_TOTAL_XP, "Total XP"),
@@ -1454,36 +1454,74 @@ _SUMMARY_STATS = (
 )
 
 
+_SKILL_GRID_ORDER = (
+    # Row-major order for the 3x8 skill levels card below (render_
+    # character_overview), matching the real in-game Skills tab's own
+    # column layout -- attack/strength/defence/ranged/prayer/magic down
+    # the first three rows of the combat column, etc. -- with sailing,
+    # this game's fictional 24th skill, filling the slot that in the
+    # real 23-skill game would be the "Total level" footer instead
+    # (deliberately omitted from this card, see that function's own
+    # comment). Every key here is one of the 24 in SKILL_NAMES
+    # (app/mindmaps.py) -- unordered there since it's a plain set, so
+    # this tuple is the one place the grid's actual left-to-right,
+    # top-to-bottom order lives.
+    "attack", "hitpoints", "mining",
+    "strength", "agility", "smithing",
+    "defence", "herblore", "fishing",
+    "ranged", "thieving", "cooking",
+    "prayer", "crafting", "firemaking",
+    "magic", "fletching", "woodcutting",
+    "runecraft", "slayer", "farming",
+    "construction", "hunter", "sailing",
+)
+
+
 def render_character_overview(player: PlayerView) -> str:
-    """Character Overview's summary row -- one long shared box (.co-
-    summary-row in character-overview.css) holding all eight icon+stat
-    pairs (see _SUMMARY_STATS above) at the same positions/spacing a
-    per-stat box would have had, just without each one's own individual
-    background/border -- and every icon the same uniform size
-    (.co-stat-icon) regardless of each wiki image's own native
-    dimensions. No caption under each value any more (was "GE VALUE" /
-    "COMBAT LEVEL" / etc.) -- each icon's alt text is still there as a
-    hover tooltip, just not printed on the page. Every value starts as
-    an em dash and is filled in by the script below once its fetch
-    resolves -- server-rendered rather than server-computed, since
-    geValue needs a live GE-price pass over the player's whole
-    inventory (already exactly what /api/possessions/summary does for
-    Storages Viewer) and the other seven are already a simple session-
-    authenticated GET away (see /api/character-overview/summary in
-    app/main.py) -- no reason to duplicate either computation here just
-    to embed a number server-side that a fresh page load re-fetches
-    from the exact same place a moment later anyway. An account that's
-    never synced one of these (no Storages Viewer data yet, or the
-    plugin's Character Summary tab has never been opened) simply leaves
-    that tile's em dash showing, same as every other "nothing synced
-    yet" spot in this app.
+    """Character Overview: the summary row (.co-summary-row in
+    character-overview.css) holding all eight icon+stat pairs (see
+    _SUMMARY_STATS above) at the same positions/spacing a per-stat box
+    would have had, just without each one's own individual background/
+    border -- and every icon the same uniform size (.co-stat-icon)
+    regardless of each wiki image's own native dimensions. No caption
+    under each value any more (was "GE VALUE" / "COMBAT LEVEL" / etc.)
+    -- each icon's alt text is still there as a hover tooltip, just not
+    printed on the page. Every value starts as an em dash and is filled
+    in by the script below once its fetch resolves -- server-rendered
+    rather than server-computed, since geValue needs a live GE-price
+    pass over the player's whole inventory (already exactly what
+    /api/possessions/summary does for Storages Viewer) and the other
+    seven are already a simple session-authenticated GET away (see
+    /api/character-overview/summary in app/main.py) -- no reason to
+    duplicate either computation here just to embed a number server-side
+    that a fresh page load re-fetches from the exact same place a
+    moment later anyway. An account that's never synced one of these
+    (no Storages Viewer data yet, or the plugin's Character Summary tab
+    has never been opened) simply leaves that tile's em dash showing,
+    same as every other "nothing synced yet" spot in this app.
 
     Combat level is shown rounded to a whole number (126, not 126.1 --
     the in-game panel's own decimal-precision option) and total level
     plain with no thousands separator (2376, not 2,376) -- both
     deliberately different from formatInt's normal comma-grouped
     output, which total XP and GE value still use. total XP gets a
-    trailing " xp" the same way GE value already gets " gp"."""
+    trailing " xp" the same way GE value already gets " gp".
+
+    Right underneath that, the skill levels card (.skills-card): a 3x8
+    grid of icon+level cells, one per skill, in _SKILL_GRID_ORDER above.
+    Modeled on the real in-game Levels tab for its layout, but not its
+    exact contents -- each cell shows only the plain real level (99, not
+    the in-game panel's boosted/real "99/99" pair), and there's no
+    "Total level" footer bar, both per explicit instruction. Icons are
+    this app's own bundled skill-icons assets (app/static/skill-icons,
+    already used by Mindmaps/Goal Tracking's skill-goal picker) rather
+    than anything wiki-fetched, so there's no icon-cache round trip for
+    this card at all. Data comes from GET /api/players/me/skills, i.e.
+    GameAccount.skills, the same JSONB column Mindmaps reads -- fetched
+    client-side same as the summary row above, for the same reason (no
+    point embedding server-side a number a fresh load re-fetches a
+    moment later anyway). A skill this account has never synced simply
+    leaves that cell's em dash showing."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
         <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
@@ -1492,11 +1530,23 @@ def render_character_overview(player: PlayerView) -> str:
         for key, icon, alt in _SUMMARY_STATS
     )
 
+    skill_cells = "\n      ".join(
+        f"""<div class="skill-cell">
+        <img class="skill-cell-icon" src="/static/skill-icons/{key}.png" alt="{key.capitalize()}" title="{key.capitalize()}" />
+        <span class="skill-cell-level" id="skill-{key}">&mdash;</span>
+      </div>"""
+        for key in _SKILL_GRID_ORDER
+    )
+
     body = f"""
     <h2 class="page-title">Character Overview</h2>
 
     <div class="co-summary-row" id="coSummaryRow">
       {stat_tiles}
+    </div>
+
+    <div class="skills-card" id="skillsCard">
+      {skill_cells}
     </div>
     """
 
@@ -1519,6 +1569,10 @@ def render_character_overview(player: PlayerView) -> str:
       function setFraction(key, completed, total) {
         if (completed == null || total == null) return;
         setStat(key, formatInt(completed) + ' / ' + formatInt(total));
+      }
+      function setSkillLevel(key, level) {
+        var el = document.getElementById('skill-' + key);
+        if (el) el.textContent = String(Math.round(level));
       }
 
       fetch('/api/character-overview/summary')
@@ -1551,6 +1605,20 @@ def render_character_overview(player: PlayerView) -> str:
           setStat('geValue', formatInt(total) + ' gp');
         })
         .catch(function () { /* leave the em dash showing */ });
+
+      // Same GameAccount.skills snapshot Mindmaps/Goal Tracking's own
+      // skill-goal picker reads -- see /api/players/me/skills in
+      // app/main.py.
+      fetch('/api/players/me/skills')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data || !data.skills) return;
+          Object.keys(data.skills).forEach(function (key) {
+            var entry = data.skills[key];
+            if (entry && entry.level != null) setSkillLevel(key, entry.level);
+          });
+        })
+        .catch(function () { /* leave this card's em dashes showing */ });
     })();
     """
 
