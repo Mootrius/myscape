@@ -79,13 +79,16 @@
    which puts its stats directly in the outer box with no per-tile
    framing, this card's cells get their own box (.gear-slot/.inventory-
    grid's convention in purchase-goals.css) nested inside the card's.
-   No explicit width here (an earlier round pinned it to a third of
-   .co-summary-row's width, since reverted) -- as a plain block element
-   it just takes the full width of .wrap by default, same as that row,
-   with its three grid columns stretching to fill it. Left-aligned
-   under that row for free either way: both are unindented children of
-   the page's own .wrap and neither has side margins. */
+   width: fit-content (an earlier round tried pinning this to a fixed
+   percentage of .co-summary-row's width, then tried leaving it
+   unconstrained and letting it stretch full width like that row --
+   both since reverted) shrinks the whole card down to whatever its
+   three columns of cells actually need, rather than stretching to
+   fill .wrap the way a plain block element would. Still left-aligned
+   under that row: fit-content doesn't center a block box, it just
+   caps its width, so it still starts at .wrap's own left edge. */
 .skills-card {
+  width: fit-content;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -97,9 +100,15 @@
   margin-bottom: 18px;
 }
 
+/* max-content, not 1fr -- each of the three columns sizes to its
+   widest cell's actual content (icon + level number + padding) instead
+   of stretching to fill whatever width the grid happens to have, which
+   is what lets .skills-card's own width: fit-content above do anything
+   -- 1fr columns would still consume all available space even inside a
+   fit-content box. */
 .skills-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, max-content);
   gap: 6px;
 }
 
