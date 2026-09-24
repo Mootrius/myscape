@@ -169,27 +169,36 @@
   padding: 8px;
 }
 
-/* repeat(auto-fill, 84px), not a fixed repeat(3, max-content) -- with
-   .skills-card's own width now fluid (see that rule's own comment),
-   a fixed column count would eventually either overflow a narrow
-   width or leave an ever-growing gap on a wide one. auto-fill instead
-   recomputes, continuously, exactly how many 84px columns (.skill-
-   cell's own fixed min-width, matched to .boss-cell's -- see both
-   cells' own comments) fit the card's current width at this same 10px
-   gap, adding or dropping a whole column as needed rather than ever
-   resizing the cells or the gaps themselves -- which is the one thing
-   explicitly asked to stay fixed here: the cards can reflow, the boxes
-   and the cushioning between them can't. 84px, a definite length, not
-   max-content -- auto-fill needs a concrete size to count columns
-   against, which max-content (this card's own natural content size)
-   can't give it without creating a circular "how wide is the card"
-   question. gap: 10px is unchanged from before -- see the section
-   this used to open with for why that number in particular, still
-   true here since it's still the same shared, uniform value making
-   horizontal and vertical cushioning equal within each card. */
+/* repeat(auto-fill, minmax(84px, 1fr)), not a fixed repeat(3,
+   max-content) -- with .skills-card's own width now fluid (see that
+   rule's own comment), a fixed column count would eventually either
+   overflow a narrow width or leave an ever-growing gap on a wide one.
+   auto-fill instead recomputes, continuously, how many columns fit the
+   card's current width using 84px (.skill-cell's own min-width,
+   matched to .boss-cell's -- see both cells' own comments) as each
+   column's floor at this same 10px gap, adding or dropping a whole
+   column as needed. Per later explicit instruction, once that column
+   count is set the boxes themselves should grow to fill the section --
+   minmax(84px, 1fr), not a bare 84px, is what does that: auto-fill
+   still uses the 84px minimum to decide how many columns fit (same
+   column counts as a bare 84px track would produce), but each of those
+   columns' own upper bound is now 1fr instead of a hard 84px ceiling,
+   so any leftover width the fixed columns wouldn't have used gets
+   distributed evenly across them instead of sitting as blank space
+   after the last one -- the cells stretch flush to both edges of the
+   card at every column count, not just at the one column count 84px
+   exactly divides evenly. 84px is still what auto-fill counts columns
+   against (a definite length, not max-content, which auto-fill can't
+   size against without creating a circular "how wide is the card"
+   question), it just no longer caps how wide a column can grow once
+   that count is settled. gap: 10px is unchanged from before -- see the
+   section this used to open with for why that number in particular,
+   still the same shared, uniform value keeping vertical cushioning (a
+   fixed row-to-row gap, unaffected by column width) matched to this
+   still-fixed 10px horizontal gap between columns. */
 .skills-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 84px);
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 10px;
 }
 
@@ -212,18 +221,24 @@
    the cell shows it, not only the small icon inside it. min-width:
    84px is a touch past this cell's own natural content size (icon +
    gap + .skill-cell-level's 5ch + padding + border, ~82.8px) -- the
-   "wiggle room" .skills-grid/.hiscores-grid's shared 10px gap is
-   solved against, widening every cell by about 1.2px so that gap comes
-   out to a clean, already-used number instead of an odd decimal. The
-   sliver of extra room this leaves inside the cell just sits as blank
-   space after .skill-cell-level -- same min-width-floor tradeoff as
-   that span's own 5ch, just one level up. Matched by .boss-cell's own
-   min-width below, same number, so the two cell types stay exactly the
-   same size this was explicitly instructed to be -- now doing double
-   duty as the fixed 84px both grids' repeat(auto-fill, 84px) reflows
-   columns against (see .skills-grid's own comment), so this number
-   staying fixed is what keeps the boxes themselves fixed too even as
-   the column count around them changes. */
+   "wiggle room" .skills-grid/.hiscores-grid's shared 10px gap was
+   originally solved against, widening every cell by about 1.2px so
+   that gap comes out to a clean, already-used number instead of an odd
+   decimal. Still doing double duty as the floor .skills-grid/
+   .hiscores-grid's own repeat(auto-fill, minmax(84px, 1fr)) reflows
+   column counts against (see .skills-grid's own comment) -- but now
+   only a floor, not this cell's actual rendered width: since that
+   track's own upper bound is 1fr, not a hard 84px, the cell stretches
+   to fill whatever its column track ends up being once the grid's
+   settled on a column count, per later explicit instruction that the
+   boxes should grow to fill their section rather than leave it
+   un-flush. The extra room a wider column leaves inside the cell still
+   just sits as blank space after .skill-cell-level, same as the
+   original ~1.2px sliver did, just potentially a lot more of it now.
+   Matched by .boss-cell's own min-width below, same number, so the two
+   cell types stay the same size as each other at any given moment,
+   even though that shared size itself now moves with the column
+   count. */
 .skill-cell,
 .skill-cell:hover {
   display: flex;
@@ -306,20 +321,22 @@
   padding: 8px;
 }
 
-/* repeat(auto-fill, 84px), same reasoning as .skills-grid's own
-   comment -- this card's width is fluid now too, so a fixed repeat(6,
-   ...) is replaced by continuously recomputing how many 84px columns
-   (matched to .skill-cell's own, unchanged) fit at the same 10px gap,
-   rather than ever resizing the cells or the gaps themselves. Whatever
-   the resulting column count, a partial last row (71 isn't evenly
-   divisible by most column counts) simply leaves its unused trailing
-   slots blank at that row's own gap spacing -- column tracks are
-   shared down the whole grid, not recomputed per row, so every row's
-   spacing stays identical regardless of how many cells are actually in
-   it. */
+/* repeat(auto-fill, minmax(84px, 1fr)), same reasoning as
+   .skills-grid's own comment -- this card's width is fluid too, so a
+   fixed repeat(6, ...) is replaced by continuously recomputing how
+   many columns (84px floor, matched to .skill-cell's own, unchanged)
+   fit at the same 10px gap, and then stretching each of those columns
+   via 1fr to fill whatever width the fixed-count version would have
+   left un-flush, rather than ever resizing the gaps themselves.
+   Whatever the resulting column count, a partial last row (71 isn't
+   evenly divisible by most column counts) simply leaves its unused
+   trailing slots blank at that row's own gap spacing and column
+   widths -- column tracks are shared down the whole grid, not
+   recomputed per row, so every row's spacing AND column width stays
+   identical regardless of how many cells are actually in it. */
 .hiscores-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 84px);
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 10px;
 }
 
