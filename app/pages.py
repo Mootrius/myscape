@@ -1527,7 +1527,13 @@ def render_character_overview(player: PlayerView) -> str:
     reads -- fetched client-side same as the summary row above, for the
     same reason (no point embedding server-side a number a fresh load
     re-fetches a moment later anyway). A skill this account has never
-    synced simply leaves that cell's em dash showing."""
+    synced simply leaves that cell's em dash showing.
+
+    Each cell's title attribute (set on the whole .skill-cell, not just
+    its icon, so hovering anywhere on the cell triggers it) starts out
+    as just the capitalized skill name and gets XP appended once the
+    skills fetch resolves (setSkillTooltip in the script below) -- e.g.
+    "Attack" becomes "Attack — 13,034,431 xp"."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
         <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
@@ -1537,8 +1543,8 @@ def render_character_overview(player: PlayerView) -> str:
     )
 
     skill_cells = "\n      ".join(
-        f"""<div class="skill-cell">
-        <img class="skill-cell-icon" src="/static/skill-icons/{key}.png" alt="{key.capitalize()}" title="{key.capitalize()}" />
+        f"""<div class="skill-cell" id="skill-cell-{key}" title="{key.capitalize()}">
+        <img class="skill-cell-icon" src="/static/skill-icons/{key}.png" alt="{key.capitalize()}" />
         <span class="skill-cell-level" id="skill-{key}">&mdash;</span>
       </div>"""
         for key in _SKILL_GRID_ORDER
@@ -1582,6 +1588,16 @@ def render_character_overview(player: PlayerView) -> str:
         var el = document.getElementById('skill-' + key);
         if (el) el.textContent = String(Math.round(level));
       }
+      // The skill name + XP tooltip lives on the whole cell (title=
+      // capitalized key initially, see skill_cells in app/pages.py) so
+      // hovering anywhere on it -- not just the small icon -- shows it;
+      // this just extends that same title with XP once it's synced.
+      function setSkillTooltip(key, xp) {
+        var el = document.getElementById('skill-cell-' + key);
+        if (!el) return;
+        var name = key.charAt(0).toUpperCase() + key.slice(1);
+        el.title = xp != null ? name + ' — ' + formatInt(xp) + ' xp' : name;
+      }
 
       fetch('/api/character-overview/summary')
         .then(function (r) { return r.ok ? r.json() : null; })
@@ -1623,7 +1639,9 @@ def render_character_overview(player: PlayerView) -> str:
           if (!data || !data.skills) return;
           Object.keys(data.skills).forEach(function (key) {
             var entry = data.skills[key];
-            if (entry && entry.level != null) setSkillLevel(key, entry.level);
+            if (!entry) return;
+            if (entry.level != null) setSkillLevel(key, entry.level);
+            setSkillTooltip(key, entry.xp);
           });
         })
         .catch(function () { /* leave this card's em dashes showing */ });

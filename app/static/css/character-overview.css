@@ -23,7 +23,16 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 8px 12px;
-  margin-bottom: 28px;
+  /* 18px, not this row's own previous 28px -- the same between-
+     sections gap every other page's top-level cards use (see .dash-
+     grid's own comment in myscape.css, and .overlay-card/.pg-body in
+     purchase-goals.css, .loot-chart-card/.loot-panels in loot-
+     tracker.css), so the space before the skills card below reads the
+     same as the gap between cards anywhere else in the app -- not to
+     be confused with .skills-grid's own 8px, the spacing *within* that
+     card between its 24 skill cells, which stays its own smaller
+     number on purpose. */
+  margin-bottom: 18px;
 }
 
 .co-stat {
@@ -79,29 +88,41 @@
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 10px;
-  margin-bottom: 28px;
+  padding: 8px;
+  /* Same 18px between-sections gap as .co-summary-row's own -- see
+     that rule's comment above. There's nothing below this card yet,
+     but this keeps both boxes' outer spacing consistent rather than
+     each picking its own number. */
+  margin-bottom: 18px;
 }
 
 .skills-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 
+/* Each cell's title attribute is the hover tooltip (skill name + XP,
+   see setSkillTooltip in render_character_overview's script) -- set on
+   this whole box, not just its icon, so hovering anywhere on the cell
+   triggers it, not only the small icon inside it. */
 .skill-cell {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  padding: 8px 14px;
+  padding: 6px 10px;
 }
 .skill-cell:hover { background-color: rgb(51, 51, 54); }
 
+/* Smaller than .co-stat-icon's 28px above -- shrinking the icon (not
+   the 15px level text next to it, which stays the same size as every
+   other stat on this page) is what makes this whole card read as more
+   compact than a plain scaled-down copy of the summary row would. */
 .skill-cell-icon {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
   image-rendering: pixelated;
   display: block;
