@@ -101,36 +101,53 @@
    (app/pages.py) -- unlike .co-summary-row, which puts its stats
    directly in the outer box with no per-tile framing, this card's
    cells get their own box (.gear-slot/.inventory-grid's convention in
-   purchase-goals.css) nested inside the card's. width: fit-content (an
-   earlier round tried pinning this to a fixed percentage of
-   .co-summary-row's width, then tried leaving it unconstrained and
-   letting it stretch full width like that row -- both since reverted)
-   shrinks the whole card down to whatever its three columns of cells
-   actually need, rather than stretching to fill its flex parent the
-   way a plain block element would -- .co-cards-row's own flex layout
-   already keeps this from growing past its content either way, but
-   this is what keeps it from doing so if that ever changes back to a
-   block/grid parent. No margin-bottom here any more -- .co-cards-row's
-   own gap/margin-bottom above now carries both the space between this
-   card and hiscores-card to its right AND the space below the row as
-   a whole. */
+   purchase-goals.css) nested inside the card's. flex: 2 1 auto, not
+   width: fit-content (an earlier round tried pinning this to a fixed
+   percentage of .co-summary-row's width, then tried leaving it
+   unconstrained and letting it stretch full width like that row, then
+   tried this exact fit-content -- all since reverted): .hiscores-
+   card's own flex-grow is what makes IT land flush with .co-summary-
+   row's right edge (see that rule's own comment), and leaving this
+   card at a fixed width while only that one grows made the two cards
+   read as mismatched -- this one packed tight at its own 6px gaps,
+   that one stretched loose to cover the rest of the row alone. flex-
+   grow: 2 here and 5 on .hiscores-card is instead proportional to each
+   card's own internal gap COUNT (2 gaps between .skills-grid's 3
+   columns, 5 between .hiscores-grid's 6 -- see both rules' own
+   comments), so the row's total leftover space splits across BOTH
+   cards in proportion to how many gaps each one has to spread it
+   across, landing every gap in either grid at close to the same final
+   width instead of one card's gaps staying tight while the other's
+   stretch alone. flex-basis: auto (not a fixed number) starts each
+   card at its own natural content size before that growth is applied,
+   same width this always rendered at with zero surplus to distribute
+   (e.g. a narrow enough browser window before the row wraps at all,
+   .co-summary-row's own comment). No margin-bottom here any more --
+   .co-cards-row's own gap/margin-bottom above now carries both the
+   space between this card and hiscores-card to its right AND the
+   space below the row as a whole. */
 .skills-card {
-  width: fit-content;
+  flex: 2 1 auto;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
 }
 
-/* max-content, not 1fr -- each of the three columns sizes to its
-   widest cell's actual content (icon + level number + padding) instead
-   of stretching to fill whatever width the grid happens to have, which
-   is what lets .skills-card's own width: fit-content above do anything
-   -- 1fr columns would still consume all available space even inside a
-   fit-content box. */
+/* max-content columns, same reasoning as .hiscores-grid's own comment
+   -- these three size to their widest cell's actual content (icon +
+   level number + padding), not to whatever width the grid happens to
+   have, so the cells themselves stay exactly the same static size as
+   .boss-cell regardless of how wide .skills-card's own flex-grow above
+   makes the card. justify-content: space-between is what actually
+   spends that extra width, the same way .hiscores-grid's own does --
+   handed to the 2 gaps BETWEEN these 3 columns rather than left as
+   dead space past the third one, so this card's cells fill its own
+   flex-grown width edge to edge too. */
 .skills-grid {
   display: grid;
   grid-template-columns: repeat(3, max-content);
+  justify-content: space-between;
   gap: 6px;
 }
 
@@ -197,23 +214,26 @@
 
 /* Hiscores card (inside .co-cards-row, right of .skills-card) -- same
    panel-translucent/border/radius/padding treatment as .skills-card
-   above, but flex: 1 1 380px, not width: fit-content -- this card
-   grows to soak up exactly whatever width .co-cards-row has left after
-   skills-card and the row's own 18px gap, landing its own right edge
-   exactly on .co-summary-row's, per explicit instruction that this be
-   pixel-exact rather than a close, one-width-only approximation (an
-   earlier round tried solving a single static gap value for a flush
-   fit at the page's normal 880px width -- close, but only at that one
-   width, and never quite exact). flex-basis 380px is a floor, not the
-   usual size, same "wrap below roughly this much room instead of
-   squeezing" reasoning as everywhere else flex-wrap handles narrow
-   viewports on this page. Critically, this only resizes the CARD, not
-   its cells -- see .hiscores-grid below for how the leftover space
-   this creates gets absorbed by the gaps between .boss-cell instead of
-   the cells themselves, which is what keeps them the same static size
-   as .skill-cell even though this card's own width now moves. */
+   above, and the same flex: <n> 1 auto pattern -- grow proportional to
+   this grid's own 5 internal gaps, shrink allowed, starting from its
+   natural content size (see .skills-card's own comment for the full
+   reasoning on both the split and why auto, not a fixed basis). Grow
+   factor 5 (vs. skills-card's 2) is what makes this card claim 5/7 of
+   the row's total leftover space to skills-card's 2/7 -- proportional
+   to gap count rather than an even 1:1 split, so a gap in this grid
+   and a gap in .skills-grid end up close to the same final width
+   instead of this card (5 gaps to spread its share across) reading
+   tighter than skills-card (only 2) would at an even split. Together
+   with .co-summary-row's own last tile and this card's own growth,
+   this is what lands its right edge exactly on .co-summary-row's, at
+   any width, not one specific width solved for. Resizes only the
+   CARD, not its cells -- see .hiscores-grid below for how the extra
+   width this creates gets absorbed by the gaps between .boss-cell
+   instead of the cells themselves, which is what keeps them the same
+   static size as .skill-cell even though this card's own width
+   moves. */
 .hiscores-card {
-  flex: 1 1 380px;
+  flex: 5 1 auto;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
