@@ -1481,17 +1481,22 @@ def _format_boss_kc(kc: Optional[int]) -> str:
     """A hiscores card cell's displayed kill count -- see .boss-cell-kc
     in character-overview.css for the width this is sized to match.
     None (never synced) is an em dash, same "nothing synced yet"
-    convention as everywhere else on this page. 0-9,999 is the plain
-    comma-grouped number ("9,999" tops out at 4 digits + 1 comma, the
-    width .boss-cell-kc is sized for); 10,000 and up switches to a
-    truncated "<thousands>K" instead ("15,742" -> "15K") rather than
-    letting the comma-grouped form grow a 5th digit and blow out every
-    other cell's width along with it (min-width means only the actual
-    wide cell would grow on its own, but a jagged one-cell-wider grid
-    reads worse than every boss just capping at K notation past this
-    point). Floor division, not rounded -- "15K" then unambiguously
-    means "at least 15,000", never a rounded-up 15,500+."""
-    if kc is None:
+    convention as everywhere else on this page -- and per explicit
+    instruction, 0 reads exactly the same way: a boss that's a key in
+    boss_kill_counts with a count of 0 (synced, but never actually
+    killed) is visually indistinguishable from one that's never been
+    synced at all, so there's no reason to show a bare "0" for it
+    either. 1-9,999 is the plain comma-grouped number ("9,999" tops out
+    at 4 digits + 1 comma, the width .boss-cell-kc is sized for);
+    10,000 and up switches to a truncated "<thousands>K" instead
+    ("15,742" -> "15K") rather than letting the comma-grouped form grow
+    a 5th digit and blow out every other cell's width along with it
+    (min-width means only the actual wide cell would grow on its own,
+    but a jagged one-cell-wider grid reads worse than every boss just
+    capping at K notation past this point). Floor division, not
+    rounded -- "15K" then unambiguously means "at least 15,000", never
+    a rounded-up 15,500+."""
+    if not kc:
         return "&mdash;"
     if kc < 10_000:
         return f"{kc:,}"
@@ -1595,8 +1600,12 @@ def render_character_overview(player: PlayerView) -> str:
     computation a fresh load would just re-fetch a moment later the way
     geValue/skills above do. A boss never in that dict (account never
     linked/synced) shows an em dash, same "nothing synced yet"
-    convention as everywhere else on this page; one already a key --
-    even at 0 -- shows its real count (see _format_boss_kc above for
+    convention as everywhere else on this page -- and per explicit
+    instruction, a boss that IS already a key but sits at 0 (synced,
+    just never actually killed) shows that same em dash rather than a
+    bare "0", since a 0-kill boss reads no differently to the player
+    than one never synced at all (see _format_boss_kc above, which is
+    what actually does that -- 1 and up shows the real count, using
     the comma-grouped-vs-"K" display cutoff, sized to match .boss-
     cell-kc's own width in character-overview.css)."""
     stat_tiles = "\n      ".join(
