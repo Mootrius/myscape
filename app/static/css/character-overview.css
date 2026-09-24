@@ -81,14 +81,30 @@
    number .co-summary-row's own comment explains, now doing double
    duty as both the horizontal gap between these two cards AND the
    vertical gap before whatever comes next, so every card-to-card gap
-   on this page reads as the same size regardless of axis. flex-wrap so
-   a narrow enough viewport stacks hiscores back under skills instead
-   of overflowing -- this site's usual "no @media queries, let flex/
-   wrap handle it" approach (see .co-summary-row's own comment). */
+   on this page reads as the same size regardless of axis.
+
+   flex-wrap: nowrap, not wrap -- an earlier round let a narrow enough
+   viewport stack hiscores back under skills instead of overflowing,
+   the site's usual "no @media queries, let flex/wrap handle it"
+   fallback (see .co-summary-row's own comment); reverted per explicit
+   instruction that these two stay side by side always, not just above
+   some width. overflow-x: auto is what makes "always" actually safe
+   rather than just clipping or spilling out of .wrap on a viewport too
+   narrow for both cards' full (static, see .skills-card/.hiscores-
+   card's own width: fit-content) width -- a scrollbar on this one row
+   specifically, not the "nothing on this site scrolls sideways"
+   html { overflow-x: hidden } rule near the top of myscape.css, which
+   is about the page as a whole, not a single section that's now
+   deliberately exempted from wrapping. flex-shrink: 0 on both cards
+   below is the other half of this: without it, a too-narrow viewport
+   would squeeze each card's grid rather than triggering this scroll,
+   clipping or overlapping cells instead of just showing a
+   horizontally-scrollable row. */
 .co-cards-row {
   display: flex;
   align-items: flex-start;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 18px;
   margin-bottom: 18px;
 }
@@ -129,6 +145,7 @@
    card to its right AND the space below the row as a whole. */
 .skills-card {
   width: fit-content;
+  flex-shrink: 0;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -225,12 +242,14 @@
 }
 
 /* Hiscores card (inside .co-cards-row, right of .skills-card) -- same
-   panel-translucent/border/radius/padding/width: fit-content treatment
-   as .skills-card above (see that rule's own comment for why this went
-   back to static sizing rather than flex-grow, and for what "solved
-   for the page's normal 880px width" means here). */
+   panel-translucent/border/radius/padding/width: fit-content/flex-
+   shrink: 0 treatment as .skills-card above (see that rule's own
+   comment for why this went back to static sizing rather than
+   flex-grow, and for what "solved for the page's normal 880px width"
+   and flex-shrink: 0 mean here). */
 .hiscores-card {
   width: fit-content;
+  flex-shrink: 0;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
