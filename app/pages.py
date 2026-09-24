@@ -1477,6 +1477,27 @@ _SKILL_GRID_ORDER = (
 )
 
 
+def _format_boss_kc(kc: Optional[int]) -> str:
+    """A hiscores card cell's displayed kill count -- see .boss-cell-kc
+    in character-overview.css for the width this is sized to match.
+    None (never synced) is an em dash, same "nothing synced yet"
+    convention as everywhere else on this page. 0-9,999 is the plain
+    comma-grouped number ("9,999" tops out at 4 digits + 1 comma, the
+    width .boss-cell-kc is sized for); 10,000 and up switches to a
+    truncated "<thousands>K" instead ("15,742" -> "15K") rather than
+    letting the comma-grouped form grow a 5th digit and blow out every
+    other cell's width along with it (min-width means only the actual
+    wide cell would grow on its own, but a jagged one-cell-wider grid
+    reads worse than every boss just capping at K notation past this
+    point). Floor division, not rounded -- "15K" then unambiguously
+    means "at least 15,000", never a rounded-up 15,500+."""
+    if kc is None:
+        return "&mdash;"
+    if kc < 10_000:
+        return f"{kc:,}"
+    return f"{kc // 1000}K"
+
+
 def render_character_overview(player: PlayerView) -> str:
     """Character Overview: the summary row (.co-summary-row in
     character-overview.css) holding all eight icon+stat pairs (see
@@ -1604,7 +1625,7 @@ def render_character_overview(player: PlayerView) -> str:
     boss_cells = "\n      ".join(
         f"""<a class="boss-cell" title="{escape(name)}" href="https://oldschool.runescape.wiki/w/{urllib.parse.quote(name)}" target="_blank" rel="noopener">
         <img class="boss-cell-icon" src="/static/boss-icons/{slug}.png" alt="{escape(name)}" />
-        <span class="boss-cell-kc">{"{:,}".format(kc) if kc is not None else "&mdash;"}</span>
+        <span class="boss-cell-kc">{_format_boss_kc(kc)}</span>
       </a>"""
         for slug, name, kc in boss_rows
     )
