@@ -114,15 +114,22 @@
 /* Each cell is itself a link (<a>, not <div> -- see skill_cells in
    app/pages.py) to that skill's wiki page, so its own base/hover link
    color and underline (see the site-wide `a`/`a:hover` rules near the
-   top of myscape.css) are reset here rather than left to bleed through
-   onto the icon/level text below -- color: inherit alone would still
-   leave a:hover's own higher-specificity color/underline winning on
-   hover, hence the explicit :hover override on .skill-cell-level too.
-   title is the hover tooltip (skill name + XP, see setSkillTooltip in
-   render_character_overview's script) -- set on this whole box, not
-   just its icon, so hovering anywhere on the cell shows it, not only
-   the small icon inside it. */
-.skill-cell {
+   top of myscape.css) need resetting here -- same "declare :hover
+   explicitly too" fix .dash-card-link/.dash-card-link:hover already
+   uses in myscape.css, and for the same reason: a:hover (element +
+   pseudo-class) outweighs a single class like plain .skill-cell, so
+   without repeating text-decoration/color under :hover specifically,
+   a:hover's own underline would win back the instant a cell is
+   hovered. .skill-cell:hover (class + pseudo-class) outweighs a:hover
+   in turn, same as .dash-card-link:hover does. The .skill-cell-level
+   override below is belt-and-suspenders on top of that, in case a
+   browser still draws the ancestor's underline through the inline-
+   block level span otherwise. title is the hover tooltip (skill name +
+   XP, see setSkillTooltip in render_character_overview's script) --
+   set on this whole box, not just its icon, so hovering anywhere on
+   the cell shows it, not only the small icon inside it. */
+.skill-cell,
+.skill-cell:hover {
   display: flex;
   align-items: center;
   gap: 8px;
