@@ -79,12 +79,13 @@
    which puts its stats directly in the outer box with no per-tile
    framing, this card's cells get their own box (.gear-slot/.inventory-
    grid's convention in purchase-goals.css) nested inside the card's.
-   One third the width of .co-summary-row above and left-aligned under
-   it: both are unindented children of the page's own .wrap, and
-   neither has side margins, so a plain percentage width keeps this
-   card flush against that row's own left edge without anything extra. */
+   No explicit width here (an earlier round pinned it to a third of
+   .co-summary-row's width, since reverted) -- as a plain block element
+   it just takes the full width of .wrap by default, same as that row,
+   with its three grid columns stretching to fill it. Left-aligned
+   under that row for free either way: both are unindented children of
+   the page's own .wrap and neither has side margins. */
 .skills-card {
-  width: 33%;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -121,8 +122,8 @@
    other stat on this page) is what makes this whole card read as more
    compact than a plain scaled-down copy of the summary row would. */
 .skill-cell-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
   image-rendering: pixelated;
   display: block;
