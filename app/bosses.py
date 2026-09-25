@@ -144,6 +144,28 @@ CHAT_NAME_OVERRIDES = {
     "Barrows Chests": "Barrows chest",
 }
 
+# The chatbox's own "Your <boss> kill count is: <n>." message drops
+# the stylistic "The " every "The <Name>" hiscores boss's display_name
+# carries (The Gauntlet, The Nightmare, The Royal Titans, ...) --
+# confirmed directly in-game for "Royal Titans" and "Corrupted
+# Gauntlet" specifically (reported after a real kill of each didn't
+# bump the Character Overview page's totals: apply_kill_count_updates
+# never recognized "Royal Titans"/"Corrupted Gauntlet" as a display
+# name it knew, since CHAT_NAME_TO_DISPLAY_NAME below only had the
+# full "The Royal Titans"/"The Corrupted Gauntlet" to match against),
+# and applied here to every other "The "-prefixed boss on the list too
+# rather than left as a one-off -- it's the same stylistic-article-
+# only-in-hiscores/wiki-display pattern in every case, not something
+# specific to those two. Computed from HISCORE_BOSSES itself (any
+# "The "-prefixed display_name not already given its own entry above)
+# rather than spelled out one boss at a time, so a future Jagex boss
+# following the same "The <Name>" convention self-heals the same way
+# without needing its own line added here.
+for _slug, _name, _has_icon in HISCORE_BOSSES:
+    if _name.startswith("The ") and _name not in CHAT_NAME_OVERRIDES:
+        CHAT_NAME_OVERRIDES[_name] = _name[len("The "):]
+del _slug, _name, _has_icon
+
 # app/hiscores.py's own reverse lookup for chat-parsed updates: the
 # chatbox's exact wording -> our display_name, matched
 # case-insensitively there (chat capitalization isn't as reliably
