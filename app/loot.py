@@ -129,8 +129,17 @@ _MAX_BUCKETS = 400
 # NPCs that never surface in the Loot Tracker at all, for any player --
 # per explicit instruction. The Wilderness rework's "Crystalline" and
 # "Corrupted" reskins of its own dungeon NPCs (wolf, bear, rat, dark
-# beast, ...) are excluded outright here, both sides of the pair.
-# Deliberately NOT the same mechanism as HiddenLootEntry/npc_hide_key
+# beast, ...) are excluded outright here, both sides of the pair. Same
+# for Tombs of Amascut's six boss-room NPCs (Ba-Ba, Akkha, Kephri,
+# Zebak, and the raid's two final-boss forms Tumeken's Warden/Elidinis'
+# Warden) -- each boss's own kill is a real source_type "npc" LootEvent
+# in its own right alongside the raid's own combined "Tombs of Amascut"
+# chest event (see build_loot_state's events loop further down), which
+# would otherwise double up on every reward the chest already covers
+# with six more (mostly-empty) per-boss tiles of their own -- excluded
+# per explicit instruction rather than left as noise for every ToA
+# raider to individually hide. Deliberately NOT the same mechanism as
+# HiddenLootEntry/npc_hide_key
 # below -- that's a per-player, reversible choice made from the eye-
 # toggle on an NPC's own tile in the UI, and a hidden NPC still gets a
 # tile (just dimmed, still countable by unhiding it -- see
@@ -166,6 +175,12 @@ _EXCLUDED_NPC_NAMES = frozenset(
         "Corrupted Bear",
         "Corrupted Dragon",
         "Corrupted Dark Beast",
+        "Ba-Ba",
+        "Akkha",
+        "Kephri",
+        "Zebak",
+        "Tumeken's Warden",
+        "Elidinis' Warden",
     )
 )
 
@@ -339,6 +354,44 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
         return None
     filename = name if _ICON_EXT_RE.search(name) else name + ".png"
     return "/icon-cache/" + urllib.parse.quote(filename)
+
+
+# A handful of loot sources where npc_icon_url's usual guessed-filename
+# default ("<source_name>.png") lands on the wrong picture (or no
+# picture at all), so a specific wiki filename is hand-picked here
+# instead -- confirmed directly against the wiki, the same way
+# clue_casket_icon_url's own filenames are, rather than guessed. Keyed
+# by the RAW source_name RuneLite/the plugin actually sends (trimmed,
+# lowercased -- matched the same case-insensitive way npc_hide_key
+# normalizes a real hide), so it applies whether that source turns out
+# to be a real NPC kill (source_type "npc") or a raid/minigame reward
+# (source_type "event") once build_loot_state's events loop resolves
+# npc_like_name/npc_like_icon for it -- per explicit instruction:
+#
+# - "Tombs of Amascut": the raid's own combined chest event has no
+#   portrait of its own to guess a filename from at all (it's not a
+#   creature) -- shown under the final boss's own portrait instead.
+# - "Intricate pouch": Guardians of the Rift's own per-round reward
+#   event, named after the pouch item it hands out rather than any
+#   creature -- same reasoning as Tombs of Amascut above.
+# - "Guardians of the Rift": the minigame's own completion event,
+#   renamed to "Rewards Guardian" (the NPC who actually hands out its
+#   reward) for a clearer display name, not just a different portrait.
+# - "Skeleton Hellhound": a real NPC kill, but a bare wiki guess for
+#   this exact name has no single infobox portrait of its own to fall
+#   back on either (see npc_icon_url's and app/icon_cache.py's own
+#   comments on _first_infobox_image) -- Vet'ion's own reskin picked
+#   here rather than leaving it to whichever variant that fallback
+#   happens to land on.
+#
+# {lowercased raw source_name: (display name override or None to keep
+# the raw name as-is, wiki filename to use for its portrait)}.
+_NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
+    "tombs of amascut": (None, "Tumeken's Warden (level-489).png"),
+    "intricate pouch": (None, "Intricate pouch detail.png"),
+    "guardians of the rift": ("Rewards Guardian", "Rewards Guardian.png"),
+    "skeleton hellhound": (None, "Skeleton Hellhound (Vet'ion).png"),
+}
 
 
 # The six clue tiers this app knows how to recognize a casket by -- the
@@ -750,17 +803,28 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
         # to show a tile under, unlike a real raid/minigame name. A
         # pickpocket (source_type "pickpocket") still never gets a tile
         # either, same as before this feature existed.
+        #
+        # A source in _NPC_DISPLAY_OVERRIDES above (Tombs of Amascut,
+        # Intricate pouch, Guardians of the Rift, Skeleton Hellhound)
+        # swaps in its own hand-picked display name/portrait right here,
+        # in place of the source_name/npc_icon_url guess an NPC or event
+        # branch would otherwise use -- see that table's own comment for
+        # why each one needed it. Looked up once, by the same raw,
+        # trimmed, lowercased source_name every other branch below
+        # already keys off of, so it applies identically whichever
+        # branch (real NPC or named event) actually matches.
         tier = _clue_tier_from_source_name(event.source_name)
         stripped_name = (event.source_name or "").strip()
+        override = _NPC_DISPLAY_OVERRIDES.get(stripped_name.lower())
         if event.source_type == "npc":
-            npc_like_name = event.source_name
-            npc_like_icon = npc_icon_url(npc_like_name)
+            npc_like_name = (override[0] if override else None) or event.source_name
+            npc_like_icon = npc_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
         elif tier is not None:
             npc_like_name = f"Reward casket ({tier.lower()})"
             npc_like_icon = clue_casket_icon_url(tier)
         elif event.source_type == "event" and stripped_name and stripped_name.lower() != "casket":
-            npc_like_name = stripped_name
-            npc_like_icon = npc_icon_url(npc_like_name)
+            npc_like_name = (override[0] if override else None) or stripped_name
+            npc_like_icon = npc_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
         else:
             npc_like_name = None
             npc_like_icon = None
