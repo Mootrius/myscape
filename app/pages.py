@@ -13111,11 +13111,25 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // one) means there was never a shared module either page's own
       // copy could live in instead.
       function wizardStageStartHtml() {
+        // While NOW is selected the field is empty (not the "_"
+        // skeleton it used to show) so its placeholder -- "Start now"
+        // -- actually shows through, same as any other empty
+        // disabled-but-visible field on this page; the mask's own
+        // "YYYY-MM-DD HH:MM" placeholder only applies once CUSTOM is
+        // picked, and even then rarely shows given CUSTOM always
+        // prefills a real value on first pick (see wireStartStage's
+        // toggle handler) -- it's a fallback for the rare case that
+        // value's own empty. GT.recurStartAt itself is left untouched
+        // by which segment is active (see wireStartStage's own
+        // comment on why) -- only the DOM field's shown value follows
+        // the toggle.
+        var startPlaceholder = (GT.recurStart === 'custom') ? 'YYYY-MM-DD HH:MM' : 'Start now';
+        var startValue = (GT.recurStart === 'custom') ? (GT.recurStartAt || RECUR_START_BLANK) : '';
         return '' +
           '<div class="gt-wizard-stage2">' +
           '  <div class="gt-wizard-recur-fields">' +
-          '    <input type="text" inputmode="numeric" class="gt-recur-start-input" id="gtRecurStartInput" placeholder="YYYY-MM-DD HH:MM" autocomplete="off" spellcheck="false" ' +
-                 (GT.recurStart === 'custom' ? '' : 'disabled ') + 'value="' + escapeHtml(GT.recurStartAt || RECUR_START_BLANK) + '" />' +
+          '    <input type="text" inputmode="numeric" class="gt-recur-start-input" id="gtRecurStartInput" placeholder="' + escapeHtml(startPlaceholder) + '" autocomplete="off" spellcheck="false" ' +
+                 (GT.recurStart === 'custom' ? '' : 'disabled ') + 'value="' + escapeHtml(startValue) + '" />' +
           '  </div>' +
           '  <div class="gt-wizard-segrow">' +
           '    <div class="gt-recur-start-toggle" id="gtRecurStartToggle">' +
@@ -13510,9 +13524,8 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       }
 
       // Turns the masked field's "YYYY-MM-DD HH:MM" (read as the
-      // VIEWER's own local time, same convention fmtIsoDateTimeLocal
-      // below reads it back with once the goal exists) into the real
-      // ISO-8601 UTC string payload.recur_start_at (GoalCreateRequest,
+      // VIEWER's own local time) into the real ISO-8601 UTC string
+      // payload.recur_start_at (GoalCreateRequest,
       // app/schemas.py) expects. `new Date(y, m-1, d, h, min)` is what
       // actually does the local-time interpretation -- JavaScript's own
       // Date constructor always reads plain numeric arguments as local
@@ -13579,11 +13592,13 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
             // in this same field. Switching back to NOW clears this
             // field's own invalid state too (there's nothing left on
             // screen for a red border to be warning about once the
-            // field's disabled) but leaves GT.recurStartAt/the field's
-            // own text untouched, so flipping back to CUSTOM restores
-            // exactly what was there before rather than making a
-            // player retype it.
+            // field's disabled) and empties its DOM value so the
+            // "Start now" placeholder shows through -- but GT.
+            // recurStartAt (the actual state) is left untouched, so
+            // flipping back to CUSTOM restores exactly what was there
+            // before rather than making a player retype it.
             input.disabled = (newStart !== 'custom');
+            input.placeholder = (newStart === 'custom') ? 'YYYY-MM-DD HH:MM' : 'Start now';
             input.classList.remove('invalid');
             if (newStart === 'custom') {
               // Prefill with right now the FIRST time CUSTOM is picked
@@ -13596,8 +13611,12 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
               if (!GT.recurStartAt) {
                 input.value = nowRecurStartMasked();
                 GT.recurStartAt = input.value;
+              } else {
+                input.value = GT.recurStartAt;
               }
               input.focus();
+            } else {
+              input.value = '';
             }
           });
         });
@@ -13749,18 +13768,6 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // actually ends.
       var RECUR_UNIT_SECONDS = { hour: 3600, day: 86400, week: 7 * 86400, month: 30 * 86400, year: 365 * 86400 };
 
-      function pad2(n) { return String(n).padStart(2, '0'); }
-
-      // "YYYY-MM-DD HH:MM" in the VIEWER's own local time (not UTC) --
-      // g's own recur_period_start arrives as a plain ISO timestamp,
-      // which `new Date(...)` already parses correctly either way, so
-      // this only has to control how it's READ back out.
-      function fmtIsoDateTimeLocal(iso) {
-        var d = new Date(iso);
-        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
-          ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-      }
-
       // Plain (not zero-padded) unit/letter pairs -- Year, Month, Week,
       // Day, Hour, Minute -- each just the remainder left after peeling
       // off every larger unit first (the same "greedy decomposition"
@@ -13773,12 +13780,12 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // empty string. Negative input (a period that's already
       // technically over -- the 5s poll just hasn't caught the
       // rollover yet) clamps to all-zeros (and so to that same "0M"
-      // floor) rather than printing a negative countdown. No pad2 here
-      // (unlike fmtIsoDateTimeLocal's own date/time digits) -- this
-      // reads as a duration, not a fixed-width clock face, so "3H" is
-      // correct and "03H" would just be a stray leading zero; a
-      // two-digit value like 10H still prints in full either way,
-      // since there's no padding to strip in the first place.
+      // floor) rather than printing a negative countdown. Never
+      // zero-padded -- this reads as a duration, not a fixed-width
+      // clock face, so "3H" is correct and "03H" would just be a
+      // stray leading zero; a two-digit value like 10H still prints in
+      // full either way, since there's no padding to strip in the
+      // first place.
       function fmtRecurCountdown(totalSeconds) {
         var sec = Math.max(0, Math.round(totalSeconds));
         var y = Math.floor(sec / RECUR_UNIT_SECONDS.year); sec -= y * RECUR_UNIT_SECONDS.year;
@@ -13801,20 +13808,19 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // tooltip component anywhere to build one from), so this is a
       // plain title attribute, not a floating element of its own. Two
       // different tooltips depending on which kind of goal this is:
-      //   recurring    -- "Set on [period start] · Next cycle in
-      //     [countdown]" -- g.recur_period_start is the CURRENT
-      //     period's own start (see GoalOut's own docstring in
-      //     app/schemas.py), which is what both halves actually
-      //     describe -- when this period began, and how much of it is
-      //     left -- so recur_period_start plus recur_interval/
-      //     recur_unit is all this branch needs.
-      //   one-time GAIN -- just "Started at [baseline] [UNIT]" -- no
-      //     "Set on [date]" half here (unlike the recurring branch
-      //     above): a one-time goal has only the one baseline, ever,
-      //     so pairing it with its own creation date added nothing a
-      //     player couldn't already tell from the goal card itself,
-      //     where "Started at" alone is what actually answers "why
-      //     does progress not start at 0". g.baseline_value is
+      //   recurring    -- just "Resets in [countdown]" -- g.
+      //     recur_period_start is the CURRENT period's own start (see
+      //     GoalOut's own docstring in app/schemas.py); combined with
+      //     recur_interval/recur_unit it's enough to compute how much
+      //     of the period is left, which is the only half of this
+      //     tooltip that survived -- the goal card's own cadence tag
+      //     (e.g. "EVERY 2 WEEKS") already says how often it repeats,
+      //     so calling out exactly when the CURRENT period started on
+      //     top of that read as more than a player actually needed.
+      //   one-time GAIN -- just "Started at [baseline] [UNIT]" -- a
+      //     one-time goal has only the one baseline, ever, and
+      //     "Started at" alone is what actually answers "why does
+      //     progress not start at 0". g.baseline_value is
       //     captured once at creation and never re-baselined (there's
       //     no period to roll forward -- see Goal.baseline_value's own
       //     docstring in app/models.py) and is only ever non-null for
@@ -13833,7 +13839,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
             var periodStartMs = new Date(g.recur_period_start).getTime();
             var periodEndMs = periodStartMs + g.recur_interval * unitSeconds * 1000;
             var remainingSeconds = (periodEndMs - Date.now()) / 1000;
-            tooltip = 'Set on ' + fmtIsoDateTimeLocal(g.recur_period_start) + ' · Next cycle in ' + fmtRecurCountdown(remainingSeconds);
+            tooltip = 'Resets in ' + fmtRecurCountdown(remainingSeconds);
           }
         } else if (!g.is_recurring && g.baseline_value != null) {
           var unit = (g.goal_type === 'kc') ? ' KC' : (g.goal_type === 'skill' && g.metric === 'xp') ? ' XP' : '';
