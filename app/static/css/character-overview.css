@@ -27,7 +27,20 @@
    icon itself rather than the whole (centered, full-width)
    .page-title so the popup opens directly under the icon, not
    wherever the title's own text happens to be widest. */
-.co-info-wrap { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
+/* top: -2.9px is a measured, not eyeballed, correction -- vertical-align:
+   middle alone aligns the icon's box to half the parent's x-height
+   above the baseline, which reads visibly low against this title's
+   all-caps text (no descenders to balance the icon's own vertical
+   center against). Confirmed against the actual rendered page: without
+   this nudge the icon's own vertical center sits ~2.9px below the real
+   glyph ink's own visual center (measured via canvas
+   actualBoundingBoxAscent/Descent for this exact font/size, not the
+   text node's line box, which includes font leading and isn't a
+   reliable proxy for perceived center) -- same category of fix as
+   .nav-side's own "a few px lower than dead center" comment in
+   myscape.css, just the opposite direction since that one nudges DOWN
+   to match all-caps nav text against a wordmark that has descenders. */
+.co-info-wrap { position: relative; top: -2.9px; display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .co-info-icon {
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none; padding: 0; margin: 0;
