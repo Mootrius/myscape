@@ -525,6 +525,70 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
 
 .gt-recur-unit-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); position: relative; z-index: 1; }
 
+/* Stage 5 (recurring goals only) -- when this goal's cadence starts.
+   Same three-row shape stage 4 uses (.gt-wizard-stage2/.gt-wizard-
+   recur-fields/.gt-wizard-segrow/.gt-wizard-actions, all reused as-is)
+   just with a masked date/time field up top instead of the interval
+   count, and a NOW/CUSTOM toggle in the segmented row instead of the
+   HOUR/DAY/WEEK/MONTH/YEAR one -- per explicit instruction on this
+   exact field-then-toggle-then-buttons order.
+
+   Wider than .gt-recur-interval-input's own 140px (that field only
+   ever holds a few digits) -- this one holds the full "YYYY-MM-DD
+   HH:MM" mask at once, which measures ~100px of text on its own at
+   this input's inherited 16px site-wide font size (input[type="text"]
+   in myscape.css); 160px leaves comfortable side padding around that
+   without ballooning past what .gt-wizard-recur-fields' own
+   justify-content: center needs to keep it looking centered in the
+   340px-wide stage. */
+input.gt-recur-start-input { width: 160px; flex: 0 0 auto; height: 34px; padding: 0 12px; }
+
+/* Disabled (NOW picked -- see wireStartStage in the script) reads as
+   visibly inert rather than looking identical to its normal,
+   interactive CUSTOM state, same dimming .gt-target-mode-toggle--
+   disabled already gives a toggle that doesn't apply yet -- just
+   applied to a field via the native :disabled pseudo-class instead of
+   a class, since an <input disabled> already gets the "can't type
+   here" cursor/behavior for free and this only needs to add the look
+   to match. */
+input.gt-recur-start-input:disabled { opacity: 0.4; }
+
+/* Same segmented-pair idea/look as .gt-target-mode-toggle above
+   (reused look, own class -- this is a different field's own toggle,
+   see that rule's own comment for why that's still worth a dedicated
+   class), same site-wide 25px button height. 140px (70px per segment),
+   a touch wider than .gt-target-mode-toggle's own 128px -- "CUSTOM" is
+   longer than "REACH", the longest word either of THAT toggle's two
+   segments ever has to fit, so this one needs a little more room to
+   keep the same comfortable side padding around its own longer label. */
+.gt-recur-start-toggle { display: flex; gap: 0; height: 25px; width: 140px; flex: none; }
+
+.gt-recur-start-btn {
+  flex: 1 1 50%;
+  height: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Same first-child border fix as .gt-metric-btn/.gt-target-mode-btn's
+   own -- see either one's own comment for why this only suppresses the
+   seam while NOT active. */
+.gt-recur-start-btn:first-child:not(.active) { border-right: none; }
+
+.gt-recur-start-btn:hover { color: var(--text); }
+
+.gt-recur-start-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+
 .gt-field-target-search { position: relative; }
 
 .gt-search-box { position: relative; }
@@ -850,13 +914,14 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
 
 /* The one rule behind the comment up in .gt-field-error's old spot --
    covers #gtWizardSearchInput (.gt-field/.gt-search-box), #gtTargetValue
-   (.gt-field), and #gtRecurInterval (.gt-recur-interval-input) all at
-   once, since they're all plain <input type="text">. Specificity
-   (0,2,1) ties every one of those fields' own width/padding rules
-   above (also (0,2,1), or (0,1,1) for .gt-recur-interval-input, which
-   this beats outright) -- placed last in the file so it wins any tie
-   on source order instead of needing a bespoke higher-specificity
-   selector per field. */
+   (.gt-field), #gtRecurInterval (.gt-recur-interval-input), and
+   #gtRecurStartInput (.gt-recur-start-input) all at once, since
+   they're all plain <input type="text">. Specificity (0,2,1) ties
+   every one of those fields' own width/padding rules above (also
+   (0,2,1), or (0,1,1) for .gt-recur-interval-input/.gt-recur-start-
+   input, which this beats outright) -- placed last in the file so it
+   wins any tie on source order instead of needing a bespoke
+   higher-specificity selector per field. */
 input[type="text"].invalid { border-color: var(--red); }
 
 @media (max-width: 720px) {

@@ -12443,9 +12443,9 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         sortMode: 'alphabetical',
         // 0 = collapsed (just the + box), 1 = pick one-time/recurring,
         // 2 = pick a type, 3 = pick a target + value, 4 = pick a
-        // recurring goal's own cadence (recurring only -- a one-time
-        // goal saves straight from stage 3 instead of ever reaching
-        // this one).
+        // recurring goal's own cadence, 5 = pick when it starts
+        // (recurring only -- a one-time goal saves straight from stage
+        // 3 instead of ever reaching either of these last two).
         wizardStage: 0,
         recurring: null, // null | 'one_time' | 'recurring' -- picked in stage 1
         type: null,
@@ -12472,6 +12472,8 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         targetMode: 'gain',
         recurInterval: '', // stage 4's own text field, kept here so re-rendering that stage (e.g. after Back then forward again) doesn't lose it
         recurUnit: 'day', // stage 4's own segmented-control selection
+        recurStart: 'now', // stage 5's own NOW/CUSTOM segmented-control selection -- NOW by default, same "the simple choice is the default" convention GT.targetMode/GT.recurUnit already follow
+        recurStartAt: '', // stage 5's own masked "YYYY-MM-DD HH:MM" text field, kept here for the same Back-then-forward reason GT.recurInterval is; only ever read when recurStart === 'custom'
         // sortMode + a JSON snapshot of whatever GT.goals last actually
         // got rendered with (see applyGoalsResponse/renderGoalList) --
         // null until the first render. Exists purely so
@@ -12532,7 +12534,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // ---- Add-goal wizard ----------------------------------------------
       //
       // Collapsed by default -- just the + box right under the page
-      // title. Clicking it expands the SAME box into a flow of up to 4
+      // title. Clicking it expands the SAME box into a flow of up to 5
       // "pages": stage 1 picks one-time vs recurring, stage 2 picks a
       // goal type (item/kc/skill for one-time; recurring drops item --
       // see wizardStageTypeHtml, RECURRING_GOAL_TYPES' own reasoning in
@@ -12541,10 +12543,11 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // type free text, same tolerance app.goals.clean_new_goal already
       // gives an item goal's name) and its target value, then either
       // submits right away (one-time -- stage 3's button reads Save) or
-      // moves on to stage 4 to pick the recurring cadence itself
-      // (recurring -- stage 3's button reads Next instead). The x (or a
-      // successful add) collapses back to stage 0, ready for the next
-      // goal.
+      // moves on to stage 4 to pick the recurring cadence itself and
+      // then stage 5 to pick when that cadence starts (recurring --
+      // stage 3's and stage 4's own buttons both read Next instead,
+      // stage 5's is the real Save). The x (or a successful add)
+      // collapses back to stage 0, ready for the next goal.
 
       var wizardExpanded = document.getElementById('gtWizardExpanded');
       var wizardStageEl = document.getElementById('gtWizardStage');
@@ -12568,6 +12571,8 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         GT.targetMode = 'gain';
         GT.recurInterval = '';
         GT.recurUnit = 'day';
+        GT.recurStart = 'now';
+        GT.recurStartAt = '';
         renderWizard();
       }
 
@@ -12615,7 +12620,9 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // there's nothing wrong with them, stage 3 just wants to be
       // exactly as the player left it.
       function wizardBack() {
-        if (GT.wizardStage === 4) {
+        if (GT.wizardStage === 5) {
+          GT.wizardStage = 4;
+        } else if (GT.wizardStage === 4) {
           GT.wizardStage = 3;
         } else if (GT.wizardStage === 3) {
           GT.wizardStage = 2;
@@ -12657,6 +12664,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
           2: wizardStageTypeHtml,
           3: wizardStageTargetHtml,
           4: wizardStageCadenceHtml,
+          5: wizardStageStartHtml,
         }[GT.wizardStage];
         wizardStageEl.innerHTML = stageHtml();
         wireWizardStage();
@@ -13041,10 +13049,19 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // that class's own comment in goal-tracking.css -- rather than a
       // page-4-only class, since it's the same "this stage's segmented
       // control(s) get a row of their own" idea stage 3's Lvl/Xp/GAIN-
-      // REACH row already established), then Back/Cancel/Save pinned
+      // REACH row already established), then Back/Cancel/Next pinned
       // to the bottom. Unlike stage 3's own segmented-control row, this
       // one's never empty -- a recurring goal always has a unit to
       // pick -- so there's no visibility toggling to wire up here.
+      //
+      // Always reads Next now, never Save -- stage 5 (when this cadence
+      // starts) always follows, so this stage never submits the goal
+      // itself any more (see wizardStageTargetHtml's own Save/Next
+      // switch for the same .gt-wizard-btn-next look applied
+      // conditionally, one stage up; here it's unconditional since
+      // stage 4 only ever exists for a recurring goal in the first
+      // place -- there's no "one-time" path that reaches this stage at
+      // all for the label to need to vary against).
       function wizardStageCadenceHtml() {
         var unitButtons = RECUR_UNIT_OPTIONS.map(function (o) {
           return '<button type="button" class="gt-recur-unit-btn' + (o.unit === GT.recurUnit ? ' active' : '') + '" data-unit="' + o.unit + '">' + o.label + '</button>';
@@ -13056,6 +13073,55 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
           '  </div>' +
           '  <div class="gt-wizard-segrow">' +
           '    <div class="gt-recur-unit-toggle" id="gtRecurUnitToggle">' + unitButtons + '</div>' +
+          '  </div>' +
+          '  <div class="gt-wizard-actions">' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
+          '    <button type="button" class="gt-wizard-btn gt-wizard-btn-cancel" id="gtWizardCancel">Cancel</button>' +
+          '    <button type="button" class="gt-add-btn gt-wizard-btn-next" id="gtWizardSave">Next</button>' +
+          '  </div>' +
+          '</div>';
+      }
+
+      // Stage 5 -- recurring goals only, reached from stage 4's own
+      // Next button, and the wizard's real last page now: when this
+      // goal's recurring cadence should start counting from. Same
+      // fixed-size box (.gt-wizard-stage2, reused same as stage 4) and
+      // the same three-row shape -- the masked date/time field up top,
+      // the NOW/CUSTOM segmented control on its own row underneath
+      // (reusing .gt-wizard-segrow, same as every other stage's own
+      // segmented control does), then Back/Cancel/Save pinned to the
+      // bottom, per explicit instruction on this exact row order. The
+      // field renders every time (not just once CUSTOM is picked) so
+      // the row order stays fixed regardless of which segment is
+      // active -- disabled (see wireStartStage) rather than removed
+      // while NOW is selected, same "visible but not usable" treatment
+      // .gt-target-mode-toggle--disabled already gives a toggle that
+      // doesn't apply yet rather than hiding it outright.
+      //
+      // RECUR_START_MASK/applyRecurStartMask below is a second,
+      // independent mask from Loot Tracker's own DATE_MASK/
+      // applyDateMask (render_loot_tracker's script, app/pages.py) --
+      // same live-masking behavior (digits only, dashes/colon fixed in
+      // place, unfilled slots shown as "_"), per explicit instruction,
+      // just a longer mask (date AND time, not date alone) living in
+      // this page's own separate script rather than sharing that
+      // page's copy -- this file's own "each page owns its script"
+      // convention (see goal-tracking.css's parallel comment on why
+      // Back/Cancel share a duplicated look rather than an imported
+      // one) means there was never a shared module either page's own
+      // copy could live in instead.
+      function wizardStageStartHtml() {
+        return '' +
+          '<div class="gt-wizard-stage2">' +
+          '  <div class="gt-wizard-recur-fields">' +
+          '    <input type="text" inputmode="numeric" class="gt-recur-start-input" id="gtRecurStartInput" placeholder="YYYY-MM-DD HH:MM" autocomplete="off" spellcheck="false" ' +
+                 (GT.recurStart === 'custom' ? '' : 'disabled ') + 'value="' + escapeHtml(GT.recurStartAt || RECUR_START_BLANK) + '" />' +
+          '  </div>' +
+          '  <div class="gt-wizard-segrow">' +
+          '    <div class="gt-recur-start-toggle" id="gtRecurStartToggle">' +
+          '      <button type="button" class="gt-recur-start-btn' + (GT.recurStart === 'now' ? ' active' : '') + '" data-start="now">Now</button>' +
+          '      <button type="button" class="gt-recur-start-btn' + (GT.recurStart === 'custom' ? ' active' : '') + '" data-start="custom">Custom</button>' +
+          '    </div>' +
           '  </div>' +
           '  <div class="gt-wizard-actions">' +
           '    <button type="button" class="gt-wizard-btn gt-wizard-btn-back" id="gtWizardBack">Back</button>' +
@@ -13093,6 +13159,11 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
 
         if (GT.wizardStage === 4) {
           wireCadenceStage();
+          return;
+        }
+
+        if (GT.wizardStage === 5) {
+          wireStartStage();
           return;
         }
 
@@ -13307,7 +13378,18 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
           });
         });
 
-        document.getElementById('gtWizardSave').addEventListener('click', wizardAddGoal);
+        // No longer calls wizardAddGoal directly -- stage 5 (when this
+        // cadence starts) now always follows, so this button reads
+        // Next and just validates/advances instead (see
+        // wizardStageCadenceHtml's own comment on why it's
+        // unconditional here). GT.recurInterval is already current by
+        // now (every keystroke above keeps it in sync), so there's
+        // nothing left to capture, only to check.
+        document.getElementById('gtWizardSave').addEventListener('click', function () {
+          if (!validateRecurField(true)) return;
+          GT.wizardStage = 5;
+          renderWizard();
+        });
       }
 
       // Same shape as validateTargetField above, just against the
@@ -13323,6 +13405,175 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         var ok = Number.isInteger(n) && n >= 1 && n <= MAX_RECUR_INTERVAL;
         input.classList.toggle('invalid', !ok);
         return ok;
+      }
+
+      // ---- Stage 5: when a recurring goal's cadence starts ---------------
+      //
+      // A second, independent live-masking setup from Loot Tracker's own
+      // DATE_MASK/applyDateMask (render_loot_tracker's script, app/
+      // pages.py) -- same technique (digits only, dashes/colon fixed in
+      // place, unfilled slots shown as "_"), per explicit instruction,
+      // just a longer mask (date AND time, 12 digits not 8) living in
+      // this page's own separate script rather than sharing that page's
+      // copy -- see wizardStageStartHtml's own comment for why there's
+      // no shared module either copy could live in instead.
+      var RECUR_START_MASK = 'dddd-dd-dd dd:dd';
+      // The all-underscores skeleton this field starts blank at (and
+      // the value it falls back to once every digit's been backspaced
+      // back out) -- built once off RECUR_START_MASK's own length
+      // rather than typed out by hand a second time somewhere that
+      // could drift from it.
+      var RECUR_START_BLANK = RECUR_START_MASK.replace(/d/g, '_');
+      // How many 'd' slots the mask actually has (12 -- 4+2+2 for the
+      // date, 2+2 for the time) -- computed once here rather than
+      // re-matched on every keystroke inside recurStartDigitsOnly, and
+      // reused again by validateRecurStartField below to tell "still
+      // being typed" apart from "every slot filled".
+      var RECUR_START_DIGIT_COUNT = (RECUR_START_MASK.match(/d/g) || []).length;
+
+      function recurStartDigitsOnly(s) {
+        return (s || '').replace(/\D/g, '').slice(0, RECUR_START_DIGIT_COUNT);
+      }
+
+      function recurStartMaskFromDigits(digits) {
+        var out = '', di = 0;
+        for (var i = 0; i < RECUR_START_MASK.length; i++) {
+          if (RECUR_START_MASK[i] === 'd') {
+            out += di < digits.length ? digits[di] : '_';
+            di++;
+          } else {
+            out += RECUR_START_MASK[i];
+          }
+        }
+        return out;
+      }
+
+      function applyRecurStartMask(input) {
+        var digits = recurStartDigitsOnly(input.value);
+        input.value = recurStartMaskFromDigits(digits);
+        // Cursor lands right after the last filled digit every time,
+        // same tradeoff (and same reasoning) as Loot Tracker's own
+        // applyDateMask -- see that function's own comment.
+        var pos = 0, di = 0;
+        for (var i = 0; i < RECUR_START_MASK.length; i++) {
+          if (RECUR_START_MASK[i] === 'd' && di < digits.length) { pos = i + 1; di++; }
+        }
+        input.setSelectionRange(pos, pos);
+        input.classList.remove('invalid');
+      }
+
+      // A real calendar date AND a real clock time, not just the right
+      // shape -- rejects "2024-13-40 25:99" the same way Loot Tracker's
+      // own isValidIsoDate rejects an impossible calendar date, extended
+      // with an hour/minute range check since this mask has a time
+      // component that one doesn't.
+      function isValidRecurStartDateTime(s) {
+        var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s || '');
+        if (!m) return false;
+        var year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
+        var hour = parseInt(m[4], 10), minute = parseInt(m[5], 10);
+        if (month < 1 || month > 12) return false;
+        var daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+        if (day < 1 || day > daysInMonth) return false;
+        return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+      }
+
+      // Same shape as validateRecurField above, just against this
+      // stage's own masked field -- and always valid (a no-op) while
+      // NOW is picked, since the field is disabled then (see
+      // wizardStageStartHtml/wireStartStage) and has nothing on it that
+      // could be wrong.
+      //
+      // A field this long can't have a meaningful "valid partial value"
+      // the way a plain number can (validateRecurField's own single
+      // digit is already a complete, checkable value; "2026-09-2_ __:__"
+      // never is, however many of its slots are filled) -- so
+      // "still being typed" is its own quiet state here, same
+      // showEmptyAsInvalid-gated treatment blank already gets in every
+      // other field on this page, just triggered by ANY unfilled slot
+      // rather than only a fully empty field. Flashing red on every
+      // keystroke until the 12th digit lands would read as the field
+      // being broken, not as it being helpfully strict -- Save (the one
+      // call site that passes true) is the one moment an incomplete
+      // value should actually be called out.
+      function validateRecurStartField(showIncompleteAsInvalid) {
+        if (GT.recurStart !== 'custom') return true;
+        var input = document.getElementById('gtRecurStartInput');
+        if (!input) return false;
+        if (recurStartDigitsOnly(input.value).length < RECUR_START_DIGIT_COUNT) {
+          input.classList.toggle('invalid', !!showIncompleteAsInvalid);
+          return false;
+        }
+        var ok = isValidRecurStartDateTime(input.value.trim());
+        input.classList.toggle('invalid', !ok);
+        return ok;
+      }
+
+      // Turns the masked field's "YYYY-MM-DD HH:MM" (read as the
+      // VIEWER's own local time, same convention fmtIsoDateTimeLocal
+      // below reads it back with once the goal exists) into the real
+      // ISO-8601 UTC string payload.recur_start_at (GoalCreateRequest,
+      // app/schemas.py) expects. `new Date(y, m-1, d, h, min)` is what
+      // actually does the local-time interpretation -- JavaScript's own
+      // Date constructor always reads plain numeric arguments as local
+      // time, never UTC -- and toISOString() converts that same instant
+      // to the UTC string FastAPI/Pydantic parses straight into a
+      // tz-aware datetime with no further conversion needed
+      // server-side. Only ever called once isValidRecurStartDateTime has
+      // already confirmed the field parses cleanly.
+      function recurStartIsoFromMasked(s) {
+        var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s || '');
+        if (!m) return null;
+        var d = new Date(
+          parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10),
+          parseInt(m[4], 10), parseInt(m[5], 10)
+        );
+        return d.toISOString();
+      }
+
+      // Wires stage 5's own three rows: the masked field itself, the
+      // NOW/CUSTOM toggle that enables/disables it, and Back/Cancel/
+      // Save. Unlike every earlier stage's Back, there's no state to
+      // clear going back to 4 -- GT.recurStart/recurStartAt survive a
+      // Back-then-forward same as GT.recurInterval/recurUnit already do
+      // (see wizardBack's own comment).
+      function wireStartStage() {
+        document.getElementById('gtWizardBack').addEventListener('click', wizardBack);
+        document.getElementById('gtWizardCancel').addEventListener('click', closeWizard);
+
+        var input = document.getElementById('gtRecurStartInput');
+        input.addEventListener('input', function () {
+          applyRecurStartMask(input);
+          GT.recurStartAt = input.value;
+          validateRecurStartField();
+        });
+
+        document.querySelectorAll('.gt-recur-start-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var newStart = btn.getAttribute('data-start');
+            if (newStart === GT.recurStart) return;
+            GT.recurStart = newStart;
+            document.querySelectorAll('.gt-recur-start-btn').forEach(function (b) {
+              b.classList.toggle('active', b === btn);
+            });
+            // Enabling/disabling in place rather than a full
+            // renderWizard() -- same reasoning as the recur-unit
+            // toggle's own click handler in wireCadenceStage: a
+            // re-render would also blow away whatever's already typed
+            // in this same field. Switching back to NOW clears this
+            // field's own invalid state too (there's nothing left on
+            // screen for a red border to be warning about once the
+            // field's disabled) but leaves GT.recurStartAt/the field's
+            // own text untouched, so flipping back to CUSTOM restores
+            // exactly what was there before rather than making a
+            // player retype it.
+            input.disabled = (newStart !== 'custom');
+            input.classList.remove('invalid');
+            if (newStart === 'custom') input.focus();
+          });
+        });
+
+        document.getElementById('gtWizardSave').addEventListener('click', wizardAddGoal);
       }
 
       function currentTargetBounds() {
@@ -13368,19 +13619,28 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // The name/target-value fields validated and captured back on
       // stage 3 (wizardTarget.name/value -- see that stage's own
       // Save/Next click handler in wireWizardStage) are already good
-      // by the time this runs, whether it's called straight from
-      // there (one-time) or from stage 4's own Save button afterward
-      // (recurring) -- this only still needs to validate/collect the
-      // cadence field for the recurring case.
+      // by the time this runs, and so is the cadence itself
+      // (GT.recurInterval/recurUnit -- validated and left in state
+      // before stage 4's own Next click ever leaves that stage's DOM,
+      // see wireCadenceStage's own Save/Next handler) -- reading
+      // #gtRecurInterval's live element here the way this function
+      // used to would be reading a DOM node stage 5 has already
+      // replaced by the time a player can even reach this button. This
+      // only still needs to validate/collect the CUSTOM start field for
+      // the recurring case, since that one's own stage (5) is still the
+      // one actually on screen right now.
       async function wizardAddGoal() {
         var payload = { goal_type: GT.type, target_name: wizardTarget.name, target_value: wizardTarget.value };
         if (GT.type === 'skill') { payload.metric = GT.skillMetric; }
         if (GT.type === 'item' && wizardTarget.itemId) { payload.item_id = wizardTarget.itemId; }
         if (GT.recurring === 'recurring') {
-          if (!validateRecurField(true)) return;
+          if (!validateRecurStartField(true)) return;
           payload.is_recurring = true;
-          payload.recur_interval = Number(document.getElementById('gtRecurInterval').value.trim());
+          payload.recur_interval = Number(GT.recurInterval);
           payload.recur_unit = GT.recurUnit;
+          if (GT.recurStart === 'custom') {
+            payload.recur_start_at = recurStartIsoFromMasked(document.getElementById('gtRecurStartInput').value.trim());
+          }
         } else if (targetModeApplies()) {
           // Sent explicitly (both "gain" and "reach") whenever the
           // toggle's actually offered, rather than leaning on the

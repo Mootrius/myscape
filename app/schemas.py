@@ -1642,6 +1642,30 @@ class GoalCreateRequest(BaseModel):
     is_recurring: bool = False
     recur_interval: Optional[int] = None
     recur_unit: Optional[str] = None
+    # A recurring goal's own choice of when its first period begins --
+    # the wizard's NOW/CUSTOM toggle (stage 5, wizardStageStartHtml in
+    # app/pages.py). None (NOW, the default -- also what a raw API call
+    # that never knew to send this gets) means create_goal in
+    # app/main.py falls back to _utcnow(), the only behavior that
+    # existed before this field did. A CUSTOM pick sends a real
+    # timestamp here instead, written straight onto Goal.recur_period_start
+    # in its place -- see that column's own docstring in app/models.py
+    # for what it actually drives (which absolute moment
+    # maybe_roll_recurring_period, app/goals.py, phase-locks this goal's
+    # period boundaries to, not "when progress starts being counted
+    # from" -- there's no historical kc/xp/level series to reconstruct a
+    # past baseline against, so baseline_value is always still captured
+    # from the account's live numbers at creation time regardless of
+    # what's picked here). Ignored when is_recurring is false, same
+    # tolerance metric/item_id above already get for a goal_type that
+    # doesn't use them. Pydantic parses whatever ISO-8601 string the
+    # wizard's own local-time "YYYY-MM-DD HH:MM" field resolves to
+    # (see recurStartIsoFromMasked in the script) straight into a
+    # tz-aware datetime; this schema only shapes the request, it
+    # doesn't validate that the goal type actually allows recurrence at
+    # all -- app.goals.clean_new_goal does that, same as every other
+    # recurring-only field here.
+    recur_start_at: Optional[datetime] = None
     # A ONE-TIME goal's own GAIN/REACH choice (see
     # app.goals.GOAL_TARGET_MODES/clean_target_mode, which does the
     # real validation -- "gain" only for a one-time kc goal or a

@@ -2770,15 +2770,25 @@ def create_goal(
     goal). Both run inside the same try block -- either one's
     GoalValidationError gets the same plain 400.
 
-    A recurring goal's very first period starts right now, baselined
-    against its own current absolute_value() (see app/goals.py) so it
-    opens at 0/target_value exactly like a REACH-mode one-time goal
-    does; a one-time GAIN-mode goal gets that same baseline treatment
-    (just without a recur_period_start alongside it -- there's no
-    period to roll forward again later, see Goal.baseline_value's own
-    docstring in app/models.py) -- both computed from the SAME context
-    this already needs to build the response below, not a second
-    query."""
+    A recurring goal's very first period starts right now by default,
+    baselined against its own current absolute_value() (see
+    app/goals.py) so it opens at 0/target_value exactly like a
+    REACH-mode one-time goal does -- unless payload.recur_start_at
+    carries a CUSTOM pick from the wizard's own stage 5 (see
+    GoalCreateRequest's own docstring in app/schemas.py), in which case
+    that timestamp is used instead of "now" for recur_period_start,
+    still baselined against the SAME live absolute_value() regardless
+    of whether that custom moment is in the past or the future -- there's
+    no historical time-series to baseline a past custom start against
+    instead (see maybe_roll_recurring_period's own docstring in
+    app/goals.py), so a custom start's only real effect is which
+    absolute moment this goal's period boundaries end up phase-locked
+    to, not when its progress starts being counted from. A one-time
+    GAIN-mode goal gets that same baseline treatment (just without a
+    recur_period_start alongside it -- there's no period to roll
+    forward again later, see Goal.baseline_value's own docstring in
+    app/models.py) -- both computed from the SAME context this already
+    needs to build the response below, not a second query."""
     try:
         cleaned = goals_module.clean_new_goal(
             payload.goal_type,
@@ -2798,7 +2808,20 @@ def create_goal(
     context = goals_module.build_progress_context(db, game_account)
     goal = Goal(game_account_id=game_account.id, **cleaned)
     if goal.is_recurring:
-        goal.recur_period_start = _utcnow()
+        recur_start_at = payload.recur_start_at
+        # Assumed UTC if the client somehow sent a bare (tz-naive)
+        # timestamp -- same defensive fallback parse_loot_range_bound
+        # (app/loot.py) already applies to a hand-typed date/time
+        # string, needed here for the same reason: mixing a naive and
+        # an aware datetime in maybe_roll_recurring_period's own
+        # `_utcnow() - goal.recur_period_start` (app/goals.py) raises
+        # TypeError rather than just comparing wrong. The wizard's own
+        # client-side code always sends a real ISO-8601 UTC string (see
+        # recurStartIsoFromMasked in the script), so this only ever
+        # matters for a raw API call that bypassed it.
+        if recur_start_at is not None and recur_start_at.tzinfo is None:
+            recur_start_at = recur_start_at.replace(tzinfo=timezone.utc)
+        goal.recur_period_start = recur_start_at or _utcnow()
         goal.baseline_value = goals_module.absolute_value(goal, context)
     elif target_mode == "gain":
         goal.baseline_value = goals_module.absolute_value(goal, context)
