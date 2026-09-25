@@ -581,6 +581,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
   background: var(--panel); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  /* Same fix as Mindmaps' own .mm-suggestions and Possessions' own
+     .pm-settings-menu -- without this, scrolling this list past its
+     own top/bottom bound chains into the next scrollable ancestor
+     (the whole page) instead of just stopping. */
+  overscroll-behavior: contain;
 }
 .suggestions.show { display: block; }
 .suggestion {

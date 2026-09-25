@@ -611,6 +611,12 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
   max-height: 240px;
   overflow-y: auto;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  /* Same fix as Mindmaps' own .mm-suggestions and Possessions' own
+     .pm-settings-menu (mindmaps.css/possessions.css) -- without this,
+     scrolling this list past its own top/bottom bound doesn't just
+     stop, it chains into the next scrollable ancestor, which here is
+     the whole page. */
+  overscroll-behavior: contain;
 }
 
 .gt-suggestions.show { display: block; }

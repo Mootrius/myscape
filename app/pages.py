@@ -13531,6 +13531,22 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         return d.toISOString();
       }
 
+      // The current moment, in the viewer's own local time, already in
+      // RECUR_START_MASK's exact "YYYY-MM-DD HH:MM" shape --
+      // recurStartIsoFromMasked's own read direction run in reverse.
+      // Used only to prefill an untouched CUSTOM field (see
+      // wireStartStage's toggle handler below) so a player sees a
+      // real, correctly-shaped date/time the first time they switch
+      // to CUSTOM, per explicit instruction, rather than the
+      // all-underscore RECUR_START_BLANK skeleton leaving the format
+      // to be guessed at.
+      function nowRecurStartMasked() {
+        var d = new Date();
+        function pad2(n) { return (n < 10 ? '0' : '') + n; }
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+          ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+      }
+
       // Wires stage 5's own three rows: the masked field itself, the
       // NOW/CUSTOM toggle that enables/disables it, and Back/Cancel/
       // Save. Unlike every earlier stage's Back, there's no state to
@@ -13569,7 +13585,20 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
             // player retype it.
             input.disabled = (newStart !== 'custom');
             input.classList.remove('invalid');
-            if (newStart === 'custom') input.focus();
+            if (newStart === 'custom') {
+              // Prefill with right now the FIRST time CUSTOM is picked
+              // in this wizard session -- an untouched field only
+              // (GT.recurStartAt empty), so flipping back to NOW and
+              // then to CUSTOM again still restores whatever the
+              // player actually typed instead of stomping it back to
+              // the current time. See nowRecurStartMasked's own
+              // comment for why this exists at all.
+              if (!GT.recurStartAt) {
+                input.value = nowRecurStartMasked();
+                GT.recurStartAt = input.value;
+              }
+              input.focus();
+            }
           });
         });
 

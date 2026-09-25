@@ -39,6 +39,11 @@
   min-width: 160px; max-width: 240px; max-height: 320px; overflow-y: auto;
   display: flex; flex-direction: column;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  /* Same fix as this page's own .mm-suggestions below -- without it,
+     scrolling this list (one row per mindmap, can run long) past its
+     own top/bottom bound chains into the next scrollable ancestor
+     instead of just stopping there. */
+  overscroll-behavior: contain;
 }
 .mm-menu-item {
   background: none; border: none; text-align: left; padding: 9px 14px;
