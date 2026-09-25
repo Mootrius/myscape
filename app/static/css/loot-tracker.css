@@ -312,6 +312,12 @@
    items: center) keeps it centered in the same slot a full-size icon
    would occupy, so the kc/value text underneath doesn't shift. */
 .loot-npc-box-icon-casket { width: 39px; height: 39px; }
+/* Intricate pouch's own tile (Guardians of the Rift's reward -- see
+   isIntricatePouch in the script below) gets the same 70% treatment
+   as the casket tier above, same reasoning: its wiki "detail" render
+   reads a bit large next to a real NPC's own portrait at this box's
+   shared 56px sizing. */
+.loot-npc-box-icon-pouch { width: 39px; height: 39px; }
 .loot-npc-box-kc {
   font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.15;
   font-variant-numeric: tabular-nums;

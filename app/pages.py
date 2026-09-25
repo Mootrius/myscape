@@ -4922,6 +4922,22 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return /^Reward casket \(/i.test(n.sourceName);
         }
 
+        // "Intricate pouch" (Guardians of the Rift's own per-round
+        // reward -- see _NPC_DISPLAY_OVERRIDES in app/loot.py) is shown
+        // under the wiki's "detail" render of the pouch item itself,
+        // same story as the casket tier above: reads a bit large next
+        // to a real NPC's own portrait at this box's shared 56px, so it
+        // gets the same 70% treatment via its own dedicated class (see
+        // .loot-npc-box-icon-pouch in loot-tracker.css). sourceName is
+        // always exactly "Intricate pouch" for this one (build_loot_state
+        // keeps the raw event name as-is here -- see that table's own
+        // comment for why only Guardians of the Rift itself gets
+        // renamed), so a plain equality check is enough, unlike the
+        // casket tier's own regex above which has to match six of them.
+        function isIntricatePouch(n) {
+          return n.sourceName === 'Intricate pouch';
+        }
+
         // hiddenFlags folds into the key alongside everything else that
         // already forces a rebuild (search/sort/toggle/the set itself)
         // -- a hide/unhide can change WHICH entries are dimmed without
@@ -4958,7 +4974,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '')) +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +
