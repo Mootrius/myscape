@@ -374,6 +374,22 @@
    control now gets the panel's full width on its own line instead. */
 .loot-panel-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .loot-search { width: 100%; height: 34px; padding: 0 10px; font-size: 13px; }
+/* Wraps the search box so its own CLEAR text button (below) can be
+   absolutely positioned over its right edge -- same recipe as Storages
+   Viewer's own .pm-search-group/.pm-search-clear (possessions.css),
+   kept as its own copy here per this project's established per-page-CSS
+   convention. The extra right padding on the input itself (overriding
+   .loot-search's own 10px above -- this selector wins on specificity)
+   leaves room for that button so typed text never runs under it. */
+.loot-search-group { position: relative; }
+.loot-search-group .loot-search { padding-right: 46px; }
+.loot-search-clear {
+  position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
+  background: none; border: none; padding: 0; margin: 0;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-faint); cursor: pointer;
+}
+.loot-search-clear:hover { color: var(--text); }
 
 /* Mirrors purchase-goals.css's .gear-summary-sort/.sort-btn pattern
    (kept as its own copy here rather than shared across files, per this

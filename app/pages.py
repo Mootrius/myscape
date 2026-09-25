@@ -4169,7 +4169,10 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       <div class="loot-panels">
         <div class="loot-panel">
           <div class="loot-panel-controls">
-            <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search for an NPC" autocomplete="off" />
+            <div class="loot-search-group">
+              <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search for an NPC" autocomplete="off" />
+              <button type="button" class="loot-search-clear" id="lootNpcSearchClear" style="display:none;">Clear</button>
+            </div>
             {_sort_tabs("lootNpcSortTabs", "KC", "lootNpcHideToggle")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
@@ -4179,7 +4182,10 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         </div>
         <div class="loot-panel">
           <div class="loot-panel-controls">
-            <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search for an item" autocomplete="off" />
+            <div class="loot-search-group">
+              <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search for an item" autocomplete="off" />
+              <button type="button" class="loot-search-clear" id="lootItemSearchClear" style="display:none;">Clear</button>
+            </div>
             {_sort_tabs("lootItemSortTabs", "Qty", "lootItemHideToggle")}
           </div>
           <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
@@ -5296,9 +5302,30 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         renderItemList(currentItems());
       });
 
-      document.getElementById('lootNpcSearch').addEventListener('input', function (e) {
+      // Same CLEAR-text-button treatment as Storages Viewer's own search
+      // box (pmSearchClear/updateSearchClear, app/pages.py's
+      // render_possessions) -- shown only once there's something typed
+      // to clear, hidden again the moment the field goes back to empty,
+      // whether that's from typing, deleting, or clicking CLEAR itself.
+      // See .loot-search-group/.loot-search-clear in loot-tracker.css
+      // for the shared absolutely-positioned-at-the-field's-right-edge
+      // styling this and the item search box below both reuse.
+      var lootNpcSearchInput = document.getElementById('lootNpcSearch');
+      var lootNpcSearchClear = document.getElementById('lootNpcSearchClear');
+      function updateNpcSearchClear() {
+        lootNpcSearchClear.style.display = lootNpcSearchInput.value ? '' : 'none';
+      }
+      lootNpcSearchInput.addEventListener('input', function (e) {
         state.npcSearch = e.target.value;
+        updateNpcSearchClear();
         if (lastData) renderNpcRow(currentNpcs());
+      });
+      lootNpcSearchClear.addEventListener('click', function () {
+        lootNpcSearchInput.value = '';
+        state.npcSearch = '';
+        updateNpcSearchClear();
+        if (lastData) renderNpcRow(currentNpcs());
+        lootNpcSearchInput.focus();
       });
       document.getElementById('lootNpcSortTabs').addEventListener('click', function (e) {
         var toggleBtn = e.target.closest('.loot-hide-toggle');
@@ -5323,9 +5350,24 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         if (eyeBtn.getAttribute('data-hidden') === '1') unhideLootItem(itemId, itemName);
         else hideLootItem(itemId, itemName);
       });
-      document.getElementById('lootItemSearch').addEventListener('input', function (e) {
+      // Same CLEAR button treatment as the NPC search box above -- see
+      // its own comment for why.
+      var lootItemSearchInput = document.getElementById('lootItemSearch');
+      var lootItemSearchClear = document.getElementById('lootItemSearchClear');
+      function updateItemSearchClear() {
+        lootItemSearchClear.style.display = lootItemSearchInput.value ? '' : 'none';
+      }
+      lootItemSearchInput.addEventListener('input', function (e) {
         state.itemSearch = e.target.value;
+        updateItemSearchClear();
         renderItemList(currentItems());
+      });
+      lootItemSearchClear.addEventListener('click', function () {
+        lootItemSearchInput.value = '';
+        state.itemSearch = '';
+        updateItemSearchClear();
+        renderItemList(currentItems());
+        lootItemSearchInput.focus();
       });
       document.getElementById('lootItemSortTabs').addEventListener('click', function (e) {
         var toggleBtn = e.target.closest('.loot-hide-toggle');
