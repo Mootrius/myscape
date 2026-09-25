@@ -15,6 +15,48 @@
    a second line, the same "no @media queries anywhere on this site"
    approach every other page already takes (relying on flex/wrap
    rather than breakpoints). */
+
+/* ---- The page title's own info icon + manual hiscores-resync popup --
+   .co-info-icon mirrors Goal Tracking's own .gt-goal-info-icon
+   (goal-tracking.css) visually: muted at rest, gold on hover, same
+   11x11 "i in a circle" glyph -- but a real <button> here rather than
+   a plain <span>, since this one opens a popup on click instead of
+   just showing a title tooltip on hover. .co-info-wrap is the
+   position: relative anchor the popup positions itself against (same
+   role as .pm-settings-wrap in possessions.css), sized to just the
+   icon itself rather than the whole (centered, full-width)
+   .page-title so the popup opens directly under the icon, not
+   wherever the title's own text happens to be widest. */
+.co-info-wrap { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
+.co-info-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 0; margin: 0;
+  color: var(--text-faint); cursor: pointer;
+}
+.co-info-icon:hover { color: var(--gold); }
+/* Same floating-box recipe as the loot range menu's own
+   .loot-range-menu (loot-tracker.css) -- centered under its trigger
+   rather than left/right-anchored, since .co-info-wrap sits in the
+   middle of a centered title instead of at a row's own edge. */
+.co-info-popup {
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  z-index: 5; padding: 10px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+/* Same gold-outlined-button recipe as the range menu's own
+   .loot-range-apply (loot-tracker.css). */
+.co-info-update-btn {
+  padding: 6px 14px;
+  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--gold);
+  background: var(--panel); border: 1px solid var(--gold-dim); border-radius: var(--radius);
+  cursor: pointer;
+}
+.co-info-update-btn:hover { border-color: var(--gold); }
+.co-info-update-btn:disabled { cursor: default; opacity: 0.75; }
+
 .co-summary-row {
   display: flex;
   flex-wrap: wrap;

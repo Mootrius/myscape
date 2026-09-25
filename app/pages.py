@@ -1642,7 +1642,20 @@ def render_character_overview(player: PlayerView) -> str:
     )
 
     body = f"""
-    <h2 class="page-title">Character Overview</h2>
+    <h2 class="page-title">Character Overview
+      <span class="co-info-wrap" id="coInfoWrap">
+        <button type="button" class="co-info-icon" id="coInfoBtn" aria-label="About updating boss kill counts">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M8 7.3V11.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="8" cy="4.9" r="0.9" fill="currentColor"/>
+          </svg>
+        </button>
+        <div class="co-info-popup" id="coInfoPopup" style="display:none;">
+          <button type="button" class="co-info-update-btn" id="coInfoUpdateBtn">Update</button>
+        </div>
+      </span>
+    </h2>
 
     <div class="co-summary-row" id="coSummaryRow">
       {stat_tiles}
@@ -1728,6 +1741,87 @@ def render_character_overview(player: PlayerView) -> str:
         var name = key.charAt(0).toUpperCase() + key.slice(1);
         el.title = xp != null ? name + ' — ' + formatInt(xp) + ' xp' : name;
       }
+
+      // ---- Boss KC info icon + manual hiscores resync popup --------
+      // The "i" icon next to the page title mirrors Goal Tracking's own
+      // recurring-goal info icon (gt-goal-info-icon, goal-tracking.css)
+      // visually -- muted, gold on hover -- but behaves differently:
+      // that one is hover-only (a title tooltip, nothing to click);
+      // this one opens a small floating popup on click, same open/
+      // close/outside-click recipe as the loot range menu's own
+      // lootRangeBtn/lootRangeMenu (loot-tracker.css/this file's own
+      // render_loot_tracker script) and Storages Viewer's settings menu
+      // (pmSettingsBtn/pmSettingsMenu) -- toggled by the button's own
+      // click, closed by clicking anywhere outside .co-info-wrap.
+      //
+      // The popup's own UPDATE button re-runs the same manual hiscores
+      // pull POST /api/players/me/hiscores/sync already exists for
+      // (see app/hiscores.py's own top-of-file comment: every OTHER
+      // hiscores pull now only fires at link/relink time, with live
+      // updates coming from the chatbox the rest of the time -- this
+      // is the one deliberate drift-correction escape hatch that
+      // design keeps). Exposed here as a real button for the first
+      // time -- previously only reachable by relinking -- both so a
+      // player who did content on mobile/a client without myscape
+      // installed can manually true up their boss KCs, and as a quick
+      // way to re-pull after a bug fix here changes how a kill count
+      // gets matched (see CHAT_NAME_OVERRIDES in app/bosses.py) without
+      // needing to wait for the next chatbox-reported kill of each
+      // affected boss.
+      var coInfoBtn = document.getElementById('coInfoBtn');
+      var coInfoPopup = document.getElementById('coInfoPopup');
+      var coInfoUpdateBtn = document.getElementById('coInfoUpdateBtn');
+
+      function setInfoPopupOpen(open) {
+        coInfoPopup.style.display = open ? 'block' : 'none';
+      }
+      coInfoBtn.addEventListener('click', function () {
+        setInfoPopupOpen(coInfoPopup.style.display === 'none');
+      });
+      document.addEventListener('click', function (e) {
+        var wrap = document.getElementById('coInfoWrap');
+        if (wrap && !wrap.contains(e.target)) setInfoPopupOpen(false);
+      });
+
+      // Same em-dash/comma-grouped/K-truncated formatting as
+      // _format_boss_kc in app/pages.py (this page's own server-side
+      // render of these same cells on load) -- duplicated here rather
+      // than shared since nothing else on this page patches a
+      // hiscores-card cell client-side yet.
+      function formatBossKc(kc) {
+        if (!kc) return '—';
+        if (kc < 10000) return kc.toLocaleString('en-US');
+        return Math.floor(kc / 1000) + 'K';
+      }
+
+      coInfoUpdateBtn.addEventListener('click', function () {
+        coInfoUpdateBtn.disabled = true;
+        coInfoUpdateBtn.textContent = 'Updating…';
+        fetch('/api/players/me/hiscores/sync', { method: 'POST' })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+          .then(function (data) {
+            var counts = data.boss_kill_counts || {};
+            // Matched by each cell's own title attribute -- already
+            // exactly the boss's real display_name (see boss_cells in
+            // app/pages.py), the same key boss_kill_counts itself uses.
+            document.querySelectorAll('.boss-cell').forEach(function (cell) {
+              var kcEl = cell.querySelector('.boss-cell-kc');
+              if (kcEl) kcEl.textContent = formatBossKc(counts[cell.getAttribute('title')]);
+            });
+            coInfoUpdateBtn.textContent = 'Updated';
+            setTimeout(function () {
+              coInfoUpdateBtn.textContent = 'Update';
+              coInfoUpdateBtn.disabled = false;
+            }, 1500);
+          })
+          .catch(function () {
+            coInfoUpdateBtn.textContent = 'Failed — try again';
+            setTimeout(function () {
+              coInfoUpdateBtn.textContent = 'Update';
+              coInfoUpdateBtn.disabled = false;
+            }, 2000);
+          });
+      });
 
       fetch('/api/character-overview/summary')
         .then(function (r) { return r.ok ? r.json() : null; })
