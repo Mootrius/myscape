@@ -72,9 +72,19 @@ This is a first pass, not the full old feature set:
   landed too far apart to pair (see CLUE_TIER_MAX_TICK_GAP in the
   plugin) -- those still count toward the chart's own totals exactly as
   before, just can't show up as their own tile with no tier to name it
-  by. A pickpocket (or anything else that isn't source_type "npc" and
-  isn't a tiered clue event) still never shows up in the "By NPC" row
-  either, same as before this feature existed.
+  by. A pickpocket still never shows up in the "By NPC" row either,
+  same as before this feature existed.
+- A raid/minigame reward (RuneLite's own LootRecordType.EVENT covers
+  these too, same as a clue casket -- "Tombs of Amascut", "Chambers of
+  Xeric", "Barrows", "Wintertodt", etc.) gets its own "By NPC" tile the
+  same way, under that event's own real name and a guessed wiki
+  portrait (see npc_icon_url) -- no chat-line pairing needed here the
+  way a clue casket's tier requires, since RuneLite's own LootReceived
+  event already carries the raid/minigame's real name untouched.
+  Reported missing for a Tombs of Amascut raid specifically: the loot
+  was already being received, synced, and folded into the chart's own
+  totals all along, it just had no tile of its own the way an NPC kill
+  or clue casket did -- see build_loot_state below for the fix.
 - Computed fresh from this player's LootEvent rows in the selected
   range on every read (the DB query itself is windowed, not just the
   totals), same as Purchase Goals computes fresh from every bank/
@@ -660,14 +670,17 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
     # each entry's own item quantities against window_items below. Not
     # npc_totals's real source_type "npc" alone any more, though: a
     # tiered clue-reward event (see _clue_tier_from_source_name) folds
-    # in here too now, under the display name "Reward casket (<tier>)"
-    # -- the OSRS wiki/in-game item's own real name (confirmed against
-    # the wiki), lowercase tier and all -- so it shows up, is searched,
-    # sorted, hidden, and clicked exactly like any other NPC tile; see
-    # npc_like_name/npc_like_icon just below the events loop starts.
-    # Still never anything for an UNTIERED "Casket" (the plugin
-    # couldn't pair it with a tier in time -- see this module's own
-    # docstring) or a pickpocket -- those still just count toward
+    # in here too, under the display name "Reward casket (<tier>)" --
+    # the OSRS wiki/in-game item's own real name (confirmed against the
+    # wiki), lowercase tier and all -- and so does any other
+    # source_type "event" with a real name of its own (a raid/minigame
+    # reward -- "Tombs of Amascut", "Chambers of Xeric", "Barrows", ...
+    # -- under that event's own name/guessed portrait), so it shows up,
+    # is searched, sorted, hidden, and clicked exactly like any other
+    # NPC tile; see npc_like_name/npc_like_icon just below the events
+    # loop starts. Still never anything for an UNTIERED "Casket" (the
+    # plugin couldn't pair it with a tier in time -- see this module's
+    # own docstring) or a pickpocket -- those still just count toward
     # buckets/windowValue/windowKills below and nothing else, same as
     # before this feature existed.
     npc_totals: Dict[str, dict] = {}
@@ -712,19 +725,42 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
 
         # A real NPC kill uses its own source_name/portrait as always;
         # a tiered clue-reward event (see _clue_tier_from_source_name)
-        # now gets treated exactly the same way, just under the
-        # casket's own display name/icon instead of an NPC's -- see
-        # npc_totals's own comment above for why. Anything else
-        # (an untiered "Casket", a pickpocket, ...) has no NPC-like
-        # identity at all: npc_like_name stays None, same as source_type
-        # != "npc" always meant before this feature existed.
+        # gets treated exactly the same way, just under the casket's own
+        # display name/icon instead of an NPC's -- see npc_totals's own
+        # comment above for why. A raid/minigame reward (RuneLite's own
+        # LootRecordType.EVENT covers both these and clue caskets --
+        # "Tombs of Amascut", "Chambers of Xeric", "Barrows", "Wintertodt",
+        # etc. -- see MyscapePlugin#onLootReceived in the Mootrius/
+        # myscape-plugin repo, which just passes RuneLite's own event
+        # name through untouched for these, no chat-line pairing needed
+        # the way a clue casket's tier does) is now an honorary NPC too,
+        # under its own real event name and a guessed wiki portrait --
+        # npc_icon_url's own docstring already calls its guess an
+        # "NPC/event portrait" for exactly this reason. Reported missing
+        # for a Tombs of Amascut raid specifically (RuneLite's own Loot
+        # Tracker panel already shows these; ours didn't), even though
+        # the raw LootEvent was already being received/stored/charted
+        # into the buckets/window totals below all along -- it just never
+        # got its own "By NPC" tile the way an NPC kill or clue casket
+        # did, which is the actual bug this branch fixes.
+        # The bare, untiered "Casket" placeholder name (the plugin
+        # couldn't pair it with a tier in time -- see this module's own
+        # docstring) is deliberately excluded here even though it's also
+        # source_type "event": it has no meaningful identity of its own
+        # to show a tile under, unlike a real raid/minigame name. A
+        # pickpocket (source_type "pickpocket") still never gets a tile
+        # either, same as before this feature existed.
         tier = _clue_tier_from_source_name(event.source_name)
+        stripped_name = (event.source_name or "").strip()
         if event.source_type == "npc":
             npc_like_name = event.source_name
             npc_like_icon = npc_icon_url(npc_like_name)
         elif tier is not None:
             npc_like_name = f"Reward casket ({tier.lower()})"
             npc_like_icon = clue_casket_icon_url(tier)
+        elif event.source_type == "event" and stripped_name and stripped_name.lower() != "casket":
+            npc_like_name = stripped_name
+            npc_like_icon = npc_icon_url(npc_like_name)
         else:
             npc_like_name = None
             npc_like_icon = None
