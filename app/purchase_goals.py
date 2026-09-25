@@ -473,8 +473,13 @@ def _take_owned(
     for the kind of near-miss that breaks a name comparison (an
     apostrophe encoded differently, incidental whitespace, a
     capitalization difference between however the RuneLite plugin
-    reported it and however a gear slot names it). Only when an item
-    isn't in that id snapshot at all (e.g. something added to the game
+    reported it and however a gear slot names it) --
+    _find_item_ids_with_cosmetic_fallback also catches the specific
+    near-miss of a saved colour-suffixed cosmetic name (e.g. "Bow of
+    Faerdhinen (c) (Amlodd)") that the RuneLite plugin itself never
+    reports with any colour suffix at all -- see that function's own
+    comment. Only when an item isn't in that id snapshot under either
+    its exact or colour-stripped name (e.g. something added to the game
     since it was last generated) does this fall back to the original
     case-insensitive name match, exactly as before -- once id data IS
     available for a name, matching sticks to ids alone rather than also
@@ -483,8 +488,9 @@ def _take_owned(
     items (see build_owned_pools) and mixing the two for one call
     risks claiming the same physical item twice over. An item can have
     more than one real id (a quest-reward variant, a minigame-only
-    version, etc.) -- owning it under any of them counts, and this
-    tries them in order until qty is satisfied or they're exhausted.
+    version, a house colour, etc.) -- owning it under any of them
+    counts, and this tries them in order until qty is satisfied or
+    they're exhausted.
 
     A gear slot's required item id is always the UNNOTED canonical id
     (it's configured via search_items, which only ever returns that
@@ -513,7 +519,7 @@ def _take_owned(
                     take += take_noted
         return take
 
-    candidate_ids = find_item_ids(item_name)
+    candidate_ids = _find_item_ids_with_cosmetic_fallback(item_name)
     if candidate_ids:
         remaining = qty
         for candidate_id in candidate_ids:
@@ -586,6 +592,43 @@ def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, pri
     }
 
 
+# Crystal helm/body/legs, Bow of Faerdhinen (c), and Blade of Saeldor
+# (c) all come in eight house-colour cosmetic variants (e.g. "Crystal
+# helm (ithell)", "Bow of Faerdhinen (c) (Amlodd)") that item_ids.json's
+# exact-name snapshot never recorded under that exact spelling -- the
+# wiki's item infobox (what that snapshot is built from) only has one
+# ROW per base item, not one per colour, with every colour's own real
+# id already bundled together under that single base name (see
+# find_item_ids' own "a name can resolve to more than one id" comment
+# in app/item_ids.py) -- app/data/recipes.json is a DIFFERENT, wider
+# scrape that does carry a separate named entry per colour (a recolor
+# "recipe": the base item plus a clan-specific Crystal shard/dust), and
+# it's THAT list a player's own gear-slot search draws its colour-
+# suffixed options from (see search_recipe_names) -- so a slot saved as
+# "Bow of Faerdhinen (c) (Amlodd)" is exactly what search offered, not
+# a typo. A colour-suffixed name is retried here with that suffix
+# stripped (see _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE -- called directly, not
+# through _strip_cosmetic_item_suffix, since that helper's own "must
+# start with 'crystal '" guard would wrongly block Faerdhinen/Saeldor)
+# -- landing back on the shared base name recovers every real id any
+# colour of it could be, at once.
+def _find_item_ids_with_cosmetic_fallback(name: Optional[str]) -> Optional[List[int]]:
+    """find_item_ids, retried with a house-colour cosmetic suffix
+    stripped if the exact name isn't in the snapshot (see the module-
+    level comment above). Used by both _derived_item_ids (pricing) and
+    _take_owned (ownership matching) -- the same gap broke both the
+    same way: an item saved by its colour-suffixed name never priced
+    OR matched as owned, since item_ids.json only ever recognizes the
+    colourless base name."""
+    ids = find_item_ids(name) if name else None
+    if ids or not name:
+        return ids
+    stripped = _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE.sub("", name.strip()).strip()
+    if stripped and stripped.lower() != name.strip().lower():
+        return find_item_ids(stripped)
+    return None
+
+
 # Every one of the special cases that used to live here (charged
 # weapons like Scythe of Vitur/Tumeken's Shadow priced off their
 # uncharged counterpart, Crystal helm/body/legs priced off a Crystal
@@ -603,30 +646,17 @@ def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, pri
 # deliberate choice to match RuneLite's own numbers everywhere rather
 # than keep two disagreeing sources of truth.
 def _derived_item_ids(name: Optional[str]) -> List[int]:
-    """Every real item id `name` resolves to (see find_item_ids) that
-    the ported untradeable mapping actually has an entry for -- i.e.
-    every real, permanent id this name could plausibly be (a name can
-    resolve to more than one, e.g. a colour/charge variant), filtered
-    down to the ones derived_price_for can actually price.
-
-    Crystal helm/body/legs, Bow of Faerdhinen, and Blade of Saeldor all
-    come in eight house-colour cosmetic variants (e.g. "Crystal helm
-    (ithell)", "Bow of Faerdhinen (amlodd)") that item_ids.json's exact-
-    name snapshot never recorded under that exact spelling -- the wiki
-    only has one page per base item, not one per colour. A colour-
-    suffixed name is retried here with that suffix stripped (see
-    _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE -- reused directly, not through
-    _strip_cosmetic_item_suffix, since that helper's own "must start
-    with 'crystal '" guard would wrongly block Faerdhinen/Saeldor). Any
-    house colour of the same piece/weapon prices identically anyway
-    (the cosmetic doesn't change the underlying seed/creation cost), so
-    landing on the base item's id instead of the exact colour typed is
-    harmless for pricing purposes."""
-    ids = find_item_ids(name) if name else None
-    if not ids and name:
-        stripped = _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE.sub("", name.strip()).strip()
-        if stripped and stripped.lower() != name.strip().lower():
-            ids = find_item_ids(stripped)
+    """Every real item id `name` resolves to (see
+    _find_item_ids_with_cosmetic_fallback) that the ported untradeable
+    mapping actually has an entry for -- i.e. every real, permanent id
+    this name could plausibly be (a name can resolve to more than one,
+    e.g. a colour/charge variant), filtered down to the ones
+    derived_price_for can actually price. Any house colour of the same
+    piece/weapon prices identically anyway (the cosmetic doesn't change
+    the underlying seed/creation cost), so landing on the base item's
+    id instead of the exact colour typed is harmless for pricing
+    purposes."""
+    ids = _find_item_ids_with_cosmetic_fallback(name)
     if not ids:
         return []
     covered = get_untradeable_mapping()
