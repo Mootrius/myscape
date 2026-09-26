@@ -392,6 +392,10 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
 #   this key is NOT a guess off the minigame's own name. Shown under
 #   the reward coffin's own portrait instead of a guess off "Hallowed
 #   Sack" (which has no wiki infobox picture of its own).
+# - "Golem Crafting": Wyrmscraig's golem-crafting reward event -- a bare
+#   wiki guess off this exact name has no infobox picture of its own
+#   ("Golem Crafting" isn't itself an in-game creature/item), so the
+#   sunstone golem's own portrait is used instead.
 #
 # {lowercased raw source_name: (display name override or None to keep
 # the raw name as-is, wiki filename to use for its portrait)}.
@@ -401,6 +405,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "guardians of the rift": ("Rewards Guardian", "Rewards Guardian.png"),
     "skeleton hellhound": (None, "Skeleton Hellhound (Vet'ion).png"),
     "hallowed sack": (None, "Coffin (Hallowed Sepulchre).png"),
+    "golem crafting": (None, "Golem (sunstone).png"),
 }
 
 
