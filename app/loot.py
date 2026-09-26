@@ -383,6 +383,15 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
 #   comments on _first_infobox_image) -- Vet'ion's own reskin picked
 #   here rather than leaving it to whichever variant that fallback
 #   happens to land on.
+# - "Hallowed Sack": Hallowed Sepulchre's own end-of-run reward event --
+#   RuneLite's bundled Loot Tracker plugin hands this one a hardcoded
+#   internal name ("Hallowed Sack", after the reward-container item
+#   itself, same naming pattern as "Intricate pouch" above) rather than
+#   anything containing "Sepulchre" or "Coffin", confirmed directly
+#   against LootTrackerPlugin's own source (HALLOWED_SACK_EVENT) -- so
+#   this key is NOT a guess off the minigame's own name. Shown under
+#   the reward coffin's own portrait instead of a guess off "Hallowed
+#   Sack" (which has no wiki infobox picture of its own).
 #
 # {lowercased raw source_name: (display name override or None to keep
 # the raw name as-is, wiki filename to use for its portrait)}.
@@ -391,6 +400,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "intricate pouch": (None, "Intricate pouch detail.png"),
     "guardians of the rift": ("Rewards Guardian", "Rewards Guardian.png"),
     "skeleton hellhound": (None, "Skeleton Hellhound (Vet'ion).png"),
+    "hallowed sack": (None, "Coffin (Hallowed Sepulchre).png"),
 }
 
 
