@@ -383,15 +383,13 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
 #   comments on _first_infobox_image) -- Vet'ion's own reskin picked
 #   here rather than leaving it to whichever variant that fallback
 #   happens to land on.
-# - "Hallowed Sack": Hallowed Sepulchre's own end-of-run reward event --
-#   RuneLite's bundled Loot Tracker plugin hands this one a hardcoded
-#   internal name ("Hallowed Sack", after the reward-container item
-#   itself, same naming pattern as "Intricate pouch" above) rather than
-#   anything containing "Sepulchre" or "Coffin", confirmed directly
-#   against LootTrackerPlugin's own source (HALLOWED_SACK_EVENT) -- so
-#   this key is NOT a guess off the minigame's own name. Shown under
-#   the reward coffin's own portrait instead of a guess off "Hallowed
-#   Sack" (which has no wiki infobox picture of its own).
+# - "Hallowed Sepulchre Coffin": Hallowed Sepulchre's own end-of-run
+#   reward event -- confirmed against a live tile in-app rather than
+#   guessed (RuneLite's Loot Tracker plugin source has historically
+#   used a different internal name for this event, "Hallowed Sack", but
+#   the live tile is what actually matters here). Shown under the
+#   reward coffin's own wiki portrait instead of a bare guess off this
+#   name, which has no infobox picture of its own.
 # - "Golem Crafting": Wyrmscraig's golem-crafting reward event -- a bare
 #   wiki guess off this exact name has no infobox picture of its own
 #   ("Golem Crafting" isn't itself an in-game creature/item), so the
@@ -404,7 +402,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "intricate pouch": (None, "Intricate pouch detail.png"),
     "guardians of the rift": ("Rewards Guardian", "Rewards Guardian.png"),
     "skeleton hellhound": (None, "Skeleton Hellhound (Vet'ion).png"),
-    "hallowed sack": (None, "Coffin (Hallowed Sepulchre).png"),
+    "hallowed sepulchre coffin": (None, "Coffin (Hallowed Sepulchre).png"),
     "golem crafting": (None, "Golem (sunstone).png"),
 }
 
