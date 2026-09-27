@@ -5038,6 +5038,18 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return n.sourceName === 'Intricate pouch';
         }
 
+        // Crawling hand is a real NPC kill (no _NPC_DISPLAY_OVERRIDES
+        // entry needed -- the bare wiki guess off its own name already
+        // lands on the right picture), but that picture reads a bit
+        // large next to a typical NPC portrait at this box's shared
+        // 56px sizing, same story as the casket tier/Intricate pouch
+        // above, so it gets the same 70% treatment via its own
+        // dedicated class (see .loot-npc-box-icon-crawling-hand in
+        // loot-tracker.css).
+        function isCrawlingHand(n) {
+          return /^Crawling Hand$/i.test(n.sourceName);
+        }
+
         // hiddenFlags folds into the key alongside everything else that
         // already forces a rebuild (search/sort/toggle/the set itself)
         // -- a hide/unhide can change WHICH entries are dimmed without
@@ -5074,7 +5086,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '')) +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +
