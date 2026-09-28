@@ -5050,6 +5050,20 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return /^Crawling Hand$/i.test(n.sourceName);
         }
 
+        // Every impling type (Baby, Young, Gourmet, Earth, Essence,
+        // Eclectic, Nature, Magpie, Ninja, Crystal, Dragon, Lucky, ...)
+        // -- no _NPC_DISPLAY_OVERRIDES entry needed, the bare wiki guess
+        // off each one's own name already lands on the right picture,
+        // but every one of them reads a bit large next to a typical
+        // NPC's own portrait at this box's shared 56px sizing, same
+        // story as Crawling Hand above. Matched by a "<word> impling"
+        // suffix rather than an exhaustive list of every type by name,
+        // so a new impling type Jagex adds later still gets the same
+        // treatment automatically instead of needing its own entry here.
+        function isImpling(n) {
+          return /\\bimpling$/i.test(n.sourceName);
+        }
+
         // hiddenFlags folds into the key alongside everything else that
         // already forces a rebuild (search/sort/toggle/the set itself)
         // -- a hide/unhide can change WHICH entries are dimmed without
@@ -5086,7 +5100,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '')) +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +
