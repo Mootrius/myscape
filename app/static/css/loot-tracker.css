@@ -306,32 +306,39 @@
    "detail" render (see clue_casket_icon_url in app/loot.py) rather
    than a real NPC's own portrait -- at this box's shared 56px sizing
    that read a bit oversized next to the smaller NPC portraits beside
-   it, so this tier alone gets scaled down to 70% (56 * 0.7 = ~39px).
-   object-fit: contain above still applies (this only narrows the box
-   the image is fit into), and .loot-npc-box's own centering (align-
-   items: center) keeps it centered in the same slot a full-size icon
-   would occupy, so the kc/value text underneath doesn't shift. */
-.loot-npc-box-icon-casket { width: 39px; height: 39px; }
+   it, so this tier alone gets scaled down to 70% -- via transform:
+   scale, NOT by shrinking width/height. .loot-npc-box is a column flex
+   container with justify-content: center (see its own rule above),
+   which centers the whole icon+kc+value stack as one block -- shrink
+   the icon's own width/height instead and that block gets shorter,
+   which justify-content: center then re-centers as a whole, visibly
+   pulling the kc/value text UP out of its usual spot (confirmed by
+   testing -- this used to be width/height: 39px here, which did
+   exactly that, despite this comment previously claiming otherwise).
+   transform: scale doesn't touch layout at all -- the icon still
+   occupies its full 56x56 flex slot (so the stack's total height, and
+   everything below the icon, stays exactly where it always was), it
+   just paints 70% as large within that same slot, centered by
+   transform's own default center origin. */
+.loot-npc-box-icon-casket,
 /* Intricate pouch's own tile (Guardians of the Rift's reward -- see
-   isIntricatePouch in the script below) gets the same 70% treatment
-   as the casket tier above, same reasoning: its wiki "detail" render
-   reads a bit large next to a real NPC's own portrait at this box's
-   shared 56px sizing. */
-.loot-npc-box-icon-pouch { width: 39px; height: 39px; }
+   isIntricatePouch in the script below): same 70%-oversized "detail"
+   render as the casket tier above, same scale-not-resize fix. */
+.loot-npc-box-icon-pouch,
 /* Crawling hand's own wiki portrait (a real NPC kill, see isCrawlingHand
    in the script below -- no _NPC_DISPLAY_OVERRIDES entry needed, the
    bare wiki guess already lands on the right picture) reads a bit
    large next to a typical NPC portrait at this box's shared 56px
-   sizing, same story as the casket tier/Intricate pouch above, so it
-   gets the same 70% treatment. */
-.loot-npc-box-icon-crawling-hand { width: 39px; height: 39px; }
+   sizing, same story as the casket tier/Intricate pouch above. */
+.loot-npc-box-icon-crawling-hand,
 /* Every impling type's own wiki portrait (see isImpling in the script
    below -- no _NPC_DISPLAY_OVERRIDES entry needed, the bare wiki guess
    off each one's own name already lands on the right picture) reads a
    bit large next to a typical NPC portrait at this box's shared 56px
-   sizing, same story as Crawling Hand above, so all of them get the
-   same 70% treatment. */
-.loot-npc-box-icon-impling { width: 39px; height: 39px; }
+   sizing, same story as Crawling Hand above. */
+.loot-npc-box-icon-impling {
+  transform: scale(0.7);
+}
 .loot-npc-box-kc {
   font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.15;
   font-variant-numeric: tabular-nums;
