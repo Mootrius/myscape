@@ -1592,20 +1592,53 @@ _MODEL_VIEWER_HEAD = """
           // repo) carries that priority/bias through as each primitive's
           // own glTF extras; GLTFLoader copies primitive extras onto that
           // primitive's own geometry.userData (not the mesh's), so this
-          // reads it from there and turns it into the equivalent
-          // three.js concept, THREE.Object3D#renderOrder, so an ambiguous-
-          // depth tie between two faces resolves the same way OSRS's own
-          // client would draw it instead of whatever a bare z-buffer
-          // happens to pick. Direction (higher priority/bias = higher
-          // renderOrder = submitted, and so wins ties, later) is this
-          // page's own best-effort reading of what "priority" means in
-          // the game's own rendering -- worth a second look if something
-          // still looks drawn in the wrong order after this.
+          // reads it from there.
+          //
+          // A first attempt here only set THREE.Object3D#renderOrder from
+          // priority/bias, which turned out to have no visible effect --
+          // expected in hindsight: renderOrder only changes which of two
+          // *exactly depth-tied* fragments wins, and only decides ordering
+          // between transparent draws generally. It does nothing for two
+          // surfaces that are merely *close* in real depth (a cape mesh
+          // genuinely a hair behind the back mesh in the model's own
+          // coordinates, an amulet genuinely a hair in front of the chest)
+          // -- the actual depth test still wins on real depth regardless
+          // of draw order, which is exactly the "still there" report this
+          // fix is responding to.
+          //
+          // So for faces that carry a non-default priority/bias -- which
+          // is precisely the set OSRS itself singles out as needing
+          // special-cased draw-order handling instead of a strict depth
+          // comparison -- this now disables the depth *test* (not the
+          // depth *write*) on their own material and relies entirely on
+          // renderOrder/submission order for them, same as before for
+          // everything else. That reproduces what OSRS's own renderer
+          // actually does for these faces: trust the explicit priority
+          // over raw depth. depthWrite stays on so anything drawn after
+          // them is still correctly occluded by them.
+          //
+          // One important wrinkle: GlbWriter's own material dedup key is
+          // (textureId, translucent) only, NOT priority/bias, so two
+          // primitives with different priority/bias can end up pointing
+          // at the very same glTF material index, and GLTFLoader hands
+          // back the very same THREE.Material *instance* for both --
+          // mutating node.material in place would leak this change onto a
+          // sibling primitive with a different priority/bias that happens
+          // to share it. Cloning before mutating avoids that.
+          //
+          // Still a best-effort reading of what "priority"/"bias" mean in
+          // the game's own rendering, since this can't be visually
+          // verified in this environment -- worth another look if the
+          // cape/amulet issue persists after this.
           model.traverse(function (node) {
             if (node.isMesh && node.geometry && node.geometry.userData) {
               var priority = node.geometry.userData.osrsPriority || 0;
               var bias = node.geometry.userData.osrsBias || 0;
               node.renderOrder = priority * 256 + bias;
+              if ((priority !== 0 || bias !== 0) && node.material) {
+                node.material = node.material.clone();
+                node.material.depthTest = false;
+              }
             }
           });
 
