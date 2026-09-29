@@ -1583,136 +1583,139 @@ _MODEL_VIEWER_HEAD = """
           var model = gltf.scene;
           scene.add(model);
 
-          // OSRS itself doesn't rely on raw 3D depth alone to decide what
-          // draws on top -- gear modeled flush against the body (a cape
-          // against the back, an amulet against the chest) leans on an
-          // explicit per-face render priority/bias instead, precisely
-          // because true depth there is ambiguous or deliberately
-          // coincident. The export (see GlbWriter in the myscape-plugin
-          // repo) carries that priority/bias through as each primitive's
-          // own glTF extras; GLTFLoader copies primitive extras onto that
-          // primitive's own geometry.userData (not the mesh's), so this
-          // reads it from there.
+          // Real per-face render-priority handling. OSRS paints faces in
+          // face-render-priority order rather than depth-testing them, so
+          // gear modeled flush against the body (a cape against the back,
+          // a necklace against a chestplate) can sit fractions of a unit
+          // inside the thing it's layered against and still draw on top
+          // in the real game -- a depth buffer alone hides that instead.
+          // The export (see ModelMeshBuilder/GlbWriter in the
+          // myscape-plugin repo) carries each primitive's own priority
+          // through as glTF extras; GLTFLoader copies primitive extras
+          // onto that primitive's own geometry.userData (not the mesh's),
+          // so this reads it from there.
           //
-          // Two earlier attempts here, both wrong in informative ways:
-          //   1. renderOrder alone: no visible effect. renderOrder only
-          //      breaks EXACT depth ties (and otherwise only matters for
-          //      transparent draw order) -- it does nothing when two
-          //      surfaces are merely close but not equal in real depth,
-          //      which is the actual case here (a cape mesh genuinely a
-          //      hair behind the back, an amulet genuinely a hair in
-          //      front of the chest).
-          //   2. depthTest = false on non-default-priority materials:
-          //      made things worse. Turning the depth test off doesn't
-          //      just stop a primitive being occluded by OTHER objects --
-          //      it also disables the self-occlusion within that
-          //      primitive's own draw call, so anything with real internal
-          //      front/back layers (a shield's spikes behind its face, for
-          //      one) loses the depth ordering that hides its own back
-          //      geometry, and the back shows through the front.
+          // Four earlier attempts, in order, each wrong in an
+          // informative way:
+          //   1. renderOrder alone: no visible effect. It only breaks
+          //      EXACT depth ties (and otherwise only matters for
+          //      transparent draw order), never a close-but-unequal gap.
+          //   2. depthTest = false on every tagged primitive: made things
+          //      worse -- it also disables the self-occlusion WITHIN a
+          //      primitive's own draw call, so a shield's own front/back
+          //      spike layers became visible through each other.
+          //   3. material.polygonOffset, scale tuned by a live slider:
+          //      never converged ("0 is least bad, bugs persist
+          //      regardless"). WebGL polygon offset works in DEPTH-BUFFER
+          //      units, which are non-linear and depend on the camera's
+          //      own near/far planes, so one "scale" constant has an
+          //      unpredictable, distance-dependent real size -- no single
+          //      value could ever be right everywhere on the model.
+          //   4. (this one) Nudge each tagged primitive's own VIEW-SPACE Z
+          //      by a small, fixed amount in real world units instead --
+          //      linear, so the same constant is the same physical
+          //      distance regardless of camera settings or how far the
+          //      geometry sits from it -- via a small vertex-shader patch
+          //      (Material#onBeforeCompile), leaving the depth test
+          //      itself ON so real, unrelated depth gaps (that shield's
+          //      own layers again) stay correctly ordered; only a gap
+          //      this small a nudge can bridge gets reordered. This is
+          //      the exact technique the (BSD-2-licensed, open source)
+          //      RuneProfile project's own web viewer uses and documents
+          //      for this identical problem -- confirmed directly against
+          //      their real, published source
+          //      (packages/model-renderer/src/priority-offset.ts in their
+          //      runeprofile repo), not guessed -- including their own
+          //      documented history of the same first three wrong
+          //      attempts. They apply the nudge per VERTEX, via a custom
+          //      exported attribute, because their own exporter
+          //      deliberately merges same-texture translucent faces of
+          //      different priorities into one mesh for correct alpha
+          //      sorting. This exporter instead already splits every
+          //      distinct (texture, priority, bias, translucent)
+          //      combination into its own primitive (a documented,
+          //      deliberate simplification -- see ModelMeshBuilder's own
+          //      top-of-file doc), so every primitive here already has
+          //      exactly ONE priority for its whole draw call, and a
+          //      per-MATERIAL uniform does the identical job with no
+          //      exported vertex attribute needed. bias is still
+          //      captured and still splits primitives, but -- matching
+          //      RuneProfile's own reference implementation, which
+          //      ignores it entirely -- is not used by the nudge itself:
+          //      keeping the real depth test on already resolves
+          //      anything closer than a whole priority level correctly.
           //
-          // This tries a narrower tool instead: WebGL polygon offset
-          // (THREE.Material#polygonOffset), which nudges the actual depth
-          // value written/tested for a whole primitive by a small,
-          // constant amount, rather than switching the test off. A real,
-          // large depth gap -- like a shield's own front vs. back layers
-          // -- stays correctly ordered, since it dwarfs this nudge; a
-          // small gap from gear modeled flush against the body is what
-          // the nudge is sized to close. Negative offset pulls a
-          // primitive toward the camera (three.js's own convention, e.g.
-          // its decal example) -- so a higher priority/bias, which should
-          // win, gets a more negative offset. The per-step size below is
-          // a guess, deliberately small (this can't be visually verified
-          // in this environment) -- still needs the user's own eyes on
-          // it, and may need scaling up if the effect is too subtle to
-          // see, or down if it distorts real geometry.
-          // Three attempts at tuning this blind (renderOrder alone, then
-          // depthTest=false, then a guessed polygonOffset step) haven't
-          // fully converged, and this environment has no way to render
-          // the page and see the result -- so this now also logs, once
-          // per primitive, exactly what priority/bias/size it actually
-          // has in a real capture. That's real data to calibrate the
-          // offset against instead of a fourth guess. Safe to delete
-          // once the offset is dialed in.
-          // Real capture data (logged by an earlier version of this block) showed
-          // every primitive reporting the SAME vertex count and bounding box --
-          // not a bug in the export, but a red herring in that diagnostic: all
-          // primitives here share one common position/color vertex buffer
-          // (ModelMeshBuilder dedupes vertices across the whole mesh) and only
-          // differ in which INDICES they draw, so geometry.attributes.position
-          // and a plain computeBoundingBox() describe the whole model, not any
-          // one primitive's own footprint. That data did confirm real,
-          // meaningfully varying priority/bias values are present (0-10 for
-          // priority, several distinct bias values even within one priority),
-          // just not which piece of gear each one is.
+          // Step size and cap below are RuneProfile's own published,
+          // in-game-tuned constants: 3 game units per priority step
+          // (below ~2 a necklace stays buried in a chestplate; by ~5 a
+          // cape starts creeping around the hips), capped at 6 steps so
+          // the extremes can't compete with genuinely separated geometry
+          // (15+ units apart) -- real numbers from a working reference
+          // implementation instead of a fifth blind guess. Their own
+          // exporter scales its root node by 1/128 (game units -> metres)
+          // and divides this same step by 128 to compensate; this
+          // exporter applies no such scale anywhere (confirmed against
+          // GlbWriter.java, and against this file's own camera-fit code
+          // below working "regardless of whatever units this buffer's
+          // vertices happen to be in"), so the raw game-unit step is used
+          // directly here, unconverted.
           //
-          // So instead of inferring identity from geometry, this makes it
-          // visible directly: every primitive with a non-default priority/bias
-          // gets flat-colored by a hash of its own (priority, bias) pair
-          // (golden-angle hue spacing so neighboring values look visibly
-          // different), replacing its real texture/vertex color, so a
-          // screenshot can be matched by eye against which piece is which
-          // priority/bias. TEMPORARY -- once the cape/amulet primitives are
-          // identified this way, delete the color override (keep renderOrder
-          // and polygonOffset) and tune the offset using the real values
-          // instead of a blind guess.
-          // The colored identification pass (two earlier versions of this
-          // comment) did its job: the cape is confirmed to be exactly ONE
-          // primitive (priority 5, bias 0), and the amulet turned out to be
-          // several small primitives clustered together, not one -- which
-          // is also *why* three guessed offset scales in a row (1x, still
-          // "better but not fixed") never fully converged: there wasn't one
-          // right constant to find, there was a right constant this
-          // environment has no way to see the effect of. So instead of a
-          // fifth guess, this restores the real textures/vertex colors and
-          // exposes the offset SCALE as a live slider (see
-          // modelViewerDebugPanel below) -- move it and watch the actual
-          // model update in real time, no reload needed, until the cape and
-          // amulet both look right, then report back the winning number so
-          // it can be hard-coded as the real default and this whole panel
-          // deleted.
-          // Real feedback so far: the offset scale alone tops out at "0 is
-          // least bad, bugs persist regardless" -- an offset can't fix a
-          // real occlusion, only nudge a close tie. But dialing the scale
-          // toward positive did reveal genuine amulet geometry that's
-          // normally hidden entirely behind the chest, just warped/wrong
-          // when nudged uniformly -- meaning those faces exist and are
-          // truly being lost to the depth test (not a missing-geometry
-          // export bug), and a uniform per-primitive nudge is too blunt a
-          // tool for it. The earlier attempt at depthTest=false on EVERY
-          // tagged primitive broke self-occlusion on complex ones (the
-          // shield's own front/back layers). Small accessories like an
-          // amulet chain/pendant are typically thin, simple shapes with no
-          // internal layers to self-occlude, so this adds a second,
-          // independent toggle that disables depthTest (keeps depthWrite)
-          // ONLY on tagged primitives below a small triangle-count
-          // threshold -- large/complex tagged primitives (shield,
-          // chestplate) are untouched by it either way.
-          //
-          // Separately, the cape's own stray triangle turned out to be
-          // angle-independent (present identically from every camera
-          // angle), which rules out a draw-order/z-fighting explanation --
-          // those are inherently viewing-angle and precision sensitive. A
-          // wireframe screenshot resolved it for real: the "stray
-          // triangle" is actually one large, deliberately-modeled quad
-          // (part of a textured surface near the neck/shoulder), and in
-          // the shaded view it renders as flat, near-white -- exactly
-          // what a textured face's own COLOR_0 looks like when its real
-          // texture image never got embedded (see HslColor's own doc:
-          // per-vertex color for a textured face is lightness-only, no
-          // real hue/saturation -- the pattern lives entirely in the
-          // texture image). So this was never a geometry or depth bug at
-          // all -- GlbWriter (myscape-plugin repo) now flags exactly this
-          // situation per-primitive via extras.missingTexture, and the
-          // traversal below dims any primitive so flagged toward a
-          // neutral gray instead of leaving it bright, so the fallback
-          // reads as "unknown texture" rather than a rendering glitch.
-          // This does not explain WHY that one texture failed to extract
-          // on capture -- ModelExporter now logs the specific failing
-          // texture id(s) so that's diagnosable from the client's own
-          // log if it recurs.
+          // The missing-texture dimming below is unrelated to priority --
+          // see HslColor/ModelMeshBuilder's own doc in the myscape-plugin
+          // repo for that one: it turned out to be a completely different
+          // bug (a "face the game never draws" sentinel being read as a
+          // real color) and has since been fixed at the export layer, so
+          // this dimming is now expected to rarely if ever trigger; it's
+          // left in place as a harmless safety net for a genuine future
+          // texture-extraction failure, not because it's still needed for
+          // any bug currently known.
+          var PRIORITY_STEP_GAME_UNITS = 3.0;
+          var PRIORITY_MAX_STEPS = 6;
+          var priorityNudgeMultiplier = 1.0;
+
+          function applyPriorityNudge(material, baseNudge) {
+            material.onBeforeCompile = function (shader) {
+              shader.uniforms.uPriorityNudge = { value: baseNudge * priorityNudgeMultiplier };
+              shader.vertexShader = shader.vertexShader
+                .replace(
+                  "#include <common>",
+                  "#include <common>\\nuniform float uPriorityNudge;"
+                )
+                .replace(
+                  "#include <project_vertex>",
+                  [
+                    "vec4 mvPosition = vec4( transformed, 1.0 );",
+                    "#ifdef USE_BATCHING",
+                    "	mvPosition = batchingMatrix * mvPosition;",
+                    "#endif",
+                    "#ifdef USE_INSTANCING",
+                    "	mvPosition = instanceMatrix * mvPosition;",
+                    "#endif",
+                    "mvPosition = modelViewMatrix * mvPosition;",
+                    // View space looks down -Z, so adding moves the
+                    // vertex toward the camera -- see RuneProfile's own
+                    // priority-offset.ts for the identical technique.
+                    "mvPosition.z += uPriorityNudge;",
+                    "gl_Position = projectionMatrix * mvPosition;",
+                  ].join("\\n")
+                );
+              material.userData.priorityShader = shader;
+            };
+            // Three keys its compiled-program cache on the shader source,
+            // which onBeforeCompile has already changed identically for
+            // every priority-nudged material (only the UNIFORM's value
+            // differs, not the GLSL text) -- a constant key here lets
+            // them all safely share one compiled program rather than
+            // each silently recompiling from scratch.
+            material.customProgramCacheKey = function () {
+              return "osrs-priority-nudge";
+            };
+            material.needsUpdate = true;
+          }
+
           var SMALL_PRIMITIVE_TRIANGLE_THRESHOLD = 40;
           var taggedNodes = [];
+          var priorityNudgedNodes = [];
           var allMeshNodes = [];
           model.traverse(function (node) {
             if (!node.isMesh || !node.geometry) return;
@@ -1721,7 +1724,6 @@ _MODEL_VIEWER_HEAD = """
             var priority = node.geometry.userData.osrsPriority || 0;
             var bias = node.geometry.userData.osrsBias || 0;
             var missingTexture = !!node.geometry.userData.missingTexture;
-            node.renderOrder = priority * 256 + bias;
             if ((priority !== 0 || bias !== 0 || missingTexture) && node.material) {
               // Materials can be shared across primitives (GlbWriter's
               // own dedup key is texture+translucency only, not
@@ -1732,10 +1734,14 @@ _MODEL_VIEWER_HEAD = """
               // situation.
               node.material = node.material.clone();
               if (priority !== 0 || bias !== 0) {
-                node.material.polygonOffset = true;
                 var index = node.geometry.index;
                 var triangleCount = index ? Math.round(index.count / 3) : null;
                 taggedNodes.push({ node: node, priority: priority, bias: bias, triangleCount: triangleCount });
+                if (priority !== 0) {
+                  var baseNudge = Math.min(priority, PRIORITY_MAX_STEPS) * PRIORITY_STEP_GAME_UNITS;
+                  applyPriorityNudge(node.material, baseNudge);
+                  priorityNudgedNodes.push({ node: node, baseNudge: baseNudge });
+                }
                 if (window.console) {
                   console.log("[osrs-priority-debug]", {
                     name: node.name || "(unnamed)",
@@ -1757,7 +1763,9 @@ _MODEL_VIEWER_HEAD = """
                 // instead of leaving it bright, so it reads as an honest
                 // "unknown texture" patch rather than a rendering bug.
                 // Doesn't explain WHY that texture failed to extract --
-                // only makes the fallback look like what it is.
+                // only makes the fallback look like what it is. Expected
+                // to rarely trigger now -- see this block's own top
+                // comment.
                 node.material.color.setRGB(0.35, 0.35, 0.35);
                 if (window.console) {
                   console.log("[osrs-missing-texture]", { name: node.name || "(unnamed)" });
@@ -1766,11 +1774,13 @@ _MODEL_VIEWER_HEAD = """
             }
           });
 
-          function applyOffsetScale(scale) {
-            taggedNodes.forEach(function (entry) {
-              var offset = -(entry.priority + entry.bias * 0.1) * scale;
-              entry.node.material.polygonOffsetFactor = offset;
-              entry.node.material.polygonOffsetUnits = offset;
+          function applyPriorityNudgeScale(multiplier) {
+            priorityNudgeMultiplier = multiplier;
+            priorityNudgedNodes.forEach(function (entry) {
+              var shader = entry.node.material.userData.priorityShader;
+              if (shader) {
+                shader.uniforms.uPriorityNudge.value = entry.baseNudge * multiplier;
+              }
             });
           }
 
@@ -1797,13 +1807,13 @@ _MODEL_VIEWER_HEAD = """
           var wireframeToggle = document.getElementById("modelViewerWireframeToggle");
           if (taggedNodes.length && debugPanel && offsetSlider && offsetValueLabel) {
             debugPanel.style.display = "flex";
-            applyOffsetScale(parseFloat(offsetSlider.value));
+            applyPriorityNudgeScale(parseFloat(offsetSlider.value));
             offsetSlider.addEventListener("input", function () {
-              var scale = parseFloat(offsetSlider.value);
-              offsetValueLabel.textContent = scale.toFixed(1);
-              applyOffsetScale(scale);
+              var multiplier = parseFloat(offsetSlider.value);
+              offsetValueLabel.textContent = multiplier.toFixed(1);
+              applyPriorityNudgeScale(multiplier);
               if (window.console) {
-                console.log("[osrs-priority-debug] offset scale ->", scale);
+                console.log("[osrs-priority-debug] nudge multiplier ->", multiplier);
               }
             });
             if (unhideSmallToggle) {
@@ -1812,8 +1822,6 @@ _MODEL_VIEWER_HEAD = """
                 applyUnhideSmall(unhideSmallToggle.checked);
               });
             }
-          } else {
-            applyOffsetScale(0);
           }
           if (wireframeToggle) {
             wireframeToggle.addEventListener("change", function () {
@@ -2058,8 +2066,8 @@ def render_character_overview(player: PlayerView) -> str:
       <div class="model-viewer-canvas-wrap" id="modelViewerCanvasWrap">
         <canvas id="modelViewerCanvas"></canvas>
         <div class="model-viewer-debug-panel" id="modelViewerDebugPanel">
-          <label for="modelViewerOffsetScale">depth offset scale: <span id="modelViewerOffsetScaleValue">0.0</span></label>
-          <input type="range" id="modelViewerOffsetScale" min="-20" max="100" step="0.5" value="0">
+          <label for="modelViewerOffsetScale">priority nudge multiplier: <span id="modelViewerOffsetScaleValue">1.0</span></label>
+          <input type="range" id="modelViewerOffsetScale" min="0" max="3" step="0.1" value="1">
           <label><input type="checkbox" id="modelViewerUnhideSmallToggle"> un-hide small accessories</label>
           <label><input type="checkbox" id="modelViewerWireframeToggle"> wireframe</label>
         </div>
