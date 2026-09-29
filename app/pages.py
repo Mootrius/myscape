@@ -1503,6 +1503,120 @@ def _format_boss_kc(kc: Optional[int]) -> str:
     return f"{kc // 1000}K"
 
 
+_MODEL_VIEWER_HEAD = """
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+  import * as THREE from "three";
+  import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+  import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+  (function () {
+    var wrap = document.getElementById("modelViewerCanvasWrap");
+    var canvas = document.getElementById("modelViewerCanvas");
+    var emptyEl = document.getElementById("modelViewerEmpty");
+    if (!wrap || !canvas) return;
+
+    function showEmpty(message) {
+      wrap.style.display = "none";
+      if (emptyEl) {
+        if (message) emptyEl.textContent = message;
+        emptyEl.style.display = "block";
+      }
+    }
+
+    // GET /api/character-overview/model (app/main.py) serves the raw
+    // .glb bytes MyscapeClient#syncCharacterModel uploaded, straight
+    // out of GameAccount.character_model_glb -- 404 until the player
+    // has used the plugin's "Export 3D model" button at least once.
+    fetch("/api/character-overview/model")
+      .then(function (r) {
+        if (r.status === 404) {
+          showEmpty();
+          return null;
+        }
+        return r.ok ? r.arrayBuffer() : Promise.reject();
+      })
+      .then(function (buffer) {
+        if (buffer) initViewer(buffer);
+      })
+      .catch(function () {
+        showEmpty("Could not load your 3D model right now.");
+      });
+
+    function initViewer(buffer) {
+      var scene = new THREE.Scene();
+
+      var camera = new THREE.PerspectiveCamera(35, wrap.clientWidth / wrap.clientHeight, 0.1, 1000);
+      camera.position.set(0, 1.6, 3.2);
+
+      var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+
+      var controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 1, 0);
+      controls.enableDamping = true;
+      controls.minDistance = 0.5;
+      controls.maxDistance = 10;
+
+      var loader = new GLTFLoader();
+      loader.parse(
+        buffer,
+        "",
+        function (gltf) {
+          var model = gltf.scene;
+          scene.add(model);
+
+          // Frame the camera off the model's own real bounding box
+          // rather than a fixed guess -- the export's origin (see
+          // ModelMeshBuilder in the myscape-plugin repo) isn't
+          // guaranteed to sit exactly at the character's visual
+          // midpoint.
+          var box = new THREE.Box3().setFromObject(model);
+          var center = box.getCenter(new THREE.Vector3());
+          var size = box.getSize(new THREE.Vector3());
+          var height = Math.max(size.y, 0.1);
+          controls.target.copy(center);
+          camera.position.set(center.x, center.y + height * 0.15, center.z + height * 1.9);
+          camera.near = Math.max(height / 100, 0.01);
+          camera.far = height * 100;
+          camera.updateProjectionMatrix();
+          controls.update();
+        },
+        undefined,
+        function () {
+          showEmpty("Could not display your 3D model right now.");
+        }
+      );
+
+      function onResize() {
+        var w = wrap.clientWidth;
+        var h = wrap.clientHeight;
+        if (w <= 0 || h <= 0) return;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+      window.addEventListener("resize", onResize);
+
+      (function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      })();
+    }
+  })();
+</script>
+"""
+
+
 def render_character_overview(player: PlayerView) -> str:
     """Character Overview: the summary row (.co-summary-row in
     character-overview.css) holding all eight icon+stat pairs (see
@@ -1673,6 +1787,13 @@ def render_character_overview(player: PlayerView) -> str:
           {boss_cells}
         </div>
       </div>
+    </div>
+
+    <div class="model-viewer-card" id="modelViewerCard">
+      <div class="model-viewer-canvas-wrap" id="modelViewerCanvasWrap">
+        <canvas id="modelViewerCanvas"></canvas>
+      </div>
+      <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
     </div>
     """
 
@@ -1872,7 +1993,10 @@ def render_character_overview(player: PlayerView) -> str:
     })();
     """
 
-    extra_head = f'<link rel="stylesheet" href="/static/css/character-overview.css?v={_CHARACTER_OVERVIEW_CSS_VERSION}" />'
+    extra_head = (
+        f'<link rel="stylesheet" href="/static/css/character-overview.css?v={_CHARACTER_OVERVIEW_CSS_VERSION}" />'
+        + _MODEL_VIEWER_HEAD
+    )
     return _shell(
         title="Character Overview — myscape",
         player=player,

@@ -449,3 +449,51 @@
   font-size: 15px;
   color: var(--text);
 }
+
+/* 3D model viewer card (render_character_overview in app/pages.py) --
+   below .co-cards-row, full width like .co-summary-row above rather
+   than squeezed in as a third flex item: skills-card + hiscores-card
+   already sum to exactly 880px, this page's own .wrap cap (myscape.css
+   -- see .co-cards-row's own comment for where 290+572+18 comes from),
+   so there's no room left for a third card beside them without
+   breaking that row's "always side by side, no scrollbar" design.
+   Same panel-translucent/border/radius/padding treatment as every
+   other card on this page. */
+.model-viewer-card {
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  margin-bottom: 18px;
+}
+
+/* Sized by this wrapper (a fixed height, full available width) rather
+   than the <canvas> element's own width/height attributes -- the
+   module script in render_character_overview reads this element's
+   clientWidth/clientHeight and calls renderer.setSize with them, which
+   is what actually drives the canvas's backing-store resolution. */
+.model-viewer-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 360px;
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+}
+.model-viewer-canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.model-viewer-canvas-wrap canvas:active { cursor: grabbing; }
+
+/* Shown instead of the canvas wrap above (see showEmpty in the module
+   script) when the account has never used the plugin's "Export 3D
+   model" button, or the fetch/parse itself fails. */
+.model-viewer-empty {
+  display: none;
+  padding: 40px 12px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}
