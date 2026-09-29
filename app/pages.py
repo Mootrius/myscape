@@ -1692,13 +1692,25 @@ _MODEL_VIEWER_HEAD = """
           // Separately, the cape's own stray triangle turned out to be
           // angle-independent (present identically from every camera
           // angle), which rules out a draw-order/z-fighting explanation --
-          // those are inherently viewing-angle and precision sensitive.
-          // That points toward a real geometry defect in the exported mesh
-          // itself rather than anything fixable from this side, so this
-          // also adds a wireframe toggle to make the exact stray triangle's
-          // boundary visible against the rest of the mesh, so it can be
-          // pinpointed precisely instead of guessed at from a shaded
-          // screenshot.
+          // those are inherently viewing-angle and precision sensitive. A
+          // wireframe screenshot resolved it for real: the "stray
+          // triangle" is actually one large, deliberately-modeled quad
+          // (part of a textured surface near the neck/shoulder), and in
+          // the shaded view it renders as flat, near-white -- exactly
+          // what a textured face's own COLOR_0 looks like when its real
+          // texture image never got embedded (see HslColor's own doc:
+          // per-vertex color for a textured face is lightness-only, no
+          // real hue/saturation -- the pattern lives entirely in the
+          // texture image). So this was never a geometry or depth bug at
+          // all -- GlbWriter (myscape-plugin repo) now flags exactly this
+          // situation per-primitive via extras.missingTexture, and the
+          // traversal below dims any primitive so flagged toward a
+          // neutral gray instead of leaving it bright, so the fallback
+          // reads as "unknown texture" rather than a rendering glitch.
+          // This does not explain WHY that one texture failed to extract
+          // on capture -- ModelExporter now logs the specific failing
+          // texture id(s) so that's diagnosable from the client's own
+          // log if it recurs.
           var SMALL_PRIMITIVE_TRIANGLE_THRESHOLD = 40;
           var taggedNodes = [];
           var allMeshNodes = [];
@@ -1708,26 +1720,48 @@ _MODEL_VIEWER_HEAD = """
             if (!node.geometry.userData) return;
             var priority = node.geometry.userData.osrsPriority || 0;
             var bias = node.geometry.userData.osrsBias || 0;
+            var missingTexture = !!node.geometry.userData.missingTexture;
             node.renderOrder = priority * 256 + bias;
-            if ((priority !== 0 || bias !== 0) && node.material) {
+            if ((priority !== 0 || bias !== 0 || missingTexture) && node.material) {
               // Materials can be shared across primitives (GlbWriter's
               // own dedup key is texture+translucency only, not
-              // priority/bias), so clone before mutating -- otherwise
-              // this would also nudge a sibling primitive with a
-              // different priority/bias that happens to reference the
-              // same material.
+              // priority/bias/missingTexture), so clone before mutating
+              // -- otherwise this would also touch a sibling primitive
+              // that happens to reference the same material but doesn't
+              // share this one's own priority/bias or missing-texture
+              // situation.
               node.material = node.material.clone();
-              node.material.polygonOffset = true;
-              var index = node.geometry.index;
-              var triangleCount = index ? Math.round(index.count / 3) : null;
-              taggedNodes.push({ node: node, priority: priority, bias: bias, triangleCount: triangleCount });
-              if (window.console) {
-                console.log("[osrs-priority-debug]", {
-                  name: node.name || "(unnamed)",
-                  priority: priority,
-                  bias: bias,
-                  triangleCount: triangleCount,
-                });
+              if (priority !== 0 || bias !== 0) {
+                node.material.polygonOffset = true;
+                var index = node.geometry.index;
+                var triangleCount = index ? Math.round(index.count / 3) : null;
+                taggedNodes.push({ node: node, priority: priority, bias: bias, triangleCount: triangleCount });
+                if (window.console) {
+                  console.log("[osrs-priority-debug]", {
+                    name: node.name || "(unnamed)",
+                    priority: priority,
+                    bias: bias,
+                    triangleCount: triangleCount,
+                  });
+                }
+              }
+              if (missingTexture) {
+                // This primitive wanted a real texture (a cloth pattern,
+                // etc.) but the plugin's own capture couldn't pull it off
+                // the live client (see GlbWriter/ModelExporter in the
+                // myscape-plugin repo), so it fell back to COLOR_0 alone
+                // -- lightness-only, no real hue/saturation for a
+                // textured face -- which renders as a flat, oddly bright
+                // near-white/gray patch. Mute it toward a dim neutral
+                // gray (material.color multiplies the per-vertex color)
+                // instead of leaving it bright, so it reads as an honest
+                // "unknown texture" patch rather than a rendering bug.
+                // Doesn't explain WHY that texture failed to extract --
+                // only makes the fallback look like what it is.
+                node.material.color.setRGB(0.35, 0.35, 0.35);
+                if (window.console) {
+                  console.log("[osrs-missing-texture]", { name: node.name || "(unnamed)" });
+                }
               }
             }
           });
