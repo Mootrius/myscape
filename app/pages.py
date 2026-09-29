@@ -1847,12 +1847,12 @@ _MODEL_VIEWER_HEAD = """
           // head position.
           controls.target.copy(center);
 
-          // The default view starts tilted 5 degrees up from level --
+          // The default view starts tilted 10 degrees up from level --
           // polar angle decreased from its level value of 90 degrees --
           // rather than dead-on, so the camera looks slightly down onto
           // the character and a bit more of the top of the head reads
           // by default instead of a perfectly eye-level view.
-          var DEFAULT_VERTICAL_TILT = (5 * Math.PI) / 180;
+          var DEFAULT_VERTICAL_TILT = (10 * Math.PI) / 180;
           var defaultSpherical = new THREE.Spherical(distance, Math.PI / 2 - DEFAULT_VERTICAL_TILT, 0);
           camera.position.setFromSpherical(defaultSpherical).add(center);
           camera.near = distance / 100;
