@@ -4871,6 +4871,28 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           var v = fillValue(b, i);
           return maxValue > 0 ? Math.max(0, Math.min(100, (v / maxValue) * 100)) : 0;
         }
+        // The outline is a bordered box on all four sides (see
+        // .loot-bar-outline in loot-tracker.css), positioned bottom: 0
+        // same as the fill -- so its own bottom edge always sits right
+        // at the chart's baseline. With nothing selected, fillPct always
+        // equals outlinePct (fillValue falls back to b.value itself, see
+        // fillValue above), so the fill's top always meets the outline's
+        // own top and nothing of the outline is ever exposed on its own
+        // -- the bottom border included. But once an NPC (or a few) is
+        // selected, a bucket the selection had NO part in still has
+        // outlineActive (its total was > 0) while fillPct is 0 -- the
+        // fill collapses to nothing, leaving the WHOLE outline box
+        // exposed, bottom border included, which reads as a flat
+        // baseline line under every such bar rather than "nothing was
+        // selected here". Only the bottom edge is the problem (the top/
+        // left/right still usefully show that bucket's total loot
+        // existed, just not from this selection) -- so this alone gets
+        // suppressed via loot-bar-outline.no-bottom-border below,
+        // rather than hiding outlineActive/the whole outline, whenever
+        // there's a selection and this bucket's own fill is empty.
+        function outlineHideBottomBorder(b, i) {
+          return selectedNpcs.length > 0 && fillPct(b, i) <= 0;
+        }
         function titleFor(b, i) {
           if (selectedNpcs.length) {
             return selectedNpcs.join(' \\u00b7 ') + ': ' + fmtGp(fillValue(b, i)) + ' gp \\u00b7 total ' + fmtGp(b.value) + ' gp';
@@ -4894,7 +4916,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         if (existingCols.length !== buckets.length) {
           barsEl.innerHTML = buckets.map(function (b, i) {
             return '<div class="loot-bar-col' + (isSelectedCol(i) ? ' selected' : '') + '" data-bucket-index="' + i + '" title="' + titleFor(b, i) + '">' +
-              '<div class="loot-bar-outline' + (outlineActive(b) ? ' active' : '') + '" style="height:' + outlinePct(b) + '%;"></div>' +
+              '<div class="loot-bar-outline' + (outlineActive(b) ? ' active' : '') + (outlineHideBottomBorder(b, i) ? ' no-bottom-border' : '') + '" style="height:' + outlinePct(b) + '%;"></div>' +
               '<div class="loot-bar-fill' + (fillPct(b, i) > 0 ? ' has-value' : '') + '" style="height:' + fillPct(b, i) + '%;"></div>' +
             '</div>';
           }).join('');
@@ -4907,6 +4929,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             var outline = col.querySelector('.loot-bar-outline');
             outline.style.height = outlinePct(b) + '%';
             outline.classList.toggle('active', outlineActive(b));
+            outline.classList.toggle('no-bottom-border', outlineHideBottomBorder(b, i));
             var fill = col.querySelector('.loot-bar-fill');
             var fp = fillPct(b, i);
             fill.style.height = fp + '%';

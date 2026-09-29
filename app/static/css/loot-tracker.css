@@ -156,6 +156,19 @@
   transition: height 0.5s ease, border-color 0.5s ease;
 }
 .loot-bar-outline.active { border-color: var(--gold-dim); }
+/* Suppresses just the outline's own bottom border (see
+   outlineHideBottomBorder in the script below) for a bucket the
+   current NPC selection had no part in -- its fill collapses to
+   nothing there, so without this the outline's bottom edge (sitting
+   right at the chart's baseline, same bottom: 0 as the fill above) is
+   left fully exposed and reads as a flat line under a bar that has
+   nothing selected in it. Only overrides border-bottom-color, not the
+   other three sides -- those still usefully show that bucket's total
+   loot existed, just not from this selection. Higher specificity
+   (two classes) than .active above so it wins over that rule's own
+   border-color shorthand, which would otherwise reset all four sides
+   back to gold-dim. */
+.loot-bar-outline.active.no-bottom-border { border-bottom-color: transparent; }
 .loot-bar-fill {
   position: absolute; left: 0; right: 0; bottom: 0; background: var(--gold-dim);
   transition: height 0.5s ease, background-color 0.5s ease, opacity 0.12s ease;
