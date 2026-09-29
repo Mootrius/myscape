@@ -1954,8 +1954,8 @@ def render_character_overview(player: PlayerView) -> str:
       <div class="model-viewer-canvas-wrap" id="modelViewerCanvasWrap">
         <canvas id="modelViewerCanvas"></canvas>
         <div class="model-viewer-debug-panel" id="modelViewerDebugPanel">
-          <label for="modelViewerOffsetScale">depth offset scale: <span id="modelViewerOffsetScaleValue">1.0</span></label>
-          <input type="range" id="modelViewerOffsetScale" min="0" max="100" step="0.5" value="1">
+          <label for="modelViewerOffsetScale">depth offset scale: <span id="modelViewerOffsetScaleValue">0.0</span></label>
+          <input type="range" id="modelViewerOffsetScale" min="-20" max="100" step="0.5" value="0">
         </div>
       </div>
       <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
