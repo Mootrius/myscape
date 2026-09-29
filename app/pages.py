@@ -1656,6 +1656,29 @@ _MODEL_VIEWER_HEAD = """
           // identified this way, delete the color override (keep renderOrder
           // and polygonOffset) and tune the offset using the real values
           // instead of a blind guess.
+          // The first version of this identification pass hashed each
+          // primitive's own (priority, bias) pair into a hue via golden-angle
+          // spacing -- guarantees good spread between CONSECUTIVE integers,
+          // not between the arbitrary, non-consecutive (priority*16+bias)
+          // values real primitives actually have, so several genuinely
+          // different pairs landed within ~20 degrees of each other (all in
+          // the cyan band) and were indistinguishable in a screenshot --
+          // exactly what happened with the cape and the amulet both reading
+          // as "light blue". This version instead assigns from a small,
+          // fixed palette of maximally-separated, named colors, one per
+          // primitive in traversal order (stable across reloads of the same
+          // capture) -- no two tagged primitives can end up looking alike,
+          // and the name in the console log is unambiguous to read back
+          // ("the amulet is 'red'") instead of eyeballing a hue.
+          var DEBUG_PALETTE = [
+            ['red', 0xe6194b], ['green', 0x3cb44b], ['yellow', 0xffe119],
+            ['blue', 0x4363d8], ['orange', 0xf58231], ['purple', 0x911eb4],
+            ['cyan', 0x46f0f0], ['magenta', 0xf032e6], ['lime', 0xbcf60c],
+            ['pink', 0xfabed4], ['teal', 0x008080], ['lavender', 0xdcbeff],
+            ['brown', 0x9a6324], ['maroon', 0x800000], ['navy', 0x000075],
+            ['olive', 0x808000], ['apricot', 0xffd8b1], ['mint', 0xaaffc3],
+          ];
+          var debugColorIndex = 0;
           model.traverse(function (node) {
             if (node.isMesh && node.geometry && node.geometry.userData) {
               var priority = node.geometry.userData.osrsPriority || 0;
@@ -1674,11 +1697,11 @@ _MODEL_VIEWER_HEAD = """
                 node.material.polygonOffsetFactor = offset;
                 node.material.polygonOffsetUnits = offset;
 
-                var combined = priority * 16 + bias;
-                var hue = (combined * 137.508) % 360;
+                var entry = DEBUG_PALETTE[debugColorIndex % DEBUG_PALETTE.length];
+                debugColorIndex++;
                 node.material.vertexColors = false;
                 node.material.map = null;
-                node.material.color.setHSL(hue / 360, 1, 0.5);
+                node.material.color.setHex(entry[1]);
 
                 if (window.console)
                 {
@@ -1686,7 +1709,7 @@ _MODEL_VIEWER_HEAD = """
                     name: node.name || '(unnamed)',
                     priority: priority,
                     bias: bias,
-                    hueDegrees: Math.round(hue),
+                    debugColor: entry[0],
                   });
                 }
               }
