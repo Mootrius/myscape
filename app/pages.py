@@ -1815,7 +1815,6 @@ _MODEL_VIEWER_HEAD = """
           var box = new THREE.Box3().setFromObject(model);
           var size = box.getSize(new THREE.Vector3());
           var center = box.getCenter(new THREE.Vector3());
-          var maxSize = Math.max(size.x, size.y, size.z, 1e-6);
 
           // A snug fit -- just enough padding that the model doesn't
           // touch the frame edges -- rather than the roomier framing a
@@ -1824,9 +1823,24 @@ _MODEL_VIEWER_HEAD = """
           // only view the user ever gets; it has to already read as
           // "the character fills the viewport," not a starting point
           // they can adjust from.
-          var fitHeightDistance = maxSize / (2 * Math.tan((Math.PI * camera.fov) / 360));
-          var fitWidthDistance = fitHeightDistance / camera.aspect;
-          var distance = 1.0 * Math.max(fitHeightDistance, fitWidthDistance);
+          //
+          // Each axis is fit against its own real extent -- size.y
+          // (standing height) against the camera's vertical FOV,
+          // size.x (shoulder-to-shoulder width) against its horizontal
+          // FOV, derived from the vertical one via the camera's own
+          // aspect -- and the camera backs off only as far as the
+          // stricter of the two needs. A standing humanoid is far
+          // taller than it is wide, so the earlier version's use of
+          // one largest-dimension value for both axes quietly assumed
+          // the model was as wide as it is tall: dividing that
+          // height-derived distance by a portrait aspect (below 1)
+          // inflated it well past what the real, much narrower width
+          // needed, which is the extra margin around the character
+          // this replaces.
+          var vFovHalfTan = Math.tan((Math.PI * camera.fov) / 360);
+          var fitHeightDistance = Math.max(size.y, 1e-6) / (2 * vFovHalfTan);
+          var fitWidthDistance = Math.max(size.x, 1e-6) / (2 * vFovHalfTan * camera.aspect);
+          var distance = 1.05 * Math.max(fitHeightDistance, fitWidthDistance);
 
           // Orbit around, and frame on, the bounding box's own
           // geometric center -- the default pivot, not an approximated
