@@ -497,3 +497,31 @@
   color: var(--text-faint);
   font-size: 13px;
 }
+
+/* TEMPORARY: a live-tunable overlay for calibrating the OSRS
+   render-priority depth-offset scale the module script above applies
+   to gear modeled flush against the body (a cape against the back, an
+   amulet against the chest) -- screenshots alone couldn't pin down the
+   right scale (this environment can't render the page itself to check
+   each guess), so this exposes it as a slider the scale can be tuned
+   against the real, live model instead. Hidden by default; the module
+   script only reveals it once a model with tagged primitives has
+   actually loaded. Delete this rule and the corresponding HTML/script
+   once a final offset scale is hard-coded and the slider removed. */
+.model-viewer-debug-panel {
+  display: none;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #fff;
+}
+.model-viewer-debug-panel input[type="range"] {
+  width: 140px;
+}

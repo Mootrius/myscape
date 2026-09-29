@@ -1656,29 +1656,22 @@ _MODEL_VIEWER_HEAD = """
           // identified this way, delete the color override (keep renderOrder
           // and polygonOffset) and tune the offset using the real values
           // instead of a blind guess.
-          // The first version of this identification pass hashed each
-          // primitive's own (priority, bias) pair into a hue via golden-angle
-          // spacing -- guarantees good spread between CONSECUTIVE integers,
-          // not between the arbitrary, non-consecutive (priority*16+bias)
-          // values real primitives actually have, so several genuinely
-          // different pairs landed within ~20 degrees of each other (all in
-          // the cyan band) and were indistinguishable in a screenshot --
-          // exactly what happened with the cape and the amulet both reading
-          // as "light blue". This version instead assigns from a small,
-          // fixed palette of maximally-separated, named colors, one per
-          // primitive in traversal order (stable across reloads of the same
-          // capture) -- no two tagged primitives can end up looking alike,
-          // and the name in the console log is unambiguous to read back
-          // ("the amulet is 'red'") instead of eyeballing a hue.
-          var DEBUG_PALETTE = [
-            ['red', 0xe6194b], ['green', 0x3cb44b], ['yellow', 0xffe119],
-            ['blue', 0x4363d8], ['orange', 0xf58231], ['purple', 0x911eb4],
-            ['cyan', 0x46f0f0], ['magenta', 0xf032e6], ['lime', 0xbcf60c],
-            ['pink', 0xfabed4], ['teal', 0x008080], ['lavender', 0xdcbeff],
-            ['brown', 0x9a6324], ['maroon', 0x800000], ['navy', 0x000075],
-            ['olive', 0x808000], ['apricot', 0xffd8b1], ['mint', 0xaaffc3],
-          ];
-          var debugColorIndex = 0;
+          // The colored identification pass (two earlier versions of this
+          // comment) did its job: the cape is confirmed to be exactly ONE
+          // primitive (priority 5, bias 0), and the amulet turned out to be
+          // several small primitives clustered together, not one -- which
+          // is also *why* three guessed offset scales in a row (1x, still
+          // "better but not fixed") never fully converged: there wasn't one
+          // right constant to find, there was a right constant this
+          // environment has no way to see the effect of. So instead of a
+          // fifth guess, this restores the real textures/vertex colors and
+          // exposes the offset SCALE as a live slider (see
+          // modelViewerDebugPanel below) -- move it and watch the actual
+          // model update in real time, no reload needed, until the cape and
+          // amulet both look right, then report back the winning number so
+          // it can be hard-coded as the real default and this whole panel
+          // deleted.
+          var taggedNodes = [];
           model.traverse(function (node) {
             if (node.isMesh && node.geometry && node.geometry.userData) {
               var priority = node.geometry.userData.osrsPriority || 0;
@@ -1688,33 +1681,41 @@ _MODEL_VIEWER_HEAD = """
                 // Materials can be shared across primitives (GlbWriter's
                 // own dedup key is texture+translucency only, not
                 // priority/bias), so clone before mutating -- otherwise
-                // this would also nudge (and recolor) a sibling primitive
-                // with a different priority/bias that happens to
-                // reference the same material.
+                // this would also nudge a sibling primitive with a
+                // different priority/bias that happens to reference the
+                // same material.
                 node.material = node.material.clone();
                 node.material.polygonOffset = true;
-                var offset = -(priority * 1.0 + bias * 0.01);
-                node.material.polygonOffsetFactor = offset;
-                node.material.polygonOffsetUnits = offset;
-
-                var entry = DEBUG_PALETTE[debugColorIndex % DEBUG_PALETTE.length];
-                debugColorIndex++;
-                node.material.vertexColors = false;
-                node.material.map = null;
-                node.material.color.setHex(entry[1]);
-
-                if (window.console)
-                {
-                  console.log('[osrs-priority-debug]', {
-                    name: node.name || '(unnamed)',
-                    priority: priority,
-                    bias: bias,
-                    debugColor: entry[0],
-                  });
-                }
+                taggedNodes.push({ node: node, priority: priority, bias: bias });
               }
             }
           });
+
+          function applyOffsetScale(scale) {
+            taggedNodes.forEach(function (entry) {
+              var offset = -(entry.priority + entry.bias * 0.1) * scale;
+              entry.node.material.polygonOffsetFactor = offset;
+              entry.node.material.polygonOffsetUnits = offset;
+            });
+          }
+
+          var debugPanel = document.getElementById("modelViewerDebugPanel");
+          var offsetSlider = document.getElementById("modelViewerOffsetScale");
+          var offsetValueLabel = document.getElementById("modelViewerOffsetScaleValue");
+          if (taggedNodes.length && debugPanel && offsetSlider && offsetValueLabel) {
+            debugPanel.style.display = "flex";
+            applyOffsetScale(parseFloat(offsetSlider.value));
+            offsetSlider.addEventListener("input", function () {
+              var scale = parseFloat(offsetSlider.value);
+              offsetValueLabel.textContent = scale.toFixed(1);
+              applyOffsetScale(scale);
+              if (window.console) {
+                console.log("[osrs-priority-debug] offset scale ->", scale);
+              }
+            });
+          } else {
+            applyOffsetScale(1);
+          }
 
           // Frame the camera to fit the model's own real bounding box,
           // using the standard "fit object in view" distance formula
@@ -1952,6 +1953,10 @@ def render_character_overview(player: PlayerView) -> str:
     <div class="model-viewer-card" id="modelViewerCard">
       <div class="model-viewer-canvas-wrap" id="modelViewerCanvasWrap">
         <canvas id="modelViewerCanvas"></canvas>
+        <div class="model-viewer-debug-panel" id="modelViewerDebugPanel">
+          <label for="modelViewerOffsetScale">depth offset scale: <span id="modelViewerOffsetScaleValue">1.0</span></label>
+          <input type="range" id="modelViewerOffsetScale" min="0" max="100" step="0.5" value="1">
+        </div>
       </div>
       <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
     </div>
