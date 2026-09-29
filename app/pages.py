@@ -1583,6 +1583,32 @@ _MODEL_VIEWER_HEAD = """
           var model = gltf.scene;
           scene.add(model);
 
+          // OSRS itself doesn't rely on raw 3D depth alone to decide what
+          // draws on top -- gear modeled flush against the body (a cape
+          // against the back, an amulet against the chest) leans on an
+          // explicit per-face render priority/bias instead, precisely
+          // because true depth there is ambiguous or deliberately
+          // coincident. The export (see GlbWriter in the myscape-plugin
+          // repo) carries that priority/bias through as each primitive's
+          // own glTF extras; GLTFLoader copies primitive extras onto that
+          // primitive's own geometry.userData (not the mesh's), so this
+          // reads it from there and turns it into the equivalent
+          // three.js concept, THREE.Object3D#renderOrder, so an ambiguous-
+          // depth tie between two faces resolves the same way OSRS's own
+          // client would draw it instead of whatever a bare z-buffer
+          // happens to pick. Direction (higher priority/bias = higher
+          // renderOrder = submitted, and so wins ties, later) is this
+          // page's own best-effort reading of what "priority" means in
+          // the game's own rendering -- worth a second look if something
+          // still looks drawn in the wrong order after this.
+          model.traverse(function (node) {
+            if (node.isMesh && node.geometry && node.geometry.userData) {
+              var priority = node.geometry.userData.osrsPriority || 0;
+              var bias = node.geometry.userData.osrsBias || 0;
+              node.renderOrder = priority * 256 + bias;
+            }
+          });
+
           // Frame the camera to fit the model's own real bounding box,
           // using the standard "fit object in view" distance formula
           // (derived purely from the camera's own vertical FOV and the
