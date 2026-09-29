@@ -1671,22 +1671,63 @@ _MODEL_VIEWER_HEAD = """
           // amulet both look right, then report back the winning number so
           // it can be hard-coded as the real default and this whole panel
           // deleted.
+          // Real feedback so far: the offset scale alone tops out at "0 is
+          // least bad, bugs persist regardless" -- an offset can't fix a
+          // real occlusion, only nudge a close tie. But dialing the scale
+          // toward positive did reveal genuine amulet geometry that's
+          // normally hidden entirely behind the chest, just warped/wrong
+          // when nudged uniformly -- meaning those faces exist and are
+          // truly being lost to the depth test (not a missing-geometry
+          // export bug), and a uniform per-primitive nudge is too blunt a
+          // tool for it. The earlier attempt at depthTest=false on EVERY
+          // tagged primitive broke self-occlusion on complex ones (the
+          // shield's own front/back layers). Small accessories like an
+          // amulet chain/pendant are typically thin, simple shapes with no
+          // internal layers to self-occlude, so this adds a second,
+          // independent toggle that disables depthTest (keeps depthWrite)
+          // ONLY on tagged primitives below a small triangle-count
+          // threshold -- large/complex tagged primitives (shield,
+          // chestplate) are untouched by it either way.
+          //
+          // Separately, the cape's own stray triangle turned out to be
+          // angle-independent (present identically from every camera
+          // angle), which rules out a draw-order/z-fighting explanation --
+          // those are inherently viewing-angle and precision sensitive.
+          // That points toward a real geometry defect in the exported mesh
+          // itself rather than anything fixable from this side, so this
+          // also adds a wireframe toggle to make the exact stray triangle's
+          // boundary visible against the rest of the mesh, so it can be
+          // pinpointed precisely instead of guessed at from a shaded
+          // screenshot.
+          var SMALL_PRIMITIVE_TRIANGLE_THRESHOLD = 40;
           var taggedNodes = [];
+          var allMeshNodes = [];
           model.traverse(function (node) {
-            if (node.isMesh && node.geometry && node.geometry.userData) {
-              var priority = node.geometry.userData.osrsPriority || 0;
-              var bias = node.geometry.userData.osrsBias || 0;
-              node.renderOrder = priority * 256 + bias;
-              if ((priority !== 0 || bias !== 0) && node.material) {
-                // Materials can be shared across primitives (GlbWriter's
-                // own dedup key is texture+translucency only, not
-                // priority/bias), so clone before mutating -- otherwise
-                // this would also nudge a sibling primitive with a
-                // different priority/bias that happens to reference the
-                // same material.
-                node.material = node.material.clone();
-                node.material.polygonOffset = true;
-                taggedNodes.push({ node: node, priority: priority, bias: bias });
+            if (!node.isMesh || !node.geometry) return;
+            allMeshNodes.push(node);
+            if (!node.geometry.userData) return;
+            var priority = node.geometry.userData.osrsPriority || 0;
+            var bias = node.geometry.userData.osrsBias || 0;
+            node.renderOrder = priority * 256 + bias;
+            if ((priority !== 0 || bias !== 0) && node.material) {
+              // Materials can be shared across primitives (GlbWriter's
+              // own dedup key is texture+translucency only, not
+              // priority/bias), so clone before mutating -- otherwise
+              // this would also nudge a sibling primitive with a
+              // different priority/bias that happens to reference the
+              // same material.
+              node.material = node.material.clone();
+              node.material.polygonOffset = true;
+              var index = node.geometry.index;
+              var triangleCount = index ? Math.round(index.count / 3) : null;
+              taggedNodes.push({ node: node, priority: priority, bias: bias, triangleCount: triangleCount });
+              if (window.console) {
+                console.log("[osrs-priority-debug]", {
+                  name: node.name || "(unnamed)",
+                  priority: priority,
+                  bias: bias,
+                  triangleCount: triangleCount,
+                });
               }
             }
           });
@@ -1699,9 +1740,27 @@ _MODEL_VIEWER_HEAD = """
             });
           }
 
+          function applyUnhideSmall(enabled) {
+            taggedNodes.forEach(function (entry) {
+              if (entry.triangleCount !== null && entry.triangleCount <= SMALL_PRIMITIVE_TRIANGLE_THRESHOLD) {
+                entry.node.material.depthTest = !enabled;
+              }
+            });
+          }
+
+          function applyWireframe(enabled) {
+            allMeshNodes.forEach(function (node) {
+              if (node.material) {
+                node.material.wireframe = enabled;
+              }
+            });
+          }
+
           var debugPanel = document.getElementById("modelViewerDebugPanel");
           var offsetSlider = document.getElementById("modelViewerOffsetScale");
           var offsetValueLabel = document.getElementById("modelViewerOffsetScaleValue");
+          var unhideSmallToggle = document.getElementById("modelViewerUnhideSmallToggle");
+          var wireframeToggle = document.getElementById("modelViewerWireframeToggle");
           if (taggedNodes.length && debugPanel && offsetSlider && offsetValueLabel) {
             debugPanel.style.display = "flex";
             applyOffsetScale(parseFloat(offsetSlider.value));
@@ -1713,8 +1772,19 @@ _MODEL_VIEWER_HEAD = """
                 console.log("[osrs-priority-debug] offset scale ->", scale);
               }
             });
+            if (unhideSmallToggle) {
+              applyUnhideSmall(unhideSmallToggle.checked);
+              unhideSmallToggle.addEventListener("change", function () {
+                applyUnhideSmall(unhideSmallToggle.checked);
+              });
+            }
           } else {
-            applyOffsetScale(1);
+            applyOffsetScale(0);
+          }
+          if (wireframeToggle) {
+            wireframeToggle.addEventListener("change", function () {
+              applyWireframe(wireframeToggle.checked);
+            });
           }
 
           // Frame the camera to fit the model's own real bounding box,
@@ -1956,6 +2026,8 @@ def render_character_overview(player: PlayerView) -> str:
         <div class="model-viewer-debug-panel" id="modelViewerDebugPanel">
           <label for="modelViewerOffsetScale">depth offset scale: <span id="modelViewerOffsetScaleValue">0.0</span></label>
           <input type="range" id="modelViewerOffsetScale" min="-20" max="100" step="0.5" value="0">
+          <label><input type="checkbox" id="modelViewerUnhideSmallToggle"> un-hide small accessories</label>
+          <label><input type="checkbox" id="modelViewerWireframeToggle"> wireframe</label>
         </div>
       </div>
       <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
