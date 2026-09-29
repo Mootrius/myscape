@@ -1626,6 +1626,14 @@ _MODEL_VIEWER_HEAD = """
           // in this environment) -- still needs the user's own eyes on
           // it, and may need scaling up if the effect is too subtle to
           // see, or down if it distorts real geometry.
+          // Three attempts at tuning this blind (renderOrder alone, then
+          // depthTest=false, then a guessed polygonOffset step) haven't
+          // fully converged, and this environment has no way to render
+          // the page and see the result -- so this now also logs, once
+          // per primitive, exactly what priority/bias/size it actually
+          // has in a real capture. That's real data to calibrate the
+          // offset against instead of a fourth guess. Safe to delete
+          // once the offset is dialed in.
           model.traverse(function (node) {
             if (node.isMesh && node.geometry && node.geometry.userData) {
               var priority = node.geometry.userData.osrsPriority || 0;
@@ -1643,6 +1651,22 @@ _MODEL_VIEWER_HEAD = """
                 var offset = -(priority * 1.0 + bias * 0.01);
                 node.material.polygonOffsetFactor = offset;
                 node.material.polygonOffsetUnits = offset;
+              }
+              if (window.console) {
+                var posAttr = node.geometry.attributes && node.geometry.attributes.position;
+                var bbox = node.geometry.boundingBox;
+                if (!bbox) {
+                  node.geometry.computeBoundingBox();
+                  bbox = node.geometry.boundingBox;
+                }
+                console.log('[osrs-priority-debug]', {
+                  name: node.name || '(unnamed)',
+                  priority: priority,
+                  bias: bias,
+                  vertexCount: posAttr ? posAttr.count : null,
+                  boundingBoxMin: bbox ? bbox.min.toArray() : null,
+                  boundingBoxMax: bbox ? bbox.max.toArray() : null,
+                });
               }
             }
           });
