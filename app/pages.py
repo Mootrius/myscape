@@ -1720,6 +1720,39 @@ _MODEL_VIEWER_HEAD = """
           model.traverse(function (node) {
             if (!node.isMesh || !node.geometry) return;
             allMeshNodes.push(node);
+            if (node.material) {
+              // GlbWriter (myscape-plugin repo) always exports
+              // doubleSided: true, deliberately -- some gear/cloth
+              // geometry only has faces wound one way and would show
+              // real holes from some camera angles without it. But the
+              // real OSRS client still culls back faces at draw time on
+              // top of that: a lot of thin cloth (a cape, in
+              // particular) is modeled as TWO coincident, oppositely
+              // wound surfaces -- an outer one (textured, e.g. the fire
+              // cape's flame pattern) and an inner lining (a flat
+              // color, e.g. plain dark red) -- and it's culling, not
+              // any runtime color logic, that picks the correct one to
+              // show for a given viewing angle. Leaving every material
+              // double-sided (GLTFLoader's default reading of the
+              // exported flag) draws BOTH of those coincident surfaces
+              // always, and whichever one wins the resulting z-fight
+              // can be either one depending on viewing angle -- this is
+              // why the cape's front (should be flat red) was instead
+              // showing its own back's fire texture. Forcing FrontSide
+              // here, at render time, restores real culling without
+              // touching the export format at all. Confirmed against
+              // RuneProfile's own published web viewer source
+              // (packages/model-renderer/src/load-model.ts in their
+              // runeprofile repo), which does the identical override
+              // for the identical reason, plus the same depthWrite
+              // companion fix just below for translucent geometry (two
+              // half-transparent culled-away layers no longer compound
+              // into something darker than either alone).
+              node.material.side = THREE.FrontSide;
+              if (node.material.transparent) {
+                node.material.depthWrite = false;
+              }
+            }
             if (!node.geometry.userData) return;
             var priority = node.geometry.userData.osrsPriority || 0;
             var bias = node.geometry.userData.osrsBias || 0;
