@@ -2,6 +2,7 @@
 early account system (website signup/login, RuneLite plugin account
 linking) -- see README.md for how the pieces fit together.
 """
+import base64
 import logging
 import os
 import uuid
@@ -140,6 +141,8 @@ from app.schemas import (
     BoatCargoItemOut,
     BoatCargoSyncRequest,
     BoatCargoSyncResponse,
+    CharacterModelSyncRequest,
+    CharacterModelSyncResponse,
     CharacterSummarySyncRequest,
     CharacterSummarySyncResponse,
     CreateGearSetupRequest,
@@ -329,6 +332,14 @@ MAX_LOOT_EVENTS_PER_SYNC = 50
 # kill-count update immediately as it's parsed out of the chatbox (see
 # MyscapePlugin#onChatMessage), so a real sync is always exactly 1.
 MAX_KILL_COUNT_UPDATES_PER_SYNC = 20
+# A real capture is one composited player model -- base mesh plus
+# whatever's equipped -- typically well under a megabyte once encoded
+# as glTF/GLB (see GameAccount.character_model_glb's own docstring in
+# app/models.py). 8MB raw (so ~10.7MB of base64 request body) is
+# generous headroom above that for a heavily-equipped/cosmetic-loaded
+# account, while still catching a genuinely malformed or hostile
+# request rather than trusting client-declared size alone.
+MAX_CHARACTER_MODEL_BYTES = 8 * 1024 * 1024
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
 if not SESSION_SECRET_KEY:
@@ -1514,6 +1525,71 @@ def character_overview_summary(game_account: GameAccount = Depends(get_current_v
         "collectionsTotal": game_account.character_summary_collections_total,
         "syncedAt": game_account.character_summary_synced_at.isoformat() if game_account.character_summary_synced_at else None,
     }
+
+
+@app.post("/api/players/me/character-model", response_model=CharacterModelSyncResponse)
+def sync_character_model(
+    payload: CharacterModelSyncRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
+):
+    """Full replace of the player's current 3D model export -- see
+    GameAccount.character_model_glb's own comment in app/models.py and
+    MyscapeClient#syncCharacterModel in the Mootrius/myscape-plugin
+    repo for how these bytes are actually produced (RuneLite's own
+    Renderable#getModel() for the local player, converted client-side
+    by io.myscape.plugin.modelexport's ModelMeshBuilder+GlbWriter).
+    Unlike every list-shaped sync* endpoint above, there's nothing to
+    count here in the item-list sense -- byte_count in the response is
+    literally len(the decoded file), so the plugin's own callback can
+    use it as a transit-integrity check (see that method's own
+    docstring) rather than anything resembling a row count."""
+    try:
+        glb_bytes = base64.b64decode(payload.glb_base64, validate=True)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="glb_base64 is not valid base64.",
+        )
+    if len(glb_bytes) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty model upload.",
+        )
+    if len(glb_bytes) > MAX_CHARACTER_MODEL_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model upload too large (max {MAX_CHARACTER_MODEL_BYTES} bytes).",
+        )
+
+    game_account.character_model_glb = glb_bytes
+    game_account.character_model_synced_at = datetime.now(timezone.utc)
+    db.commit()
+    return CharacterModelSyncResponse(byte_count=len(glb_bytes))
+
+
+@app.get("/api/character-overview/model")
+def character_overview_model(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """Character Overview's own 3D-viewer payload -- session-
+    authenticated like character_overview_summary above, since only
+    the website UI calls this. Returns the raw .glb bytes directly
+    (model/gltf-binary), not JSON -- render_character_overview's own
+    script (app/pages.py) hands this response's arrayBuffer straight to
+    three.js's GLTFLoader#parse, so there's no reason to round-trip
+    back through base64 the way the plugin's own upload does (that
+    detour exists client-side only to fit the plugin's existing JSON
+    sync contract -- see CharacterModelSyncRequest's own docstring in
+    app/schemas.py). 404, not a 200 with an empty/null body, when
+    nothing's been captured yet (an account that's never clicked
+    "Export 3D model" in the plugin's side panel) -- the frontend's own
+    fetch treats that as "show the not-captured-yet placeholder"."""
+    if not game_account.character_model_glb:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No character model captured yet.")
+    return Response(
+        content=game_account.character_model_glb,
+        media_type="model/gltf-binary",
+        headers={"Cache-Control": "private, max-age=0, must-revalidate"},
+    )
 
 
 @app.post("/api/players/me/hiscores/sync")

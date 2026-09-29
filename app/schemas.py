@@ -1075,6 +1075,27 @@ class CharacterSummarySyncResponse(BaseModel):
     stat_count: int
 
 
+class CharacterModelSyncRequest(BaseModel):
+    """A single .glb (glTF 2.0 binary) file, base64-encoded -- see
+    GameAccount.character_model_glb's own docstring in app/models.py
+    for what this actually is and why it's sent base64-in-JSON rather
+    than as a raw multipart/octet-stream upload (MyscapeClient#
+    syncCharacterModel in the Mootrius/myscape-plugin repo reuses this
+    app's existing sync* JSON contract rather than adding a second,
+    differently-shaped upload path just for this one endpoint)."""
+
+    glb_base64: str
+
+
+class CharacterModelSyncResponse(BaseModel):
+    # The server's own count of bytes actually stored, once decoded --
+    # not just an echo of len(request.glb_base64) -- so this also
+    # doubles as a sanity check that nothing was corrupted/truncated in
+    # transit, the same role syncCharacterModel's own docstring
+    # describes client-side.
+    byte_count: int
+
+
 # -- Item search (backs the gear-setup slot picker's search box). ---------
 
 class ItemSearchResult(BaseModel):

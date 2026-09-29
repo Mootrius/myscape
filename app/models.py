@@ -29,7 +29,7 @@ account inherit history that isn't theirs.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, LargeBinary, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -300,6 +300,33 @@ class GameAccount(Base):
     character_summary_collections_completed = Column(Integer, nullable=True)
     character_summary_collections_total = Column(Integer, nullable=True)
     character_summary_synced_at = Column(DateTime(timezone=True), nullable=True)
+
+    # The player's current 3D model export (POST
+    # /api/players/me/character-model) -- a single self-contained .glb
+    # (glTF 2.0 binary) file, the local player's composited mesh (base
+    # skeleton + every equipped item + current animation pose) exactly
+    # as RuneLite's own Renderable#getModel() hands it to the client's
+    # renderer, converted client-side by the myscape-plugin repo's
+    # io.myscape.plugin.modelexport package (ModelMeshBuilder + GlbWriter)
+    # and sent up whole. Stored as bytes directly on this row rather
+    # than on disk (see app/icon_cache.py's own docstring for why a
+    # local disk cache is a bad fit for this single free-tier Render
+    # web service -- no persistent disk actually mounted there yet,
+    # see render.yaml -- so anything written to local disk is gone on
+    # the next deploy/restart) -- Postgres already holds everything
+    # else this app persists, and one player's own model export is a
+    # small enough blob (a single composited player model, typically
+    # well under a megabyte) that BYTEA storage here is simpler than
+    # standing up a separate object-storage integration for it. Full
+    # replace, same as every other current-state sync -- there's only
+    # ever one "current" model per account, not a history of captures.
+    # Null until the player has actually clicked "Export 3D model" in
+    # the plugin's side panel at least once; the Character Overview
+    # viewer (GET /api/character-overview/model) treats that the same
+    # way every other never-synced value on that page is treated --
+    # nothing to show yet, not a broken viewer.
+    character_model_glb = Column(LargeBinary, nullable=True)
+    character_model_synced_at = Column(DateTime(timezone=True), nullable=True)
 
     account = relationship("Account", back_populates="game_accounts")
 
