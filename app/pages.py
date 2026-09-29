@@ -1846,22 +1846,32 @@ _MODEL_VIEWER_HEAD = """
           // geometric center -- the default pivot, not an approximated
           // head position.
           controls.target.copy(center);
-          camera.position.set(center.x, center.y, center.z + distance);
+
+          // The default view starts tilted 5 degrees up from level --
+          // polar angle decreased from its level value of 90 degrees --
+          // rather than dead-on, so the camera looks slightly down onto
+          // the character and a bit more of the top of the head reads
+          // by default instead of a perfectly eye-level view.
+          var DEFAULT_VERTICAL_TILT = (5 * Math.PI) / 180;
+          var defaultSpherical = new THREE.Spherical(distance, Math.PI / 2 - DEFAULT_VERTICAL_TILT, 0);
+          camera.position.setFromSpherical(defaultSpherical).add(center);
           camera.near = distance / 100;
           camera.far = distance * 100;
           camera.updateProjectionMatrix();
 
-          // Keep orbiting within 45 degrees of this initial, front-on
-          // view in every direction. Read back from the camera's own
-          // actual offset from its target (rather than assumed to be
-          // exactly level/head-on) so this stays correct even if the
-          // framing above ever changes.
+          // Keep orbiting within 45 degrees horizontally and 15 degrees
+          // vertically of this initial, tilted view. Read back from the
+          // camera's own actual offset from its target (rather than
+          // assumed values) so this stays correct even if the framing
+          // above ever changes.
           var initialOffset = camera.position.clone().sub(controls.target);
           var initialSpherical = new THREE.Spherical().setFromVector3(initialOffset);
-          controls.minAzimuthAngle = initialSpherical.theta - Math.PI / 4;
-          controls.maxAzimuthAngle = initialSpherical.theta + Math.PI / 4;
-          controls.minPolarAngle = Math.max(0, initialSpherical.phi - Math.PI / 4);
-          controls.maxPolarAngle = Math.min(Math.PI, initialSpherical.phi + Math.PI / 4);
+          var HORIZONTAL_ORBIT_LIMIT = Math.PI / 4;
+          var VERTICAL_ORBIT_LIMIT = Math.PI / 12;
+          controls.minAzimuthAngle = initialSpherical.theta - HORIZONTAL_ORBIT_LIMIT;
+          controls.maxAzimuthAngle = initialSpherical.theta + HORIZONTAL_ORBIT_LIMIT;
+          controls.minPolarAngle = Math.max(0, initialSpherical.phi - VERTICAL_ORBIT_LIMIT);
+          controls.maxPolarAngle = Math.min(Math.PI, initialSpherical.phi + VERTICAL_ORBIT_LIMIT);
 
           controls.update();
         },
