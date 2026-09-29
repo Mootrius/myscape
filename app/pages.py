@@ -1563,8 +1563,17 @@ _MODEL_VIEWER_HEAD = """
       var controls = new OrbitControls(camera, renderer.domElement);
       controls.target.set(0, 1, 0);
       controls.enableDamping = true;
-      controls.minDistance = 0.5;
-      controls.maxDistance = 10;
+      // minDistance/maxDistance are set once the model's own real size
+      // is known below, not here as a fixed 0.5-10 range -- OSRS's own
+      // model-space units aren't meter-scale (see ModelMeshBuilder's
+      // own top-of-file doc in the myscape-plugin repo), so a fixed
+      // absolute zoom range clamped the camera back down to well
+      // inside the model regardless of how far away it was actually
+      // positioned below: a real captured model spans on the order of
+      // hundreds of these units, so a maxDistance of 10 pulled the
+      // camera to 10 units from center on the very first
+      // controls.update() call, deep inside the torso -- exactly the
+      // "looking at the inside of the model" bug this fixes.
 
       var loader = new GLTFLoader();
       loader.parse(
@@ -1574,20 +1583,38 @@ _MODEL_VIEWER_HEAD = """
           var model = gltf.scene;
           scene.add(model);
 
-          // Frame the camera off the model's own real bounding box
-          // rather than a fixed guess -- the export's origin (see
-          // ModelMeshBuilder in the myscape-plugin repo) isn't
-          // guaranteed to sit exactly at the character's visual
-          // midpoint.
+          // Frame the camera to fit the model's own real bounding box,
+          // using the standard "fit object in view" distance formula
+          // (derived purely from the camera's own vertical FOV and the
+          // object's own largest dimension) rather than a fixed guess
+          // at the model's real-world scale -- this works regardless
+          // of whatever units this particular buffer's vertices
+          // happen to be in, which a hardcoded human-scale height
+          // multiplier (the previous approach) does not. The export's
+          // own origin (see ModelMeshBuilder in the myscape-plugin
+          // repo) isn't guaranteed to sit exactly at the character's
+          // visual midpoint either, hence reading center/size off the
+          // real geometry rather than assuming one.
           var box = new THREE.Box3().setFromObject(model);
-          var center = box.getCenter(new THREE.Vector3());
           var size = box.getSize(new THREE.Vector3());
-          var height = Math.max(size.y, 0.1);
+          var center = box.getCenter(new THREE.Vector3());
+          var maxSize = Math.max(size.x, size.y, size.z, 1e-6);
+
+          var fitHeightDistance = maxSize / (2 * Math.tan((Math.PI * camera.fov) / 360));
+          var fitWidthDistance = fitHeightDistance / camera.aspect;
+          var distance = 1.35 * Math.max(fitHeightDistance, fitWidthDistance);
+
           controls.target.copy(center);
-          camera.position.set(center.x, center.y + height * 0.15, center.z + height * 1.9);
-          camera.near = Math.max(height / 100, 0.01);
-          camera.far = height * 100;
+          camera.position.set(center.x, center.y + size.y * 0.08, center.z + distance);
+          camera.near = distance / 100;
+          camera.far = distance * 100;
           camera.updateProjectionMatrix();
+
+          // Scaled off this same maxSize, so zooming in/out stays
+          // bounded relative to THIS model's own real size instead of
+          // an arbitrary fixed range that fit a different scale.
+          controls.minDistance = maxSize * 0.4;
+          controls.maxDistance = maxSize * 6;
           controls.update();
         },
         undefined,
