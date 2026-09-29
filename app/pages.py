@@ -1826,7 +1826,7 @@ _MODEL_VIEWER_HEAD = """
           // they can adjust from.
           var fitHeightDistance = maxSize / (2 * Math.tan((Math.PI * camera.fov) / 360));
           var fitWidthDistance = fitHeightDistance / camera.aspect;
-          var distance = 1.08 * Math.max(fitHeightDistance, fitWidthDistance);
+          var distance = 1.0 * Math.max(fitHeightDistance, fitWidthDistance);
 
           // Orbit around, and frame on, the bounding box's own
           // geometric center -- the default pivot, not an approximated
