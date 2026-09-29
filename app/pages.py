@@ -1594,50 +1594,55 @@ _MODEL_VIEWER_HEAD = """
           // primitive's own geometry.userData (not the mesh's), so this
           // reads it from there.
           //
-          // A first attempt here only set THREE.Object3D#renderOrder from
-          // priority/bias, which turned out to have no visible effect --
-          // expected in hindsight: renderOrder only changes which of two
-          // *exactly depth-tied* fragments wins, and only decides ordering
-          // between transparent draws generally. It does nothing for two
-          // surfaces that are merely *close* in real depth (a cape mesh
-          // genuinely a hair behind the back mesh in the model's own
-          // coordinates, an amulet genuinely a hair in front of the chest)
-          // -- the actual depth test still wins on real depth regardless
-          // of draw order, which is exactly the "still there" report this
-          // fix is responding to.
+          // Two earlier attempts here, both wrong in informative ways:
+          //   1. renderOrder alone: no visible effect. renderOrder only
+          //      breaks EXACT depth ties (and otherwise only matters for
+          //      transparent draw order) -- it does nothing when two
+          //      surfaces are merely close but not equal in real depth,
+          //      which is the actual case here (a cape mesh genuinely a
+          //      hair behind the back, an amulet genuinely a hair in
+          //      front of the chest).
+          //   2. depthTest = false on non-default-priority materials:
+          //      made things worse. Turning the depth test off doesn't
+          //      just stop a primitive being occluded by OTHER objects --
+          //      it also disables the self-occlusion within that
+          //      primitive's own draw call, so anything with real internal
+          //      front/back layers (a shield's spikes behind its face, for
+          //      one) loses the depth ordering that hides its own back
+          //      geometry, and the back shows through the front.
           //
-          // So for faces that carry a non-default priority/bias -- which
-          // is precisely the set OSRS itself singles out as needing
-          // special-cased draw-order handling instead of a strict depth
-          // comparison -- this now disables the depth *test* (not the
-          // depth *write*) on their own material and relies entirely on
-          // renderOrder/submission order for them, same as before for
-          // everything else. That reproduces what OSRS's own renderer
-          // actually does for these faces: trust the explicit priority
-          // over raw depth. depthWrite stays on so anything drawn after
-          // them is still correctly occluded by them.
-          //
-          // One important wrinkle: GlbWriter's own material dedup key is
-          // (textureId, translucent) only, NOT priority/bias, so two
-          // primitives with different priority/bias can end up pointing
-          // at the very same glTF material index, and GLTFLoader hands
-          // back the very same THREE.Material *instance* for both --
-          // mutating node.material in place would leak this change onto a
-          // sibling primitive with a different priority/bias that happens
-          // to share it. Cloning before mutating avoids that.
-          //
-          // Still a best-effort reading of what "priority"/"bias" mean in
-          // the game's own rendering, since this can't be visually
-          // verified in this environment -- worth another look if the
-          // cape/amulet issue persists after this.
+          // This tries a narrower tool instead: WebGL polygon offset
+          // (THREE.Material#polygonOffset), which nudges the actual depth
+          // value written/tested for a whole primitive by a small,
+          // constant amount, rather than switching the test off. A real,
+          // large depth gap -- like a shield's own front vs. back layers
+          // -- stays correctly ordered, since it dwarfs this nudge; a
+          // small gap from gear modeled flush against the body is what
+          // the nudge is sized to close. Negative offset pulls a
+          // primitive toward the camera (three.js's own convention, e.g.
+          // its decal example) -- so a higher priority/bias, which should
+          // win, gets a more negative offset. The per-step size below is
+          // a guess, deliberately small (this can't be visually verified
+          // in this environment) -- still needs the user's own eyes on
+          // it, and may need scaling up if the effect is too subtle to
+          // see, or down if it distorts real geometry.
           model.traverse(function (node) {
             if (node.isMesh && node.geometry && node.geometry.userData) {
               var priority = node.geometry.userData.osrsPriority || 0;
               var bias = node.geometry.userData.osrsBias || 0;
               node.renderOrder = priority * 256 + bias;
               if ((priority !== 0 || bias !== 0) && node.material) {
+                // Materials can be shared across primitives (GlbWriter's
+                // own dedup key is texture+translucency only, not
+                // priority/bias), so clone before mutating -- otherwise
+                // this would also nudge a sibling primitive with a
+                // different priority/bias that happens to reference the
+                // same material.
                 node.material = node.material.clone();
-                node.material.depthTest = false;
+                node.material.polygonOffset = true;
+                var offset = -(priority * 1.0 + bias * 0.01);
+                node.material.polygonOffsetFactor = offset;
+                node.material.polygonOffsetUnits = offset;
               }
             }
           });
