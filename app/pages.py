@@ -1569,17 +1569,10 @@ _MODEL_VIEWER_HEAD = """
       // viewer like this one, so panning is off outright rather than
       // rebinding it to another button.
       controls.enablePan = false;
-      // minDistance/maxDistance are set once the model's own real size
-      // is known below, not here as a fixed 0.5-10 range -- OSRS's own
-      // model-space units aren't meter-scale (see ModelMeshBuilder's
-      // own top-of-file doc in the myscape-plugin repo), so a fixed
-      // absolute zoom range clamped the camera back down to well
-      // inside the model regardless of how far away it was actually
-      // positioned below: a real captured model spans on the order of
-      // hundreds of these units, so a maxDistance of 10 pulled the
-      // camera to 10 units from center on the very first
-      // controls.update() call, deep inside the torso -- exactly the
-      // "looking at the inside of the model" bug this fixes.
+      // Zoom is off outright -- the camera below is framed once, to a
+      // fixed distance that fits the model, and that's the only view
+      // the user ever gets.
+      controls.enableZoom = false;
 
       var loader = new GLTFLoader();
       loader.parse(
@@ -1824,38 +1817,25 @@ _MODEL_VIEWER_HEAD = """
           var center = box.getCenter(new THREE.Vector3());
           var maxSize = Math.max(size.x, size.y, size.z, 1e-6);
 
+          // A snug fit -- just enough padding that the model doesn't
+          // touch the frame edges -- rather than the roomier framing a
+          // zoomable view would want. Zoom is disabled entirely (see
+          // controls.enableZoom above), so this fixed distance is the
+          // only view the user ever gets; it has to already read as
+          // "the character fills the viewport," not a starting point
+          // they can adjust from.
           var fitHeightDistance = maxSize / (2 * Math.tan((Math.PI * camera.fov) / 360));
           var fitWidthDistance = fitHeightDistance / camera.aspect;
-          var distance = 1.35 * Math.max(fitHeightDistance, fitWidthDistance);
+          var distance = 1.08 * Math.max(fitHeightDistance, fitWidthDistance);
 
-          // Orbit around, and zoom toward, roughly the character's own
-          // head rather than the bounding box's geometric center (which
-          // for a standing humanoid sits down around the waist). There's
-          // no joint/bone data available from this export to find the
-          // head exactly (see ModelMeshBuilder's own top-of-file doc in
-          // the myscape-plugin repo) -- only the overall mesh bounding
-          // box -- so this approximates head height as most of the way
-          // up the box's own total height rather than reading a real
-          // skeletal position.
-          var headTarget = new THREE.Vector3(center.x, box.min.y + size.y * 0.88, center.z);
-
-          controls.target.copy(headTarget);
-          camera.position.set(headTarget.x, headTarget.y + size.y * 0.08, headTarget.z + distance);
+          // Orbit around, and frame on, the bounding box's own
+          // geometric center -- the default pivot, not an approximated
+          // head position.
+          controls.target.copy(center);
+          camera.position.set(center.x, center.y, center.z + distance);
           camera.near = distance / 100;
           camera.far = distance * 100;
           camera.updateProjectionMatrix();
-
-          // Zoom is bounded relative to this same fitted distance now,
-          // not an arbitrary maxSize-scaled range: maxDistance is
-          // exactly that starting distance, so the user can't pull back
-          // any further than the initial framing, and minDistance only
-          // keeps a quarter of the zoom-in room the old maxSize*0.4
-          // floor allowed, so getting in close is still possible but
-          // nowhere near as far as before.
-          var previousMinDistance = maxSize * 0.4;
-          var zoomInRoom = Math.max(distance - previousMinDistance, 0);
-          controls.minDistance = distance - zoomInRoom * 0.25;
-          controls.maxDistance = distance;
 
           // Keep orbiting within 45 degrees of this initial, front-on
           // view in every direction. Read back from the camera's own
