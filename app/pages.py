@@ -1563,6 +1563,12 @@ _MODEL_VIEWER_HEAD = """
       var controls = new OrbitControls(camera, renderer.domElement);
       controls.target.set(0, 1, 0);
       controls.enableDamping = true;
+      // Right-click (OrbitControls' default RIGHT mouse binding) pans
+      // the camera off the character entirely, with nothing forcing it
+      // back -- there's nothing worth panning to on a single-subject
+      // viewer like this one, so panning is off outright rather than
+      // rebinding it to another button.
+      controls.enablePan = false;
       // minDistance/maxDistance are set once the model's own real size
       // is known below, not here as a fixed 0.5-10 range -- OSRS's own
       // model-space units aren't meter-scale (see ModelMeshBuilder's
@@ -1671,11 +1677,16 @@ _MODEL_VIEWER_HEAD = """
           // any bug currently known.
           var PRIORITY_STEP_GAME_UNITS = 3.0;
           var PRIORITY_MAX_STEPS = 6;
-          var priorityNudgeMultiplier = 1.0;
+          // Fixed, not user-adjustable. 1.0 (RuneProfile's own tuned
+          // constant, used unconverted -- see this block's own doc
+          // above) was confirmed correct for both the cape and the
+          // amulet against a real in-game comparison; halved here for
+          // a gentler nudge than that confirmed value.
+          var PRIORITY_NUDGE_MULTIPLIER = 0.5;
 
-          function applyPriorityNudge(material, baseNudge) {
+          function applyPriorityNudge(material, nudge) {
             material.onBeforeCompile = function (shader) {
-              shader.uniforms.uPriorityNudge = { value: baseNudge * priorityNudgeMultiplier };
+              shader.uniforms.uPriorityNudge = { value: nudge };
               shader.vertexShader = shader.vertexShader
                 .replace(
                   "#include <common>",
@@ -1699,7 +1710,6 @@ _MODEL_VIEWER_HEAD = """
                     "gl_Position = projectionMatrix * mvPosition;",
                   ].join("\\n")
                 );
-              material.userData.priorityShader = shader;
             };
             // Three keys its compiled-program cache on the shader source,
             // which onBeforeCompile has already changed identically for
@@ -1713,13 +1723,8 @@ _MODEL_VIEWER_HEAD = """
             material.needsUpdate = true;
           }
 
-          var SMALL_PRIMITIVE_TRIANGLE_THRESHOLD = 40;
-          var taggedNodes = [];
-          var priorityNudgedNodes = [];
-          var allMeshNodes = [];
           model.traverse(function (node) {
             if (!node.isMesh || !node.geometry) return;
-            allMeshNodes.push(node);
             if (node.material) {
               // GlbWriter (myscape-plugin repo) always exports
               // doubleSided: true, deliberately -- some gear/cloth
@@ -1767,20 +1772,15 @@ _MODEL_VIEWER_HEAD = """
               // situation.
               node.material = node.material.clone();
               if (priority !== 0 || bias !== 0) {
-                var index = node.geometry.index;
-                var triangleCount = index ? Math.round(index.count / 3) : null;
-                taggedNodes.push({ node: node, priority: priority, bias: bias, triangleCount: triangleCount });
                 if (priority !== 0) {
-                  var baseNudge = Math.min(priority, PRIORITY_MAX_STEPS) * PRIORITY_STEP_GAME_UNITS;
-                  applyPriorityNudge(node.material, baseNudge);
-                  priorityNudgedNodes.push({ node: node, baseNudge: baseNudge });
+                  var nudge = Math.min(priority, PRIORITY_MAX_STEPS) * PRIORITY_STEP_GAME_UNITS * PRIORITY_NUDGE_MULTIPLIER;
+                  applyPriorityNudge(node.material, nudge);
                 }
                 if (window.console) {
                   console.log("[osrs-priority-debug]", {
                     name: node.name || "(unnamed)",
                     priority: priority,
                     bias: bias,
-                    triangleCount: triangleCount,
                   });
                 }
               }
@@ -1807,61 +1807,6 @@ _MODEL_VIEWER_HEAD = """
             }
           });
 
-          function applyPriorityNudgeScale(multiplier) {
-            priorityNudgeMultiplier = multiplier;
-            priorityNudgedNodes.forEach(function (entry) {
-              var shader = entry.node.material.userData.priorityShader;
-              if (shader) {
-                shader.uniforms.uPriorityNudge.value = entry.baseNudge * multiplier;
-              }
-            });
-          }
-
-          function applyUnhideSmall(enabled) {
-            taggedNodes.forEach(function (entry) {
-              if (entry.triangleCount !== null && entry.triangleCount <= SMALL_PRIMITIVE_TRIANGLE_THRESHOLD) {
-                entry.node.material.depthTest = !enabled;
-              }
-            });
-          }
-
-          function applyWireframe(enabled) {
-            allMeshNodes.forEach(function (node) {
-              if (node.material) {
-                node.material.wireframe = enabled;
-              }
-            });
-          }
-
-          var debugPanel = document.getElementById("modelViewerDebugPanel");
-          var offsetSlider = document.getElementById("modelViewerOffsetScale");
-          var offsetValueLabel = document.getElementById("modelViewerOffsetScaleValue");
-          var unhideSmallToggle = document.getElementById("modelViewerUnhideSmallToggle");
-          var wireframeToggle = document.getElementById("modelViewerWireframeToggle");
-          if (taggedNodes.length && debugPanel && offsetSlider && offsetValueLabel) {
-            debugPanel.style.display = "flex";
-            applyPriorityNudgeScale(parseFloat(offsetSlider.value));
-            offsetSlider.addEventListener("input", function () {
-              var multiplier = parseFloat(offsetSlider.value);
-              offsetValueLabel.textContent = multiplier.toFixed(1);
-              applyPriorityNudgeScale(multiplier);
-              if (window.console) {
-                console.log("[osrs-priority-debug] nudge multiplier ->", multiplier);
-              }
-            });
-            if (unhideSmallToggle) {
-              applyUnhideSmall(unhideSmallToggle.checked);
-              unhideSmallToggle.addEventListener("change", function () {
-                applyUnhideSmall(unhideSmallToggle.checked);
-              });
-            }
-          }
-          if (wireframeToggle) {
-            wireframeToggle.addEventListener("change", function () {
-              applyWireframe(wireframeToggle.checked);
-            });
-          }
-
           // Frame the camera to fit the model's own real bounding box,
           // using the standard "fit object in view" distance formula
           // (derived purely from the camera's own vertical FOV and the
@@ -1883,17 +1828,47 @@ _MODEL_VIEWER_HEAD = """
           var fitWidthDistance = fitHeightDistance / camera.aspect;
           var distance = 1.35 * Math.max(fitHeightDistance, fitWidthDistance);
 
-          controls.target.copy(center);
-          camera.position.set(center.x, center.y + size.y * 0.08, center.z + distance);
+          // Orbit around, and zoom toward, roughly the character's own
+          // head rather than the bounding box's geometric center (which
+          // for a standing humanoid sits down around the waist). There's
+          // no joint/bone data available from this export to find the
+          // head exactly (see ModelMeshBuilder's own top-of-file doc in
+          // the myscape-plugin repo) -- only the overall mesh bounding
+          // box -- so this approximates head height as most of the way
+          // up the box's own total height rather than reading a real
+          // skeletal position.
+          var headTarget = new THREE.Vector3(center.x, box.min.y + size.y * 0.88, center.z);
+
+          controls.target.copy(headTarget);
+          camera.position.set(headTarget.x, headTarget.y + size.y * 0.08, headTarget.z + distance);
           camera.near = distance / 100;
           camera.far = distance * 100;
           camera.updateProjectionMatrix();
 
-          // Scaled off this same maxSize, so zooming in/out stays
-          // bounded relative to THIS model's own real size instead of
-          // an arbitrary fixed range that fit a different scale.
-          controls.minDistance = maxSize * 0.4;
-          controls.maxDistance = maxSize * 6;
+          // Zoom is bounded relative to this same fitted distance now,
+          // not an arbitrary maxSize-scaled range: maxDistance is
+          // exactly that starting distance, so the user can't pull back
+          // any further than the initial framing, and minDistance only
+          // keeps a quarter of the zoom-in room the old maxSize*0.4
+          // floor allowed, so getting in close is still possible but
+          // nowhere near as far as before.
+          var previousMinDistance = maxSize * 0.4;
+          var zoomInRoom = Math.max(distance - previousMinDistance, 0);
+          controls.minDistance = distance - zoomInRoom * 0.25;
+          controls.maxDistance = distance;
+
+          // Keep orbiting within 45 degrees of this initial, front-on
+          // view in every direction. Read back from the camera's own
+          // actual offset from its target (rather than assumed to be
+          // exactly level/head-on) so this stays correct even if the
+          // framing above ever changes.
+          var initialOffset = camera.position.clone().sub(controls.target);
+          var initialSpherical = new THREE.Spherical().setFromVector3(initialOffset);
+          controls.minAzimuthAngle = initialSpherical.theta - Math.PI / 4;
+          controls.maxAzimuthAngle = initialSpherical.theta + Math.PI / 4;
+          controls.minPolarAngle = Math.max(0, initialSpherical.phi - Math.PI / 4);
+          controls.maxPolarAngle = Math.min(Math.PI, initialSpherical.phi + Math.PI / 4);
+
           controls.update();
         },
         undefined,
@@ -2098,12 +2073,6 @@ def render_character_overview(player: PlayerView) -> str:
     <div class="model-viewer-card" id="modelViewerCard">
       <div class="model-viewer-canvas-wrap" id="modelViewerCanvasWrap">
         <canvas id="modelViewerCanvas"></canvas>
-        <div class="model-viewer-debug-panel" id="modelViewerDebugPanel">
-          <label for="modelViewerOffsetScale">priority nudge multiplier: <span id="modelViewerOffsetScaleValue">1.0</span></label>
-          <input type="range" id="modelViewerOffsetScale" min="0" max="3" step="0.1" value="1">
-          <label><input type="checkbox" id="modelViewerUnhideSmallToggle"> un-hide small accessories</label>
-          <label><input type="checkbox" id="modelViewerWireframeToggle"> wireframe</label>
-        </div>
       </div>
       <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
     </div>

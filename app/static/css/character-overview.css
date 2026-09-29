@@ -451,31 +451,38 @@
 }
 
 /* 3D model viewer card (render_character_overview in app/pages.py) --
-   below .co-cards-row, full width like .co-summary-row above rather
-   than squeezed in as a third flex item: skills-card + hiscores-card
-   already sum to exactly 880px, this page's own .wrap cap (myscape.css
-   -- see .co-cards-row's own comment for where 290+572+18 comes from),
-   so there's no room left for a third card beside them without
-   breaking that row's "always side by side, no scrollbar" design.
-   Same panel-translucent/border/radius/padding treatment as every
-   other card on this page. */
+   below .co-cards-row rather than squeezed into it as a third flex
+   item: skills-card + hiscores-card already sum to exactly 880px, this
+   page's own .wrap cap (myscape.css -- see .co-cards-row's own comment
+   for where 290+572+18 comes from), so there's no room left for a
+   third card beside them. Capped narrower than that and centered
+   (rather than stretched to the full 880px like .co-summary-row above)
+   and paired with .model-viewer-canvas-wrap's own portrait
+   aspect-ratio below, so a standing character reads as a tall portrait
+   rather than a wide, mostly-empty strip. Same panel-translucent/
+   border/radius/padding treatment as every other card on this page. */
 .model-viewer-card {
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
-  margin-bottom: 18px;
+  margin: 0 auto 18px;
+  max-width: 300px;
 }
 
-/* Sized by this wrapper (a fixed height, full available width) rather
-   than the <canvas> element's own width/height attributes -- the
-   module script in render_character_overview reads this element's
-   clientWidth/clientHeight and calls renderer.setSize with them, which
-   is what actually drives the canvas's backing-store resolution. */
+/* Sized by this wrapper (a fixed aspect ratio, full available width up
+   to .model-viewer-card's own max-width) rather than the <canvas>
+   element's own width/height attributes -- the module script in
+   render_character_overview reads this element's clientWidth/
+   clientHeight and calls renderer.setSize with them, which is what
+   actually drives the canvas's backing-store resolution. Portrait (2
+   wide : 3 tall) rather than the previous fixed 360px landscape
+   height, since a standing character fills a tall frame far better
+   than a wide one. */
 .model-viewer-canvas-wrap {
   position: relative;
   width: 100%;
-  height: 360px;
+  aspect-ratio: 2 / 3;
   border-radius: calc(var(--radius) - 2px);
   overflow: hidden;
 }
@@ -496,42 +503,4 @@
   text-align: center;
   color: var(--text-faint);
   font-size: 13px;
-}
-
-/* TEMPORARY: a live-tunable overlay for calibrating the OSRS
-   render-priority depth-offset scale the module script above applies
-   to gear modeled flush against the body (a cape against the back, an
-   amulet against the chest) -- screenshots alone couldn't pin down the
-   right scale (this environment can't render the page itself to check
-   each guess), so this exposes it as a slider the scale can be tuned
-   against the real, live model instead. Hidden by default; the module
-   script only reveals it once a model with tagged primitives has
-   actually loaded. Delete this rule and the corresponding HTML/script
-   once a final offset scale is hard-coded and the slider removed. */
-.model-viewer-debug-panel {
-  display: none;
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  right: 8px;
-  z-index: 2;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: #fff;
-}
-.model-viewer-debug-panel input[type="range"] {
-  width: 140px;
-  vertical-align: middle;
-}
-.model-viewer-debug-panel label {
-  white-space: nowrap;
-}
-.model-viewer-debug-panel input[type="checkbox"] {
-  vertical-align: middle;
-  margin-right: 2px;
 }
