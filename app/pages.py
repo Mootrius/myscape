@@ -1634,6 +1634,28 @@ _MODEL_VIEWER_HEAD = """
           // has in a real capture. That's real data to calibrate the
           // offset against instead of a fourth guess. Safe to delete
           // once the offset is dialed in.
+          // Real capture data (logged by an earlier version of this block) showed
+          // every primitive reporting the SAME vertex count and bounding box --
+          // not a bug in the export, but a red herring in that diagnostic: all
+          // primitives here share one common position/color vertex buffer
+          // (ModelMeshBuilder dedupes vertices across the whole mesh) and only
+          // differ in which INDICES they draw, so geometry.attributes.position
+          // and a plain computeBoundingBox() describe the whole model, not any
+          // one primitive's own footprint. That data did confirm real,
+          // meaningfully varying priority/bias values are present (0-10 for
+          // priority, several distinct bias values even within one priority),
+          // just not which piece of gear each one is.
+          //
+          // So instead of inferring identity from geometry, this makes it
+          // visible directly: every primitive with a non-default priority/bias
+          // gets flat-colored by a hash of its own (priority, bias) pair
+          // (golden-angle hue spacing so neighboring values look visibly
+          // different), replacing its real texture/vertex color, so a
+          // screenshot can be matched by eye against which piece is which
+          // priority/bias. TEMPORARY -- once the cape/amulet primitives are
+          // identified this way, delete the color override (keep renderOrder
+          // and polygonOffset) and tune the offset using the real values
+          // instead of a blind guess.
           model.traverse(function (node) {
             if (node.isMesh && node.geometry && node.geometry.userData) {
               var priority = node.geometry.userData.osrsPriority || 0;
@@ -1643,30 +1665,30 @@ _MODEL_VIEWER_HEAD = """
                 // Materials can be shared across primitives (GlbWriter's
                 // own dedup key is texture+translucency only, not
                 // priority/bias), so clone before mutating -- otherwise
-                // this would also nudge a sibling primitive with a
-                // different priority/bias that happens to reference the
-                // same material.
+                // this would also nudge (and recolor) a sibling primitive
+                // with a different priority/bias that happens to
+                // reference the same material.
                 node.material = node.material.clone();
                 node.material.polygonOffset = true;
                 var offset = -(priority * 1.0 + bias * 0.01);
                 node.material.polygonOffsetFactor = offset;
                 node.material.polygonOffsetUnits = offset;
-              }
-              if (window.console) {
-                var posAttr = node.geometry.attributes && node.geometry.attributes.position;
-                var bbox = node.geometry.boundingBox;
-                if (!bbox) {
-                  node.geometry.computeBoundingBox();
-                  bbox = node.geometry.boundingBox;
+
+                var combined = priority * 16 + bias;
+                var hue = (combined * 137.508) % 360;
+                node.material.vertexColors = false;
+                node.material.map = null;
+                node.material.color.setHSL(hue / 360, 1, 0.5);
+
+                if (window.console)
+                {
+                  console.log('[osrs-priority-debug]', {
+                    name: node.name || '(unnamed)',
+                    priority: priority,
+                    bias: bias,
+                    hueDegrees: Math.round(hue),
+                  });
                 }
-                console.log('[osrs-priority-debug]', {
-                  name: node.name || '(unnamed)',
-                  priority: priority,
-                  bias: bias,
-                  vertexCount: posAttr ? posAttr.count : null,
-                  boundingBoxMin: bbox ? bbox.min.toArray() : null,
-                  boundingBoxMax: bbox ? bbox.max.toArray() : null,
-                });
               }
             }
           });
