@@ -388,14 +388,16 @@
    grid to its right always starts at the same x position regardless
    of which tab is active, min-width included so a long page name
    (e.g. "Chambers of Xeric (Solo)") never expands the rail. Its own
-   scrollbar rather than growing the whole card taller, capped to
-   roughly match .co-left-col's own footprint beside it (the model
-   viewer + skill grid stacked to this card's left, not above it any
-   more). */
+   scrollbar rather than growing the whole card taller, height fixed
+   (not capped) to exactly the space left after .clog-tabs above it
+   once .clog-card is set to match .model-viewer-card's own height --
+   see .clog-items below, held to this same height so both panes (and
+   so .clog-card as a whole) resolve to that one deterministic
+   height. */
 .clog-pages {
   flex: 0 0 226px;
   min-width: 0;
-  max-height: 600px;
+  height: 361px;
   overflow-y: auto;
   scrollbar-gutter: stable;
   display: flex;
@@ -419,6 +421,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Without this, once a tab's total row height exceeds .clog-pages'
+     own fixed height below, the flex column shrinks every row
+     proportionally to fit rather than leaving them at their natural
+     height and just scrolling -- that's what made rows in a
+     long/scrolling tab (Bosses) visibly shorter than rows in a short
+     one (Raids). Locking natural height here is what keeps every
+     page's own "box" the same size in every section. */
+  flex-shrink: 0;
 }
 .clog-page-btn:hover { color: var(--text); background: var(--panel-2); }
 .clog-page-btn.active {
@@ -436,22 +446,29 @@
    signal the page list gives without opening every page in turn. */
 .clog-page-btn.complete .clog-page-count { color: var(--gold-dim); }
 
-/* The active page's own item grid -- fixed-size tiles, same wrap-and-
-   gap approach as .skills-grid/.hiscores-grid above rather than a
-   fixed column count, so it reflows cleanly at any card width. */
+/* The active page's own item grid -- unlike .skills-grid/.hiscores-
+   grid above, this one IS a fixed column count: repeat(6, 1fr) so
+   every row holds exactly 6 tiles by construction and the last
+   column's right edge always lands flush with .clog-pages/.clog-tabs'
+   own right edge, at any card width, with no per-tile px tuning.
+   Its own scrollbar rather than growing the card, height matched to
+   .clog-pages so both panes settle at the same fixed height (see that
+   rule's own comment). */
 .clog-items {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
+  height: 361px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   align-content: flex-start;
   gap: 6px;
-  min-height: 600px;
 }
 .clog-item {
   position: relative;
-  width: 54px;
-  height: 54px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -464,8 +481,8 @@
    this" color across the whole card. */
 .clog-item.obtained { border-color: var(--gold-dim); }
 .clog-item-icon {
-  max-width: 42px;
-  max-height: 42px;
+  width: 78%;
+  height: 78%;
   object-fit: contain;
   image-rendering: pixelated;
   /* Same RuneLite item-icon CDN as every other icon in this app
