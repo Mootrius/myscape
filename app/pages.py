@@ -2201,11 +2201,18 @@ def render_character_overview(player: PlayerView) -> str:
         if (!tab) return;
         tab.pages.forEach(function (page, pageIndex) {
           var obtainedCount = clogObtainedCount(clogUniqueIds(page.items));
+          // Red/yellow/green by how far along this page is -- checked
+          // in this order so a page with 0 items (0/0) reads as
+          // complete rather than as zero, the same "nothing left to
+          // get" edge case elsewhere on this page already treats as
+          // done.
+          var progressState = obtainedCount === page.items.length ? 'complete'
+            : obtainedCount === 0 ? 'zero'
+            : 'started';
           var btn = document.createElement('button');
           btn.type = 'button';
-          btn.className = 'clog-page-btn'
-            + (pageIndex === clogActivePage ? ' active' : '')
-            + (obtainedCount === page.items.length ? ' complete' : '');
+          btn.className = 'clog-page-btn ' + progressState
+            + (pageIndex === clogActivePage ? ' active' : '');
           var label = document.createElement('span');
           label.textContent = page.name;
           var count = document.createElement('span');
@@ -2258,6 +2265,56 @@ def render_character_overview(player: PlayerView) -> str:
         clogEmpty.style.display = 'block';
       }
 
+      // Keeps .clog-pages/.clog-items' own height locked to whatever
+      // .model-viewer-card's real rendered height is, live, instead of
+      // a fixed px number baked into the CSS. A fixed number has to
+      // assume an exact .clog-tabs height, which depends on the
+      // RuneScapePlain11 web font's own real line-height metrics
+      // (font-display: optional up in myscape.css, see that rule's own
+      // comment) -- not always the font actually painted (a slow
+      // network, a dev/test environment without that font file, a
+      // different browser's own hinting) at the moment the CSS was
+      // last tuned, which is exactly the kind of off-by-a-couple-px
+      // drift a hardcoded constant can't self-correct. Computing it
+      // here, from the real boxes, makes clogCard match modelCard's
+      // height exactly regardless of which font actually rendered,
+      // the viewport width, page zoom, or browser.
+      var modelViewerCard = document.getElementById('modelViewerCard');
+      function syncClogHeight() {
+        if (!modelViewerCard || !clogCard || !clogPagesEl || !clogItemsEl) return;
+        var modelBoxHeight = modelViewerCard.getBoundingClientRect().height;
+        if (!modelBoxHeight) return;
+        var clogCS = getComputedStyle(clogCard);
+        var tabsEl = clogCard.querySelector('.clog-tabs');
+        var tabsCS = tabsEl ? getComputedStyle(tabsEl) : null;
+        var panesHeight = modelBoxHeight
+          - parseFloat(clogCS.paddingTop)
+          - parseFloat(clogCS.paddingBottom)
+          - parseFloat(clogCS.borderTopWidth)
+          - parseFloat(clogCS.borderBottomWidth)
+          - (tabsEl ? tabsEl.getBoundingClientRect().height : 0)
+          - (tabsCS ? parseFloat(tabsCS.marginBottom) : 0);
+        if (panesHeight > 0) {
+          clogPagesEl.style.height = panesHeight + 'px';
+          clogItemsEl.style.height = panesHeight + 'px';
+        }
+      }
+      if (modelViewerCard && window.ResizeObserver) {
+        new ResizeObserver(syncClogHeight).observe(modelViewerCard);
+      } else {
+        window.addEventListener('resize', syncClogHeight);
+      }
+      syncClogHeight();
+      // Re-run once the real web font swaps in (it can arrive a beat
+      // after first paint -- see font-display: optional's own comment
+      // in myscape.css), since that's exactly the kind of change
+      // ResizeObserver on modelViewerCard alone wouldn't catch (the
+      // model card's own height is width-driven, not font-driven --
+      // it's .clog-tabs' height this is really guarding against).
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(syncClogHeight);
+      }
+
       if (clogCard) {
         fetch('/api/players/me/collection-log')
           .then(function (r) { return r.ok ? r.json() : null; })
@@ -2271,6 +2328,11 @@ def render_character_overview(player: PlayerView) -> str:
             renderClogTabs();
             renderClogPages();
             renderClogItems();
+            // .clog-tabs goes from empty (0px tall) to holding real
+            // tab buttons right here -- re-sync now that its real
+            // height exists, rather than waiting for an unrelated
+            // resize to trigger it.
+            syncClogHeight();
           })
           .catch(function () { showClogEmpty(); });
       }

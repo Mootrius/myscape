@@ -388,17 +388,22 @@
    grid to its right always starts at the same x position regardless
    of which tab is active, min-width included so a long page name
    (e.g. "Chambers of Xeric (Solo)") never expands the rail. Its own
-   scrollbar rather than growing the whole card taller, height fixed
-   (not capped) to exactly the space left after .clog-tabs above it
-   once .clog-card is set to match .model-viewer-card's own height --
-   see .clog-items below, held to this same height so both panes (and
-   so .clog-card as a whole) resolve to that one deterministic
-   height. */
+   scrollbar rather than growing the whole card taller. The 361px
+   height below is only a static fallback for the instant before
+   syncClogHeight's own script runs (see that function's own comment
+   in render_character_overview, app/pages.py) -- that script
+   overrides it with a live-measured value matching .model-viewer-
+   card's own real height exactly, so .clog-card as a whole lines up
+   with it regardless of the actual font/zoom/width in play, not just
+   at the one width/font this fallback number was measured against.
+   overscroll-behavior: contain keeps scrolling past this rail's own
+   top/bottom edge from chaining into a scroll of the whole page. */
 .clog-pages {
   flex: 0 0 226px;
   min-width: 0;
   height: 361px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
@@ -439,26 +444,35 @@
 .clog-page-count {
   flex: none;
   font-size: 15px;
-  color: var(--text-faint);
 }
-/* A fully-obtained page's own count reads in gold-dim instead of the
-   usual faint gray -- the one piece of "am I done with this page"
-   signal the page list gives without opening every page in turn. */
-.clog-page-btn.complete .clog-page-count { color: var(--gold-dim); }
+/* Red/yellow/green by how far obtained this page is -- zero, partial,
+   or complete (see progressState in renderClogPages, app/pages.py) --
+   the same red/amber/green status vocabulary mindmaps.css' own node-
+   color states use, so this reads as a status signal at a glance
+   rather than a plain fraction, without opening every page in turn.
+   All three states set their own color explicitly (not a colored
+   "complete" layered on an unstyled default) so no page's state is
+   ambiguous. */
+.clog-page-btn.zero .clog-page-count { color: var(--red); }
+.clog-page-btn.started .clog-page-count { color: var(--yellow); }
+.clog-page-btn.complete .clog-page-count { color: var(--green); }
 
 /* The active page's own item grid -- unlike .skills-grid/.hiscores-
    grid above, this one IS a fixed column count: repeat(6, 1fr) so
    every row holds exactly 6 tiles by construction and the last
    column's right edge always lands flush with .clog-pages/.clog-tabs'
    own right edge, at any card width, with no per-tile px tuning.
-   Its own scrollbar rather than growing the card, height matched to
-   .clog-pages so both panes settle at the same fixed height (see that
-   rule's own comment). */
+   Its own scrollbar rather than growing the card, height kept in sync
+   with .clog-pages by the same syncClogHeight script (see that rule's
+   own comment) so both panes settle at whatever .model-viewer-card's
+   real height actually is. overscroll-behavior: contain, same
+   reasoning as .clog-pages above. */
 .clog-items {
   flex: 1;
   min-width: 0;
   height: 361px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -510,7 +524,10 @@
   position: absolute;
   right: 1px;
   bottom: 0px;
-  font-size: 9px;
+  /* Same 15px every page name in .clog-pages reads at (.clog-page-btn
+     above), per explicit instruction that this match it, rather than
+     the smaller badge size it used to carry. */
+  font-size: 15px;
   color: var(--gold);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
   line-height: 1;
