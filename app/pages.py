@@ -2229,6 +2229,13 @@ def render_character_overview(player: PlayerView) -> str:
         });
       }
 
+      // Same wiki-URL shape itemWikiUrl (elsewhere on this page, for gear
+      // slots) already builds -- kept as its own local copy rather than a
+      // shared helper since each render_* function's inline <script> here
+      // is independent with no shared module between them.
+      function clogItemWikiUrl(itemName) {
+        return 'https://oldschool.runescape.wiki/w/' + encodeURIComponent(String(itemName).replace(/ /g, '_'));
+      }
       function renderClogItems() {
         clogItemsEl.innerHTML = '';
         var tab = clogTabs[clogActiveTab];
@@ -2236,8 +2243,11 @@ def render_character_overview(player: PlayerView) -> str:
         if (!page) return;
         page.items.forEach(function (item) {
           var qty = clogObtained[String(item.id)];
-          var tile = document.createElement('div');
+          var tile = document.createElement('a');
           tile.className = 'clog-item' + (qty != null ? ' obtained' : '');
+          tile.href = clogItemWikiUrl(item.name);
+          tile.target = '_blank';
+          tile.rel = 'noopener';
           tile.title = qty != null ? item.name + ' \u2014 ' + formatInt(qty) : item.name;
           var img = document.createElement('img');
           img.className = 'clog-item-icon';

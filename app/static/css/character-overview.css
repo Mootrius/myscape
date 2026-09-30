@@ -489,6 +489,16 @@
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  /* Tiles are <a> elements (link to the item's wiki page) now, not plain
+     divs -- same link reset .skill-cell's own clickable tiles use, so a
+     tile doesn't suddenly look/read like a text link. */
+  color: inherit;
+  text-decoration: none;
+}
+.clog-item:hover {
+  /* Same hover affordance .gear-slot (purchase-goals.css) already uses
+     for its own clickable item tiles. */
+  background-color: rgb(51, 51, 54);
 }
 /* An obtained item's tile border picks up the same gold-dim accent
    .clog-page-btn.complete's own count uses -- one consistent "you have
@@ -522,7 +532,13 @@
    a "1" badge on every single non-stackable drop would just be noise. */
 .clog-item-qty {
   position: absolute;
-  right: 1px;
+  /* Digits have no descender, so line-height: 1's own box leaves real
+     whitespace below the glyph that a raw right/bottom offset comparison
+     doesn't see -- measured against the actual rendered glyph ink (not
+     just this box) the old right: 1px sat visibly closer to the tile's
+     right edge than bottom: 0px sat to its bottom edge. Nudged left only,
+     per instruction, to equalize the two visually; bottom stays put. */
+  right: 2.5px;
   bottom: 0px;
   /* Same 15px every page name in .clog-pages reads at (.clog-page-btn
      above), per explicit instruction that this match it, rather than
