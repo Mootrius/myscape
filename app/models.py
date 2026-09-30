@@ -178,6 +178,30 @@ class GameAccount(Base):
     # /api/players/me/diaries, full replace.
     diary_tiers = Column(JSONB, nullable=False, default=dict)
 
+    # collection_log_items: {<item id, as a string -- JSONB object keys
+    # are always strings>: <quantity>} for every collection log item
+    # the player has actually obtained, however many are currently
+    # captured -- NOT one entry per item the schema knows about (see
+    # app/collectionlog.py's own get_valid_item_ids/get_collection_log_
+    # tabs for the full, static, every-player-identical structure this
+    # is checked against and rendered alongside). An item id simply
+    # missing from this dict means "not yet obtained", the same way an
+    # area missing from diary_tiers above means "no tier complete yet"
+    # -- there's no separate boolean, the presence of the key IS the
+    # obtained flag. Synced by POST /api/players/me/collection-log,
+    # full replace -- see CollectionLogItemCapture in the
+    # Mootrius/myscape-plugin repo for how the plugin actually gets
+    # this data at all (it isn't cache data the way the schema
+    # structure is; the collection log widget has to actually be
+    # opened in-game).
+    collection_log_items = Column(JSONB, nullable=False, default=dict)
+    # When collection_log_items above was last synced -- null until the
+    # player has opened the collection log widget in-game at least once
+    # with the plugin running, same "never synced" meaning as
+    # hiscores_synced_at below rather than storage_synced_at's own
+    # per-key dict (there's only one thing to track here, not fourteen).
+    collection_log_synced_at = Column(DateTime(timezone=True), nullable=True)
+
     # storage_synced_at: {<storage key>: <ISO 8601 timestamp>} for every
     # one of the fourteen sources Storages Viewer's side-panel
     # Status section reports on -- "bank", "equipment", "inventory",

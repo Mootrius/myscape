@@ -46,6 +46,7 @@ from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
 from app.limiter import limiter
 from app.loot import build_loot_state, kc_counts_by_player, parse_loot_range_bound, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
+from app.collectionlog import get_collection_log_tabs, get_valid_item_ids
 from app.item_ids import find_item_ids
 from app.npc_names import search_npc_names
 from app.quest_names import search_quest_names
@@ -145,6 +146,8 @@ from app.schemas import (
     CharacterModelSyncResponse,
     CharacterSummarySyncRequest,
     CharacterSummarySyncResponse,
+    CollectionLogSyncRequest,
+    CollectionLogSyncResponse,
     CreateGearSetupRequest,
     CreateMindMapRequest,
     DashboardCardOrderRequest,
@@ -322,6 +325,16 @@ MAX_QUESTS_PER_SYNC = 1000
 # There are exactly 12 real OSRS achievement diary areas (see
 # DIARY_AREAS in app/mindmaps.py) -- a real ceiling, not a guess.
 MAX_DIARY_AREAS_PER_SYNC = 12
+# There are exactly as many real collection log item ids as
+# app.collectionlog.get_valid_item_ids() knows about (1721 as of this
+# writing) -- a real ceiling, not a guess, same spirit as
+# MAX_SKILLS_PER_SYNC/MAX_DIARY_AREAS_PER_SYNC above. A real sync is
+# always a full replace of every item the player has ever obtained
+# (see CollectionLogItemCapture in the Mootrius/myscape-plugin repo),
+# which only grows monotonically over a session/account lifetime, so
+# this is sized to the true maximum rather than a guessed "typical"
+# count.
+MAX_COLLECTION_LOG_ITEMS_PER_SYNC = len(get_valid_item_ids())
 # The plugin syncs one loot event immediately as it happens (see
 # MyscapePlugin#onLootReceived), so a real sync is always exactly 1 --
 # this is a defensive upper bound against a malformed/buggy client
@@ -1467,6 +1480,50 @@ def read_diaries(game_account: GameAccount = Depends(get_current_verified_game_a
     """The website's own read of the last-synced diary-tiers snapshot
     -- session-authenticated like every other GET here."""
     return {"diaryTiers": game_account.diary_tiers or {}}
+
+
+@app.post("/api/players/me/collection-log", response_model=CollectionLogSyncResponse)
+def sync_collection_log(
+    payload: CollectionLogSyncRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
+):
+    """Full replace of every collection log item the player has ever
+    obtained, and its quantity -- see GameAccount.collection_log_items'
+    own comment in app/models.py and CollectionLogItemCapture in the
+    Mootrius/myscape-plugin repo for how the plugin actually captures
+    this at all (unlike skills/quests/diaries above, it isn't cache
+    data -- the collection log widget has to actually be opened
+    in-game). Each item_id is validated against the real collection
+    log structure (CollectionLogItemIn in app/schemas.py), so a stale
+    plugin build reporting an id from a since-changed schema fails
+    that one item's validation rather than silently storing junk."""
+    if len(payload.items) > MAX_COLLECTION_LOG_ITEMS_PER_SYNC:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many collection log items in one sync (max {MAX_COLLECTION_LOG_ITEMS_PER_SYNC}).",
+        )
+    game_account.collection_log_items = {str(i.item_id): i.quantity for i in payload.items}
+    game_account.collection_log_synced_at = datetime.now(timezone.utc)
+    db.commit()
+    return CollectionLogSyncResponse(item_count=len(payload.items))
+
+
+@app.get("/api/players/me/collection-log")
+def read_collection_log(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """The website's own read of the last-synced collection log
+    snapshot -- session-authenticated like every other GET here.
+    Returns the player's own obtained/quantity state alongside the
+    full static tab/page/item structure (get_collection_log_tabs in
+    app/collectionlog.py) in one response, so the Character Overview
+    page's collection log renderer doesn't need a second request just
+    to know what a page's OWN items are before it can mark which of
+    them this player already has."""
+    return {
+        "tabs": get_collection_log_tabs(),
+        "obtainedItems": game_account.collection_log_items or {},
+        "syncedAt": game_account.collection_log_synced_at.isoformat() if game_account.collection_log_synced_at else None,
+    }
 
 
 @app.post("/api/players/me/character-summary", response_model=CharacterSummarySyncResponse)
