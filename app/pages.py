@@ -2492,7 +2492,7 @@ def render_character_overview(player: PlayerView) -> str:
         var listEl = document.getElementById('questsList');
         var emptyEl = document.getElementById('questsEmpty');
         if (!listEl || !quests) return;
-        var groups = [['Free Quests', quests.free], ["Members' Quests", quests.members]];
+        var groups = [['Free Quests', quests.free], ["Members' Quests", quests.members], ['Miniquests', quests.miniquests]];
         var html = '';
         groups.forEach(function (group) {
           var label = group[0];

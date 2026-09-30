@@ -1623,14 +1623,16 @@ def character_overview_progress(game_account: GameAccount = Depends(get_current_
     from app/data/*.json, rather than deriving anything from the
     account alone.
 
-    Quests: {"free": [...], "members": [...]}, each a list of
-    {"name", "state"} in the same order get_quest_list() returns --
-    state is "completed"/"in_progress"/"not_started", matched
-    case-insensitively against completed_quests/in_progress_quests
-    (same normalization goal-node quest matching already uses, see
+    Quests: {"free": [...], "members": [...], "miniquests": [...]},
+    each a list of {"name", "state"} in the same order
+    get_quest_list() returns -- state is
+    "completed"/"in_progress"/"not_started", matched case-
+    insensitively against completed_quests/in_progress_quests (same
+    normalization goal-node quest matching already uses, see
     app.mindmaps._normalize_lookup_name) since RuneLite's own quest
     names and this snapshot's wiki-sourced names don't always agree on
-    case.
+    case. See get_quest_list's own docstring for what "members" and
+    "miniquests" each deliberately leave out.
 
     Diaries: one entry per DIARY_AREAS area (app/mindmaps.py) with
     completed/total task counts and a per-tier "completed"/

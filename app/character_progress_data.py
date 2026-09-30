@@ -43,13 +43,27 @@ def _load_json(path: pathlib.Path, default):
 
 
 def get_quest_list() -> Dict[str, List[str]]:
-    """{"free": [...24 quest names...], "members": [...172...]}, each
-    already alphabetized (ignoring a leading "The") -- matches the
-    real in-game Quest List interface's own two-group default order,
-    see Character Overview's quest section in app/pages.py."""
+    """{"free": [...24 quest names...], "members": [...161...],
+    "miniquests": [...19...]}, each already alphabetized (ignoring a
+    leading "The") -- matches the real in-game Quest List interface's
+    own three-group default order (Free/Members/Miniquests), see
+    Character Overview's quest section in app/pages.py. "members"
+    excludes every "Recipe for Disaster/<subquest>" entry (the
+    standalone "Recipe for Disaster" quest itself is still listed) --
+    those subquests aren't separately trackable via RuneLite's own
+    Quest enum (net.runelite.api.Quest has no per-subquest entries for
+    it, only QuestState for the parent quest as a whole), so listing
+    them individually would only ever show as permanently not-started.
+    "miniquests" is exactly the set of OSRS Wiki Category:Miniquests
+    members that RuneLite's Quest enum actually has an entry for --
+    a handful of wiki-categorized miniquests (Tutorial Island, Knight
+    Waves Training Ground, Rogue Trader, Lost Lover, Spirit of
+    Adventure, Architectural Alliance, Natural history quiz, Sacred
+    Bone Burner) have no RuneLite Quest enum entry at all and so
+    aren't trackable here either."""
     global _quest_list
     if _quest_list is None:
-        _quest_list = _load_json(_QUEST_LIST_PATH, {"free": [], "members": []})
+        _quest_list = _load_json(_QUEST_LIST_PATH, {"free": [], "members": [], "miniquests": []})
     return _quest_list
 
 
