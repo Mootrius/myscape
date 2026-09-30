@@ -423,6 +423,26 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     # exactly this panel (KC-labeled sort tabs) for a "seed" search.
     "seed pack": (None, "Seed pack detail.png"),
     "bird nest": (None, "Bird nest (empty) detail.png"),
+    # Same shape again: using a salvaging hook on a shipwreck (Sailing)
+    # is its own RuneLite LootReceived event too, one per tier, each
+    # named exactly after the salvage type itself -- confirmed against
+    # the wiki's own "Salvage" page (oldschool.runescape.wiki/w/Salvage),
+    # whose drop-table template literally keys each tier's average
+    # value off e.g. "mob=Martial salvage", the same "treated like its
+    # own loot source" signal Bird nest/Seed pack already were. Reported
+    # specifically for Martial salvage showing the plain guessed icon
+    # in this panel (still wrong after d188035 fixed the item-panel
+    # side for all 8 tiers), but there's nothing tier-specific about
+    # the cause -- all 8 needed this entry, Martial was just the one
+    # actually seen so far.
+    "small salvage": (None, "Small salvage detail.png"),
+    "fishy salvage": (None, "Fishy salvage detail.png"),
+    "barracuda salvage": (None, "Barracuda salvage detail.png"),
+    "large salvage": (None, "Large salvage detail.png"),
+    "plundered salvage": (None, "Plundered salvage detail.png"),
+    "martial salvage": (None, "Martial salvage detail.png"),
+    "fremennik salvage": (None, "Fremennik salvage detail.png"),
+    "opulent salvage": (None, "Opulent salvage detail.png"),
 }
 
 

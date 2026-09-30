@@ -6049,6 +6049,22 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return n.sourceName === 'Bird nest';
         }
 
+        // Same story again, one per Sailing salvage tier (see
+        // _NPC_DISPLAY_OVERRIDES in app/loot.py -- using a salvaging
+        // hook on a shipwreck is its own event-type loot source too,
+        // confirmed against the wiki's own "Salvage" page), all 8
+        // matched by one "<word> salvage" suffix rather than an
+        // exhaustive list of tier names, same family-matching approach
+        // isImpling above already uses for the same reason -- there's
+        // no other real source name ending in " salvage" that isn't
+        // one of these 8 tiers, so this can't false-positive. Same
+        // 70%-oversized "detail" render as everything else here, same
+        // scale-not-resize treatment via its own dedicated class (see
+        // .loot-npc-box-icon-salvage in loot-tracker.css).
+        function isSalvageSource(n) {
+          return /\\bsalvage$/i.test(n.sourceName);
+        }
+
 
         // hiddenFlags folds into the key alongside everything else that
         // already forces a rebuild (search/sort/toggle/the set itself)
@@ -6086,7 +6102,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '')) +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +

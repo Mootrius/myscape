@@ -360,7 +360,14 @@
    deliberately disagree here), same 70%-oversized story as every
    other detail render on this shared 56px sizing. */
 .loot-npc-box-icon-seedpack,
-.loot-npc-box-icon-birdnest {
+.loot-npc-box-icon-birdnest,
+/* Same story again, one per Sailing salvage tier (see isSalvageSource
+   in the script below, and the matching _NPC_DISPLAY_OVERRIDES
+   entries in app/loot.py) -- using a salvaging hook on a shipwreck is
+   its own event-type loot source too, one per tier, all 8 sharing
+   this one class (isSalvageSource itself is what tells them apart
+   from a real NPC by name, not this rule). */
+.loot-npc-box-icon-salvage {
   transform: scale(0.7);
 }
 .loot-npc-box-kc {
