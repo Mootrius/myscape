@@ -568,6 +568,29 @@
   width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated;
   transform: translate(5.5%, -1%);
 }
+/* A handful of individual items (see _ITEM_DETAIL_ICON_OVERRIDES in
+   app/loot.py / isDetailItemIcon in app/pages.py -- Seed pack, Bird
+   nest (empty), and every Salvage type) use the wiki's own larger
+   "detail" item-page render instead of the usual small flat
+   RuneLite-CDN inventory sprite .loot-item-box-icon above points at,
+   which reads a bit large at this box's shared 28px sizing -- same
+   "scale the box's full slot down 70%, not the box itself" fix (and
+   the exact same reasoning) as .loot-npc-box-icon-casket/-pouch/
+   -crawling-hand/-impling above use for the same oversized-"detail"-
+   render problem on the NPC side. This class is applied ALONGSIDE
+   .loot-item-box-icon, not instead of it (see the script below), so
+   its transform here has to fully replace that rule's own
+   translate(5.5%, -1%) -- same specificity (one class each), so
+   source order alone decides, which is why this has to come after
+   .loot-item-box-icon above rather than before it. The translate that
+   compensates for is specific to the CDN's small sprite canvas (see
+   .loot-item-box-icon's own comment); the wiki's detail renders have
+   no such built-in padding to correct for, same as every "detail"
+   render already shown on the NPC side never gets that translate
+   either. */
+.loot-item-box-icon-detail {
+  transform: scale(0.7);
+}
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
 

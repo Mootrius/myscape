@@ -6028,6 +6028,38 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return /\\bimpling$/i.test(n.sourceName);
         }
 
+        // Item-side counterpart to the NPC-side isCasketNpc/isImpling/
+        // etc. above -- a handful of individual items (see
+        // _ITEM_DETAIL_ICON_OVERRIDES in app/loot.py) are shown under
+        // the wiki's own larger "detail" item-page render instead of
+        // the usual small flat RuneLite-CDN inventory sprite
+        // it.icon otherwise points at, and read a bit large next to a
+        // typical item's own CDN icon at this box's shared 28px
+        // sizing, same story as those NPC tiles at their own 56px --
+        // so they get the same 70%-scale treatment (see
+        // .loot-item-box-icon-detail in loot-tracker.css), keyed by
+        // itemId rather than a name pattern since these are a fixed,
+        // specific set of items rather than an open-ended family like
+        // "every impling type." Kept in sync with
+        // _ITEM_DETAIL_ICON_OVERRIDES by hand -- there's no shared
+        // source of truth between this file and app/loot.py for
+        // either list.
+        var DETAIL_ICON_ITEM_IDS = {
+          22993: true, // Seed pack
+          5075: true, // Bird nest (empty)
+          32847: true, // Small salvage
+          32849: true, // Fishy salvage
+          32851: true, // Barracuda salvage
+          32853: true, // Large salvage
+          32855: true, // Plundered salvage
+          32857: true, // Martial salvage
+          32859: true, // Fremennik salvage
+          32861: true, // Opulent salvage
+        };
+        function isDetailItemIcon(it) {
+          return !!DETAIL_ICON_ITEM_IDS[it.itemId];
+        }
+
         // hiddenFlags folds into the key alongside everything else that
         // already forces a rebuild (search/sort/toggle/the set itself)
         // -- a hide/unhide can change WHICH entries are dimmed without
@@ -6175,7 +6207,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             // an <a> can't validly contain a <button> either.
             return '<div class="loot-item-box-wrap' + (it.hidden ? ' hidden-entry' : '') + '">' +
               '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" title="' + escapeHtml(itemTitle(it)) + '">' +
-                iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
+                iconImg(it.icon, it.itemName, 'loot-item-box-icon' + (isDetailItemIcon(it) ? ' loot-item-box-icon-detail' : '')) +
                 '<div class="loot-item-box-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
                 '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
               '</a>' +

@@ -467,6 +467,49 @@ def clue_casket_icon_url(tier: str) -> str:
     return "/icon-cache/" + urllib.parse.quote(filename)
 
 
+# A handful of individual ITEMS whose RuneLite-CDN pixel icon
+# (item_icon_url's usual route, straight off the small flat in-game
+# inventory sprite) reads too flat/small at this app's loot-tracker
+# sizing -- the wiki's own larger "detail" item-page render swapped in
+# instead, per explicit instruction, same reasoning (and the same
+# /icon-cache/<filename> route) as clue_casket_icon_url's own tier
+# caskets above. Keyed by the real numeric item id
+# _resolve_loot_items already canonicalizes every drop down to, so a
+# noted/unnoted pair of one of these (not that any currently are
+# noteable) would still resolve to the same override. Confirmed
+# directly against the wiki, same as every other hand-picked filename
+# in this module -- "Bird nest (empty)" specifically, not any of the
+# wiki's several other bird-nest-with-contents variants, which keep
+# their usual small CDN icon. Every entry here also gets the matching
+# 70%-scale treatment the casket/impling/pouch NPC tiles already have
+# (see isDetailItemIcon/.loot-item-box-icon-detail in
+# render_loot_tracker/loot-tracker.css) -- the wiki's detail renders
+# read a bit large next to a typical item's own CDN icon at this box's
+# shared 28px sizing, same story as those NPC tiles at their own 56px.
+_ITEM_DETAIL_ICON_OVERRIDES: Dict[int, str] = {
+    22993: "Seed pack detail.png",
+    5075: "Bird nest (empty) detail.png",
+    32847: "Small salvage detail.png",
+    32849: "Fishy salvage detail.png",
+    32851: "Barracuda salvage detail.png",
+    32853: "Large salvage detail.png",
+    32855: "Plundered salvage detail.png",
+    32857: "Martial salvage detail.png",
+    32859: "Fremennik salvage detail.png",
+    32861: "Opulent salvage detail.png",
+}
+
+
+def _item_detail_icon_url(item_id: int) -> str:
+    """The override URL for one of _ITEM_DETAIL_ICON_OVERRIDES' own
+    item ids -- same /icon-cache/<filename> routing as npc_icon_url/
+    clue_casket_icon_url above, for the same rate-limiting reason.
+    Only ever called once a caller has already confirmed item_id is a
+    key of that dict."""
+    filename = _ITEM_DETAIL_ICON_OVERRIDES[item_id]
+    return "/icon-cache/" + urllib.parse.quote(filename)
+
+
 # ---- Hiding NPCs/items out of the tracker (see HiddenLootEntry's own
 # docstring in app/models.py) -----------------------------------------
 #
@@ -601,7 +644,11 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict, hidden_ite
         # URL directly from it, tradeable or not, so unlike before there's
         # no need to fall back to guessing a wiki filename off the bare
         # item name for an untradeable drop any more.
-        icon = item_icon_url(canonical_id)
+        icon = (
+            _item_detail_icon_url(canonical_id)
+            if canonical_id in _ITEM_DETAIL_ICON_OVERRIDES
+            else item_icon_url(canonical_id)
+        )
         resolved.append({
             "itemId": canonical_id,
             "itemName": item_name,
