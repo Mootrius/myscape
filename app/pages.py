@@ -1194,17 +1194,15 @@ def render_dashboard(player: PlayerView) -> str:
             "for yourself to meet, complete with auto-detecting and "
             "updating progress bars.",
         ),
-        # Placeholder copy -- render_character_overview itself is a blank
-        # page for now too (see its own docstring), so there's nothing
-        # real to describe here yet.
         "character_overview": _dash_card_wrap(
             "/dashboard/character-overview",
             _ICON_CHARACTER_OVERVIEW,
             "Character overview icon",
             "Character Overview",
-            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
-            "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. "
-            "Ut enim ad minim veniam, quis nostrud exercitation.",
+            "See your account's most relevant details all at a glance "
+            "\u2014 including collection logs, skill levels, quest "
+            "completions, achievement diaries, combat achievements, "
+            "and more!",
         ),
     }
 
