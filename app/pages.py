@@ -2441,11 +2441,11 @@ def render_character_overview(player: PlayerView) -> str:
       // all three sections together (see that endpoint's own
       // docstring in app/main.py for how each is derived).
 
-      // Same DIARY_AREA_LABELS/DIARY_AREA_ICON convention the
-      // Mindmaps goal editor's own diary-area search field already
-      // uses (render_mindmaps in app/pages.py) -- duplicated here
-      // rather than shared, since the two pages' script blocks are
-      // otherwise entirely independent of each other.
+      // DIARY_AREA_LABELS: same convention the Mindmaps goal editor's
+      // own diary-area search field already uses (render_mindmaps in
+      // app/pages.py) -- duplicated here rather than shared, since the
+      // two pages' script blocks are otherwise entirely independent of
+      // each other.
       var DIARY_AREA_LABELS = {
         ardougne: 'Ardougne', desert: 'Desert', falador: 'Falador',
         fremennik: 'Fremennik', kandarin: 'Kandarin', karamja: 'Karamja',
@@ -2453,20 +2453,97 @@ def render_character_overview(player: PlayerView) -> str:
         morytania: 'Morytania', varrock: 'Varrock',
         western_provinces: 'Western Provinces', wilderness: 'Wilderness',
       };
-      var DIARY_AREA_ICON = {
-        ardougne: 'https://static.runelite.net/cache/item/icon/13124.png',
-        desert: 'https://static.runelite.net/cache/item/icon/13136.png',
-        falador: 'https://static.runelite.net/cache/item/icon/13120.png',
-        fremennik: 'https://static.runelite.net/cache/item/icon/13132.png',
-        kandarin: 'https://static.runelite.net/cache/item/icon/13140.png',
-        karamja: 'https://static.runelite.net/cache/item/icon/13103.png',
-        kourend_kebos: 'https://static.runelite.net/cache/item/icon/22947.png',
-        lumbridge_draynor: 'https://static.runelite.net/cache/item/icon/13128.png',
-        morytania: 'https://static.runelite.net/cache/item/icon/13115.png',
-        varrock: 'https://static.runelite.net/cache/item/icon/13107.png',
-        western_provinces: 'https://static.runelite.net/cache/item/icon/13144.png',
-        wilderness: 'https://static.runelite.net/cache/item/icon/13111.png',
+      // Each area's own "Main reward" icon, per tier (easy/medium/hard/
+      // elite, matching DIARY_TIER_ORDER below), not a single fixed
+      // (elite-only) icon per area any more -- per explicit instruction,
+      // renderDiaries below now picks the icon for whichever tier the
+      // player has actually completed. URLs pulled directly from the
+      // "List of diaries" table's own Main Reward column on
+      // https://oldschool.runescape.wiki/w/Achievement_Diary (every one
+      // of these 48 confirmed to resolve, not guessed/reconstructed from
+      // item names or IDs) -- a different host than DIARY_AREA_ICON
+      // used to hotlink (static.runelite.net's item-icon cache), but
+      // that convention only ever had the elite icon on hand; the wiki
+      // page itself was the only place all four tiers' reward icons for
+      // every area were available together.
+      var DIARY_AREA_TIER_ICON = {
+        ardougne: [
+          'https://oldschool.runescape.wiki/images/Ardougne_cloak_1.png',
+          'https://oldschool.runescape.wiki/images/Ardougne_cloak_2.png',
+          'https://oldschool.runescape.wiki/images/Ardougne_cloak_3.png',
+          'https://oldschool.runescape.wiki/images/Ardougne_cloak_4.png',
+        ],
+        desert: [
+          'https://oldschool.runescape.wiki/images/Desert_amulet_1.png',
+          'https://oldschool.runescape.wiki/images/Desert_amulet_2.png',
+          'https://oldschool.runescape.wiki/images/Desert_amulet_3.png',
+          'https://oldschool.runescape.wiki/images/Desert_amulet_4.png',
+        ],
+        falador: [
+          'https://oldschool.runescape.wiki/images/Falador_shield_1.png',
+          'https://oldschool.runescape.wiki/images/Falador_shield_2.png',
+          'https://oldschool.runescape.wiki/images/Falador_shield_3.png',
+          'https://oldschool.runescape.wiki/images/Falador_shield_4.png',
+        ],
+        fremennik: [
+          'https://oldschool.runescape.wiki/images/Fremennik_sea_boots_1.png',
+          'https://oldschool.runescape.wiki/images/Fremennik_sea_boots_2.png',
+          'https://oldschool.runescape.wiki/images/Fremennik_sea_boots_3.png',
+          'https://oldschool.runescape.wiki/images/Fremennik_sea_boots_4.png',
+        ],
+        kandarin: [
+          'https://oldschool.runescape.wiki/images/Kandarin_headgear_1.png',
+          'https://oldschool.runescape.wiki/images/Kandarin_headgear_2.png',
+          'https://oldschool.runescape.wiki/images/Kandarin_headgear_3.png',
+          'https://oldschool.runescape.wiki/images/Kandarin_headgear_4.png',
+        ],
+        karamja: [
+          'https://oldschool.runescape.wiki/images/Karamja_gloves_1.png',
+          'https://oldschool.runescape.wiki/images/Karamja_gloves_2.png',
+          'https://oldschool.runescape.wiki/images/Karamja_gloves_3.png',
+          'https://oldschool.runescape.wiki/images/Karamja_gloves_4.png',
+        ],
+        kourend_kebos: [
+          "https://oldschool.runescape.wiki/images/Rada%27s_blessing_1.png",
+          "https://oldschool.runescape.wiki/images/Rada%27s_blessing_2.png",
+          "https://oldschool.runescape.wiki/images/Rada%27s_blessing_3.png",
+          "https://oldschool.runescape.wiki/images/Rada%27s_blessing_4.png",
+        ],
+        lumbridge_draynor: [
+          "https://oldschool.runescape.wiki/images/Explorer%27s_ring_1.png",
+          "https://oldschool.runescape.wiki/images/Explorer%27s_ring_2.png",
+          "https://oldschool.runescape.wiki/images/Explorer%27s_ring_3.png",
+          "https://oldschool.runescape.wiki/images/Explorer%27s_ring_4.png",
+        ],
+        morytania: [
+          'https://oldschool.runescape.wiki/images/Morytania_legs_1.png',
+          'https://oldschool.runescape.wiki/images/Morytania_legs_2.png',
+          'https://oldschool.runescape.wiki/images/Morytania_legs_3.png',
+          'https://oldschool.runescape.wiki/images/Morytania_legs_4.png',
+        ],
+        varrock: [
+          'https://oldschool.runescape.wiki/images/Varrock_armour_1.png',
+          'https://oldschool.runescape.wiki/images/Varrock_armour_2.png',
+          'https://oldschool.runescape.wiki/images/Varrock_armour_3.png',
+          'https://oldschool.runescape.wiki/images/Varrock_armour_4.png',
+        ],
+        western_provinces: [
+          'https://oldschool.runescape.wiki/images/Western_banner_1.png',
+          'https://oldschool.runescape.wiki/images/Western_banner_2.png',
+          'https://oldschool.runescape.wiki/images/Western_banner_3.png',
+          'https://oldschool.runescape.wiki/images/Western_banner_4.png',
+        ],
+        wilderness: [
+          'https://oldschool.runescape.wiki/images/Wilderness_sword_1.png',
+          'https://oldschool.runescape.wiki/images/Wilderness_sword_2.png',
+          'https://oldschool.runescape.wiki/images/Wilderness_sword_3.png',
+          'https://oldschool.runescape.wiki/images/Wilderness_sword_4.png',
+        ],
       };
+      // Shown instead, for an area with zero tiers completed -- the
+      // user's own attached image, saved locally (not hotlinked, since
+      // it isn't a wiki asset) at app/static/img/diary-not-started.png.
+      var DIARY_AREA_NOT_STARTED_ICON = '/static/img/diary-not-started.png';
       // In-game area order (matches the real Achievement Diary
       // journal's own tab order), not the alphabetical order
       // DIARY_AREAS/get_diary_tier_totals happen to iterate in.
@@ -2515,7 +2592,18 @@ def render_character_overview(player: PlayerView) -> str:
         DIARY_AREA_ORDER.forEach(function (area) {
           var d = byArea[area];
           if (!d) return;
-          var icon = DIARY_AREA_ICON[area] || '';
+          // Highest tier actually completed (DIARY_TIER_ORDER is
+          // easy->elite, so the last match found walking it in order is
+          // the highest one) picks which tier's own reward icon shows --
+          // per explicit instruction, not always the elite one any more.
+          // -1 (no match) means zero tiers completed for this area.
+          var highestCompletedIndex = -1;
+          DIARY_TIER_ORDER.forEach(function (tier, i) {
+            if (d.tiers && d.tiers[tier] === 'completed') highestCompletedIndex = i;
+          });
+          var icon = highestCompletedIndex >= 0
+            ? (DIARY_AREA_TIER_ICON[area] || [])[highestCompletedIndex]
+            : DIARY_AREA_NOT_STARTED_ICON;
           var label = DIARY_AREA_LABELS[area] || titleCase(area);
           html += '<div class="diary-row">'
             + '<div class="diary-row-header">'

@@ -930,14 +930,18 @@
   gap: 2px;
   height: 6px;
 }
+/* var(--bg) -- the page's own darkest surface color, i.e. plain black
+   -- not var(--red), per explicit instruction: an incomplete tier no
+   longer reads as a "bad/red" status, just an empty/unfilled segment.
+   opacity: 1 now too (dropped the earlier 0.55 dimming); a translucent
+   black over this page's already-dark background would barely read as
+   a distinct segment at all, unlike translucent red did. */
 .diary-tier-seg {
   flex: 1 1 0;
-  background: var(--red);
-  opacity: 0.55;
+  background: var(--bg);
 }
 .diary-tier-seg--completed {
   background: var(--green);
-  opacity: 1;
 }
 
 /* Combat Achievements card -- one .ca-tile per tier
