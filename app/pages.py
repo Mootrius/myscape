@@ -2080,6 +2080,21 @@ def render_character_overview(player: PlayerView) -> str:
       </div>
       <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
     </div>
+
+    <div class="clog-card" id="clogCard">
+      <div class="clog-header">
+        <h3 class="clog-title">Collection Log</h3>
+        <div class="clog-overall" id="clogOverall">&mdash;</div>
+      </div>
+      <div class="clog-empty" id="clogEmpty">No collection log data yet &mdash; open your collection log in-game with the myscape RuneLite plugin running, then refresh this page.</div>
+      <div class="clog-body" id="clogBody">
+        <div class="clog-tabs" id="clogTabs"></div>
+        <div class="clog-panes">
+          <div class="clog-pages" id="clogPages"></div>
+          <div class="clog-items" id="clogItems"></div>
+        </div>
+      </div>
+    </div>
     """
 
     script = """
@@ -2275,6 +2290,185 @@ def render_character_overview(player: PlayerView) -> str:
           });
         })
         .catch(function () { /* leave this card's em dashes showing */ });
+
+      // ---- Collection Log (GET /api/players/me/collection-log) -----
+      // Tabs -> pages -> items structure straight from the schema
+      // (get_collection_log_tabs in app/collectionlog.py, static and
+      // identical for every player) plus this account's own obtained-
+      // item map (GameAccount.collection_log_items, {item id (string):
+      // quantity} -- see CollectionLogItemCapture in the
+      // Mootrius/myscape-plugin repo for how the plugin captures this
+      // in the first place). Rendered entirely client-side: tabs
+      // across the top, that tab's own pages down the left, the
+      // active page's own item grid on the right -- same three-level
+      // drill-down RuneProfile's own collection log browser uses, just
+      // this app's own visual language (character-overview.css's own
+      // .clog-* rules).
+      var clogCard = document.getElementById('clogCard');
+      var clogEmpty = document.getElementById('clogEmpty');
+      var clogBody = document.getElementById('clogBody');
+      var clogOverallEl = document.getElementById('clogOverall');
+      var clogTabsEl = document.getElementById('clogTabs');
+      var clogPagesEl = document.getElementById('clogPages');
+      var clogItemsEl = document.getElementById('clogItems');
+
+      var clogTabs = [];
+      var clogObtained = {};
+      var clogActiveTab = 0;
+      var clogActivePage = 0;
+
+      // Same RuneLite item-icon CDN item_icon_url in
+      // app/purchase_goals.py already builds every other icon in this
+      // app from -- built straight from the numeric id client-side
+      // rather than a server-built URL, since get_collection_log_tabs
+      // deliberately hands back bare ids (see that module's own doc).
+      function clogIconUrl(itemId) {
+        return 'https://static.runelite.net/cache/item/icon/' + itemId + '.png';
+      }
+
+      // A page's own item ids can repeat across other pages (~205 of
+      // them do -- e.g. the same clue-scroll reward listed on more
+      // than one clue tier's page, see get_collection_log_tabs's own
+      // doc), so any "how many total" count has to dedupe by id with a
+      // Set-like pass rather than just summing item-list lengths --
+      // used for both the grand total below and each tab's own count.
+      function clogUniqueIds(items) {
+        var seen = {};
+        var ids = [];
+        items.forEach(function (item) {
+          if (!seen[item.id]) { seen[item.id] = true; ids.push(item.id); }
+        });
+        return ids;
+      }
+
+      function clogObtainedCount(ids) {
+        var count = 0;
+        ids.forEach(function (id) { if (clogObtained[String(id)] != null) count++; });
+        return count;
+      }
+
+      function clogTabItems(tab) {
+        var items = [];
+        tab.pages.forEach(function (page) { items = items.concat(page.items); });
+        return items;
+      }
+
+      function clogAllItems() {
+        var items = [];
+        clogTabs.forEach(function (tab) { items = items.concat(clogTabItems(tab)); });
+        return items;
+      }
+
+      function renderClogOverall() {
+        var ids = clogUniqueIds(clogAllItems());
+        clogOverallEl.textContent = formatInt(clogObtainedCount(ids)) + ' / ' + formatInt(ids.length);
+      }
+
+      function renderClogTabs() {
+        clogTabsEl.innerHTML = '';
+        clogTabs.forEach(function (tab, tabIndex) {
+          var ids = clogUniqueIds(clogTabItems(tab));
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'clog-tab' + (tabIndex === clogActiveTab ? ' active' : '');
+          var label = document.createElement('span');
+          label.textContent = tab.name;
+          var count = document.createElement('span');
+          count.className = 'clog-tab-count';
+          count.textContent = formatInt(clogObtainedCount(ids)) + '/' + formatInt(ids.length);
+          btn.appendChild(label);
+          btn.appendChild(count);
+          btn.addEventListener('click', function () {
+            clogActiveTab = tabIndex;
+            clogActivePage = 0;
+            renderClogTabs();
+            renderClogPages();
+            renderClogItems();
+          });
+          clogTabsEl.appendChild(btn);
+        });
+      }
+
+      function renderClogPages() {
+        clogPagesEl.innerHTML = '';
+        var tab = clogTabs[clogActiveTab];
+        if (!tab) return;
+        tab.pages.forEach(function (page, pageIndex) {
+          var obtainedCount = clogObtainedCount(clogUniqueIds(page.items));
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'clog-page-btn'
+            + (pageIndex === clogActivePage ? ' active' : '')
+            + (obtainedCount === page.items.length ? ' complete' : '');
+          var label = document.createElement('span');
+          label.textContent = page.name;
+          var count = document.createElement('span');
+          count.className = 'clog-page-count';
+          count.textContent = formatInt(obtainedCount) + '/' + formatInt(page.items.length);
+          btn.appendChild(label);
+          btn.appendChild(count);
+          btn.addEventListener('click', function () {
+            clogActivePage = pageIndex;
+            renderClogPages();
+            renderClogItems();
+          });
+          clogPagesEl.appendChild(btn);
+        });
+      }
+
+      function renderClogItems() {
+        clogItemsEl.innerHTML = '';
+        var tab = clogTabs[clogActiveTab];
+        var page = tab && tab.pages[clogActivePage];
+        if (!page) return;
+        page.items.forEach(function (item) {
+          var qty = clogObtained[String(item.id)];
+          var tile = document.createElement('div');
+          tile.className = 'clog-item' + (qty != null ? ' obtained' : '');
+          tile.title = qty != null ? item.name + ' \u2014 ' + formatInt(qty) : item.name;
+          var img = document.createElement('img');
+          img.className = 'clog-item-icon';
+          img.src = clogIconUrl(item.id);
+          img.alt = '';
+          img.loading = 'lazy';
+          img.onerror = function () { img.style.display = 'none'; };
+          tile.appendChild(img);
+          if (qty != null && qty > 1) {
+            var badge = document.createElement('div');
+            badge.className = 'clog-item-qty';
+            badge.textContent = formatInt(qty);
+            tile.appendChild(badge);
+          }
+          clogItemsEl.appendChild(tile);
+        });
+      }
+
+      // Same "swap to the empty-state message" shape as showEmpty in
+      // the model viewer's own module script above -- .clog-body stays
+      // the default visible markup and this is only called once it's
+      // confirmed there's nothing real to show in it.
+      function showClogEmpty() {
+        clogBody.style.display = 'none';
+        clogEmpty.style.display = 'block';
+      }
+
+      if (clogCard) {
+        fetch('/api/players/me/collection-log')
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.syncedAt || !Array.isArray(data.tabs) || !data.tabs.length) {
+              showClogEmpty();
+              return;
+            }
+            clogTabs = data.tabs;
+            clogObtained = data.obtainedItems || {};
+            renderClogOverall();
+            renderClogTabs();
+            renderClogPages();
+            renderClogItems();
+          })
+          .catch(function () { showClogEmpty(); });
+      }
     })();
     """
 

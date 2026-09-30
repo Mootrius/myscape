@@ -504,3 +504,207 @@
   color: var(--text-faint);
   font-size: 13px;
 }
+
+/* Collection Log card (render_character_overview in app/pages.py) --
+   below .model-viewer-card, same panel-translucent/border/radius/
+   padding treatment as every other card on this page. Modeled on
+   RuneProfile's own collection log browser (tabs across the top, a
+   scrollable page list on the left, an icon grid for the active page
+   on the right) but entirely this app's own visual language -- no
+   RuneProfile styling copied, just the same information layout. Data
+   comes from GET /api/players/me/collection-log (the script below),
+   which is GameAccount.collection_log_items -- see that column's own
+   doc in app/models.py and CollectionLogItemCapture in the
+   Mootrius/myscape-plugin repo for how the plugin actually captures
+   this. */
+.clog-card {
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px 12px;
+  margin-bottom: 18px;
+}
+.clog-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 10px;
+}
+.clog-title {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+/* The running "obtained / total" count across every tab -- a Set of
+   every unique item id the schema itself lists (see clogAllItemIds in
+   the script below), never a raw sum of each page's own item count,
+   since ~205 item ids are deliberately listed on more than one page
+   (see get_collection_log_tabs's own doc in app/collectionlog.py) and
+   summing those page lists would double-count every one of them. */
+.clog-overall {
+  font-size: 12px;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* Shown instead of .clog-body below (see showClogEmpty in the script)
+   when the account has never opened its collection log with the
+   myscape plugin running -- same "display:none until proven
+   otherwise" convention as .model-viewer-empty above. */
+.clog-empty {
+  display: none;
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.clog-tabs {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.clog-tab {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.clog-tab:hover { border-color: var(--gold-dim); color: var(--text); }
+.clog-tab.active { border-color: var(--gold); color: var(--gold); }
+/* Each tab's own "obtained / total" count, same Set-of-unique-ids
+   math as .clog-overall above, just scoped to that tab's own pages. */
+.clog-tab-count {
+  display: block;
+  font-size: 9px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+.clog-tab.active .clog-tab-count { color: var(--gold-dim); }
+
+.clog-panes {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+/* The active tab's own page list -- a fixed-width rail so the item
+   grid to its right always starts at the same x position regardless
+   of which tab is active, min-width included so a long page name
+   (e.g. "Chambers of Xeric (Solo)") never expands the rail. Its own
+   scrollbar rather than growing the whole card taller, capped to
+   roughly match .model-viewer-card's own footprint above it. */
+.clog-pages {
+  flex: 0 0 190px;
+  min-width: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 2px;
+}
+.clog-page-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.clog-page-btn:hover { color: var(--text); background: var(--panel-2); }
+.clog-page-btn.active {
+  color: var(--gold);
+  background: var(--panel-2);
+  border-color: var(--gold-dim);
+}
+.clog-page-count {
+  flex: none;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+/* A fully-obtained page's own count reads in gold-dim instead of the
+   usual faint gray -- the one piece of "am I done with this page"
+   signal the page list gives without opening every page in turn. */
+.clog-page-btn.complete .clog-page-count { color: var(--gold-dim); }
+
+/* The active page's own item grid -- fixed-size tiles, same wrap-and-
+   gap approach as .skills-grid/.hiscores-grid above rather than a
+   fixed column count, so it reflows cleanly at any card width. */
+.clog-items {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  min-height: 220px;
+}
+.clog-item {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+/* An obtained item's tile border picks up the same gold-dim accent
+   .clog-page-btn.complete's own count uses -- one consistent "you have
+   this" color across the whole card. */
+.clog-item.obtained { border-color: var(--gold-dim); }
+.clog-item-icon {
+  max-width: 28px;
+  max-height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  /* Same RuneLite item-icon CDN as every other icon in this app
+     (item_icon_url in app/purchase_goals.py) and the same small
+     right/up nudge .loot-item-box-icon already applies to compensate
+     for that CDN's own baked-in sprite padding (see that rule's own
+     comment in loot-tracker.css) -- copied here rather than a shared
+     class since this page doesn't load that stylesheet. */
+  transform: translate(5.5%, -1%);
+}
+/* Not-yet-obtained items stay in the grid (so the page's own total
+   count is visible at a glance) but read as a dim silhouette rather
+   than a full-color icon -- grayscale plus a brightness cut, same
+   pairing loot-tracker.css's own hidden-tile convention uses for "less
+   important than what's still in color". */
+.clog-item:not(.obtained) .clog-item-icon {
+  filter: grayscale(1) brightness(0.55);
+  opacity: 0.75;
+}
+/* The obtained quantity, bottom-right corner of the tile -- omitted
+   entirely for a quantity of 1 (see the script below), since "you have
+   this" is already what the tile's own border/color communicates and
+   a "1" badge on every single non-stackable drop would just be noise. */
+.clog-item-qty {
+  position: absolute;
+  right: 1px;
+  bottom: 0px;
+  font-size: 9px;
+  color: var(--gold);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
+  line-height: 1;
+}
