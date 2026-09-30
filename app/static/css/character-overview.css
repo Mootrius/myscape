@@ -891,8 +891,13 @@
   scrollbar-gutter: stable;
   padding-right: 6px;
 }
-.diary-row { margin-bottom: 10px; }
+.diary-row {
+  padding: 4px;
+  margin: 0 -4px 2px -4px;
+  border-radius: var(--radius);
+}
 .diary-row:last-child { margin-bottom: 0; }
+.diary-row:hover { background: var(--panel-2); }
 .diary-row-header {
   display: flex;
   align-items: center;
@@ -955,6 +960,11 @@
    synced) renders as an em dash and a zero-width bar, same as every
    other never-synced stat on this page.
 
+   Each tile is itself a link to that tier's own OSRS Wiki page now
+   (<a>, not <div> -- see renderCombatAchievements in app/pages.py;
+   https://oldschool.runescape.wiki/w/Combat_Achievements/<TitleCase
+   tier>, confirmed live), per explicit instruction.
+
    No fixed height/scrollbar here any more, unlike .quests-list/
    .diaries-list above -- those hold a variable, sometimes-long list
    of rows and need one; .ca-list always holds exactly six tiles, so
@@ -978,6 +988,25 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 3px 6px;
+  /* Link reset -- same color: inherit/text-decoration: none
+     .skill-cell/.clog-item/.quest-row's own clickable tiles already
+     use to undo the site-wide a/a:hover reset (myscape.css). */
+  color: inherit;
+  text-decoration: none;
+}
+/* rgb(51, 51, 54), not var(--panel-2) again -- the tile's own resting
+   background already IS var(--panel-2), so hovering needs a visibly
+   lighter shade to read as a highlight at all. Same exact hover shade
+   .skill-cell/.clog-item already use for this identical situation (a
+   panel-2 tile that needs its own hover color, not the plain
+   panel-2-on-translucent-card contrast .quest-row/.diary-row's hover
+   box relies on). text-decoration: none cancels a:hover's own
+   underline (element + pseudo-class, myscape.css) the same "declare
+   :hover explicitly" way .quest-row's own hover box already does --
+   without it the tile would gain a stray underline under its label. */
+.ca-tile:hover {
+  background-color: rgb(51, 51, 54);
+  text-decoration: none;
 }
 .ca-tile-label {
   font-size: 13px;

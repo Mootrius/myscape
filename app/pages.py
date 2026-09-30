@@ -2546,12 +2546,12 @@ def render_character_overview(player: PlayerView) -> str:
           var completed = item.completed;
           var total = item.total;
           var pct = (completed != null && total) ? Math.min(100, (completed / total) * 100) : 0;
-          html += '<div class="ca-tile">'
+          html += '<a class="ca-tile" href="https://oldschool.runescape.wiki/w/Combat_Achievements/' + titleCase(tier) + '" target="_blank" rel="noopener">'
             + '<span class="ca-tile-label">' + titleCase(tier) + '</span>'
             + '<img class="ca-tile-icon" src="/static/img/combat-achievement-tiers/' + tier + '.png" alt="" />'
             + '<span class="ca-tile-count">' + (completed != null ? completed : '\u2014') + '/' + total + '</span>'
             + '<div class="ca-tile-bar"><div class="ca-tile-bar-fill" style="width: ' + pct + '%"></div></div>'
-            + '</div>';
+            + '</a>';
         });
         listEl.innerHTML = html;
       }
