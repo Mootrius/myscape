@@ -358,11 +358,68 @@
   font-size: 13px;
 }
 
-.clog-tabs {
+/* Wraps .clog-tabs + .clog-sync-btn in one row so the manual
+   hiscores refresh trigger sits beside the tabs instead of inside
+   them -- .clog-tabs' own former margin-bottom now lives here, since
+   the tab row is just one flex item in this row now rather than the
+   card's own direct full-width child. */
+.clog-toolbar {
   display: flex;
-  gap: 3px;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 8px;
 }
+
+.clog-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+}
+
+/* Manual "pull fresh boss/clue counts from the OSRS hiscores right
+   now" trigger for renderClogItemsHeader's own count -- see that
+   button's own click handler in the script above for why this
+   exists (an account linked before a newly-tracked stat existed, most
+   recently clue-scroll tiers, has no other way to backfill it short
+   of a full relink). Square icon-only button, not a labeled one --
+   .clog-toolbar has no room to spare beside three tabs at this card's
+   own width (see .clog-card's own comment), so this follows
+   .pm-filter-icon-btn's icon-only footprint (possessions.css) rather
+   than button.secondary's full-width labeled one. 29px, not that
+   rule's 15px, since this sits in its own toolbar rather than a
+   dense table header cell and can afford a proper click target. */
+.clog-sync-btn {
+  flex: 0 0 auto;
+  width: 29px;
+  height: 29px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.clog-sync-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+.clog-sync-btn:disabled { opacity: 0.5; cursor: default; }
+.clog-sync-btn svg { display: block; }
+/* Spins the icon itself (not the button's own border/background)
+   while a sync is in flight, so the button's square footprint never
+   shifts. */
+.clog-sync-btn.syncing svg { animation: clog-sync-spin 0.8s linear infinite; }
+@keyframes clog-sync-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+/* Brief red flash on a failed sync (account not linked, or the
+   hiscores fetch itself failed) so the button doesn't just silently
+   do nothing -- removed a couple seconds later by the click handler's
+   own setTimeout, the same "temporary state, no persistent error
+   banner" footprint the rest of this page's UI uses. */
+.clog-sync-btn.sync-failed { border-color: var(--red); color: var(--red); }
 .clog-tab {
   flex: 1;
   padding: 8px 6px;

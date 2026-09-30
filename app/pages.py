@@ -1999,7 +1999,10 @@ def render_character_overview(player: PlayerView) -> str:
       <div class="clog-card" id="clogCard">
         <div class="clog-empty" id="clogEmpty">No collection log data yet &mdash; open your collection log in-game with the myscape RuneLite plugin running, then refresh this page.</div>
         <div class="clog-body" id="clogBody">
-          <div class="clog-tabs" id="clogTabs"></div>
+          <div class="clog-toolbar">
+            <div class="clog-tabs" id="clogTabs"></div>
+            <button class="clog-sync-btn" id="clogSyncBtn" type="button" title="Refresh kill/completion counts from the OSRS hiscores"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>
+          </div>
           <div class="clog-panes">
             <div class="clog-pages" id="clogPages"></div>
             <div class="clog-items-col" id="clogItemsCol">
@@ -2145,6 +2148,7 @@ def render_character_overview(player: PlayerView) -> str:
       var clogPagesEl = document.getElementById('clogPages');
       var clogItemsEl = document.getElementById('clogItems');
       var clogItemsHeaderEl = document.getElementById('clogItemsHeader');
+      var clogSyncBtn = document.getElementById('clogSyncBtn');
 
       var clogTabs = [];
       var clogObtained = {};
@@ -2385,8 +2389,11 @@ def render_character_overview(player: PlayerView) -> str:
         document.fonts.ready.then(syncClogHeight);
       }
 
-      if (clogCard) {
-        fetch('/api/players/me/collection-log')
+      // Named (not an inline .then chain) so the manual sync button
+      // below can re-run it after a successful resync, same as the
+      // page's own initial load does.
+      function loadCollectionLog() {
+        return fetch('/api/players/me/collection-log')
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (data) {
             if (!data || !data.syncedAt || !Array.isArray(data.tabs) || !data.tabs.length) {
@@ -2409,6 +2416,49 @@ def render_character_overview(player: PlayerView) -> str:
             syncClogHeight();
           })
           .catch(function () { showClogEmpty(); });
+      }
+      if (clogCard) {
+        loadCollectionLog();
+      }
+
+      // Manual "pull fresh boss/clue counts from the OSRS hiscores
+      // right now" trigger for the numbers renderClogItemsHeader shows
+      // -- POST /api/players/me/hiscores/sync already existed as a
+      // drift-correction escape hatch (see that route's own docstring
+      // in app/main.py) but nothing on this page ever called it before
+      // now. That matters here specifically because a hiscores pull
+      // only ever fires at link/relink time otherwise (see
+      // sync_hiscores's own top-of-file comment in app/hiscores.py) --
+      // an account linked before a newly-tracked stat existed (clue-
+      // scroll tiers, most recently, see
+      // COLLECTION_LOG_CLUE_PAGE_TIERS in app/bosses.py) has that
+      // field sitting empty forever otherwise, with no live chatbox-
+      // parsed path to backfill it the way boss kill counts get one,
+      // and no way to trigger a fresh pull short of a full unlink/
+      // relink. Session-authenticated POST (this page is only ever
+      // loaded signed-in), not the plugin's own API-key-authenticated
+      // push endpoints next to it. Collection log items/obtained
+      // state themselves come from the plugin, not the hiscores, so
+      // only clogKillCounts can actually change from this -- reusing
+      // loadCollectionLog() above to re-render it is simpler than
+      // re-deriving just that one field client-side.
+      if (clogSyncBtn) {
+        clogSyncBtn.addEventListener('click', function () {
+          if (clogSyncBtn.disabled) return;
+          clogSyncBtn.classList.remove('sync-failed');
+          clogSyncBtn.disabled = true;
+          clogSyncBtn.classList.add('syncing');
+          fetch('/api/players/me/hiscores/sync', { method: 'POST' })
+            .then(function (r) { return r.ok ? loadCollectionLog() : Promise.reject(); })
+            .catch(function () {
+              clogSyncBtn.classList.add('sync-failed');
+              setTimeout(function () { clogSyncBtn.classList.remove('sync-failed'); }, 2500);
+            })
+            .then(function () {
+              clogSyncBtn.disabled = false;
+              clogSyncBtn.classList.remove('syncing');
+            });
+        });
       }
     })();
     """
