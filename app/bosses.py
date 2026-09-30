@@ -25,7 +25,7 @@ Each entry is (slug, display_name, has_icon):
   singleplayer and harder multiplayer versions look the same, just
   reskinned) -- everything else has its own distinct icon.
 """
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 HISCORE_BOSSES: List[Tuple[str, str, bool]] = [
     ("abyssal-sire", "Abyssal Sire", True),
@@ -176,17 +176,25 @@ CHAT_NAME_TO_DISPLAY_NAME = {
 }
 
 # Collection log PAGE names (see app.collectionlog.get_collection_log_tabs)
-# whose name alone isn't an exact HISCORE_BOSSES display_name -- either
-# because the page groups multiple hiscores-tracked kills into one combined
-# page (the four twin/trio-boss pairs below), or the page's own name differs
-# from its hiscores boss by more than the "The " prefix every other
-# "The <Name>" boss already matches directly (Royal Titans/The Mad Angel go
-# opposite directions from their hiscores name, so neither is a plain
-# strip/add-"The " rule -- see each one's own hiscores display_name in
-# HISCORE_BOSSES above). Confirmed against a real collection log page list,
-# not guessed -- content this app hasn't verified a hiscores mapping for yet
-# (Moons of Peril, at time of writing) is deliberately left out of both this
-# table and collection_log_page_kill_counts's own result, rather than risk
+# whose kill/completion count isn't a single HISCORE_BOSSES display_name
+# read directly -- either because the page groups more than one
+# hiscores-tracked activity (the twin/trio-boss pairs, a raid's normal
+# and harder mode, or The Nightmare/Phosani's Nightmare sharing one
+# page), or the page's own name differs from its hiscores boss by more
+# than the "The " prefix every other "The <Name>" boss already matches
+# directly (Royal Titans/The Mad Angel go opposite directions from
+# their hiscores name, so neither is a plain strip/add-"The " rule --
+# see each one's own hiscores display_name in HISCORE_BOSSES above).
+# Every value here is a LIST, in display order (easier/base mode first,
+# harder mode second -- e.g. Tombs of Amascut before its Expert Mode) --
+# collection_log_page_kill_counts shows each entry individually
+# ("1,234 · 56"), not summed, so a page like "Callisto and Artio"
+# reads as two real numbers rather than one combined total that hides
+# which twin the player has actually killed more of. Confirmed against
+# a real collection log page list, not guessed -- content this app
+# hasn't verified a hiscores mapping for yet (Moons of Peril, at time
+# of writing) is deliberately left out of both this table and
+# collection_log_page_kill_counts's own result, rather than risk
 # showing a wrong number next to it.
 COLLECTION_LOG_PAGE_NAME_OVERRIDES: Dict[str, List[str]] = {
     "Callisto and Artio": ["Callisto", "Artio"],
@@ -198,47 +206,100 @@ COLLECTION_LOG_PAGE_NAME_OVERRIDES: Dict[str, List[str]] = {
     "The Fight Caves": ["TzTok-Jad"],
     "The Inferno": ["TzKal-Zuk"],
     "Fortis Colosseum": ["Sol Heredit"],
+    "The Nightmare": ["The Nightmare", "Phosani's Nightmare"],
+    "Chambers of Xeric": ["Chambers of Xeric", "Chambers of Xeric: Challenge Mode"],
+    "Theatre of Blood": ["Theatre of Blood", "Theatre of Blood: Hard Mode"],
+    "Tombs of Amascut": ["Tombs of Amascut", "Tombs of Amascut: Expert Mode"],
+}
+
+# The official hiscores' own clue-tier activity names (app/hiscores.py's
+# own _parse_clue_scroll_counts reads these off the same activities[]
+# list HISCORE_BOSSES' names come from) -- confirmed directly against a
+# live hiscores response, not guessed. "Clue Scrolls (all)" is
+# deliberately excluded: no single collection log page corresponds to
+# the all-tiers combined total, only the six individual tiers below do.
+CLUE_SCROLL_HISCORE_NAMES: List[str] = [
+    "Clue Scrolls (beginner)",
+    "Clue Scrolls (easy)",
+    "Clue Scrolls (medium)",
+    "Clue Scrolls (hard)",
+    "Clue Scrolls (elite)",
+    "Clue Scrolls (master)",
+]
+
+# Collection log PAGE name -> the one hiscores clue tier that page's
+# completion count comes from. A tier with its own separate "(Rare)"
+# unique-drop page (Hard/Elite/Master) maps both pages to the same tier
+# name, since both draw from the same underlying completion count --
+# confirmed against a real collection log page list. "Shared Treasure
+# Trail Rewards" and "Scroll Cases" aren't tier-specific (obtainable
+# from more than one tier) and are deliberately left unmapped, same
+# "don't guess" reasoning as COLLECTION_LOG_PAGE_NAME_OVERRIDES above.
+COLLECTION_LOG_CLUE_PAGE_TIERS: Dict[str, str] = {
+    "Beginner Treasure Trails": "Clue Scrolls (beginner)",
+    "Easy Treasure Trails": "Clue Scrolls (easy)",
+    "Medium Treasure Trails": "Clue Scrolls (medium)",
+    "Hard Treasure Trails": "Clue Scrolls (hard)",
+    "Elite Treasure Trails": "Clue Scrolls (elite)",
+    "Master Treasure Trails": "Clue Scrolls (master)",
+    "Hard Treasure Trails (Rare)": "Clue Scrolls (hard)",
+    "Elite Treasure Trails (Rare)": "Clue Scrolls (elite)",
+    "Master Treasure Trails (Rare)": "Clue Scrolls (master)",
 }
 
 
-def collection_log_page_kill_counts(boss_kill_counts: Dict[str, int]) -> Dict[str, int]:
-    """Maps GameAccount.boss_kill_counts (keyed by HISCORE_BOSSES display_name
-    -- see that column's own docstring in app/models.py) onto collection log
+def collection_log_page_kill_counts(
+    boss_kill_counts: Dict[str, int],
+    clue_scroll_counts: Optional[Dict[str, int]] = None,
+) -> Dict[str, List[int]]:
+    """Maps GameAccount.boss_kill_counts and GameAccount.clue_scroll_counts
+    (see both columns' own docstrings in app/models.py) onto collection log
     PAGE names, for every page this module can confidently match to one or
-    more hiscores-tracked kills. Read by read_collection_log in app/main.py
+    more hiscores-tracked counts. Read by read_collection_log in app/main.py
     so the Character Overview page's collection log card can show a kill/
     completion count next to the pages that have one, the same way the real
     in-game collection log does, without the frontend needing its own copy
     of this mapping.
 
-    A page whose name exactly matches a HISCORE_BOSSES display_name (the
-    large majority of boss/raid pages) uses that count directly; a page in
-    COLLECTION_LOG_PAGE_NAME_OVERRIDES above sums however many of its
-    constituent bosses' counts this account actually has -- ALL of them,
-    not just however many happen to be present, since a partial sum (e.g.
-    only Callisto's count, Artio's missing) would silently under-report
-    the page's real total rather than honestly show nothing. Every other
-    collection log page (clue scrolls, minigames/activities the hiscores'
-    "Bosses" category doesn't track, and any boss this app hasn't verified
-    a mapping for yet) is simply absent from the result -- the frontend
-    treats a missing entry as "no count for this page" rather than zero.
+    Every result value is a LIST of one or more counts, in display order --
+    a page whose name exactly matches a HISCORE_BOSSES display_name (the
+    large majority of boss/raid pages) gets a single-element list; a page in
+    COLLECTION_LOG_PAGE_NAME_OVERRIDES gets one element per constituent
+    activity, ALL of them, not just however many happen to be present (a
+    partial list -- e.g. only Callisto's count, Artio's missing -- would
+    silently misrepresent the page rather than honestly show nothing); a
+    page in COLLECTION_LOG_CLUE_PAGE_TIERS gets its one clue-tier count.
+    The frontend joins a multi-element list with a middot
+    ("1,234 · 56") rather than summing it, so e.g. Callisto and
+    Artio's page shows each twin's own count instead of one combined total
+    that hides which twin the player has actually killed more of.
 
-    Every hiscores boss is a key in boss_kill_counts once an account has
-    synced at least once (0 for "never killed it, but tracked", see that
-    column's own docstring), so a mapped page reads as a real number
-    either way and only an account with no boss_kill_counts at all (never
-    linked) gets an empty result here."""
-    if not boss_kill_counts:
-        return {}
+    Every other collection log page (minigames/activities the hiscores
+    "Bosses" category doesn't track, Shared Treasure Trail Rewards/Scroll
+    Cases, and any boss this app hasn't verified a mapping for yet) is
+    simply absent from the result -- the frontend treats a missing entry
+    as "no count for this page" rather than zero.
 
-    result: Dict[str, int] = {}
+    Every hiscores boss/clue tier is a key in boss_kill_counts/
+    clue_scroll_counts once an account has synced at least once (0 for
+    "never killed it"/"never completed one", see _parse_boss_kill_counts
+    and _parse_clue_scroll_counts in app/hiscores.py), so a mapped page
+    reads as a real number either way and only an account that's never
+    linked/synced gets an empty result here."""
+    clue_scroll_counts = clue_scroll_counts or {}
+    result: Dict[str, List[int]] = {}
+
     for _slug, boss_name, _has_icon in HISCORE_BOSSES:
         if boss_name in boss_kill_counts:
-            result[boss_name] = boss_kill_counts[boss_name]
+            result[boss_name] = [boss_kill_counts[boss_name]]
 
     for page_name, constituent_names in COLLECTION_LOG_PAGE_NAME_OVERRIDES.items():
         counts = [boss_kill_counts[name] for name in constituent_names if name in boss_kill_counts]
         if len(counts) == len(constituent_names):
-            result[page_name] = sum(counts)
+            result[page_name] = counts
+
+    for page_name, tier_name in COLLECTION_LOG_CLUE_PAGE_TIERS.items():
+        if tier_name in clue_scroll_counts:
+            result[page_name] = [clue_scroll_counts[tier_name]]
 
     return result

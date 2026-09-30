@@ -482,17 +482,25 @@
 }
 /* The active page's own name + kill/completion count -- same info the
    real in-game collection log shows above a page's own item grid, per
-   explicit instruction. Empty (0px tall, no margin pushing anything
-   down) until renderClogItemsHeader's first real call. */
+   explicit instruction. justify-content is the default (flex-start,
+   not space-between) so the count sits directly after the name rather
+   than pushed to the card's far edge, per later explicit instruction
+   that these read closer together. Empty (0px tall, no margin pushing
+   anything down) until renderClogItemsHeader's first real call. */
 .clog-items-header {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
   font-size: 15px;
 }
+/* min-width: 0 (overriding a flex item's own default of auto/min-
+   content) is what actually lets this shrink/ellipsis on a page name
+   long enough to crowd .clog-items-header-kc -- without it, a nowrap
+   text node refuses to shrink below its own full content width no
+   matter what overflow/text-overflow say. */
 .clog-items-header-name {
+  min-width: 0;
   color: var(--text);
   overflow: hidden;
   white-space: nowrap;
@@ -501,7 +509,9 @@
 /* Only rendered when clogKillCounts has an entry for the active page
    (see renderClogItemsHeader's own comment) -- most pages simply have
    no header count at all rather than a "0" or dash standing in for
-   one. */
+   one. A combo page's multiple numbers (twin bosses, a raid's normal/
+   hard-mode split, ...) are joined with a middot inside this one span
+   rather than summed -- see renderClogItemsHeader's own comment. */
 .clog-items-header-kc {
   flex: none;
   color: var(--gold);

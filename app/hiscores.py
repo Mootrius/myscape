@@ -106,7 +106,11 @@ from datetime import datetime, timezone
 from typing import Dict, Iterable, Optional
 from uuid import UUID
 
-from app.bosses import CHAT_NAME_TO_DISPLAY_NAME, HISCORES_NAME_TO_DISPLAY_NAME
+from app.bosses import (
+    CHAT_NAME_TO_DISPLAY_NAME,
+    CLUE_SCROLL_HISCORE_NAMES,
+    HISCORES_NAME_TO_DISPLAY_NAME,
+)
 
 USER_AGENT = "myscape.io/1.0 (Goal Tracking; contact: chandler@myscape.io)"
 BASE_URL = "https://secure.runescape.com/m=hiscore_oldschool{suffix}/index_lite.json"
@@ -149,6 +153,11 @@ _recent_failures: Dict[UUID, float] = {}
 _CHAT_NAME_TO_DISPLAY_NAME_LOWER = {
     chat_name.lower(): display_name for chat_name, display_name in CHAT_NAME_TO_DISPLAY_NAME.items()
 }
+
+# app/bosses.CLUE_SCROLL_HISCORE_NAMES as a set, for _parse_clue_scroll_counts'
+# own O(1) membership check below (built once at import time, same reasoning
+# as the two lookups above).
+_CLUE_SCROLL_NAME_SET = set(CLUE_SCROLL_HISCORE_NAMES)
 
 
 class HiscoresSyncError(Exception):
@@ -243,8 +252,10 @@ def _parse_boss_kill_counts(payload: dict) -> Dict[str, int]:
     string differs from ours for a small handful of bosses, e.g. its
     bare "Mimic"/"Nightmare" for our "The Mimic"/"The Nightmare"),
     for every activity this payload reports that matches a boss in
-    app.bosses.HISCORE_BOSSES (anything else -- clue scrolls, LMS rank,
-    Collections Logged, ... -- isn't a boss and is ignored here). -1
+    app.bosses.HISCORE_BOSSES (anything else -- LMS rank, Collections
+    Logged, minigame scores, ... -- isn't a boss and is ignored here;
+    clue scroll tiers are collected separately by
+    _parse_clue_scroll_counts below). -1
     (Jagex's "not ranked" sentinel) is normalized to 0 rather than kept
     literal, so a boss the player has simply never killed reads as a
     real zero, not a display bug."""
@@ -255,6 +266,24 @@ def _parse_boss_kill_counts(payload: dict) -> Dict[str, int]:
             continue
         score = activity.get("score")
         result[display_name] = score if isinstance(score, int) and score > 0 else 0
+    return result
+
+
+def _parse_clue_scroll_counts(payload: dict) -> Dict[str, int]:
+    """activities[].name -> completion count, keyed by the hiscores' own
+    clue-tier name string (app.bosses.CLUE_SCROLL_HISCORE_NAMES) -- same
+    -1-("not ranked")-normalizes-to-0 treatment _parse_boss_kill_counts
+    gives boss activities just above. "Clue Scrolls (all)" isn't
+    collected (see CLUE_SCROLL_HISCORE_NAMES' own comment), and anything
+    that isn't one of the six individual tiers is ignored the same way a
+    non-boss activity is ignored there."""
+    result: Dict[str, int] = {}
+    for activity in payload.get("activities", []):
+        name = activity.get("name")
+        if name not in _CLUE_SCROLL_NAME_SET:
+            continue
+        score = activity.get("score")
+        result[name] = score if isinstance(score, int) and score > 0 else 0
     return result
 
 
@@ -358,6 +387,7 @@ def sync_hiscores(db, game_account) -> HiscoresSyncResult:
         _recent_failures.pop(game_account.id, None)
 
     pulled = _parse_boss_kill_counts(payload)
+    pulled_clues = _parse_clue_scroll_counts(payload)
     synced_at = _utcnow()
     synced_at_iso = synced_at.isoformat()
 
@@ -365,15 +395,24 @@ def sync_hiscores(db, game_account) -> HiscoresSyncResult:
     # this module's top-of-file comment for why that's correct here
     # (unlike the interval-polling design this replaced): every boss
     # this pull reports gets both its stored value and its anchor moved
-    # forward together, full stop.
+    # forward together, full stop. clue_scroll_counts gets the same
+    # unconditional overwrite but no per-tier anchor of its own -- unlike
+    # boss_kill_counts, nothing else ever writes it (there's no chatbox-
+    # parsed clue-completion update the way apply_kill_count_updates
+    # tracks bosses), so the account-level hiscores_synced_at below
+    # already says exactly how fresh every clue tier is.
     baseline = dict(game_account.boss_kill_counts or {})
     anchors = dict(game_account.boss_kill_counts_updated_at or {})
     baseline.update(pulled)
     for name in pulled:
         anchors[name] = synced_at_iso
 
+    clue_baseline = dict(game_account.clue_scroll_counts or {})
+    clue_baseline.update(pulled_clues)
+
     game_account.boss_kill_counts = baseline
     game_account.boss_kill_counts_updated_at = anchors
+    game_account.clue_scroll_counts = clue_baseline
     game_account.hiscores_account_type = mode
     game_account.hiscores_synced_at = synced_at
     db.add(game_account)

@@ -1524,13 +1524,19 @@ def read_collection_log(game_account: GameAccount = Depends(get_current_verified
         "tabs": get_collection_log_tabs(),
         "obtainedItems": game_account.collection_log_items or {},
         "syncedAt": game_account.collection_log_synced_at.isoformat() if game_account.collection_log_synced_at else None,
-        # Page name -> kill/completion count, for however many pages
-        # app.bosses.collection_log_page_kill_counts can confidently match
-        # to this account's already-synced boss_kill_counts (see that
-        # function's own docstring) -- {} for an account that's never
-        # linked/synced hiscores at all, same as everywhere else that
-        # column is read.
-        "killCounts": collection_log_page_kill_counts(game_account.boss_kill_counts or {}),
+        # Page name -> list of kill/completion counts (one element for a
+        # plain page, more for a combo page like "Callisto and Artio" or
+        # a raid's normal/hard-mode split -- see
+        # app.bosses.collection_log_page_kill_counts's own docstring),
+        # for however many pages that function can confidently match to
+        # this account's already-synced boss_kill_counts/
+        # clue_scroll_counts -- {} for an account that's never
+        # linked/synced hiscores at all, same as everywhere else those
+        # columns are read.
+        "killCounts": collection_log_page_kill_counts(
+            game_account.boss_kill_counts or {},
+            game_account.clue_scroll_counts or {},
+        ),
     }
 
 

@@ -2148,12 +2148,16 @@ def render_character_overview(player: PlayerView) -> str:
 
       var clogTabs = [];
       var clogObtained = {};
-      // page name -> kill/completion count, from app.bosses'
-      // collection_log_page_kill_counts (see read_collection_log in
-      // app/main.py) -- only ever has entries for pages this app can
-      // confidently match to hiscores-tracked kills (mostly boss/raid
-      // pages; clue scrolls and most minigames have none), so a page
-      // absent here just renders no count rather than a zero.
+      // page name -> array of one or more kill/completion counts, from
+      // app.bosses' collection_log_page_kill_counts (see
+      // read_collection_log in app/main.py) -- only ever has entries
+      // for pages that function can confidently match to hiscores-
+      // tracked counts (boss/raid/clue pages; minigames and a handful
+      // of miscellaneous pages have none), so a page absent here just
+      // renders no count rather than a zero. More than one element
+      // means a combo page (twin bosses, a raid's normal/hard-mode
+      // split, The Nightmare/Phosani's Nightmare) -- see
+      // renderClogItemsHeader below for how those render.
       var clogKillCounts = {};
       var clogActiveTab = 0;
       var clogActivePage = 0;
@@ -2284,8 +2288,13 @@ def render_character_overview(player: PlayerView) -> str:
       // shows above a page's own items, per explicit instruction. Kill
       // count is omitted entirely (not shown as a dash or a zero) for a
       // page clogKillCounts has no entry for, same "absent means no
-      // data" contract that dict carries end to end from
-      // collection_log_page_kill_counts (app/bosses.py). There's no
+      // data" contract that array carries end to end from
+      // collection_log_page_kill_counts (app/bosses.py). A page with
+      // more than one underlying hiscores count (a combo/twin-boss
+      // page, or a raid's normal/hard-mode split) shows each number
+      // side by side, joined by a middot, rather than summed, per
+      // explicit instruction -- so e.g. Callisto and Artio's page shows
+      // both twins' own counts, not one combined total. There's no
       // personal-best time here -- unlike kill counts, no source
       // anywhere in this app (or the official hiscores) tracks one for
       // a collection log page, so it's left out rather than faked.
@@ -2298,11 +2307,11 @@ def render_character_overview(player: PlayerView) -> str:
         name.className = 'clog-items-header-name';
         name.textContent = page.name;
         clogItemsHeaderEl.appendChild(name);
-        var killCount = clogKillCounts[page.name];
-        if (killCount != null) {
+        var killCounts = clogKillCounts[page.name];
+        if (killCounts != null && killCounts.length) {
           var kc = document.createElement('span');
           kc.className = 'clog-items-header-kc';
-          kc.textContent = formatInt(killCount);
+          kc.textContent = killCounts.map(formatInt).join(' \\u00b7 ');
           clogItemsHeaderEl.appendChild(kc);
         }
       }

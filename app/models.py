@@ -265,6 +265,20 @@ class GameAccount(Base):
     # when is this number good" record, e.g. for a future goal-progress
     # UI that wants to say how fresh a given boss's count is.
     boss_kill_counts_updated_at = Column(JSONB, nullable=False, default=dict)
+    # Cached clue-tier completion-count snapshot from the same hiscores
+    # pull that populates boss_kill_counts above -- {<hiscores clue-tier
+    # name, one of app.bosses.CLUE_SCROLL_HISCORE_NAMES>: <completion
+    # count>}. Written only by app.hiscores.sync_hiscores (see
+    # _parse_clue_scroll_counts there); unlike boss_kill_counts there's
+    # no live chatbox-parsed update path for this -- RuneLite doesn't
+    # announce a running clue-completion count the way it does a kill
+    # count -- so this is only ever as fresh as hiscores_synced_at
+    # below, with no per-tier anchor column of its own needed. Read by
+    # app.bosses.collection_log_page_kill_counts (via
+    # read_collection_log in app/main.py) to show a completion count
+    # above a clue-tier page's own item grid, the same way
+    # boss_kill_counts feeds a boss page's count.
+    clue_scroll_counts = Column(JSONB, nullable=False, default=dict)
     # Which hiscores game-mode endpoint actually resolved this account
     # (one of app.hiscores.GAMEMODES' first elements) -- cached after
     # the first successful sync purely so every later one hits that
