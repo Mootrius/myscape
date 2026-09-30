@@ -2484,6 +2484,9 @@ def render_character_overview(player: PlayerView) -> str:
         });
       }
 
+      function questWikiUrl(name) {
+        return 'https://oldschool.runescape.wiki/w/' + encodeURIComponent(String(name).replace(/ /g, '_'));
+      }
       function renderQuests(quests) {
         var listEl = document.getElementById('questsList');
         var emptyEl = document.getElementById('questsEmpty');
@@ -2496,7 +2499,7 @@ def render_character_overview(player: PlayerView) -> str:
           if (!items.length) return;
           html += '<div class="quests-group-title">' + escapeHtml(label) + '</div>';
           items.forEach(function (q) {
-            html += '<div class="quest-row quest-row--' + q.state + '">' + escapeHtml(q.name) + '</div>';
+            html += '<a class="quest-row quest-row--' + q.state + '" href="' + questWikiUrl(q.name) + '" target="_blank" rel="noopener">' + escapeHtml(q.name) + '</a>';
           });
         });
         listEl.innerHTML = html;
@@ -2544,11 +2547,9 @@ def render_character_overview(player: PlayerView) -> str:
           var total = item.total;
           var pct = (completed != null && total) ? Math.min(100, (completed / total) * 100) : 0;
           html += '<div class="ca-tile">'
-            + '<div class="ca-tile-header">'
-            + '<img class="ca-tile-icon" src="/static/img/combat-achievement-tiers/' + tier + '.png" alt="" />'
             + '<span class="ca-tile-label">' + titleCase(tier) + '</span>'
+            + '<img class="ca-tile-icon" src="/static/img/combat-achievement-tiers/' + tier + '.png" alt="" />'
             + '<span class="ca-tile-count">' + (completed != null ? completed : '\u2014') + '/' + total + '</span>'
-            + '</div>'
             + '<div class="ca-tile-bar"><div class="ca-tile-bar-fill" style="width: ' + pct + '%"></div></div>'
             + '</div>';
         });

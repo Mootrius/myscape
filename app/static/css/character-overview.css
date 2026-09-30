@@ -213,6 +213,7 @@
 .skill-cell:hover {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -796,16 +797,36 @@
   color: var(--gold-dim);
 }
 .quests-group-title:first-child { margin-top: 0; }
+/* Each row is itself a link to that quest's OSRS Wiki page now (<a>,
+   not <div> -- see renderQuests in app/pages.py), so display: block is
+   what keeps it laid out (and truncating via white-space/ellipsis
+   below) exactly like the plain div it used to be, an inline <a>
+   can't. color: inherit + text-decoration: none undo the site-wide
+   a/a:hover reset (myscape.css) the same way .skill-cell/.clog-item's
+   own clickable tiles already do, so a quest row keeps reading as
+   status-colored text, not a plain link, until hovered. */
 .quest-row {
+  display: block;
   font-size: 13px;
   line-height: 1.6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: inherit;
+  text-decoration: none;
 }
 .quest-row--completed { color: var(--green); }
 .quest-row--in_progress { color: var(--yellow); }
 .quest-row--not_started { color: var(--red); }
+/* a:hover (element + pseudo-class, myscape.css) would otherwise repaint
+   every row gold on hover regardless of its own completion state --
+   same "declare :hover explicitly" fix .skill-cell/.diary-row's own
+   siblings apply, just per status class here so hovering still shows
+   which state a quest is in, with only the underline as the new
+   "this is a link" affordance. */
+.quest-row--completed:hover { color: var(--green); }
+.quest-row--in_progress:hover { color: var(--yellow); }
+.quest-row--not_started:hover { color: var(--red); }
 .quests-empty {
   color: var(--text-muted);
   font-size: 13px;
@@ -883,12 +904,18 @@
 }
 
 /* Combat Achievements card -- one .ca-tile per tier
-   (app.character_progress_data.get_ca_tier_totals), each pairing that
-   tier's own wiki-sourced icon (app/static/img/combat-achievement-
-   tiers/<tier>.png, the same small pixel-art sword icon the real
-   in-game Combat Achievements tab uses for that tier) and label with
-   a completed/total count and a single proportional fill bar (unlike
-   .diary-tier-seg above, this IS true within-tier progress -- the six
+   (app.character_progress_data.get_ca_tier_totals), laid out as a
+   2-column, 3-row grid of boxes (Easy/Medium on top down to Master/
+   Grandmaster on the bottom) matching the real in-game Combat
+   Achievements tab's own tile layout, per explicit instruction --
+   CA_TIER_ORDER in app/pages.py is already Easy,Medium,Hard,Elite,
+   Master,Grandmaster, so a 2-column grid lays these out row-major
+   exactly right with no reordering needed in renderCombatAchievements.
+   Each tile stacks tier name, then that tier's own wiki-sourced icon
+   (app/static/img/combat-achievement-tiers/<tier>.png, the same small
+   pixel-art sword icon the real tab uses), then a completed/total
+   count, then a single proportional fill bar (unlike .diary-tier-seg
+   above, this IS true within-tier progress -- the six
    COMBAT_ACHIEVEMENT_COMPLETED_VARBITS this is read from are each a
    real live "tasks completed in this tier" count, not a derived
    highest-tier flag, see MyscapePlugin#patchCombatAchievementStats in
@@ -896,47 +923,53 @@
    synced) renders as an em dash and a zero-width bar, same as every
    other never-synced stat on this page.
 
-   .ca-list (the actual #caList wrapper in app/pages.py, holding all
-   six .ca-tile below) gets the same fixed height + own scrollbar as
-   .quests-list/.diaries-list above, same reasoning: six tiers don't
-   come close to needing it, but it keeps .ca-card's height locked to
-   its three .co-quad-row siblings' regardless. 272px, down from an
-   earlier 320px -- see .quests-list's own comment. */
+   No fixed height/scrollbar here any more, unlike .quests-list/
+   .diaries-list above -- those hold a variable, sometimes-long list
+   of rows and need one; .ca-list always holds exactly six tiles, so
+   like .skills-grid it's sized to its own content instead. Each
+   tile's own padding/gap below were tuned specifically to land this
+   grid's natural height at the same ~272px .quests-list/.diaries-list
+   use, so all four .co-quad-row cards still read as equally sized. */
 .ca-list {
-  height: 272px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  padding-right: 6px;
-}
-.ca-tile { margin-bottom: 10px; }
-.ca-tile:last-child { margin-bottom: 0; }
-.ca-tile-header {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
-  margin-bottom: 4px;
 }
-.ca-tile-icon {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  flex: none;
+.ca-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 6px;
 }
 .ca-tile-label {
   font-size: 13px;
   color: var(--text);
-  flex: 1 1 auto;
+}
+.ca-tile-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 .ca-tile-count {
   font-size: 12px;
   color: var(--text-muted);
-  flex: none;
 }
 .ca-tile-bar {
+  width: 100%;
   height: 6px;
-  background: var(--panel-2);
+  /* var(--bg), not the .ca-tile-icon/.skill-cell convention of
+     --panel-2 -- the tile itself is --panel-2 now (it used to be
+     transparent, sitting directly on .ca-card's own --panel-translucent
+     background), so the bar track needs the page's darkest surface
+     color to still read as a recessed track against it. */
+  background: var(--bg);
   border: 1px solid var(--border);
 }
 .ca-tile-bar-fill {
