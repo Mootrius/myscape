@@ -1606,14 +1606,22 @@ _MODEL_VIEWER_HEAD = """
     // stopPropagation calls keep a click on the button itself or
     // inside the popup from also hitting that same document-level
     // listener and closing it again in the same event.
+    function setInfoPopupOpen(open) {
+      infoPopup.hidden = !open;
+      // Keeps the info button visually "pressed" (same gold as its
+      // own :hover) for as long as the popup it opened is showing,
+      // rather than only while the pointer happens to still be over
+      // it.
+      infoBtn.classList.toggle("is-active", open);
+    }
     if (infoBtn && infoPopup) {
       infoBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        infoPopup.hidden = !infoPopup.hidden;
+        setInfoPopupOpen(infoPopup.hidden);
       });
       infoPopup.addEventListener("click", function (e) { e.stopPropagation(); });
       document.addEventListener("click", function () {
-        infoPopup.hidden = true;
+        setInfoPopupOpen(false);
       });
     }
 

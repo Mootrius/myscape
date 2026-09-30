@@ -379,7 +379,7 @@
   color: #fff;
   cursor: pointer;
 }
-.model-viewer-btn:hover { border-color: var(--gold); color: var(--gold); }
+.model-viewer-btn:hover, .model-viewer-btn.is-active { border-color: var(--gold); color: var(--gold); }
 .model-viewer-btn svg { display: block; }
 /* The rule above sets `display` on every icon inside a button,
    including the play/pause pair's two stacked SVGs -- author CSS
@@ -409,7 +409,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.4;
 }
 
