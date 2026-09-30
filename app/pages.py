@@ -1547,6 +1547,32 @@ _MODEL_VIEWER_HEAD = """
       // fixed distance that fits the model, and that's the only view
       // the user ever gets.
       controls.enableZoom = false;
+      // The camera no longer takes pointer input at all -- see
+      // autoRotate just below, which spins it on its own instead.
+      // Dragging is switched off outright rather than just left
+      // unused, so the canvas doesn't invite an interaction that no
+      // longer does anything (see this canvas's own cursor rule in
+      // character-overview.css, which drops the grab/grabbing cursor
+      // for the same reason).
+      controls.enableRotate = false;
+      // A slow, continuous spin around the model instead of a
+      // user-controlled orbit -- autoRotate only ever turns the
+      // camera's azimuth (theta) around controls.target, never its
+      // polar angle, so the 10-degree-down tilt framed once below
+      // (see DEFAULT_VERTICAL_TILT) holds for the whole loop.
+      // autoRotate ignores enableRotate entirely -- that flag only
+      // gates pointer-driven orbiting -- so it keeps animating with
+      // rotation switched off above; it does still respect
+      // minAzimuthAngle/maxAzimuthAngle though, which is why those
+      // aren't set any more below -- a full revolution needs an
+      // unclamped theta, not the +-45 degree window the old
+      // drag-to-rotate view was limited to. Three.js paces autoRotate
+      // by real elapsed time (not by however often
+      // requestAnimationFrame happens to fire), so this holds the
+      // same speed regardless of the display's refresh rate.
+      controls.autoRotate = true;
+      var ROTATION_SECONDS_PER_REVOLUTION = 45;
+      controls.autoRotateSpeed = 60 / ROTATION_SECONDS_PER_REVOLUTION;
 
       var loader = new GLTFLoader();
       loader.parse(
@@ -1833,20 +1859,18 @@ _MODEL_VIEWER_HEAD = """
           camera.far = distance * 100;
           camera.updateProjectionMatrix();
 
-          // Keep orbiting within 45 degrees horizontally and 15 degrees
-          // vertically of this initial, tilted view. Read back from the
-          // camera's own actual offset from its target (rather than
-          // assumed values) so this stays correct even if the framing
-          // above ever changes.
-          var initialOffset = camera.position.clone().sub(controls.target);
-          var initialSpherical = new THREE.Spherical().setFromVector3(initialOffset);
-          var HORIZONTAL_ORBIT_LIMIT = Math.PI / 4;
-          var VERTICAL_ORBIT_LIMIT = Math.PI / 12;
-          controls.minAzimuthAngle = initialSpherical.theta - HORIZONTAL_ORBIT_LIMIT;
-          controls.maxAzimuthAngle = initialSpherical.theta + HORIZONTAL_ORBIT_LIMIT;
-          controls.minPolarAngle = Math.max(0, initialSpherical.phi - VERTICAL_ORBIT_LIMIT);
-          controls.maxPolarAngle = Math.min(Math.PI, initialSpherical.phi + VERTICAL_ORBIT_LIMIT);
-
+          // No orbit limits any more -- the old +-45 degree horizontal /
+          // +-15 degree vertical window existed to keep a user's drag
+          // from wandering too far off the framed view, but nothing
+          // drags this camera now (controls.enableRotate is off, see
+          // that flag's own comment above). Leaving minAzimuthAngle/
+          // maxAzimuthAngle at their unclamped defaults is what lets
+          // autoRotate complete a full revolution instead of hitting a
+          // wall partway around; the vertical tilt needs no lock of
+          // its own either, since autoRotate only ever turns the
+          // camera's azimuth (theta), never its polar angle -- the
+          // 10-degree DEFAULT_VERTICAL_TILT set just above this stays
+          // exactly where it was framed for the whole loop.
           controls.update();
         },
         undefined,

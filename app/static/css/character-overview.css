@@ -296,13 +296,16 @@
   border-radius: calc(var(--radius) - 2px);
   overflow: hidden;
 }
+/* No more grab/grabbing cursor -- the camera no longer takes pointer
+   input (see controls.enableRotate/autoRotate in the module script
+   above), so a drag affordance here would invite an interaction that
+   no longer does anything. Default cursor, same as if this rule
+   didn't exist at all. */
 .model-viewer-canvas-wrap canvas {
   display: block;
   width: 100%;
   height: 100%;
-  cursor: grab;
 }
-.model-viewer-canvas-wrap canvas:active { cursor: grabbing; }
 
 /* Shown instead of the canvas wrap above (see showEmpty in the module
    script) when the account has never used the plugin's "Export 3D
