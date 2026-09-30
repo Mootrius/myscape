@@ -2300,25 +2300,21 @@ def render_character_overview(player: PlayerView) -> str:
 
     <div class="co-quad-row" id="coQuadRow">
       <div class="skills-card" id="skillsCard">
-        <h3 class="co-quad-title">Skills</h3>
         <div class="skills-grid">
           {skill_cells}
         </div>
       </div>
 
       <div class="quests-card" id="questsCard">
-        <h3 class="co-quad-title">Quests</h3>
         <div class="quests-empty" id="questsEmpty">No quest data yet &mdash; open your quest list in-game with the myscape RuneLite plugin running, then refresh this page.</div>
         <div class="quests-list" id="questsList"></div>
       </div>
 
       <div class="diaries-card" id="diariesCard">
-        <h3 class="co-quad-title">Achievement Diaries</h3>
         <div class="diaries-list" id="diariesList"></div>
       </div>
 
       <div class="ca-card" id="caCard">
-        <h3 class="co-quad-title">Combat Achievements</h3>
         <div class="ca-list" id="caList"></div>
       </div>
     </div>

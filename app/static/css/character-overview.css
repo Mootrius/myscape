@@ -151,41 +151,27 @@
   min-width: 0;
 }
 
-/* Each card's own label -- these four aren't as self-explanatory at a
-   glance as .model-viewer-card/.clog-card above them, so unlike those
-   two, each gets one. Same uppercase/letter-spaced/--text-faint
-   treatment .gt-card-title (goal-tracking.css) already uses for this
-   exact role elsewhere on the site. */
-.co-quad-title {
-  margin: 0 0 10px;
-  font-size: 13px;
-  font-weight: normal;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
+/* A fixed repeat(3, 1fr) -- this no longer needs to reflow its column
+   count against a fluid card width (that auto-fill/minmax math existed
+   only to keep this grid from overflowing or gapping while
+   .skills-card shared a row with the now-removed boss-KC hiscores
+   card); the three columns are always there, and 1fr each just splits
+   .skills-card's own width (set by the shared flex: 1 1 0 rule above,
+   same as its three siblings in .co-quad-row) evenly between them.
 
-/* A fixed repeat(3, 1fr), per explicit instruction -- this no longer
-   needs to reflow its column count against a fluid card width (that
-   auto-fill/minmax math existed only to keep this grid from
-   overflowing or gapping while .skills-card shared a row with the
-   now-removed boss-KC hiscores card); the three columns are always
-   there, and 1fr each just splits .skills-card's own width (set by
-   the shared flex: 1 1 0 rule above, same as its three siblings in
-   .co-quad-row) evenly between them. Fixed height + its own
-   scrollbar, same .quests-list/.diaries-list/.ca-list convention
-   just below, so all four .co-quad-row cards land at the same height
-   regardless of how many rows 24 skills happens to need at any given
-   width. */
+   No fixed height/scrollbar here, unlike .quests-list/.diaries-list/
+   .ca-list below -- per explicit instruction, this card should never
+   scroll, so it's sized instead: .skill-cell's own padding/icon size
+   below were shrunk specifically so all 8 rows of 24 skills fit inside
+   a height close to its three siblings' fixed 320px without one. gap:
+   6px, down from the row-height math's own previous 10px, for the same
+   reason (shrinking the row-to-row gutter along with each cell's own
+   size is what actually buys back the vertical space removing the
+   scrollbar needs). */
 .skills-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  height: 320px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  padding-right: 6px;
+  gap: 6px;
 }
 
 /* Each cell is itself a link (<a>, not <div> -- see skill_cells in
@@ -204,20 +190,25 @@
    block level span otherwise. title is the hover tooltip (skill name +
    XP, see setSkillTooltip in render_character_overview's script) --
    set on this whole box, not just its icon, so hovering anywhere on
-   the cell shows it, not only the small icon inside it. min-width:
-   84px is just a floor now (each cell still stretches to fill its own
-   1fr column, same as before -- see .skills-grid's own comment) so a
-   cell never collapses narrower than its own icon + gap +
-   .skill-cell-level's 5ch + padding + border can actually fit. */
+   the cell shows it, not only the small icon inside it.
+
+   padding: 4px 6px, down from 6px 10px, and gap: 6px, down from 8px
+   (between the icon and the level number) -- per explicit instruction,
+   shrunk along with .skill-cell-icon below specifically to keep this
+   card scroll-free (see .skills-grid's own comment) while still
+   showing both the icon and the number in full. min-width: 64px is
+   just a floor now (each cell still stretches to fill its own 1fr
+   column, same as before -- see .skills-grid's own comment), lowered
+   to match this cell's smaller actual content. */
 .skill-cell,
 .skill-cell:hover {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  padding: 6px 10px;
-  min-width: 84px;
+  padding: 4px 6px;
+  min-width: 64px;
   color: inherit;
   text-decoration: none;
 }
@@ -227,24 +218,28 @@
 /* Smaller than .co-stat-icon's 28px above -- shrinking the icon (not
    the 15px level text next to it, which stays the same size as every
    other stat on this page) is what makes this whole card read as more
-   compact than a plain scaled-down copy of the summary row would. */
+   compact than a plain scaled-down copy of the summary row would.
+   16px, down from an earlier 20px, per the same explicit instruction
+   .skill-cell's own padding shrink above responds to. */
 .skill-cell-icon {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   object-fit: contain;
   image-rendering: pixelated;
   display: block;
   flex: none;
 }
 
-/* 5ch, wider than the 3ch "126" (the highest virtual level, see
-   levelForXp in the script above) alone would need, so every level
-   badge lines up at the same width regardless of digit count instead
-   of each cell's text sitting flush against a different point.
-   inline-block because a plain inline <span> ignores min-width. */
+/* 3ch, exactly what "126" (the highest virtual level, see levelForXp
+   in the script above) needs -- tightened from an earlier 5ch of
+   deliberate breathing room now that .skill-cell's own padding has
+   been shrunk to keep this card scroll-free (see .skills-grid's own
+   comment), so every level badge still lines up at the same width
+   regardless of digit count, just without the extra slack. inline-
+   block because a plain inline <span> ignores min-width. */
 .skill-cell-level {
   display: inline-block;
-  min-width: 5ch;
+  min-width: 3ch;
   font-size: 15px;
   color: var(--text);
 }
