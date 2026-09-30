@@ -367,7 +367,13 @@
    its own event-type loot source too, one per tier, all 8 sharing
    this one class (isSalvageSource itself is what tells them apart
    from a real NPC by name, not this rule). */
-.loot-npc-box-icon-salvage {
+.loot-npc-box-icon-salvage,
+/* Spider -- a real NPC kill (see isSpider in the script below, no
+   _NPC_DISPLAY_OVERRIDES entry needed, the bare wiki guess off its
+   own name already lands on the right picture), same "reads a bit
+   large at this box's shared 56px" story as Crawling Hand/implings
+   above, per explicit instruction. */
+.loot-npc-box-icon-spider {
   transform: scale(0.7);
 }
 .loot-npc-box-kc {

@@ -6014,6 +6014,19 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return /^Crawling Hand$/i.test(n.sourceName);
         }
 
+        // Spider -- same story as Crawling Hand just above (a real NPC
+        // kill, bare wiki guess off its own name already lands on the
+        // right picture, just reads a bit large at this box's shared
+        // 56px), per explicit instruction. Exact-name match, not a
+        // suffix family like isImpling/isSalvageSource below -- "Giant
+        // spider"/"Jungle spider"/etc. are separate NPCs with their own
+        // portraits, not sized variants of this one, so they're
+        // deliberately left alone rather than swept in by a loose
+        // "ends with spider" match.
+        function isSpider(n) {
+          return /^Spider$/i.test(n.sourceName);
+        }
+
         // Every impling type (Baby, Young, Gourmet, Earth, Essence,
         // Eclectic, Nature, Magpie, Ninja, Crystal, Dragon, Lucky, ...)
         // -- no _NPC_DISPLAY_OVERRIDES entry needed, the bare wiki guess
@@ -6102,7 +6115,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '')) +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '') + (isSpider(n) ? ' loot-npc-box-icon-spider' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +
