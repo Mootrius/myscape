@@ -46,6 +46,7 @@ from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
 from app.limiter import limiter
 from app.loot import build_loot_state, kc_counts_by_player, parse_loot_range_bound, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
+from app.bosses import collection_log_page_kill_counts
 from app.collectionlog import get_collection_log_tabs, get_valid_item_ids
 from app.item_ids import find_item_ids
 from app.npc_names import search_npc_names
@@ -1523,6 +1524,13 @@ def read_collection_log(game_account: GameAccount = Depends(get_current_verified
         "tabs": get_collection_log_tabs(),
         "obtainedItems": game_account.collection_log_items or {},
         "syncedAt": game_account.collection_log_synced_at.isoformat() if game_account.collection_log_synced_at else None,
+        # Page name -> kill/completion count, for however many pages
+        # app.bosses.collection_log_page_kill_counts can confidently match
+        # to this account's already-synced boss_kill_counts (see that
+        # function's own docstring) -- {} for an account that's never
+        # linked/synced hiscores at all, same as everywhere else that
+        # column is read.
+        "killCounts": collection_log_page_kill_counts(game_account.boss_kill_counts or {}),
     }
 
 

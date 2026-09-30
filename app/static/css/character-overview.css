@@ -467,9 +467,47 @@
    own comment) so both panes settle at whatever .model-viewer-card's
    real height actually is. overscroll-behavior: contain, same
    reasoning as .clog-pages above. */
-.clog-items {
+/* Wraps .clog-items-header + .clog-items in a column so the header can
+   sit above the item grid without disturbing .clog-pages beside it --
+   .clog-pages stays a direct flex child of .clog-panes with no header
+   of its own, so it alone keeps the "flex: 1" .clog-items itself used
+   to carry (see syncClogHeight's own comment in
+   render_character_overview, app/pages.py, for how the two panes'
+   heights now split that budget differently). */
+.clog-items-col {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* The active page's own name + kill/completion count -- same info the
+   real in-game collection log shows above a page's own item grid, per
+   explicit instruction. Empty (0px tall, no margin pushing anything
+   down) until renderClogItemsHeader's first real call. */
+.clog-items-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+.clog-items-header-name {
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Only rendered when clogKillCounts has an entry for the active page
+   (see renderClogItemsHeader's own comment) -- most pages simply have
+   no header count at all rather than a "0" or dash standing in for
+   one. */
+.clog-items-header-kc {
+  flex: none;
+  color: var(--gold);
+  white-space: nowrap;
+}
+.clog-items {
   height: 361px;
   overflow-y: auto;
   overscroll-behavior: contain;

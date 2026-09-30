@@ -2002,7 +2002,10 @@ def render_character_overview(player: PlayerView) -> str:
           <div class="clog-tabs" id="clogTabs"></div>
           <div class="clog-panes">
             <div class="clog-pages" id="clogPages"></div>
-            <div class="clog-items" id="clogItems"></div>
+            <div class="clog-items-col" id="clogItemsCol">
+              <div class="clog-items-header" id="clogItemsHeader"></div>
+              <div class="clog-items" id="clogItems"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -2141,9 +2144,17 @@ def render_character_overview(player: PlayerView) -> str:
       var clogTabsEl = document.getElementById('clogTabs');
       var clogPagesEl = document.getElementById('clogPages');
       var clogItemsEl = document.getElementById('clogItems');
+      var clogItemsHeaderEl = document.getElementById('clogItemsHeader');
 
       var clogTabs = [];
       var clogObtained = {};
+      // page name -> kill/completion count, from app.bosses'
+      // collection_log_page_kill_counts (see read_collection_log in
+      // app/main.py) -- only ever has entries for pages this app can
+      // confidently match to hiscores-tracked kills (mostly boss/raid
+      // pages; clue scrolls and most minigames have none), so a page
+      // absent here just renders no count rather than a zero.
+      var clogKillCounts = {};
       var clogActiveTab = 0;
       var clogActivePage = 0;
 
@@ -2190,6 +2201,7 @@ def render_character_overview(player: PlayerView) -> str:
             renderClogTabs();
             renderClogPages();
             renderClogItems();
+            renderClogItemsHeader();
           });
           clogTabsEl.appendChild(btn);
         });
@@ -2224,6 +2236,7 @@ def render_character_overview(player: PlayerView) -> str:
             clogActivePage = pageIndex;
             renderClogPages();
             renderClogItems();
+            renderClogItemsHeader();
           });
           clogPagesEl.appendChild(btn);
         });
@@ -2266,6 +2279,34 @@ def render_character_overview(player: PlayerView) -> str:
         });
       }
 
+      // The active page's own name + kill/completion count, right above
+      // its item grid -- same header the real in-game collection log
+      // shows above a page's own items, per explicit instruction. Kill
+      // count is omitted entirely (not shown as a dash or a zero) for a
+      // page clogKillCounts has no entry for, same "absent means no
+      // data" contract that dict carries end to end from
+      // collection_log_page_kill_counts (app/bosses.py). There's no
+      // personal-best time here -- unlike kill counts, no source
+      // anywhere in this app (or the official hiscores) tracks one for
+      // a collection log page, so it's left out rather than faked.
+      function renderClogItemsHeader() {
+        clogItemsHeaderEl.innerHTML = '';
+        var tab = clogTabs[clogActiveTab];
+        var page = tab && tab.pages[clogActivePage];
+        if (!page) return;
+        var name = document.createElement('span');
+        name.className = 'clog-items-header-name';
+        name.textContent = page.name;
+        clogItemsHeaderEl.appendChild(name);
+        var killCount = clogKillCounts[page.name];
+        if (killCount != null) {
+          var kc = document.createElement('span');
+          kc.className = 'clog-items-header-kc';
+          kc.textContent = formatInt(killCount);
+          clogItemsHeaderEl.appendChild(kc);
+        }
+      }
+
       // Same "swap to the empty-state message" shape as showEmpty in
       // the model viewer's own module script above -- .clog-body stays
       // the default visible markup and this is only called once it's
@@ -2291,7 +2332,7 @@ def render_character_overview(player: PlayerView) -> str:
       // the viewport width, page zoom, or browser.
       var modelViewerCard = document.getElementById('modelViewerCard');
       function syncClogHeight() {
-        if (!modelViewerCard || !clogCard || !clogPagesEl || !clogItemsEl) return;
+        if (!modelViewerCard || !clogCard || !clogPagesEl || !clogItemsEl || !clogItemsHeaderEl) return;
         var modelBoxHeight = modelViewerCard.getBoundingClientRect().height;
         if (!modelBoxHeight) return;
         var clogCS = getComputedStyle(clogCard);
@@ -2305,8 +2346,18 @@ def render_character_overview(player: PlayerView) -> str:
           - (tabsEl ? tabsEl.getBoundingClientRect().height : 0)
           - (tabsCS ? parseFloat(tabsCS.marginBottom) : 0);
         if (panesHeight > 0) {
+          // .clog-pages has no header of its own above it, so it gets
+          // the whole shared budget -- .clog-items-header eats into
+          // .clog-items' own share only, one level down (see
+          // .clog-items-col's own comment in character-overview.css).
           clogPagesEl.style.height = panesHeight + 'px';
-          clogItemsEl.style.height = panesHeight + 'px';
+          var headerCS = getComputedStyle(clogItemsHeaderEl);
+          var itemsHeight = panesHeight
+            - clogItemsHeaderEl.getBoundingClientRect().height
+            - parseFloat(headerCS.marginBottom);
+          if (itemsHeight > 0) {
+            clogItemsEl.style.height = itemsHeight + 'px';
+          }
         }
       }
       if (modelViewerCard && window.ResizeObserver) {
@@ -2335,13 +2386,17 @@ def render_character_overview(player: PlayerView) -> str:
             }
             clogTabs = data.tabs;
             clogObtained = data.obtainedItems || {};
+            clogKillCounts = data.killCounts || {};
             renderClogTabs();
             renderClogPages();
             renderClogItems();
+            renderClogItemsHeader();
             // .clog-tabs goes from empty (0px tall) to holding real
             // tab buttons right here -- re-sync now that its real
             // height exists, rather than waiting for an unrelated
-            // resize to trigger it.
+            // resize to trigger it. Also re-syncs now that
+            // .clog-items-header actually has content in it (it's
+            // empty, 0px tall, until this point), same reasoning.
             syncClogHeight();
           })
           .catch(function () { showClogEmpty(); });
