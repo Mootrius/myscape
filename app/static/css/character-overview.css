@@ -151,27 +151,30 @@
   min-width: 0;
 }
 
-/* A fixed repeat(3, 1fr) -- this no longer needs to reflow its column
-   count against a fluid card width (that auto-fill/minmax math existed
-   only to keep this grid from overflowing or gapping while
-   .skills-card shared a row with the now-removed boss-KC hiscores
-   card); the three columns are always there, and 1fr each just splits
-   .skills-card's own width (set by the shared flex: 1 1 0 rule above,
-   same as its three siblings in .co-quad-row) evenly between them.
+/* A fixed 3-track grid -- the three columns are always there, and each
+   track just splits .skills-card's own width (set by the shared
+   flex: 1 1 0 rule above, same as its three siblings in .co-quad-row)
+   evenly between them.
+
+   minmax(0, 1fr) per track, not a bare 1fr -- this is the actual fix
+   for a real bug: a bare repeat(3, 1fr) track has an *automatic*
+   minimum width equal to its items' min-content size, not 0, so at a
+   narrower real window (.skill-cell's min-content width * 3 wider than
+   .skills-card actually was) the grid refused to shrink and the third
+   column bled straight through .skills-card's own right padding and
+   past its border -- exactly what the "skills extending past the
+   skills section box" report showed. minmax(0, 1fr) lets each track
+   actually shrink to whatever width the card really has. gap: 4px,
+   down from a previous 6px, for the same real-narrow-window reason
+   .skill-cell's own padding/icon shrink below responds to.
 
    No fixed height/scrollbar here, unlike .quests-list/.diaries-list/
    .ca-list below -- per explicit instruction, this card should never
-   scroll, so it's sized instead: .skill-cell's own padding/icon size
-   below were shrunk specifically so all 8 rows of 24 skills fit inside
-   a height close to its three siblings' fixed 320px without one. gap:
-   6px, down from the row-height math's own previous 10px, for the same
-   reason (shrinking the row-to-row gutter along with each cell's own
-   size is what actually buys back the vertical space removing the
-   scrollbar needs). */
+   scroll, so it's sized instead to its own content. */
 .skills-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
 }
 
 /* Each cell is itself a link (<a>, not <div> -- see skill_cells in
@@ -192,23 +195,30 @@
    set on this whole box, not just its icon, so hovering anywhere on
    the cell shows it, not only the small icon inside it.
 
-   padding: 4px 6px, down from 6px 10px, and gap: 6px, down from 8px
-   (between the icon and the level number) -- per explicit instruction,
-   shrunk along with .skill-cell-icon below specifically to keep this
-   card scroll-free (see .skills-grid's own comment) while still
-   showing both the icon and the number in full. min-width: 64px is
-   just a floor now (each cell still stretches to fill its own 1fr
-   column, same as before -- see .skills-grid's own comment), lowered
-   to match this cell's smaller actual content. */
+   padding: 3px 4px, down another notch from a previous 4px 6px, and
+   gap: 4px (between the icon and the level number), down from 6px --
+   shrunk further along with .skill-cell-icon below once a real,
+   narrower-than-expected window showed these cells still weren't small
+   enough to fit three per row without overflowing (see
+   .skills-grid's own comment on the minmax(0, 1fr) fix this pairs
+   with). No min-width floor any more -- at that same narrow width a
+   64px floor was itself wide enough to force a cell past its 1fr
+   column regardless of what the track could shrink to, so the cell is
+   now sized by its own content (icon + gap + padding + the level
+   text's own 3ch below) instead of a fixed floor. overflow: hidden +
+   white-space: nowrap are a safety net so a still-narrower window
+   clips a cell's own content at its own edge rather than ever
+   bleeding past the card border again. */
 .skill-cell,
 .skill-cell:hover {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  padding: 4px 6px;
-  min-width: 64px;
+  padding: 3px 4px;
+  overflow: hidden;
+  white-space: nowrap;
   color: inherit;
   text-decoration: none;
 }
@@ -219,11 +229,11 @@
    the 15px level text next to it, which stays the same size as every
    other stat on this page) is what makes this whole card read as more
    compact than a plain scaled-down copy of the summary row would.
-   16px, down from an earlier 20px, per the same explicit instruction
-   .skill-cell's own padding shrink above responds to. */
+   14px, down from an earlier 16px, for the same real-narrow-window
+   reason .skill-cell's own padding/gap shrink above responds to. */
 .skill-cell-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   object-fit: contain;
   image-rendering: pixelated;
   display: block;
@@ -763,9 +773,15 @@
    already reserves for exactly this kind of state, not new picks of
    their own. Fixed height + its own scrollbar rather than growing the
    card (and therefore the whole .co-quad-row) to fit ~196 rows --
-   same convention .clog-pages/.clog-items already use one row up. */
+   same convention .clog-pages/.clog-items already use one row up.
+   272px, down from an earlier 320px -- matches .skills-grid's own
+   actual content height now (24 skills at .skill-cell's shrunk size),
+   since .skills-card never scrolls and co-quad-row's flex stretch was
+   otherwise forcing all four cards 320px tall regardless, leaving
+   visible empty space below the skills grid specifically (per
+   explicit report). See .skills-grid's own comment. */
 .quests-list {
-  height: 320px;
+  height: 272px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -813,9 +829,10 @@
    holding all 12 .diary-row below) gets the same fixed height + own
    scrollbar as .quests-list above, same reasoning: keeps .diaries-card
    the same height as its three .co-quad-row siblings regardless of
-   its own row count, rather than growing the whole row to fit. */
+   its own row count, rather than growing the whole row to fit. 272px,
+   down from an earlier 320px -- see .quests-list's own comment. */
 .diaries-list {
-  height: 320px;
+  height: 272px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -883,9 +900,10 @@
    six .ca-tile below) gets the same fixed height + own scrollbar as
    .quests-list/.diaries-list above, same reasoning: six tiers don't
    come close to needing it, but it keeps .ca-card's height locked to
-   its three .co-quad-row siblings' regardless. */
+   its three .co-quad-row siblings' regardless. 272px, down from an
+   earlier 320px -- see .quests-list's own comment. */
 .ca-list {
-  height: 320px;
+  height: 272px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
