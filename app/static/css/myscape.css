@@ -778,25 +778,12 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   margin-top: 14px;
 }
 
-/* Reorder plumbing (see _dash_card_wrap/wireDashboardDrag in
-   app/pages.py) around the actual card below. The whole wrapper is
-   what's draggable="true" (set in the markup, not here) -- pressing
-   and dragging anywhere on a card, not just some dedicated handle,
-   picks THIS element up (see _dash_card_wrap's own docstring for why
-   its <a>/<img> are each explicitly draggable="false" so neither one
-   steals that gesture into its own native link-/image-drag instead).
-   cursor: grab signals that anywhere on the card, same "the whole
-   thing is what you'd grab" affordance a Trello-style card list gives;
-   :active flips to grabbing for the press itself, and .dragging (added
-   only on the card actually being picked up) fades it in place while
-   animateReorder slides the others out of the way -- identical to
-   .gt-goal-row.draggable/.dragging's own cursor/opacity pair in
-   goal-tracking.css. user-select: none stops a press-and-drag from
-   also selecting/highlighting the card's title/description text
-   underneath it, same reasoning .gt-goal-row.draggable already has. */
-.dash-card-wrap { cursor: grab; user-select: none; }
-.dash-card-wrap:active { cursor: grabbing; }
-.dash-card-wrap.dragging { opacity: 0.4; cursor: grabbing; }
+/* Plain wrapper around the actual card below -- see _dash_card_wrap in
+   app/pages.py -- so .dash-card-link's own display: block/color/
+   text-decoration rules just below have something to apply to. Used
+   to also be this dashboard's drag-and-drop reorder handle (removed
+   per explicit instruction in favor of one fixed card order for every
+   player -- see DASHBOARD_CARD_KEYS' own comment in app/pages.py). */
 
 /* :hover repeated explicitly, not just relying on the plain rule above
    -- the site-wide `a:hover { color: var(--gold); text-decoration:

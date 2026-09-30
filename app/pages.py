@@ -45,13 +45,6 @@ class PlayerView:
     # boss synced at least once is a key, 0 or otherwise).
     boss_kill_counts: dict
     hiscores_synced_at: Optional[datetime]
-    # The account's own saved drag-and-drop order for the dashboard's
-    # cards (Account.dashboard_card_order), exactly as stored -- None
-    # when nothing's ever been dragged. render_dashboard is the only
-    # thing that reads this, via resolve_dashboard_card_order below,
-    # which is what actually falls back to DASHBOARD_CARD_KEYS' default
-    # order and folds in any card this list predates.
-    dashboard_card_order: Optional[list]
 
 
 def build_player_view(account: "Account", game_account: Optional["GameAccount"]) -> PlayerView:
@@ -71,7 +64,6 @@ def build_player_view(account: "Account", game_account: Optional["GameAccount"])
         account_hash=game_account.account_hash if game_account else None,
         boss_kill_counts=dict(game_account.boss_kill_counts or {}) if game_account else {},
         hiscores_synced_at=game_account.hiscores_synced_at if game_account else None,
-        dashboard_card_order=account.dashboard_card_order,
     )
 
 # Cache-busting query string for the stylesheet link in _shell() below.
@@ -1110,18 +1102,10 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
     """One dashboard feature card -- an icon chip on the left, heading and
     description stacked on the right. Both current cards describe features
     that aren't live yet, but their copy explains what's coming rather than
-    just saying "coming soon" now that there's something to say about them.
-
-    draggable="false" on the icon <img> -- an <img> is a natively
-    draggable element by default (same as an <a href>, see
-    _dash_card_wrap's own comment on the link below), so without this a
-    press-and-drag starting right on the icon would kick off the
-    browser's own native image-drag instead of the whole card's reorder
-    drag it should defer to. Same guard, same reason,
-    .gt-goal-icon/.gear-slot-icon already carry elsewhere on the site."""
+    just saying "coming soon" now that there's something to say about them."""
     return f"""
     <div class="dash-card">
-      <div class="dash-card-icon"><img src="{escape(icon_src)}" alt="{escape(icon_alt)}" draggable="false" /></div>
+      <div class="dash-card-icon"><img src="{escape(icon_src)}" alt="{escape(icon_alt)}" /></div>
       <div class="dash-card-body">
         <h3>{escape(title)}</h3>
         <p class="subtitle">{escape(description)}</p>
@@ -1130,33 +1114,15 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
     """
 
 
-def _dash_card_wrap(key: str, href: str, icon_src: str, icon_alt: str, title: str, description: str) -> str:
-    """One dashboard card, plus the drag-and-drop plumbing wireDashboardDrag
-    (render_dashboard's own script, below) needs to let a player reorder it
-    by pressing and dragging anywhere on the card -- not just some
-    dedicated handle.
-
-    draggable="true" lives on THIS wrapper div, not the card's own <a>
-    directly, and the <a> itself carries draggable="false" to match --
-    an <a href> is a natively draggable element by default (same as
-    <img>, see _dash_card's own comment on its icon above), so leaving
-    it draggable would let the browser treat the anchor itself as the
-    drag source (its own native link-drag) rather than deferring to
-    this wrapper. With the anchor's own native drag switched off, a
-    press-and-move starting anywhere inside it -- the icon, the title,
-    anywhere -- correctly bubbles up and picks up THIS element instead,
-    while a plain click (no pointer movement at all) never starts an
-    HTML5 drag in the first place, so it still just navigates like any
-    other link, completely unaffected.
-
-    data-card-key on the wrapper is both this card's drag payload and
-    the same key DASHBOARD_CARD_KEYS/resolve_dashboard_card_order below
-    identify it by -- see PUT /api/dashboard/card-order in app/main.py,
-    which is what wireDashboardDrag's own commitDomOrder posts this
-    list of keys to after a drop."""
+def _dash_card_wrap(href: str, icon_src: str, icon_alt: str, title: str, description: str) -> str:
+    """One dashboard card, wrapped in its own link out to that app's page.
+    A separate wrapper div (rather than just returning _dash_card's own
+    markup straight inside the <a>) purely so .dash-card-link's own
+    display: block/color/text-decoration rules below have something to
+    apply to."""
     return f"""
-    <div class="dash-card-wrap" data-card-key="{escape(key)}" draggable="true">
-      <a href="{escape(href)}" class="dash-card-link" draggable="false">
+    <div class="dash-card-wrap">
+      <a href="{escape(href)}" class="dash-card-link">
         {_dash_card(icon_src, icon_alt, title, description)}
       </a>
     </div>
@@ -1164,64 +1130,26 @@ def _dash_card_wrap(key: str, href: str, icon_src: str, icon_alt: str, title: st
 
 
 # Every dashboard card, keyed by a short stable id that's independent of
-# its own title/route/copy (so a title tweak like the Goal Tracking
-# description edits earlier never orphans a player's saved order) --
-# and, in this same tuple, TODAY'S DEFAULT ORDER: Loot Tracker, Purchase
-# Goals, Mindmaps, Storages Viewer, Goal Tracking, Character Overview,
-# the same deliberate (not alphabetical, not declaration-order)
-# sequence this used to be hardcoded as directly in render_dashboard's
-# own body string. Doing double duty like this is exactly what makes
-# "add a new card" and "a player who's never dragged anything sees
-# today's order" the same single fact instead of two things that could
-# drift apart -- see resolve_dashboard_card_order right below for the
-# other half: what happens to this order once a player HAS saved one
-# of their own. Character Overview, appended here after the original
-# five, is the first real card this "a new one always takes the last
-# spot" rule has actually had to prove itself on -- both halves of that
-# promise (today's default AND anyone's existing custom order) fall
-# out of it landing last in this tuple, nothing else to update.
+# its own title/route/copy -- and, in this same tuple, the one fixed
+# order every player's dashboard renders cards in: Character Overview,
+# Loot Tracker, Purchase Goals, Storages Viewer, Mindmaps, Goal
+# Tracking. Used to be individually reorderable per player (drag-and-
+# drop, saved to Account.dashboard_card_order) -- removed per explicit
+# instruction in favor of this one fixed order for everyone; see
+# migrations/versions for the migration that dropped that column.
 DASHBOARD_CARD_KEYS = (
+    "character_overview",
     "loot_tracker",
     "purchase_goals",
-    "mindmaps",
     "possessions",
+    "mindmaps",
     "goal_tracking",
-    "character_overview",
 )
-
-
-def resolve_dashboard_card_order(stored: Optional[list]) -> list:
-    """Turns a player's raw Account.dashboard_card_order (None, or
-    whatever list of keys they last dragged their cards into) into the
-    actual key order render_dashboard renders cards in.
-
-    None (or empty -- a defensive fallback, not a state a real drag
-    would ever save) means nothing's ever been dragged: DASHBOARD_CARD_KEYS'
-    own order, untouched -- today's default layout, exactly as it's
-    always looked.
-
-    Otherwise: keep the stored order, silently dropping any key that
-    isn't a real card anymore (DASHBOARD_CARD_KEYS shrank since they
-    last saved -- not possible today, but this stays correct if a card
-    is ever retired), then append whichever real cards that filtered
-    list still doesn't mention -- a card DASHBOARD_CARD_KEYS grew by
-    since they last saved -- in DASHBOARD_CARD_KEYS' own relative
-    order, at the very end. That's the "a new app takes the last spot
-    as it's added" behavior applied to an existing custom order, not
-    just the default one: a brand new key is never spliced in wherever
-    DASHBOARD_CARD_KEYS happens to place it, only ever appended after
-    everything a player already arranged."""
-    if not stored:
-        return list(DASHBOARD_CARD_KEYS)
-    kept = [key for key in stored if key in DASHBOARD_CARD_KEYS]
-    missing = [key for key in DASHBOARD_CARD_KEYS if key not in kept]
-    return kept + missing
 
 
 def render_dashboard(player: PlayerView) -> str:
     cards = {
         "loot_tracker": _dash_card_wrap(
-            "loot_tracker",
             "/dashboard/loot",
             _ICON_BONES,
             "Dragon bones",
@@ -1231,7 +1159,6 @@ def render_dashboard(player: PlayerView) -> str:
             "NPCs are tracked and what data is shown.",
         ),
         "purchase_goals": _dash_card_wrap(
-            "purchase_goals",
             "/dashboard/purchase-goals",
             _ICON_COINS,
             "Coins",
@@ -1241,7 +1168,6 @@ def render_dashboard(player: PlayerView) -> str:
             "Organize multiple setups to keep track of at once.",
         ),
         "mindmaps": _dash_card_wrap(
-            "mindmaps",
             "/dashboard/mindmaps",
             _ICON_CLUELESS_SCROLL,
             "Clueless scroll",
@@ -1251,7 +1177,6 @@ def render_dashboard(player: PlayerView) -> str:
             "auto-detecting completion functionality.",
         ),
         "possessions": _dash_card_wrap(
-            "possessions",
             "/dashboard/possessions",
             _ICON_HEAVY_CASKET,
             "Heavy casket",
@@ -1261,7 +1186,6 @@ def render_dashboard(player: PlayerView) -> str:
             "content — all in one place!",
         ),
         "goal_tracking": _dash_card_wrap(
-            "goal_tracking",
             "/dashboard/goal-tracking",
             _ICON_MAX_CAPE,
             "Max cape",
@@ -1274,7 +1198,6 @@ def render_dashboard(player: PlayerView) -> str:
         # page for now too (see its own docstring), so there's nothing
         # real to describe here yet.
         "character_overview": _dash_card_wrap(
-            "character_overview",
             "/dashboard/character-overview",
             _ICON_CHARACTER_OVERVIEW,
             "Character overview icon",
@@ -1285,10 +1208,10 @@ def render_dashboard(player: PlayerView) -> str:
         ),
     }
 
-    # See resolve_dashboard_card_order's own docstring -- this is the
-    # ONLY place dashboard-card order is decided; the grid below just
-    # renders whichever key order it hands back.
-    cards_html = "\n      ".join(cards[key] for key in resolve_dashboard_card_order(player.dashboard_card_order))
+    # DASHBOARD_CARD_KEYS' own docstring -- this is the ONLY place
+    # dashboard-card order is decided (the same fixed order for every
+    # player); the grid below just renders it.
+    cards_html = "\n      ".join(cards[key] for key in DASHBOARD_CARD_KEYS)
 
     body = f"""
     <div class="dash-grid" id="dashGrid">
@@ -1296,137 +1219,7 @@ def render_dashboard(player: PlayerView) -> str:
     </div>
     """
 
-    script = """
-    (function () {
-      // Drag-and-drop reordering for the dashboard's own cards -- same
-      // dragstart/dragover/drop/dragend shape (and the same FLIP-style
-      // animateReorder live preview) as Goal Tracking's own wireGoalDrag/
-      // Purchase Goals' wireSummaryDrag, just keyed by data-card-key
-      // (see _dash_card_wrap in app/pages.py) instead of a goal id.
-      // Every .dash-card-wrap carries draggable="true" itself (with its
-      // own <a>/<img> both explicitly draggable="false", so neither one
-      // hijacks the browser's own native link-/image-drag instead) --
-      // see that function's own docstring for why a press-and-drag
-      // starting anywhere on a card, not just some dedicated handle,
-      // still correctly picks up the card as a whole.
-      //
-      // Unlike those two, there's no in-memory source-of-truth array to
-      // re-render from if a drag ends without a drop -- this page's
-      // cards are plain server-rendered HTML, not built from a JS state
-      // object. originalOrder (captured once, before any drag can
-      // happen) stands in for that: restoreOriginalOrder just snaps
-      // every card straight back into its last-known-good DOM position.
-      var grid = document.getElementById('dashGrid');
-      if (!grid) return;
-
-      function wraps() { return Array.prototype.slice.call(grid.querySelectorAll('.dash-card-wrap')); }
-      function wrapKey(el) { return el.getAttribute('data-card-key'); }
-
-      var wrapsByKey = {};
-      wraps().forEach(function (el) { wrapsByKey[wrapKey(el)] = el; });
-      var originalOrder = wraps().map(wrapKey);
-
-      function restoreOriginalOrder() {
-        originalOrder.forEach(function (key) {
-          var el = wrapsByKey[key];
-          if (el) grid.appendChild(el);
-        });
-      }
-
-      var draggedEl = null;
-      var dropped = false;
-
-      function animateReorder(mutate) {
-        var els = wraps();
-        var firstRects = {};
-        els.forEach(function (el) { firstRects[wrapKey(el)] = el.getBoundingClientRect(); });
-
-        mutate();
-
-        els.forEach(function (el) {
-          if (el === draggedEl) return;
-          var first = firstRects[wrapKey(el)];
-          var last = el.getBoundingClientRect();
-          var dx = first.left - last.left;
-          var dy = first.top - last.top;
-          if (!dx && !dy) return;
-          el.style.transition = 'none';
-          el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-          el.getBoundingClientRect();
-          el.style.transition = 'transform 150ms ease';
-          el.style.transform = '';
-          el.addEventListener('transitionend', function handler() {
-            el.style.transition = '';
-            el.removeEventListener('transitionend', handler);
-          });
-        });
-      }
-
-      // The live preview above already leaves the DOM in exactly the
-      // order a drop should save -- no separate source/target diffing
-      // needed, just read the cards back out in their current order.
-      async function commitDomOrder() {
-        var order = wraps().map(wrapKey);
-        try {
-          await fetch('/api/dashboard/card-order', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order: order }),
-          });
-        } catch (err) {
-          // Best-effort, same as every other saved-order endpoint on the
-          // site -- the drag itself already visibly succeeded, and a
-          // dropped save attempt here just means the NEXT refresh falls
-          // back to whatever order was last saved rather than this one,
-          // not a broken page.
-        }
-      }
-
-      wraps().forEach(function (wrap) {
-        wrap.addEventListener('dragstart', function (e) {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', wrapKey(wrap));
-          draggedEl = wrap;
-          dropped = false;
-          wrap.classList.add('dragging');
-        });
-        wrap.addEventListener('dragend', function () {
-          wrap.classList.remove('dragging');
-          draggedEl = null;
-          if (!dropped) restoreOriginalOrder();
-        });
-
-        wrap.addEventListener('dragover', function (e) {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          if (!draggedEl || draggedEl === wrap) return;
-          // X, not Y -- unlike Goal Tracking's own single-column list,
-          // .dash-grid wraps into however many columns actually fit the
-          // viewport (see its own comment in myscape.css), so "before"/
-          // "after" has to mean left-half/right-half of whichever card
-          // is actually under the pointer right now, not above/below.
-          // Since dragover only ever fires while the pointer is
-          // physically over this element, that's always a left/right
-          // read on ITS OWN box, which is exactly what a wrapping grid
-          // needs -- no separate up/down case to handle at all.
-          var rect = wrap.getBoundingClientRect();
-          var before = e.clientX < rect.left + rect.width / 2;
-          var alreadyBefore = wrap.previousElementSibling === draggedEl;
-          var alreadyAfter = wrap.nextElementSibling === draggedEl;
-          if (before ? alreadyBefore : alreadyAfter) return;
-          animateReorder(function () {
-            grid.insertBefore(draggedEl, before ? wrap : wrap.nextSibling);
-          });
-        });
-        wrap.addEventListener('drop', function (e) {
-          e.preventDefault();
-          dropped = true;
-          commitDomOrder();
-        });
-      });
-    })();
-    """
-    return _shell(title="Dashboard — myscape", player=player, body=body, extra_script=script)
+    return _shell(title="Dashboard — myscape", player=player, body=body)
 
 
 _SUMMARY_STATS = (
