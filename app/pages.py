@@ -6028,6 +6028,25 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return /\\bimpling$/i.test(n.sourceName);
         }
 
+        // Searching/opening a seed pack or a bird nest is its own
+        // event-type loot source (see _NPC_DISPLAY_OVERRIDES in
+        // app/loot.py), entirely separate from ever holding one as a
+        // plain dropped item (see isDetailItemIcon/DETAIL_ICON_ITEM_IDS
+        // below for that tile) -- sourceName is always exactly "Seed
+        // pack"/"Bird nest" for these (build_loot_state keeps the raw
+        // event name as-is for both, same as Intricate pouch above), so
+        // a plain equality check is enough. Same 70%-oversized "detail"
+        // render as the casket tier/Intricate pouch above, so they get
+        // the same scale-not-resize treatment via their own dedicated
+        // classes (see .loot-npc-box-icon-seedpack/-birdnest in
+        // loot-tracker.css).
+        function isSeedPackSource(n) {
+          return n.sourceName === 'Seed pack';
+        }
+        function isBirdNestSource(n) {
+          return n.sourceName === 'Bird nest';
+        }
+
 
         // hiddenFlags folds into the key alongside everything else that
         // already forces a rebuild (search/sort/toggle/the set itself)
@@ -6065,7 +6084,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '')) +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +

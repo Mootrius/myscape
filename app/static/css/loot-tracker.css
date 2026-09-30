@@ -349,7 +349,16 @@
    off each one's own name already lands on the right picture) reads a
    bit large next to a typical NPC portrait at this box's shared 56px
    sizing, same story as Crawling Hand above. */
-.loot-npc-box-icon-impling {
+.loot-npc-box-icon-impling,
+/* Searching/opening a seed pack or a bird nest is its own event-type
+   loot source (see isSeedPackSource/isBirdNestSource in the script
+   below, and the matching _NPC_DISPLAY_OVERRIDES entries in
+   app/loot.py) -- shown under the same wiki "detail" render as the
+   item-panel tile for actually holding one of these (see
+   .loot-item-box-icon-detail above), same 70%-oversized story as
+   every other detail render on this shared 56px sizing. */
+.loot-npc-box-icon-seedpack,
+.loot-npc-box-icon-birdnest {
   transform: scale(0.7);
 }
 .loot-npc-box-kc {

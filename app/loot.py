@@ -404,6 +404,22 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "skeleton hellhound": (None, "Skeleton Hellhound (Vet'ion).png"),
     "hallowed sepulchre coffin": (None, "Coffin (Hallowed Sepulchre).png"),
     "golem crafting": (None, "Golem (sunstone).png"),
+    # Searching/opening these is its own RuneLite LootReceived event
+    # (source_type "event", named after the thing itself -- same
+    # "Intricate pouch" shape as above), entirely separate from ever
+    # holding one as a plain dropped ITEM (item_id-keyed, see
+    # _ITEM_DETAIL_ICON_OVERRIDES far above in this module) -- this is
+    # the tile that shows up in the Loot Tracker's left (NPC/source)
+    # panel when you search one, not the right (item) panel, and it
+    # was still on npc_icon_url's bare guessed-filename default (the
+    # small flat wiki icon, not the detail render) even after
+    # _ITEM_DETAIL_ICON_OVERRIDES shipped -- reported as "the bird nest
+    # [and] seed pack ... icons are still wrong" after that fix, with a
+    # screenshot showing exactly this panel (KC-labeled sort tabs) for
+    # a "seed" search. Same detail-render filenames as their item-panel
+    # counterparts, so the two tiles for the same thing look the same.
+    "seed pack": (None, "Seed pack detail.png"),
+    "bird nest": (None, "Bird nest (empty) detail.png"),
 }
 
 
