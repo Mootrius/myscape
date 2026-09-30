@@ -270,30 +270,107 @@ def _bucket_plan(start: datetime, end: datetime) -> Tuple[int, timedelta, str]:
     return num_buckets, bucket_width, granularity
 
 
-def _noted_id_fallback(item_id: int, mapping: dict) -> Optional[int]:
+def _build_name_index(mapping: dict) -> Dict[str, int]:
+    """{lowercased tradeable item name: its numeric id}, built once per
+    mapping refresh (see build_loot_state, the only real caller) and
+    threaded through to every _noted_id_fallback call below rather than
+    rebuilt per item/per event -- mapping has ~4,000 entries, cheap
+    once, wasteful rebuilt in a loop. Every name in the wiki's own
+    mapping payload is already a real tradeable item's own canonical
+    display name -- GE-listed items don't share a display name with
+    each other, so first-seen-wins on a collision is never actually
+    exercised in practice, just a defensive default rather than a
+    raise."""
+    index: Dict[str, int] = {}
+    for id_str, meta in mapping.items():
+        name = meta.get("name")
+        if not name:
+            continue
+        key = name.strip().lower()
+        if key not in index:
+            try:
+                index[key] = int(id_str)
+            except (TypeError, ValueError):
+                continue
+    return index
+
+
+def _noted_id_fallback(
+    item_id: int,
+    mapping: dict,
+    item_name: Optional[str] = None,
+    name_index: Optional[Dict[str, int]] = None,
+) -> Optional[int]:
     """A noted item (some monster drops and clue caskets hand out ores
     and similar stackables noted, so they stack in the kill inventory
     instead of taking a slot each) has its own item id, but the wiki's
     mapping/price APIs only ever carry data under the UNNOTED id --
     notes trade at the same price as the unnoted item anyway, so there
     being no separate listing for the noted id isn't a bug on the
-    wiki's end. OSRS's item definitions always place a notable item's
-    noted id at exactly unnoted_id + 1 (that's how the game links every
-    notable item to its own note, not a guess), so unnoted_id is
-    item_id - 1. Only returns it once mapping confirms item_id - 1 is
-    itself a real, known tradeable item AND item_id is NOT already one
-    (both true) -- otherwise a merely-untradeable item (a quest item,
-    say) would silently borrow whatever unrelated item happens to sit
-    at the neighboring id."""
+    wiki's end.
+
+    Tries two ways to find that unnoted id, in order:
+
+    1. item_id - 1. OSRS places a LOT of notable items' noted id at
+       exactly unnoted_id + 1, and this needs no name/index at all, so
+       it's tried first -- but it's a common convention, not a
+       guarantee the game enforces for every item (Jagex's own item-id
+       allocation isn't required to keep noted/unnoted pairs adjacent,
+       and doesn't for every family -- logs are a real example: the
+       many different log types were allocated as one contiguous
+       unnoted block, with their notes allocated separately, elsewhere,
+       not immediately after each one). Confirmed wrong for Mahogany
+       logs specifically: id 6332's "+1" neighbor, 6333, is Teak logs'
+       own UNNOTED id -- a real, differently-priced, differently-named
+       item -- so this branch would have silently (no error, no 0gp
+       even) priced a noted Mahogany log drop as Teak logs instead, had
+       Teak logs' own id not happened to also be absent from `mapping`'s
+       6333 slot... which it isn't (Teak logs IS a real mapped item),
+       making this exact case actively dangerous, not just a miss: it
+       returns a WRONG id with high confidence rather than failing
+       closed. That's a sharper bug than this fallback merely returning
+       None when it doesn't matter -- reported as noted Mahogany logs
+       from Zulrah showing 0gp, which traces to this same "+1" guess
+       landing on 6333 (Teak logs), which the caller (canonical_id,
+       item_name) then displays/prices as if it were that wrong item --
+       except item_name here is always the RAW name straight off the
+       plugin's own sync ("Mahogany logs", never "Teak logs"), so the
+       display name and the mis-resolved id pull in two different
+       directions rather than cleanly showing the wrong item, which is
+       its own tell that this branch picked wrong.
+    2. item_name, case-insensitively, against name_index (see
+       _build_name_index) -- OSRS shows a noted item under the exact
+       same display name as its unnoted counterpart (the plugin's own
+       resolveItemName never appends "(noted)" or similar), so this
+       works for every notable tradeable item regardless of where
+       Jagex happened to allocate its noted id, not just the ones that
+       happen to sit at unnoted_id + 1. This is the reliable one; #1
+       above is only tried first because it needs nothing but item_id
+       itself and is right often enough to skip a dict lookup for.
+
+    Either way, only returns a candidate once `mapping` confirms it's a
+    real, known tradeable item AND item_id is NOT already one (both
+    true) -- otherwise a merely-untradeable item (a quest item, say)
+    would silently borrow whatever unrelated item happens to match."""
     if str(item_id) in mapping:
         return None
     candidate = item_id - 1
     if str(candidate) in mapping:
         return candidate
+    if item_name and name_index:
+        candidate = name_index.get(item_name.strip().lower())
+        if candidate is not None and candidate != item_id:
+            return candidate
     return None
 
 
-def sell_price_for(item_id: int, prices: dict, mapping: Optional[dict] = None) -> Tuple[Optional[int], Optional[str]]:
+def sell_price_for(
+    item_id: int,
+    prices: dict,
+    mapping: Optional[dict] = None,
+    item_name: Optional[str] = None,
+    name_index: Optional[Dict[str, int]] = None,
+) -> Tuple[Optional[int], Optional[str]]:
     """What a dropped item is actually worth right now if sold -- the
     mirror of app/purchase_goals.py's unit_price_for, which prefers the
     instant-BUY ("high") price since Purchase Goals is about the cost
@@ -301,11 +378,13 @@ def sell_price_for(item_id: int, prices: dict, mapping: Optional[dict] = None) -
     kill actually netted is what selling its drops would return, not
     what buying them back would cost -- so this prefers instant-sell
     ("low") instead, same as the original tool's own sell_price_for.
-    Falls back to a noted item's unnoted counterpart's price when
-    given `mapping` -- see _noted_id_fallback."""
+    Falls back to a noted item's unnoted counterpart's price when given
+    `mapping` -- see _noted_id_fallback, including for why item_name/
+    name_index (both optional -- a caller with neither just loses the
+    name-based half of that fallback) matter too, not just mapping."""
     p = prices.get(str(item_id))
     if not p and mapping is not None:
-        unnoted_id = _noted_id_fallback(item_id, mapping)
+        unnoted_id = _noted_id_fallback(item_id, mapping, item_name, name_index)
         if unnoted_id is not None:
             p = prices.get(str(unnoted_id))
     if not p:
@@ -317,12 +396,19 @@ def sell_price_for(item_id: int, prices: dict, mapping: Optional[dict] = None) -
     return None, None
 
 
-def _item_value(item_id: Optional[int], quantity: int, prices: dict, mapping: Optional[dict] = None) -> int:
+def _item_value(
+    item_id: Optional[int],
+    quantity: int,
+    prices: dict,
+    mapping: Optional[dict] = None,
+    item_name: Optional[str] = None,
+    name_index: Optional[Dict[str, int]] = None,
+) -> int:
     if item_id is None:
         return 0
     if item_id == COINS_ITEM_ID:
         return quantity
-    unit_price, _src = sell_price_for(item_id, prices, mapping)
+    unit_price, _src = sell_price_for(item_id, prices, mapping, item_name, name_index)
     return (unit_price or 0) * quantity
 
 
@@ -602,12 +688,26 @@ def set_item_hidden(db: Session, game_account: GameAccount, item_id: Optional[in
         db.commit()
 
 
-def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict, hidden_items: set) -> Tuple[List[dict], int]:
+def _resolve_loot_items(
+    raw_items: list,
+    mapping: dict,
+    prices: dict,
+    hidden_items: set,
+    name_index: Optional[Dict[str, int]] = None,
+) -> Tuple[List[dict], int]:
     resolved = []
     total_value = 0
     for raw in raw_items:
         item_id = raw.get("item_id")
         quantity = raw.get("quantity", 0) or 0
+        # The RAW name straight off the plugin's own sync, BEFORE any
+        # meta/"Item #<id>" fallback below -- this is what
+        # _noted_id_fallback's name-based branch matches against
+        # name_index, since it's the game's own display name for
+        # whatever actually dropped (a noted item's display name is
+        # never different from its unnoted counterpart's -- see that
+        # function's own docstring), not a guess.
+        raw_item_name = raw.get("item_name")
         # A noted drop keeps the game's own display name (OSRS shows
         # "Blue dragonhide" whether it's noted or not) but carries a
         # DIFFERENT item id from the unnoted item -- which is exactly
@@ -621,18 +721,18 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict, hidden_ite
         # one entry downstream.
         canonical_id = item_id
         if item_id is not None:
-            unnoted_id = _noted_id_fallback(item_id, mapping)
+            unnoted_id = _noted_id_fallback(item_id, mapping, raw_item_name, name_index)
             if unnoted_id is not None:
                 canonical_id = unnoted_id
         meta = mapping.get(str(canonical_id), {}) if canonical_id is not None else {}
-        item_name = raw.get("item_name") or meta.get("name") or (
+        item_name = raw_item_name or meta.get("name") or (
             f"Item #{canonical_id}" if canonical_id is not None else "Unknown item"
         )
         # Value is still priced off the ORIGINAL item_id (sell_price_for
         # does its own noted-id fallback internally) -- canonical_id is
         # only for grouping/display, not a claim that the two ids are
         # interchangeable everywhere.
-        value = _item_value(item_id, quantity, prices, mapping)
+        value = _item_value(item_id, quantity, prices, mapping, raw_item_name, name_index)
         total_value += value
         # A real numeric item id was already on hand for every drop
         # here (canonical_id, straight off the plugin's own sync) --
@@ -751,6 +851,11 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
     docstring in app/models.py for the full hide/unhide model this
     implements."""
     mapping, mapping_error = get_mapping()
+    # Built once per request (mapping itself is cached ~daily, see
+    # get_mapping) and threaded down to every _resolve_loot_items call
+    # below, rather than rebuilt per event -- see _build_name_index's
+    # own docstring for why _noted_id_fallback needs this at all now.
+    name_index = _build_name_index(mapping)
     prices, prices_error = get_latest_prices()
     hidden_npcs = hidden_npc_keys(db, game_account)
     hidden_items = hidden_item_keys(db, game_account)
@@ -833,7 +938,7 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
         if idx < 0:
             continue
 
-        items, _raw_event_value = _resolve_loot_items(event.items or [], mapping, prices, hidden_items)
+        items, _raw_event_value = _resolve_loot_items(event.items or [], mapping, prices, hidden_items, name_index)
         # What this event actually contributes to any total -- every
         # OTHER item's value, minus whichever of its items the player
         # has individually hidden (see item_hide_key/_resolve_loot_items
