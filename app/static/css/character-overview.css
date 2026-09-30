@@ -16,60 +16,6 @@
    approach every other page already takes (relying on flex/wrap
    rather than breakpoints). */
 
-/* ---- The page title's own info icon + manual hiscores-resync popup --
-   .co-info-icon mirrors Goal Tracking's own .gt-goal-info-icon
-   (goal-tracking.css) visually: muted at rest, gold on hover, same
-   11x11 "i in a circle" glyph -- but a real <button> here rather than
-   a plain <span>, since this one opens a popup on click instead of
-   just showing a title tooltip on hover. .co-info-wrap is the
-   position: relative anchor the popup positions itself against (same
-   role as .pm-settings-wrap in possessions.css), sized to just the
-   icon itself rather than the whole (centered, full-width)
-   .page-title so the popup opens directly under the icon, not
-   wherever the title's own text happens to be widest. */
-/* top: -2.9px is a measured, not eyeballed, correction -- vertical-align:
-   middle alone aligns the icon's box to half the parent's x-height
-   above the baseline, which reads visibly low against this title's
-   all-caps text (no descenders to balance the icon's own vertical
-   center against). Confirmed against the actual rendered page: without
-   this nudge the icon's own vertical center sits ~2.9px below the real
-   glyph ink's own visual center (measured via canvas
-   actualBoundingBoxAscent/Descent for this exact font/size, not the
-   text node's line box, which includes font leading and isn't a
-   reliable proxy for perceived center) -- same category of fix as
-   .nav-side's own "a few px lower than dead center" comment in
-   myscape.css, just the opposite direction since that one nudges DOWN
-   to match all-caps nav text against a wordmark that has descenders. */
-.co-info-wrap { position: relative; top: -2.9px; display: inline-flex; vertical-align: middle; margin-left: 4px; }
-.co-info-icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  background: none; border: none; padding: 0; margin: 0;
-  color: var(--text-faint); cursor: pointer;
-}
-.co-info-icon:hover { color: var(--gold); }
-/* Same floating-box recipe as the loot range menu's own
-   .loot-range-menu (loot-tracker.css) -- centered under its trigger
-   rather than left/right-anchored, since .co-info-wrap sits in the
-   middle of a centered title instead of at a row's own edge. */
-.co-info-popup {
-  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-  z-index: 5; padding: 10px;
-  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-  white-space: nowrap;
-}
-/* Same gold-outlined-button recipe as the range menu's own
-   .loot-range-apply (loot-tracker.css). */
-.co-info-update-btn {
-  padding: 6px 14px;
-  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
-  color: var(--gold);
-  background: var(--panel); border: 1px solid var(--gold-dim); border-radius: var(--radius);
-  cursor: pointer;
-}
-.co-info-update-btn:hover { border-color: var(--gold); }
-.co-info-update-btn:disabled { cursor: default; opacity: 0.75; }
-
 .co-summary-row {
   display: flex;
   flex-wrap: wrap;
@@ -124,32 +70,23 @@
   white-space: nowrap;
 }
 
-/* Wraps the skill and hiscores cards side by side, skills on the left
-   (flush with .co-summary-row's own left edge above, same as before
-   this row existed) and hiscores to its right, per explicit
-   instruction. flex, not grid -- these two cards can land at very
-   different natural heights (see .hiscores-grid below), and flex's
-   align-items: flex-start is what keeps the shorter one (skills)
-   pinned to the top instead of stretching to match the taller one's
-   height the way a plain grid row would. gap/margin-bottom both 18px
-   -- the same between-sections number .co-summary-row's own comment
-   explains, now doing double duty as both the horizontal gap between
-   these two cards AND the vertical gap before whatever comes next, so
-   every card-to-card gap on this page reads as the same size
-   regardless of axis.
-
-   flex-wrap: nowrap -- these two stay side by side at every width, per
-   explicit instruction, not just above some width the way every other
-   section on this page relies on flex-wrap for. Two earlier rounds
-   tried to make "always side by side" safe on a narrow viewport first
-   by keeping both cards' own width static and letting THIS row scroll
-   horizontally when they didn't both fit, then reverted that too --
-   overflow-x: auto avoided clipping, but a scrollbar was still
-   explicitly ruled out. What actually makes nowrap safe with no
-   scrollbar at all is .skills-card/.hiscores-card no longer having a
-   fixed width in the first place -- see their own comments -- so
-   there's nothing left that could fail to fit. */
-.co-cards-row {
+/* The page's main two-column row, below .co-summary-row: a left
+   column (.co-left-col -- the 3D model viewer stacked directly above
+   the skill levels card) and, to its right, the collection log card
+   (.clog-card, styled further down this file) -- per explicit
+   instruction, replacing the earlier skills-card/hiscores-card side-
+   by-side row (the hiscores/boss-KC card has been removed outright,
+   not just relocated). flex, not grid, align-items: flex-start,
+   flex-wrap: nowrap, 18px gap -- same reasoning as the row this
+   replaces: the left column and .clog-card can land at very different
+   natural heights (a tall portrait model + a multi-row skill grid vs.
+   a collection log page list/item grid that scrolls its own
+   overflow), so flex-start keeps both pinned to the same top edge
+   rather than stretching the shorter one to match, and nowrap (no
+   fixed width on either side -- see .co-left-col/.clog-card's own
+   flex-basis instead) is what keeps them side by side at every width
+   with no scrollbar, exactly like the row this replaces. */
+.co-main-row {
   display: flex;
   align-items: flex-start;
   flex-wrap: nowrap;
@@ -157,67 +94,50 @@
   margin-bottom: 18px;
 }
 
-/* Skill levels card (inside .co-cards-row, left-hand side) -- its own
-   outer box (.skills-card, same panel-translucent/border/radius
-   treatment as .co-summary-row above) containing a reflowing grid
-   (.skills-grid) of smaller individually-bordered/backgrounded cells
-   (.skill-cell), one per skill, in _SKILL_GRID_ORDER (app/pages.py) --
-   unlike .co-summary-row, which puts its stats directly in the outer
-   box with no per-tile framing, this card's cells get their own box
-   (.gear-slot/.inventory-grid's convention in purchase-goals.css)
-   nested inside the card's.
-
-   flex: 1 1 290px, not width: fit-content -- several earlier rounds
-   tried pinning this card's own width (fixed, a solved-for-one-width
-   flush fit, flex-grow computed from .hiscores-card's own) so it would
-   land flush with .co-summary-row's right edge -- all reverted now
-   that "always side by side, never a scrollbar" is the explicit
-   priority: a FIXED-width card is exactly what forced the earlier
-   choice between wrapping to a second line or scrolling once the
-   viewport got too narrow for both cards' full width side by side.
-   flex-basis 290px (.hiscores-card is 572px -- see that rule's own
-   comment for where both numbers come from), not flex-basis 0 with a
-   grow-factor ratio -- a basis-0 + disproportionate-grow-factor
-   version of this was tried first and landed a few px off target
-   (295.89/566.11 instead of 290/572): giving a grid-containing flex
-   item a basis of 0 still lets its content (here, .skills-grid's own
-   auto-fill track sizing) pull the browser's flex-resolution algorithm
-   off a clean proportional split by a few px, even with min-width: 0
-   set below. Anchoring each card's flex-basis directly at its own real
-   target width sidesteps that: with both cards' true widths already
-   equal to their basis, the row's free space comes out to exactly 0px
-   at the page's normal ~880px width (880 total - 290 - 572 - 18px gap
-   = 0), so neither flex-grow nor flex-shrink has anything left to do
-   and both cards render at EXACTLY 290 and 572 -- confirmed directly
-   by measuring the rendered boxes, not just computed from the CSS.
-   Those two numbers aren't an arbitrary 1:2 split -- they're this
-   card's and hiscores-card's own exact border-box widths at 3 and 6
-   columns respectively (3*84 + 2*10 gaps + 8+8 padding + 1+1 border =
-   290; see hiscores-card's own comment for its 554+18=572), so 3 and 6
-   columns, flush to both edges, is exactly what renders at the page's
-   normal width -- the same as every round of this page before "let it
-   reflow" was asked for. Narrower than that (once .wrap's own 880px
-   cap stops capping the row), flex-shrink: 1 on both takes over,
-   shrinking each card down from its 290/572 basis roughly in
-   proportion to that same basis, so auto-fill (see .skills-grid below)
-   just picks whatever whole column count fits each at that narrower
-   width -- .wrap's cap means the row is never wider than 880px in the
-   first place, so flex-grow here never actually has anything to do,
-   but is still declared (1, not 0) so a case that somehow gave this
-   row more than 880px to work with wouldn't leave dead space on the
-   right of either card. min-width: 0 overrides a flex item's own
-   default min-width: auto
-   (effectively its content's own minimum size), which would otherwise
-   still refuse to shrink this card below its natural content width and
-   defeat the entire point of the flex split -- .skills-grid below is
-   what turns this now-fluid width into a whole number of columns
-   instead of stretching or squeezing individual cells to fit it. No
-   margin-bottom here any more -- .co-cards-row's own gap/margin-bottom
-   above now carries both the space between this card and hiscores-card
-   to its right AND the space below the row as a whole. */
-.skills-card {
+/* The left column itself -- a plain flex column (not a card in its
+   own right, no background/border/padding here) so .model-viewer-card
+   and .skills-card below keep rendering as two separate boxes stacked
+   with the same 18px between-sections gap every other pair of cards
+   on this page uses, via this column's own `gap` rather than either
+   card's own margin-bottom. flex: 1 1 290px/min-width: 0 -- the exact
+   same flex-basis .skills-card used to carry back when IT was this
+   row's own left-hand flex item (see that rule's own comment for
+   where 290px comes from: 3 skill-grid columns + gaps + padding/
+   border, still this column's own width floor now), just moved up a
+   level since a flex item's own flex-basis controls its size along
+   its PARENT's main axis (.co-main-row's horizontal axis here) --
+   .model-viewer-card/.skills-card inside this column don't need their
+   own width rules any more, since a column-direction flex container's
+   default align-items: stretch already fills each of them to this
+   column's own resolved width. */
+.co-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   flex: 1 1 290px;
   min-width: 0;
+}
+
+/* Skill levels card (inside .co-left-col, below .model-viewer-card) --
+   its own outer box (.skills-card, same panel-translucent/border/
+   radius treatment as .co-summary-row above) containing a reflowing
+   grid (.skills-grid) of smaller individually-bordered/backgrounded
+   cells (.skill-cell), one per skill, in _SKILL_GRID_ORDER
+   (app/pages.py) -- unlike .co-summary-row, which puts its stats
+   directly in the outer box with no per-tile framing, this card's
+   cells get their own box (.gear-slot/.inventory-grid's convention in
+   purchase-goals.css) nested inside the card's.
+
+   No width rule of its own any more -- .co-left-col's own flex-basis
+   (see that rule's own comment) is what sets this column's 290px
+   width now, and this card (like .model-viewer-card above it) just
+   stretches to fill it via that column's default align-items:
+   stretch, rather than carrying its own flex-basis the way it did
+   back when it was itself a horizontal flex item next to the (now
+   removed) hiscores card. .skills-grid below still turns whatever
+   width that resolves to into a whole number of columns, same as
+   always. */
+.skills-card {
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -339,135 +259,25 @@
   color: var(--text);
 }
 
-/* Hiscores card (inside .co-cards-row, right of .skills-card) -- same
-   panel-translucent/border/radius/padding treatment as .skills-card
-   above, and the same flex: 1 1 <basis>px / min-width: 0 pattern --
-   see that rule's own comment for the full reasoning on both,
-   including why an anchored flex-basis was used instead of a plain
-   flex-grow ratio (a plain 2:1 grow-factor split was tried first and
-   landed a few px short, at 568.67px -- just short of what six 84px
-   columns plus their gaps and this card's own padding/border actually
-   need, quietly dropping to 5 columns with dead space on the right).
-   572px is this card's own exact border-box width at 6 columns (6*84
-   + 5*10 gaps + 8+8 padding + 1+1 border), paired with skills-card's
-   own exact 290px target for 3 columns, so at the page's normal
-   ~880px row width the two bases already sum to the full 880px (with
-   .co-cards-row's own 18px gap between them: 290 + 572 + 18 = 880),
-   leaving flex-grow/flex-shrink nothing to do and both cards landing
-   on exactly 290/572 -- 3 and 6 columns, flush to both edges, same as
-   every round of this page before "let it reflow" was asked for.
-   572/290 is roughly a 2:1 ratio (about 1.97:1, not exactly 2:1),
-   which is why the plain 2:1 shorthand looked right but wasn't quite
-   -- app.bosses.HISCORE_BOSSES (71 entries) being roughly 3x
-   _SKILL_GRID_ORDER's 24 is what put this grid at 6 columns to
-   .skills-grid's 3 back when both were fixed-column grids in the
-   first place. Narrower than 880px, flex-shrink: 1 on both takes over
-   and shrinks each card down from its own basis, and auto-fill (see
-   .hiscores-grid below) picks whatever whole column count that
-   narrower width actually fits, per explicit instruction that the
-   column counts moving is fine as long as the cells and the gaps
-   between them don't change. */
-.hiscores-card {
-  flex: 1 1 572px;
-  min-width: 0;
-  background: var(--panel-translucent);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 8px;
-}
-
-/* repeat(auto-fill, minmax(84px, 1fr)), same reasoning as
-   .skills-grid's own comment -- this card's width is fluid too, so a
-   fixed repeat(6, ...) is replaced by continuously recomputing how
-   many columns (84px floor, matched to .skill-cell's own, unchanged)
-   fit at the same 10px gap, and then stretching each of those columns
-   via 1fr to fill whatever width the fixed-count version would have
-   left un-flush, rather than ever resizing the gaps themselves.
-   Whatever the resulting column count, a partial last row (71 isn't
-   evenly divisible by most column counts) simply leaves its unused
-   trailing slots blank at that row's own gap spacing and column
-   widths -- column tracks are shared down the whole grid, not
-   recomputed per row, so every row's spacing AND column width stays
-   identical regardless of how many cells are actually in it. */
-.hiscores-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 10px;
-}
-
-/* Same link-cell treatment as .skill-cell/:hover above, including the
-   same a/a:hover specificity fix and the same reasoning for it -- see
-   that rule's own comment. title is the hover tooltip (the boss's
-   plain display name, see boss_cells in app/pages.py); unlike
-   .skill-cell, there's no separate tooltip upgrade on data arriving --
-   the kill count is already server-rendered by the time this card
-   exists at all (see render_character_overview's own docstring), so
-   there's nothing left to fill in after the fact. min-width: 84px
-   matches .skill-cell's own -- see that rule's own comment for what
-   it's solved against and why. */
-.boss-cell,
-.boss-cell:hover {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  padding: 6px 10px;
-  min-width: 84px;
-  color: inherit;
-  text-decoration: none;
-}
-.boss-cell:hover { background-color: rgb(51, 51, 54); }
-.boss-cell:hover .boss-cell-kc { color: var(--text); text-decoration: none; }
-
-/* Same 20px as .skill-cell-icon above, for the same "smaller than the
-   summary row's 28px is what makes this read as compact" reason. */
-.boss-cell-icon {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-  image-rendering: pixelated;
-  display: block;
-  flex: none;
-}
-
-/* 5ch -- "9,999" (4 digits + 1 comma) is the widest a plain
-   comma-grouped count ever gets now: _format_boss_kc (app/pages.py)
-   switches anything 10,000 and up to a truncated "<thousands>K"
-   instead (e.g. "15,742" -> "15K") specifically so this column never
-   needs a 5th digit -- the width here and that formatting cutoff are
-   the same design, not independent choices. Also what .skill-cell-
-   level's own min-width is set to now, per explicit instruction that
-   the skill and hiscores cells be the same size -- see that rule's own
-   comment. A "###K" value can still run past 5 characters for a
-   genuinely huge outlier (a seven-figure KC would be "####K"), same as
-   any min-width floor. inline-block for the same min-width-on-a-span
-   reason as .skill-cell-level. */
-.boss-cell-kc {
-  display: inline-block;
-  min-width: 5ch;
-  font-size: 15px;
-  color: var(--text);
-}
-
 /* 3D model viewer card (render_character_overview in app/pages.py) --
-   below .co-cards-row rather than squeezed into it as a third flex
-   item: skills-card + hiscores-card already sum to exactly 880px, this
-   page's own .wrap cap (myscape.css -- see .co-cards-row's own comment
-   for where 290+572+18 comes from), so there's no room left for a
-   third card beside them. Capped narrower than that and centered
-   (rather than stretched to the full 880px like .co-summary-row above)
-   and paired with .model-viewer-canvas-wrap's own portrait
-   aspect-ratio below, so a standing character reads as a tall portrait
-   rather than a wide, mostly-empty strip. Same panel-translucent/
-   border/radius/padding treatment as every other card on this page. */
+   top of .co-left-col, directly above .skills-card, per explicit
+   instruction (the boss-KC hiscores card that used to sit to its
+   right, and the skill/hiscores row this column itself replaces, are
+   both gone outright -- see .co-main-row/.co-left-col's own comments
+   above). No width rule of its own (compare its old max-width: 300px/
+   margin: 0 auto, back when this was a standalone, centered full-
+   width row on its own below .co-cards-row) -- .co-left-col's own
+   flex-basis is what sets the column's 290px width now, and this card
+   just stretches to fill it, same as .skills-card below. Still paired
+   with .model-viewer-canvas-wrap's own portrait aspect-ratio below, so
+   a standing character reads as a tall portrait rather than a wide,
+   mostly-empty strip. Same panel-translucent/border/radius/padding
+   treatment as every other card on this page. */
 .model-viewer-card {
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px;
-  margin: 0 auto 18px;
-  max-width: 300px;
 }
 
 /* Sized by this wrapper (a fixed aspect ratio, full available width up
@@ -506,7 +316,9 @@
 }
 
 /* Collection Log card (render_character_overview in app/pages.py) --
-   below .model-viewer-card, same panel-translucent/border/radius/
+   beside .co-left-col, inside .co-main-row (per explicit instruction:
+   this card sits to the right of the 3D model/skill levels column,
+   not below it any more), same panel-translucent/border/radius/
    padding treatment as every other card on this page. Modeled on
    RuneProfile's own collection log browser (tabs across the top, a
    scrollable page list on the left, an icon grid for the active page
@@ -516,13 +328,22 @@
    which is GameAccount.collection_log_items -- see that column's own
    doc in app/models.py and CollectionLogItemCapture in the
    Mootrius/myscape-plugin repo for how the plugin actually captures
-   this. */
+   this.
+
+   flex: 1 1 572px/min-width: 0 -- the exact same basis the old
+   hiscores-card carried (see .co-left-col's own comment for the
+   290px side of this same math), so at this page's normal ~880px
+   width the two columns still land flush on both edges (290 + 572 +
+   18px gap = 880) with nothing left for flex-grow/flex-shrink to do.
+   No margin-bottom of its own any more -- .co-main-row's own gap/
+   margin-bottom now carries that spacing instead. */
 .clog-card {
+  flex: 1 1 572px;
+  min-width: 0;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 10px 12px;
-  margin-bottom: 18px;
 }
 .clog-header {
   display: flex;
@@ -545,7 +366,7 @@
    (see get_collection_log_tabs's own doc in app/collectionlog.py) and
    summing those page lists would double-count every one of them. */
 .clog-overall {
-  font-size: 12px;
+  font-size: 15px;
   color: var(--gold);
   white-space: nowrap;
 }
@@ -569,8 +390,8 @@
 }
 .clog-tab {
   flex: 1;
-  padding: 6px 4px;
-  font-size: 10px;
+  padding: 8px 6px;
+  font-size: 15px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   text-align: center;
@@ -586,9 +407,9 @@
    math as .clog-overall above, just scoped to that tab's own pages. */
 .clog-tab-count {
   display: block;
-  font-size: 9px;
+  font-size: 15px;
   color: var(--text-faint);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .clog-tab.active .clog-tab-count { color: var(--gold-dim); }
 
@@ -604,9 +425,9 @@
    scrollbar rather than growing the whole card taller, capped to
    roughly match .model-viewer-card's own footprint above it. */
 .clog-pages {
-  flex: 0 0 190px;
+  flex: 0 0 210px;
   min-width: 0;
-  max-height: 320px;
+  max-height: 600px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -618,8 +439,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 5px 8px;
-  font-size: 12px;
+  padding: 6px 8px;
+  font-size: 15px;
   color: var(--text-dim);
   background: transparent;
   border: 1px solid transparent;
@@ -638,7 +459,7 @@
 }
 .clog-page-count {
   flex: none;
-  font-size: 10px;
+  font-size: 15px;
   color: var(--text-faint);
 }
 /* A fully-obtained page's own count reads in gold-dim instead of the
@@ -656,7 +477,7 @@
   flex-wrap: wrap;
   align-content: flex-start;
   gap: 6px;
-  min-height: 220px;
+  min-height: 600px;
 }
 .clog-item {
   position: relative;

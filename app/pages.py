@@ -1477,32 +1477,6 @@ _SKILL_GRID_ORDER = (
 )
 
 
-def _format_boss_kc(kc: Optional[int]) -> str:
-    """A hiscores card cell's displayed kill count -- see .boss-cell-kc
-    in character-overview.css for the width this is sized to match.
-    None (never synced) is an em dash, same "nothing synced yet"
-    convention as everywhere else on this page -- and per explicit
-    instruction, 0 reads exactly the same way: a boss that's a key in
-    boss_kill_counts with a count of 0 (synced, but never actually
-    killed) is visually indistinguishable from one that's never been
-    synced at all, so there's no reason to show a bare "0" for it
-    either. 1-9,999 is the plain comma-grouped number ("9,999" tops out
-    at 4 digits + 1 comma, the width .boss-cell-kc is sized for);
-    10,000 and up switches to a truncated "<thousands>K" instead
-    ("15,742" -> "15K") rather than letting the comma-grouped form grow
-    a 5th digit and blow out every other cell's width along with it
-    (min-width means only the actual wide cell would grow on its own,
-    but a jagged one-cell-wider grid reads worse than every boss just
-    capping at K notation past this point). Floor division, not
-    rounded -- "15K" then unambiguously means "at least 15,000", never
-    a rounded-up 15,500+."""
-    if not kc:
-        return "&mdash;"
-    if kc < 10_000:
-        return f"{kc:,}"
-    return f"{kc // 1000}K"
-
-
 _MODEL_VIEWER_HEAD = """
 <script type="importmap">
 {
@@ -1932,7 +1906,9 @@ def render_character_overview(player: PlayerView) -> str:
     output, which total XP and GE value still use. total XP gets a
     trailing " xp" the same way GE value already gets " gp".
 
-    Right underneath that, the skill levels card: its own outer box
+    In the left column below the summary row (.co-left-col, home to
+    both the 3D model viewer above and this card), the skill levels
+    card: its own outer box
     (.skills-card, styled like .co-summary-row above -- same panel-
     translucent background/border) containing a 3x8 grid (.skills-grid)
     of smaller individually-boxed cells (.skill-cell), one per skill, in
@@ -1973,40 +1949,14 @@ def render_character_overview(player: PlayerView) -> str:
     the skills fetch resolves (setSkillTooltip in the script below) --
     e.g. "Attack" becomes "Attack — 13,034,431 xp".
 
-    To the skill card's right, the hiscores card (.hiscores-card): same
-    panel-translucent outer box, same per-cell (.boss-cell) styling and
-    hover/link behavior as .skill-cell -- an <a> to that boss's own
-    wiki page, title tooltip, class+:hover specificity fix, the works
-    -- just built from app.bosses.HISCORE_BOSSES instead of
-    _SKILL_GRID_ORDER, in that module's own order (already the
-    canonical hiscores ordering Goal Tracking's own reference table
-    uses). Filtered to has_icon entries (every current one, per that
-    module's docstring, but kept defensive in case Jagex ever adds a
-    boss before this app has a sprite for it). Icons are this app's own
-    bundled boss-icons assets (app/static/boss-icons, the same RuneLite
-    sprites Goal Tracking's own kc-goal icon picker already uses --
-    BOSS_SLUG_BY_NAME below), not wiki-fetched, so -- like the skill
-    icons -- there's no icon-cache round trip for this card either.
-
-    Unlike the skill card, this one is rendered fully server-side, no
-    client fetch: player.boss_kill_counts (PlayerView, above) is
-    already exactly this -- a session-fresh {display_name: kill count}
-    snapshot built by build_player_view on every request, kept current
-    by the same two writers Goal Tracking's own KC column reads (a
-    one-time hiscores pull at link time, then live chatbox updates the
-    rest of the time -- see GameAccount.boss_kill_counts's own
-    docstring in app/models.py) -- nothing here duplicates a
-    computation a fresh load would just re-fetch a moment later the way
-    geValue/skills above do. A boss never in that dict (account never
-    linked/synced) shows an em dash, same "nothing synced yet"
-    convention as everywhere else on this page -- and per explicit
-    instruction, a boss that IS already a key but sits at 0 (synced,
-    just never actually killed) shows that same em dash rather than a
-    bare "0", since a 0-kill boss reads no differently to the player
-    than one never synced at all (see _format_boss_kc above, which is
-    what actually does that -- 1 and up shows the real count, using
-    the comma-grouped-vs-"K" display cutoff, sized to match .boss-
-    cell-kc's own width in character-overview.css)."""
+    Beside .co-left-col, inside the page's own two-column row
+    (.co-main-row), the collection log card (.clog-card) -- replacing
+    the hiscores/boss-KC card that used to sit here, next to the skill
+    card, per explicit instruction (removed outright, not relocated).
+    See .model-viewer-card's and .clog-card's own comments in
+    character-overview.css, and this function's own script below, for
+    how the model viewer and the collection log are each actually
+    built and kept in sync."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
         <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
@@ -2023,75 +1973,41 @@ def render_character_overview(player: PlayerView) -> str:
         for key in _SKILL_GRID_ORDER
     )
 
-    # (slug, display_name, kill count-or-None) per hiscores boss this
-    # app has a bundled sprite for -- see this function's own docstring
-    # above for why player.boss_kill_counts is read directly here
-    # rather than fetched client-side the way skills/summary-row are.
-    boss_rows = [
-        (slug, name, player.boss_kill_counts.get(name))
-        for slug, name, has_icon in HISCORE_BOSSES
-        if has_icon
-    ]
-    boss_cells = "\n      ".join(
-        f"""<a class="boss-cell" title="{escape(name)}" href="https://oldschool.runescape.wiki/w/{urllib.parse.quote(name)}" target="_blank" rel="noopener">
-        <img class="boss-cell-icon" src="/static/boss-icons/{slug}.png" alt="{escape(name)}" />
-        <span class="boss-cell-kc">{_format_boss_kc(kc)}</span>
-      </a>"""
-        for slug, name, kc in boss_rows
-    )
-
     body = f"""
-    <h2 class="page-title">Character Overview
-      <span class="co-info-wrap" id="coInfoWrap">
-        <button type="button" class="co-info-icon" id="coInfoBtn" aria-label="About updating boss kill counts">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
-            <path d="M8 7.3V11.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            <circle cx="8" cy="4.9" r="0.9" fill="currentColor"/>
-          </svg>
-        </button>
-        <div class="co-info-popup" id="coInfoPopup" style="display:none;">
-          <button type="button" class="co-info-update-btn" id="coInfoUpdateBtn">Update</button>
-        </div>
-      </span>
-    </h2>
+    <h2 class="page-title">Character Overview</h2>
 
     <div class="co-summary-row" id="coSummaryRow">
       {stat_tiles}
     </div>
 
-    <div class="co-cards-row">
-      <div class="skills-card" id="skillsCard">
-        <div class="skills-grid">
-          {skill_cells}
+    <div class="co-main-row">
+      <div class="co-left-col">
+        <div class="model-viewer-card" id="modelViewerCard">
+          <div class="model-viewer-canvas-wrap" id="modelViewerCanvasWrap">
+            <canvas id="modelViewerCanvas"></canvas>
+          </div>
+          <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
+        </div>
+
+        <div class="skills-card" id="skillsCard">
+          <div class="skills-grid">
+            {skill_cells}
+          </div>
         </div>
       </div>
 
-      <div class="hiscores-card" id="hiscoresCard">
-        <div class="hiscores-grid">
-          {boss_cells}
+      <div class="clog-card" id="clogCard">
+        <div class="clog-header">
+          <h3 class="clog-title">Collection Log</h3>
+          <div class="clog-overall" id="clogOverall">&mdash;</div>
         </div>
-      </div>
-    </div>
-
-    <div class="model-viewer-card" id="modelViewerCard">
-      <div class="model-viewer-canvas-wrap" id="modelViewerCanvasWrap">
-        <canvas id="modelViewerCanvas"></canvas>
-      </div>
-      <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
-    </div>
-
-    <div class="clog-card" id="clogCard">
-      <div class="clog-header">
-        <h3 class="clog-title">Collection Log</h3>
-        <div class="clog-overall" id="clogOverall">&mdash;</div>
-      </div>
-      <div class="clog-empty" id="clogEmpty">No collection log data yet &mdash; open your collection log in-game with the myscape RuneLite plugin running, then refresh this page.</div>
-      <div class="clog-body" id="clogBody">
-        <div class="clog-tabs" id="clogTabs"></div>
-        <div class="clog-panes">
-          <div class="clog-pages" id="clogPages"></div>
-          <div class="clog-items" id="clogItems"></div>
+        <div class="clog-empty" id="clogEmpty">No collection log data yet &mdash; open your collection log in-game with the myscape RuneLite plugin running, then refresh this page.</div>
+        <div class="clog-body" id="clogBody">
+          <div class="clog-tabs" id="clogTabs"></div>
+          <div class="clog-panes">
+            <div class="clog-pages" id="clogPages"></div>
+            <div class="clog-items" id="clogItems"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -2162,87 +2078,6 @@ def render_character_overview(player: PlayerView) -> str:
         var name = key.charAt(0).toUpperCase() + key.slice(1);
         el.title = xp != null ? name + ' — ' + formatInt(xp) + ' xp' : name;
       }
-
-      // ---- Boss KC info icon + manual hiscores resync popup --------
-      // The "i" icon next to the page title mirrors Goal Tracking's own
-      // recurring-goal info icon (gt-goal-info-icon, goal-tracking.css)
-      // visually -- muted, gold on hover -- but behaves differently:
-      // that one is hover-only (a title tooltip, nothing to click);
-      // this one opens a small floating popup on click, same open/
-      // close/outside-click recipe as the loot range menu's own
-      // lootRangeBtn/lootRangeMenu (loot-tracker.css/this file's own
-      // render_loot_tracker script) and Storages Viewer's settings menu
-      // (pmSettingsBtn/pmSettingsMenu) -- toggled by the button's own
-      // click, closed by clicking anywhere outside .co-info-wrap.
-      //
-      // The popup's own UPDATE button re-runs the same manual hiscores
-      // pull POST /api/players/me/hiscores/sync already exists for
-      // (see app/hiscores.py's own top-of-file comment: every OTHER
-      // hiscores pull now only fires at link/relink time, with live
-      // updates coming from the chatbox the rest of the time -- this
-      // is the one deliberate drift-correction escape hatch that
-      // design keeps). Exposed here as a real button for the first
-      // time -- previously only reachable by relinking -- both so a
-      // player who did content on mobile/a client without myscape
-      // installed can manually true up their boss KCs, and as a quick
-      // way to re-pull after a bug fix here changes how a kill count
-      // gets matched (see CHAT_NAME_OVERRIDES in app/bosses.py) without
-      // needing to wait for the next chatbox-reported kill of each
-      // affected boss.
-      var coInfoBtn = document.getElementById('coInfoBtn');
-      var coInfoPopup = document.getElementById('coInfoPopup');
-      var coInfoUpdateBtn = document.getElementById('coInfoUpdateBtn');
-
-      function setInfoPopupOpen(open) {
-        coInfoPopup.style.display = open ? 'block' : 'none';
-      }
-      coInfoBtn.addEventListener('click', function () {
-        setInfoPopupOpen(coInfoPopup.style.display === 'none');
-      });
-      document.addEventListener('click', function (e) {
-        var wrap = document.getElementById('coInfoWrap');
-        if (wrap && !wrap.contains(e.target)) setInfoPopupOpen(false);
-      });
-
-      // Same em-dash/comma-grouped/K-truncated formatting as
-      // _format_boss_kc in app/pages.py (this page's own server-side
-      // render of these same cells on load) -- duplicated here rather
-      // than shared since nothing else on this page patches a
-      // hiscores-card cell client-side yet.
-      function formatBossKc(kc) {
-        if (!kc) return '—';
-        if (kc < 10000) return kc.toLocaleString('en-US');
-        return Math.floor(kc / 1000) + 'K';
-      }
-
-      coInfoUpdateBtn.addEventListener('click', function () {
-        coInfoUpdateBtn.disabled = true;
-        coInfoUpdateBtn.textContent = 'Updating…';
-        fetch('/api/players/me/hiscores/sync', { method: 'POST' })
-          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-          .then(function (data) {
-            var counts = data.boss_kill_counts || {};
-            // Matched by each cell's own title attribute -- already
-            // exactly the boss's real display_name (see boss_cells in
-            // app/pages.py), the same key boss_kill_counts itself uses.
-            document.querySelectorAll('.boss-cell').forEach(function (cell) {
-              var kcEl = cell.querySelector('.boss-cell-kc');
-              if (kcEl) kcEl.textContent = formatBossKc(counts[cell.getAttribute('title')]);
-            });
-            coInfoUpdateBtn.textContent = 'Updated';
-            setTimeout(function () {
-              coInfoUpdateBtn.textContent = 'Update';
-              coInfoUpdateBtn.disabled = false;
-            }, 1500);
-          })
-          .catch(function () {
-            coInfoUpdateBtn.textContent = 'Failed — try again';
-            setTimeout(function () {
-              coInfoUpdateBtn.textContent = 'Update';
-              coInfoUpdateBtn.disabled = false;
-            }, 2000);
-          });
-      });
 
       fetch('/api/character-overview/summary')
         .then(function (r) { return r.ok ? r.json() : null; })
