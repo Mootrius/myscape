@@ -247,6 +247,17 @@ COLLECTION_LOG_CLUE_PAGE_TIERS: Dict[str, str] = {
     "Master Treasure Trails (Rare)": "Clue Scrolls (master)",
 }
 
+# Unlike every page in COLLECTION_LOG_CLUE_PAGE_TIERS above, this page isn't
+# any ONE tier's own reward pool -- it's the shared pool every tier can drop
+# from, so the number that belongs above its item grid is a TOTAL of clues
+# completed across all six tiers, not a single tier's own count (see
+# collection_log_page_kill_counts' own docstring for why that makes it a
+# single summed number rather than a per-tier list like a combo page's).
+# "Scroll Cases" -- the other page in the Clues tab that isn't itself a
+# single tier -- stays unmapped: it's clue-tier reward SLOTS, not a count
+# tracked anywhere.
+COLLECTION_LOG_CLUE_TOTAL_PAGE = "Shared Treasure Trail Rewards"
+
 
 def collection_log_page_kill_counts(
     boss_kill_counts: Dict[str, int],
@@ -274,11 +285,19 @@ def collection_log_page_kill_counts(
     Artio's page shows each twin's own count instead of one combined total
     that hides which twin the player has actually killed more of.
 
+    COLLECTION_LOG_CLUE_TOTAL_PAGE (Shared Treasure Trail Rewards) is the one
+    exception to the "one page, one hiscores-tracked thing" shape above --
+    it gets a single-element list too, but that element is a SUM across
+    every clue tier (all six, all-or-nothing same as a combo page above)
+    rather than any one tier's own count, since that page's rewards aren't
+    tier-specific. Still just one number in the end, so the frontend
+    renders it exactly like any other single-count page -- no middot.
+
     Every other collection log page (minigames/activities the hiscores
-    "Bosses" category doesn't track, Shared Treasure Trail Rewards/Scroll
-    Cases, and any boss this app hasn't verified a mapping for yet) is
-    simply absent from the result -- the frontend treats a missing entry
-    as "no count for this page" rather than zero.
+    "Bosses" category doesn't track, Scroll Cases, and any boss this app
+    hasn't verified a mapping for yet) is simply absent from the result --
+    the frontend treats a missing entry as "no count for this page" rather
+    than zero.
 
     Every hiscores boss/clue tier is a key in boss_kill_counts/
     clue_scroll_counts once an account has synced at least once (0 for
@@ -301,5 +320,10 @@ def collection_log_page_kill_counts(
     for page_name, tier_name in COLLECTION_LOG_CLUE_PAGE_TIERS.items():
         if tier_name in clue_scroll_counts:
             result[page_name] = [clue_scroll_counts[tier_name]]
+
+    if all(name in clue_scroll_counts for name in CLUE_SCROLL_HISCORE_NAMES):
+        result[COLLECTION_LOG_CLUE_TOTAL_PAGE] = [
+            sum(clue_scroll_counts[name] for name in CLUE_SCROLL_HISCORE_NAMES)
+        ]
 
     return result

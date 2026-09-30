@@ -516,14 +516,18 @@
 
 /* The active page's own item grid -- unlike .skills-grid/.hiscores-
    grid above, this one IS a fixed column count: repeat(6, 1fr) so
-   every row holds exactly 6 tiles by construction and the last
-   column's right edge always lands flush with .clog-pages/.clog-tabs'
-   own right edge, at any card width, with no per-tile px tuning.
-   Its own scrollbar rather than growing the card, height kept in sync
-   with .clog-pages by the same syncClogHeight script (see that rule's
-   own comment) so both panes settle at whatever .model-viewer-card's
-   real height actually is. overscroll-behavior: contain, same
-   reasoning as .clog-pages above. */
+   every row holds exactly 6 tiles by construction. padding-right: 8px
+   (not flush with .clog-pages/.clog-tabs' own right edge any more --
+   see this rule's own padding below) leaves the scrollbar's own track
+   a clear gap from the tiles instead of touching/overlapping them;
+   scrollbar-gutter: stable already reserves the track's own width
+   outside the content box, this padding is the separate breathing
+   room INSIDE it. Its own scrollbar rather than growing the card,
+   height kept in sync with .clog-pages by the same syncClogHeight
+   script (see that rule's own comment) so both panes settle at
+   whatever .model-viewer-card's real height actually is.
+   overscroll-behavior: contain, same reasoning as .clog-pages
+   above. */
 /* Wraps .clog-items-header + .clog-items in a column so the header can
    sit above the item grid without disturbing .clog-pages beside it --
    .clog-pages stays a direct flex child of .clog-panes with no header
@@ -579,6 +583,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  padding-right: 8px;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   align-content: flex-start;

@@ -2210,6 +2210,17 @@ def render_character_overview(player: PlayerView) -> str:
             renderClogPages();
             renderClogItems();
             renderClogItemsHeader();
+            // Leaving a section and coming back to it starts fresh --
+            // first page selected (clogActivePage = 0 above) and both
+            // scrollable panes back at the top, rather than wherever
+            // this tab happened to be left scrolled to last time.
+            // innerHTML replacement alone (in renderClogPages/renderClogItems
+            // above) doesn't guarantee this -- scrollTop is a property
+            // of clogPagesEl/clogItemsEl themselves, which stay the
+            // same elements across a tab switch, not something
+            // replacing their children resets on its own.
+            clogPagesEl.scrollTop = 0;
+            clogItemsEl.scrollTop = 0;
           });
           clogTabsEl.appendChild(btn);
         });
@@ -2245,6 +2256,15 @@ def render_character_overview(player: PlayerView) -> str:
             renderClogPages();
             renderClogItems();
             renderClogItemsHeader();
+            // Same reasoning as the tab click handler's own
+            // clogItemsEl.scrollTop reset above -- a newly-selected
+            // page's own items should start at the top of the grid,
+            // not wherever the PREVIOUS page happened to be scrolled
+            // to. .clog-pages' own scroll position is deliberately
+            // left alone here (unlike the tab switch, which does reset
+            // it) -- staying on the same section, so the page list
+            // itself shouldn't jump.
+            clogItemsEl.scrollTop = 0;
           });
           clogPagesEl.appendChild(btn);
         });
@@ -2349,15 +2369,21 @@ def render_character_overview(player: PlayerView) -> str:
         var modelBoxHeight = modelViewerCard.getBoundingClientRect().height;
         if (!modelBoxHeight) return;
         var clogCS = getComputedStyle(clogCard);
-        var tabsEl = clogCard.querySelector('.clog-tabs');
-        var tabsCS = tabsEl ? getComputedStyle(tabsEl) : null;
+        // .clog-toolbar, not .clog-tabs itself -- .clog-toolbar is what
+        // now carries the row's own margin-bottom (it wraps .clog-tabs
+        // + .clog-sync-btn, see both rules' own comments in
+        // character-overview.css), so reading .clog-tabs' own margin
+        // here (0 since the move) silently under-subtracts from this budget by
+        // that 8px and leaves .clog-card taller than modelViewerCard.
+        var toolbarEl = clogCard.querySelector('.clog-toolbar');
+        var toolbarCS = toolbarEl ? getComputedStyle(toolbarEl) : null;
         var panesHeight = modelBoxHeight
           - parseFloat(clogCS.paddingTop)
           - parseFloat(clogCS.paddingBottom)
           - parseFloat(clogCS.borderTopWidth)
           - parseFloat(clogCS.borderBottomWidth)
-          - (tabsEl ? tabsEl.getBoundingClientRect().height : 0)
-          - (tabsCS ? parseFloat(tabsCS.marginBottom) : 0);
+          - (toolbarEl ? toolbarEl.getBoundingClientRect().height : 0)
+          - (toolbarCS ? parseFloat(toolbarCS.marginBottom) : 0);
         if (panesHeight > 0) {
           // .clog-pages has no header of its own above it, so it gets
           // the whole shared budget -- .clog-items-header eats into
