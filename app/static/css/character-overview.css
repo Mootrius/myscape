@@ -331,6 +331,13 @@
   display: block;
   width: 100%;
   height: 100%;
+  /* The model's materials are unlit (KHR_materials_unlit -- see the
+     GLB export comment in app/main.py), so there's no scene light to
+     raise instead; a flat 15% brightness lift on the canvas itself is
+     the direct way to do it. Scoped to just this element, same as
+     .model-viewer-bg's own filter below -- it doesn't reach the
+     backdrop or the button row either. */
+  filter: brightness(1.15);
 }
 
 /* Bottom button row (info / shuffle-bg / play-pause / reset),
