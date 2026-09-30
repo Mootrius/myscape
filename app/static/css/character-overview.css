@@ -345,31 +345,6 @@
   border-radius: var(--radius);
   padding: 8px 10px 12px;
 }
-.clog-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px 2px 10px;
-}
-.clog-title {
-  margin: 0;
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text);
-}
-/* The running "obtained / total" count across every tab -- a Set of
-   every unique item id the schema itself lists (see clogAllItemIds in
-   the script below), never a raw sum of each page's own item count,
-   since ~205 item ids are deliberately listed on more than one page
-   (see get_collection_log_tabs's own doc in app/collectionlog.py) and
-   summing those page lists would double-count every one of them. */
-.clog-overall {
-  font-size: 15px;
-  color: var(--gold);
-  white-space: nowrap;
-}
 
 /* Shown instead of .clog-body below (see showClogEmpty in the script)
    when the account has never opened its collection log with the
@@ -403,15 +378,6 @@
 }
 .clog-tab:hover { border-color: var(--gold-dim); color: var(--text); }
 .clog-tab.active { border-color: var(--gold); color: var(--gold); }
-/* Each tab's own "obtained / total" count, same Set-of-unique-ids
-   math as .clog-overall above, just scoped to that tab's own pages. */
-.clog-tab-count {
-  display: block;
-  font-size: 15px;
-  color: var(--text-faint);
-  margin-top: 3px;
-}
-.clog-tab.active .clog-tab-count { color: var(--gold-dim); }
 
 .clog-panes {
   display: flex;
@@ -423,12 +389,15 @@
    of which tab is active, min-width included so a long page name
    (e.g. "Chambers of Xeric (Solo)") never expands the rail. Its own
    scrollbar rather than growing the whole card taller, capped to
-   roughly match .model-viewer-card's own footprint above it. */
+   roughly match .co-left-col's own footprint beside it (the model
+   viewer + skill grid stacked to this card's left, not above it any
+   more). */
 .clog-pages {
-  flex: 0 0 210px;
+  flex: 0 0 226px;
   min-width: 0;
   max-height: 600px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -481,8 +450,8 @@
 }
 .clog-item {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 54px;
+  height: 54px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -495,8 +464,8 @@
    this" color across the whole card. */
 .clog-item.obtained { border-color: var(--gold-dim); }
 .clog-item-icon {
-  max-width: 28px;
-  max-height: 28px;
+  max-width: 42px;
+  max-height: 42px;
   object-fit: contain;
   image-rendering: pixelated;
   /* Same RuneLite item-icon CDN as every other icon in this app

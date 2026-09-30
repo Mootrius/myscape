@@ -1997,10 +1997,6 @@ def render_character_overview(player: PlayerView) -> str:
       </div>
 
       <div class="clog-card" id="clogCard">
-        <div class="clog-header">
-          <h3 class="clog-title">Collection Log</h3>
-          <div class="clog-overall" id="clogOverall">&mdash;</div>
-        </div>
         <div class="clog-empty" id="clogEmpty">No collection log data yet &mdash; open your collection log in-game with the myscape RuneLite plugin running, then refresh this page.</div>
         <div class="clog-body" id="clogBody">
           <div class="clog-tabs" id="clogTabs"></div>
@@ -2142,7 +2138,6 @@ def render_character_overview(player: PlayerView) -> str:
       var clogCard = document.getElementById('clogCard');
       var clogEmpty = document.getElementById('clogEmpty');
       var clogBody = document.getElementById('clogBody');
-      var clogOverallEl = document.getElementById('clogOverall');
       var clogTabsEl = document.getElementById('clogTabs');
       var clogPagesEl = document.getElementById('clogPages');
       var clogItemsEl = document.getElementById('clogItems');
@@ -2182,37 +2177,13 @@ def render_character_overview(player: PlayerView) -> str:
         return count;
       }
 
-      function clogTabItems(tab) {
-        var items = [];
-        tab.pages.forEach(function (page) { items = items.concat(page.items); });
-        return items;
-      }
-
-      function clogAllItems() {
-        var items = [];
-        clogTabs.forEach(function (tab) { items = items.concat(clogTabItems(tab)); });
-        return items;
-      }
-
-      function renderClogOverall() {
-        var ids = clogUniqueIds(clogAllItems());
-        clogOverallEl.textContent = formatInt(clogObtainedCount(ids)) + ' / ' + formatInt(ids.length);
-      }
-
       function renderClogTabs() {
         clogTabsEl.innerHTML = '';
         clogTabs.forEach(function (tab, tabIndex) {
-          var ids = clogUniqueIds(clogTabItems(tab));
           var btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'clog-tab' + (tabIndex === clogActiveTab ? ' active' : '');
-          var label = document.createElement('span');
-          label.textContent = tab.name;
-          var count = document.createElement('span');
-          count.className = 'clog-tab-count';
-          count.textContent = formatInt(clogObtainedCount(ids)) + '/' + formatInt(ids.length);
-          btn.appendChild(label);
-          btn.appendChild(count);
+          btn.textContent = tab.name;
           btn.addEventListener('click', function () {
             clogActiveTab = tabIndex;
             clogActivePage = 0;
@@ -2297,7 +2268,6 @@ def render_character_overview(player: PlayerView) -> str:
             }
             clogTabs = data.tabs;
             clogObtained = data.obtainedItems || {};
-            renderClogOverall();
             renderClogTabs();
             renderClogPages();
             renderClogItems();
