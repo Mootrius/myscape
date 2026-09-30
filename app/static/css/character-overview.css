@@ -815,7 +815,10 @@
   font-weight: normal;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--gold-dim);
+  /* var(--text) (the page's own off-white body-text color), not
+     var(--gold-dim) -- per explicit instruction these read as plain
+     white section labels, not gold like a stat/accent would. */
+  color: var(--text);
 }
 .quests-group-title:first-child { margin-top: 0; }
 /* Each row is itself a link to that quest's OSRS Wiki page now (<a>,
@@ -835,16 +838,24 @@
   text-overflow: ellipsis;
   color: inherit;
   text-decoration: none;
+  padding: 1px 4px;
+  margin: 0 -4px;
+  border-radius: var(--radius);
 }
 .quest-row--completed { color: var(--green); }
 .quest-row--in_progress { color: var(--yellow); }
 .quest-row--not_started { color: var(--red); }
-/* a:hover (element + pseudo-class, myscape.css) would otherwise repaint
-   every row gold on hover regardless of its own completion state --
-   same "declare :hover explicitly" fix .skill-cell/.diary-row's own
-   siblings apply, just per status class here so hovering still shows
-   which state a quest is in, with only the underline as the new
-   "this is a link" affordance. */
+/* A background "box" highlight on hover, same .clog-page-btn:hover
+   convention one row up (var(--panel-2) fill, no border-color change
+   needed), not an underline -- per explicit instruction. Also cancels
+   a:hover's own underline + gold (element + pseudo-class, myscape.css)
+   the same "declare :hover explicitly" way .skill-cell/.diary-row's
+   own siblings already do; the three status-color rules just below
+   stay separate so hovering still shows which state a quest is in. */
+.quest-row:hover {
+  background: var(--panel-2);
+  text-decoration: none;
+}
 .quest-row--completed:hover { color: var(--green); }
 .quest-row--in_progress:hover { color: var(--yellow); }
 .quest-row--not_started:hover { color: var(--red); }
