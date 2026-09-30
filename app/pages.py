@@ -1477,6 +1477,22 @@ _SKILL_GRID_ORDER = (
 )
 
 
+# Background images cycled by the model viewer's prev/next arrow
+# buttons (see the module script below) -- served straight out of
+# app/static/img/model-viewer-bg/, plain files rather than anything
+# GameAccount stores, since these are decorative and the same for
+# every player (unlike the character model itself, which is real
+# per-account data from the plugin). Index 0 is the default shown on
+# a player's first visit, before they've picked anything -- see
+# MODEL_VIEWER_BG_STORAGE_KEY in the script below for how a later
+# choice is remembered after that. Order here is also cycle order for
+# the prev/next buttons; append future images to the end so existing
+# players' stored indexes keep pointing at the same picture.
+_MODEL_VIEWER_BACKGROUNDS = (
+    "/static/img/model-viewer-bg/castle-courtyard.jpg",
+    "/static/img/model-viewer-bg/garden-bridge.jpg",
+)
+
 _MODEL_VIEWER_HEAD = """
 <script type="importmap">
 {
@@ -1496,6 +1512,104 @@ _MODEL_VIEWER_HEAD = """
     var canvas = document.getElementById("modelViewerCanvas");
     var emptyEl = document.getElementById("modelViewerEmpty");
     if (!wrap || !canvas) return;
+
+    var bgEl = document.getElementById("modelViewerBg");
+    var infoBtn = document.getElementById("mvInfoBtn");
+    var infoPopup = document.getElementById("modelViewerInfoPopup");
+    var bgPrevBtn = document.getElementById("mvBgPrevBtn");
+    var bgNextBtn = document.getElementById("mvBgNextBtn");
+    var playPauseBtn = document.getElementById("mvPlayPauseBtn");
+    var playIcon = document.getElementById("mvPlayIcon");
+    var pauseIcon = document.getElementById("mvPauseIcon");
+    var resetBtn = document.getElementById("mvResetBtn");
+
+    // Backdrop images cycled by the prev/next arrow buttons -- a
+    // plain <div> behind the (alpha:true) canvas below rather than
+    // anything three.js renders, since it never needs to rotate,
+    // light, or otherwise interact with the model scene; see
+    // .model-viewer-bg's own stacking-order comment in character-
+    // overview.css. The list itself comes from _MODEL_VIEWER_BACKGROUNDS
+    // (app/pages.py), baked in here as JSON since this script isn't
+    // one this page re-renders per request in any other way -- see
+    // that constant's own comment for why index 0 is the default.
+    var MODEL_VIEWER_BACKGROUNDS = __MODEL_VIEWER_BACKGROUNDS_JSON__;
+    // Remembers the player's chosen background across sessions/
+    // reloads, per explicit instruction -- localStorage rather than
+    // anything server-side since this is a pure per-browser display
+    // preference, nothing GameAccount needs to know about.
+    var MODEL_VIEWER_BG_STORAGE_KEY = "myscape.modelViewerBgIndex";
+    var bgIndex = 0;
+    try {
+      var storedBgIndex = parseInt(localStorage.getItem(MODEL_VIEWER_BG_STORAGE_KEY), 10);
+      if (!isNaN(storedBgIndex) && storedBgIndex >= 0 && storedBgIndex < MODEL_VIEWER_BACKGROUNDS.length) {
+        bgIndex = storedBgIndex;
+      }
+    } catch (e) {
+      // localStorage can throw (private browsing, disabled storage) --
+      // falling back to the index-0 default is fine either way.
+    }
+
+    function applyBackground() {
+      if (bgEl && MODEL_VIEWER_BACKGROUNDS.length) {
+        bgEl.style.backgroundImage = 'url("' + MODEL_VIEWER_BACKGROUNDS[bgIndex] + '")';
+      }
+    }
+    applyBackground();
+
+    function cycleBackground(delta) {
+      if (!MODEL_VIEWER_BACKGROUNDS.length) return;
+      bgIndex = (bgIndex + delta + MODEL_VIEWER_BACKGROUNDS.length) % MODEL_VIEWER_BACKGROUNDS.length;
+      applyBackground();
+      try {
+        localStorage.setItem(MODEL_VIEWER_BG_STORAGE_KEY, String(bgIndex));
+      } catch (e) {}
+    }
+    if (bgPrevBtn) bgPrevBtn.addEventListener("click", function () { cycleBackground(-1); });
+    if (bgNextBtn) bgNextBtn.addEventListener("click", function () { cycleBackground(1); });
+
+    // Small popup with the fixed copy below -- toggled by its own
+    // button, dismissed by a click anywhere else on the page. The two
+    // stopPropagation calls keep a click on the button itself or
+    // inside the popup from also hitting that same document-level
+    // listener and closing it again in the same event.
+    if (infoBtn && infoPopup) {
+      infoBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        infoPopup.hidden = !infoPopup.hidden;
+      });
+      infoPopup.addEventListener("click", function (e) { e.stopPropagation(); });
+      document.addEventListener("click", function () {
+        infoPopup.hidden = true;
+      });
+    }
+
+    // Keeps the play/pause button's two SVGs (see the markup in
+    // render_character_overview) and title/aria-label in sync with a
+    // plain boolean -- called both from the button's own click
+    // handler and from the reset button, both wired up in initViewer
+    // below once `controls` actually exists. Splitting this out here
+    // (rather than defining it inside initViewer) is what lets reset
+    // and the play/pause button share one place that updates the icon.
+    function setPlayPauseIcon(paused) {
+      // Plain `.hidden = x` is a no-op here: `hidden` isn't a
+      // recognized IDL property on inline <svg> elements in every
+      // browser build (SVGElement doesn't always expose it), so
+      // setting it just creates a throwaway JS expando that never
+      // touches the actual "hidden" attribute the [hidden]{display:
+      // none} UA rule keys off of. setAttribute/removeAttribute hit
+      // the real attribute directly and work everywhere.
+      function setHidden(el, isHidden) {
+        if (!el) return;
+        if (isHidden) el.setAttribute("hidden", "");
+        else el.removeAttribute("hidden");
+      }
+      setHidden(playIcon, !paused);
+      setHidden(pauseIcon, paused);
+      if (playPauseBtn) {
+        playPauseBtn.title = paused ? "Play rotation" : "Pause rotation";
+        playPauseBtn.setAttribute("aria-label", playPauseBtn.title);
+      }
+    }
 
     function showEmpty(message) {
       wrap.style.display = "none";
@@ -1840,7 +1954,13 @@ _MODEL_VIEWER_HEAD = """
           var vFovHalfTan = Math.tan((Math.PI * camera.fov) / 360);
           var fitHeightDistance = Math.max(size.y, 1e-6) / (2 * vFovHalfTan);
           var fitWidthDistance = Math.max(size.x, 1e-6) / (2 * vFovHalfTan * camera.aspect);
-          var distance = 1.15 * Math.max(fitHeightDistance, fitWidthDistance);
+          // 1.3 rather than the original snug 1.15 -- backed off a bit
+          // further so the character reads a little smaller, leaving
+          // clearer margin around it now that the button row below
+          // (.model-viewer-controls) sits inside the same frame,
+          // rather than the character filling it edge to edge.
+          var CAMERA_DISTANCE_MULTIPLIER = 1.3;
+          var distance = CAMERA_DISTANCE_MULTIPLIER * Math.max(fitHeightDistance, fitWidthDistance);
 
           // Orbit around, and frame on, the bounding box's own
           // geometric center -- the default pivot, not an approximated
@@ -1855,6 +1975,20 @@ _MODEL_VIEWER_HEAD = """
           var DEFAULT_VERTICAL_TILT = (10 * Math.PI) / 180;
           var defaultSpherical = new THREE.Spherical(distance, Math.PI / 2 - DEFAULT_VERTICAL_TILT, 0);
           camera.position.setFromSpherical(defaultSpherical).add(center);
+
+          // Shift the whole camera rig -- the eye and what it looks
+          // at -- down by a fraction of the model's own height,
+          // without touching distance, tilt, or facing: camera.position
+          // and controls.target move by the identical vector, so the
+          // view direction and zoom are unchanged, only where that
+          // view sits inside the canvas. Aiming lower makes the
+          // character read higher in frame, opening up clearance at
+          // the bottom for .model-viewer-controls below so the button
+          // row doesn't overlap the model.
+          var VERTICAL_FRAME_SHIFT = size.y * 0.16;
+          camera.position.y -= VERTICAL_FRAME_SHIFT;
+          controls.target.y -= VERTICAL_FRAME_SHIFT;
+
           camera.near = distance / 100;
           camera.far = distance * 100;
           camera.updateProjectionMatrix();
@@ -1872,6 +2006,59 @@ _MODEL_VIEWER_HEAD = """
           // 10-degree DEFAULT_VERTICAL_TILT set just above this stays
           // exactly where it was framed for the whole loop.
           controls.update();
+
+          // Snapshot of the view just framed above (post vertical-
+          // shift), for the reset button below to return to.
+          var defaultCameraPosition = camera.position.clone();
+          var defaultTarget = controls.target.clone();
+
+          // controls.enableDamping keeps a little angular momentum
+          // from autoRotate alive for a frame or two after it's
+          // switched off -- easing it to a stop rather than zeroing
+          // it immediately (the same damping that makes a manual
+          // drag feel smooth). That's the right feel for a drag, but
+          // "pause" and "reset" both mean "stop it right now" -- a
+          // visible coast after pausing, or a position that's off by
+          // that same leftover delta after resetting, would both
+          // read as bugs. Toggling damping off for exactly one extra
+          // update() call consumes 100% of whatever delta is pending
+          // in a single step (undamped, OrbitControls applies the
+          // whole delta and clears it, instead of multiplying it by
+          // dampingFactor and carrying the rest forward), then
+          // damping is put back to whatever it was.
+          function killDampingMomentum() {
+            var wasDamping = controls.enableDamping;
+            controls.enableDamping = false;
+            controls.update();
+            controls.enableDamping = wasDamping;
+          }
+
+          if (playPauseBtn) {
+            playPauseBtn.addEventListener("click", function () {
+              controls.autoRotate = !controls.autoRotate;
+              if (!controls.autoRotate) killDampingMomentum();
+              setPlayPauseIcon(!controls.autoRotate);
+            });
+          }
+          if (resetBtn) {
+            resetBtn.addEventListener("click", function () {
+              // Drain any leftover autoRotate momentum first, using
+              // the still-current position/target -- otherwise the
+              // update() below would apply that stale delta on top
+              // of the freshly-assigned default position/target and
+              // land slightly off it.
+              controls.autoRotate = false;
+              killDampingMomentum();
+              camera.position.copy(defaultCameraPosition);
+              controls.target.copy(defaultTarget);
+              // Reset always pauses too, per explicit instruction --
+              // returning to front-facing and then immediately
+              // spinning away from it again would defeat the point of
+              // a reset button.
+              setPlayPauseIcon(true);
+              controls.update();
+            });
+          }
         },
         undefined,
         function () {
@@ -2008,7 +2195,16 @@ def render_character_overview(player: PlayerView) -> str:
       <div class="co-left-col">
         <div class="model-viewer-card" id="modelViewerCard">
           <div class="model-viewer-canvas-wrap" id="modelViewerCanvasWrap">
+            <div class="model-viewer-bg" id="modelViewerBg"></div>
             <canvas id="modelViewerCanvas"></canvas>
+            <div class="model-viewer-controls" id="modelViewerControls">
+              <button class="model-viewer-btn" id="mvInfoBtn" type="button" title="About this viewer" aria-label="About this viewer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+              <button class="model-viewer-btn" id="mvBgPrevBtn" type="button" title="Previous background" aria-label="Previous background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+              <button class="model-viewer-btn" id="mvPlayPauseBtn" type="button" title="Pause rotation" aria-label="Pause rotation"><svg id="mvPlayIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" hidden><polygon points="6 3 20 12 6 21 6 3"></polygon></svg><svg id="mvPauseIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></button>
+              <button class="model-viewer-btn" id="mvResetBtn" type="button" title="Reset view" aria-label="Reset view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle><circle cx="12" cy="12" r="0.5" fill="currentColor" stroke="none"></circle></svg></button>
+              <button class="model-viewer-btn" id="mvBgNextBtn" type="button" title="Next background" aria-label="Next background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+            </div>
+            <div class="model-viewer-info-popup" id="modelViewerInfoPopup" hidden>Set your character model in the myscape plugin sidebar on RuneLite.</div>
           </div>
           <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
         </div>
@@ -2515,7 +2711,9 @@ def render_character_overview(player: PlayerView) -> str:
 
     extra_head = (
         f'<link rel="stylesheet" href="/static/css/character-overview.css?v={_CHARACTER_OVERVIEW_CSS_VERSION}" />'
-        + _MODEL_VIEWER_HEAD
+        + _MODEL_VIEWER_HEAD.replace(
+            "__MODEL_VIEWER_BACKGROUNDS_JSON__", json.dumps(_MODEL_VIEWER_BACKGROUNDS)
+        )
     )
     return _shell(
         title="Character Overview — myscape",
