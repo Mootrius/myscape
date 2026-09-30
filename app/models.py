@@ -170,6 +170,17 @@ class GameAccount(Base):
     # against a blue goal node's chosen quest. Synced by POST
     # /api/players/me/quests, full replace.
     completed_quests = Column(JSONB, nullable=False, default=list)
+    # in_progress_quests: same shape/naming as completed_quests above,
+    # but for QuestState.IN_PROGRESS instead of FINISHED (see
+    # MyscapePlugin#readInProgressQuestNames in the Mootrius/myscape-
+    # plugin repo) -- a quest/miniquest name in neither this list nor
+    # completed_quests reads as "not started". Added for Character
+    # Overview's quest section (render_character_overview in
+    # app/pages.py), which needs this third state to color a quest
+    # red/yellow/green rather than just done/not-done. Synced
+    # alongside completed_quests by the same POST
+    # /api/players/me/quests, full replace.
+    in_progress_quests = Column(JSONB, nullable=False, default=list)
     # diary_tiers: {<diary area name, lowercase>: <highest tier
     # completed, one of DIARY_TIERS in app/mindmaps.py>} -- only the
     # highest tier is kept per area (finishing Elite implies Hard/
@@ -337,6 +348,20 @@ class GameAccount(Base):
     character_summary_combat_tasks_total = Column(Integer, nullable=True)
     character_summary_collections_completed = Column(Integer, nullable=True)
     character_summary_collections_total = Column(Integer, nullable=True)
+    # character_summary_combat_task_tier_completed: {<tier, one of
+    # "easy"/"medium"/"hard"/"elite"/"master"/"grandmaster">:
+    # <completed task count>} -- the same six combat-achievement-tier
+    # varbits character_summary_combat_tasks_completed above is their
+    # SUM of, kept separate here instead (see MyscapePlugin#
+    # patchCombatAchievementStats in the Mootrius/myscape-plugin repo).
+    # Null until the first sync that includes it, same "never synced"
+    # meaning every other character_summary_* field uses -- Character
+    # Overview's combat achievements section (render_character_overview
+    # in app/pages.py) pairs each tier's count here against that fixed
+    # tier's own total task count (app.character_progress_data.
+    # get_ca_tier_totals), which is static game content, not something
+    # synced from the plugin at all.
+    character_summary_combat_task_tier_completed = Column(JSONB, nullable=True)
     character_summary_synced_at = Column(DateTime(timezone=True), nullable=True)
 
     # The player's current 3D model export (POST

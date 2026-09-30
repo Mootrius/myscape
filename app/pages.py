@@ -2278,12 +2278,6 @@ def render_character_overview(player: PlayerView) -> str:
           </div>
           <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
         </div>
-
-        <div class="skills-card" id="skillsCard">
-          <div class="skills-grid">
-            {skill_cells}
-          </div>
-        </div>
       </div>
 
       <div class="clog-card" id="clogCard">
@@ -2301,6 +2295,31 @@ def render_character_overview(player: PlayerView) -> str:
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="co-quad-row" id="coQuadRow">
+      <div class="skills-card" id="skillsCard">
+        <h3 class="co-quad-title">Skills</h3>
+        <div class="skills-grid">
+          {skill_cells}
+        </div>
+      </div>
+
+      <div class="quests-card" id="questsCard">
+        <h3 class="co-quad-title">Quests</h3>
+        <div class="quests-empty" id="questsEmpty">No quest data yet &mdash; open your quest list in-game with the myscape RuneLite plugin running, then refresh this page.</div>
+        <div class="quests-list" id="questsList"></div>
+      </div>
+
+      <div class="diaries-card" id="diariesCard">
+        <h3 class="co-quad-title">Achievement Diaries</h3>
+        <div class="diaries-list" id="diariesList"></div>
+      </div>
+
+      <div class="ca-card" id="caCard">
+        <h3 class="co-quad-title">Combat Achievements</h3>
+        <div class="ca-list" id="caList"></div>
       </div>
     </div>
     """
@@ -2417,6 +2436,138 @@ def render_character_overview(player: PlayerView) -> str:
           });
         })
         .catch(function () { /* leave this card's em dashes showing */ });
+
+      // ---- Collection Log (GET /api/players/me/collection-log) -----
+
+      // ---- Quests / Achievement Diaries / Combat Achievements ------
+      // (GET /api/character-overview/progress) -- one fetch feeds all
+      // three .co-quad-row cards, since the endpoint already returns
+      // all three sections together (see that endpoint's own
+      // docstring in app/main.py for how each is derived).
+
+      // Same DIARY_AREA_LABELS/DIARY_AREA_ICON convention the
+      // Mindmaps goal editor's own diary-area search field already
+      // uses (render_mindmaps in app/pages.py) -- duplicated here
+      // rather than shared, since the two pages' script blocks are
+      // otherwise entirely independent of each other.
+      var DIARY_AREA_LABELS = {
+        ardougne: 'Ardougne', desert: 'Desert', falador: 'Falador',
+        fremennik: 'Fremennik', kandarin: 'Kandarin', karamja: 'Karamja',
+        kourend_kebos: 'Kourend & Kebos', lumbridge_draynor: 'Lumbridge & Draynor',
+        morytania: 'Morytania', varrock: 'Varrock',
+        western_provinces: 'Western Provinces', wilderness: 'Wilderness',
+      };
+      var DIARY_AREA_ICON = {
+        ardougne: 'https://static.runelite.net/cache/item/icon/13124.png',
+        desert: 'https://static.runelite.net/cache/item/icon/13136.png',
+        falador: 'https://static.runelite.net/cache/item/icon/13120.png',
+        fremennik: 'https://static.runelite.net/cache/item/icon/13132.png',
+        kandarin: 'https://static.runelite.net/cache/item/icon/13140.png',
+        karamja: 'https://static.runelite.net/cache/item/icon/13103.png',
+        kourend_kebos: 'https://static.runelite.net/cache/item/icon/22947.png',
+        lumbridge_draynor: 'https://static.runelite.net/cache/item/icon/13128.png',
+        morytania: 'https://static.runelite.net/cache/item/icon/13115.png',
+        varrock: 'https://static.runelite.net/cache/item/icon/13107.png',
+        western_provinces: 'https://static.runelite.net/cache/item/icon/13144.png',
+        wilderness: 'https://static.runelite.net/cache/item/icon/13111.png',
+      };
+      // In-game area order (matches the real Achievement Diary
+      // journal's own tab order), not the alphabetical order
+      // DIARY_AREAS/get_diary_tier_totals happen to iterate in.
+      var DIARY_AREA_ORDER = [
+        'ardougne', 'desert', 'falador', 'fremennik', 'kandarin', 'karamja',
+        'kourend_kebos', 'lumbridge_draynor', 'morytania', 'varrock',
+        'western_provinces', 'wilderness',
+      ];
+      var DIARY_TIER_ORDER = ['easy', 'medium', 'hard', 'elite'];
+      var CA_TIER_ORDER = ['easy', 'medium', 'hard', 'elite', 'master', 'grandmaster'];
+      function titleCase(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      function renderQuests(quests) {
+        var listEl = document.getElementById('questsList');
+        var emptyEl = document.getElementById('questsEmpty');
+        if (!listEl || !quests) return;
+        var groups = [['Free Quests', quests.free], ["Members' Quests", quests.members]];
+        var html = '';
+        groups.forEach(function (group) {
+          var label = group[0];
+          var items = group[1] || [];
+          if (!items.length) return;
+          html += '<div class="quests-group-title">' + escapeHtml(label) + '</div>';
+          items.forEach(function (q) {
+            html += '<div class="quest-row quest-row--' + q.state + '">' + escapeHtml(q.name) + '</div>';
+          });
+        });
+        listEl.innerHTML = html;
+        if (emptyEl) emptyEl.hidden = html.length > 0;
+      }
+
+      function renderDiaries(diaries) {
+        var listEl = document.getElementById('diariesList');
+        if (!listEl || !Array.isArray(diaries)) return;
+        var byArea = {};
+        diaries.forEach(function (d) { byArea[d.area] = d; });
+        var html = '';
+        DIARY_AREA_ORDER.forEach(function (area) {
+          var d = byArea[area];
+          if (!d) return;
+          var icon = DIARY_AREA_ICON[area] || '';
+          var label = DIARY_AREA_LABELS[area] || titleCase(area);
+          html += '<div class="diary-row">'
+            + '<div class="diary-row-header">'
+            + '<img class="diary-row-icon" src="' + icon + '" alt="" />'
+            + '<span class="diary-row-label">' + escapeHtml(label) + '</span>'
+            + '<span class="diary-row-count">' + d.completed + '/' + d.total + '</span>'
+            + '</div>'
+            + '<div class="diary-row-bar">'
+            + DIARY_TIER_ORDER.map(function (tier) {
+                var state = (d.tiers && d.tiers[tier]) || 'not_completed';
+                return '<div class="diary-tier-seg' + (state === 'completed' ? ' diary-tier-seg--completed' : '') + '"></div>';
+              }).join('')
+            + '</div>'
+            + '</div>';
+        });
+        listEl.innerHTML = html;
+      }
+
+      function renderCombatAchievements(items) {
+        var listEl = document.getElementById('caList');
+        if (!listEl || !Array.isArray(items)) return;
+        var byTier = {};
+        items.forEach(function (item) { byTier[item.tier] = item; });
+        var html = '';
+        CA_TIER_ORDER.forEach(function (tier) {
+          var item = byTier[tier];
+          if (!item) return;
+          var completed = item.completed;
+          var total = item.total;
+          var pct = (completed != null && total) ? Math.min(100, (completed / total) * 100) : 0;
+          html += '<div class="ca-tile">'
+            + '<div class="ca-tile-header">'
+            + '<img class="ca-tile-icon" src="/static/img/combat-achievement-tiers/' + tier + '.png" alt="" />'
+            + '<span class="ca-tile-label">' + titleCase(tier) + '</span>'
+            + '<span class="ca-tile-count">' + (completed != null ? completed : '\u2014') + '/' + total + '</span>'
+            + '</div>'
+            + '<div class="ca-tile-bar"><div class="ca-tile-bar-fill" style="width: ' + pct + '%"></div></div>'
+            + '</div>';
+        });
+        listEl.innerHTML = html;
+      }
+
+      fetch('/api/character-overview/progress')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          renderQuests(data.quests);
+          renderDiaries(data.diaries);
+          renderCombatAchievements(data.combatAchievements);
+        })
+        .catch(function () { /* leave each card's own empty/em-dash state showing */ });
 
       // ---- Collection Log (GET /api/players/me/collection-log) -----
       // Tabs -> pages -> items structure straight from the schema

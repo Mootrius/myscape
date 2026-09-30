@@ -1014,6 +1014,13 @@ class SkillsSyncResponse(BaseModel):
 
 class QuestsSyncRequest(BaseModel):
     completed_quests: List[str]
+    # New alongside completed_quests, not replacing it -- see
+    # GameAccount.in_progress_quests' own comment in app/models.py.
+    # Defaulted to [] rather than required, so an older plugin build
+    # that only ever sends completed_quests doesn't fail this sync
+    # outright -- sync_quests below just treats a missing/empty list
+    # the same as "nothing in progress right now".
+    in_progress_quests: List[str] = []
 
 
 class QuestsSyncResponse(BaseModel):
@@ -1106,6 +1113,22 @@ class CharacterSummarySyncRequest(BaseModel):
     combat_tasks_total: int
     collections_completed: int
     collections_total: int
+    # New: {<tier>: <completed count>} for the six combat achievement
+    # tiers, alongside (not replacing) the aggregate combat_tasks_*
+    # pair above -- see GameAccount.character_summary_combat_task_tier_
+    # completed's own comment in app/models.py. Defaulted to {} rather
+    # than required, same backward-compatibility reasoning
+    # QuestsSyncRequest.in_progress_quests above gives.
+    combat_task_tier_completed: Dict[str, int] = {}
+
+    @field_validator("combat_task_tier_completed")
+    @classmethod
+    def check_combat_task_tier_completed(cls, value: Dict[str, int]) -> Dict[str, int]:
+        valid_tiers = {"easy", "medium", "hard", "elite", "master", "grandmaster"}
+        bad = set(value) - valid_tiers
+        if bad:
+            raise ValueError(f"combat_task_tier_completed has unknown tier(s): {sorted(bad)}")
+        return value
 
 
 class CharacterSummarySyncResponse(BaseModel):

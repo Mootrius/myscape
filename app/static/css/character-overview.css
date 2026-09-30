@@ -94,22 +94,17 @@
   margin-bottom: 18px;
 }
 
-/* The left column itself -- a plain flex column (not a card in its
-   own right, no background/border/padding here) so .model-viewer-card
-   and .skills-card below keep rendering as two separate boxes stacked
-   with the same 18px between-sections gap every other pair of cards
-   on this page uses, via this column's own `gap` rather than either
-   card's own margin-bottom. flex: 1 1 290px/min-width: 0 -- the exact
-   same flex-basis .skills-card used to carry back when IT was this
-   row's own left-hand flex item (see that rule's own comment for
-   where 290px comes from: 3 skill-grid columns + gaps + padding/
-   border, still this column's own width floor now), just moved up a
-   level since a flex item's own flex-basis controls its size along
-   its PARENT's main axis (.co-main-row's horizontal axis here) --
-   .model-viewer-card/.skills-card inside this column don't need their
-   own width rules any more, since a column-direction flex container's
-   default align-items: stretch already fills each of them to this
-   column's own resolved width. */
+/* The left column itself -- now holds only .model-viewer-card
+   (.skills-card moved out to .co-quad-row below, per explicit
+   instruction that Skills join Quests/Achievement Diaries/Combat
+   Achievements as four equal-width sections under this row instead).
+   Still a plain flex column, not a card in its own right, so a future
+   second item here would keep the same 18px between-sections gap
+   every other pair of cards on this page uses. flex: 1 1 290px is
+   unchanged from before -- .model-viewer-card has no width rule of
+   its own, so this column's own flex-basis is still what sets its
+   (and therefore the model viewer's) width against .clog-card beside
+   it. */
 .co-left-col {
   display: flex;
   flex-direction: column;
@@ -118,30 +113,51 @@
   min-width: 0;
 }
 
-/* Skill levels card (inside .co-left-col, below .model-viewer-card) --
-   its own outer box (.skills-card, same panel-translucent/border/
-   radius treatment as .co-summary-row above) containing a reflowing
-   grid (.skills-grid) of smaller individually-bordered/backgrounded
-   cells (.skill-cell), one per skill, in _SKILL_GRID_ORDER
-   (app/pages.py) -- unlike .co-summary-row, which puts its stats
-   directly in the outer box with no per-tile framing, this card's
-   cells get their own box (.gear-slot/.inventory-grid's convention in
-   purchase-goals.css) nested inside the card's.
+/* Skills/Quests/Achievement Diaries/Combat Achievements row, below
+   .co-main-row -- four equal-width cards spanning the same combined
+   width .co-main-row's model viewer + collection log do, per explicit
+   instruction. Plain flex-wrap, same "no @media queries anywhere on
+   this site" reasoning .co-summary-row's own comment gives: at a
+   narrow enough width these four wrap to two rows of two (then one
+   column of four) rather than squeezing unreadably or scrolling. */
+.co-quad-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
 
-   No width rule of its own any more -- .co-left-col's own flex-basis
-   (see that rule's own comment) is what sets this column's 290px
-   width now, and this card (like .model-viewer-card above it) just
-   stretches to fill it via that column's default align-items:
-   stretch, rather than carrying its own flex-basis the way it did
-   back when it was itself a horizontal flex item next to the (now
-   removed) hiscores card. .skills-grid below still turns whatever
-   width that resolves to into a whole number of columns, same as
-   always. */
-.skills-card {
+/* Shared card chrome for all four -- same panel-translucent/border/
+   radius treatment every other card on this page uses.
+   flex: 1 1 260px/min-width: 0 makes the four equal-width flex items
+   (260px is comfortably past .quest-row's/.diary-row's/.ca-tile's own
+   natural content width, the same "floor, not a ceiling" role 290px
+   plays for .co-left-col above); each grows to fill its share of
+   whatever width co-quad-row actually has, same as .co-left-col/
+   .clog-card already do one row up. */
+.skills-card,
+.quests-card,
+.diaries-card,
+.ca-card {
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px;
+  padding: 12px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+/* Each card's own label -- these four aren't as self-explanatory at a
+   glance as .model-viewer-card/.clog-card above them, so unlike those
+   two, each gets one. Same uppercase/letter-spaced/--text-faint
+   treatment .gt-card-title (goal-tracking.css) already uses for this
+   exact role elsewhere on the site. */
+.co-quad-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
 /* repeat(auto-fill, minmax(84px, 1fr)), not a fixed repeat(3,
@@ -766,4 +782,151 @@
   color: var(--gold);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
   line-height: 1;
+}
+
+/* Quests card (.quests-card, inside .co-quad-row above) -- a scrolling
+   list of every current quest, grouped "Free Quests" then "Members'
+   Quests" (matching the real in-game Quest List interface's own two
+   groups, see app.character_progress_data.get_quest_list), each
+   quest's name colored by its synced state: green (completed), yellow
+   (started but not finished), red (not started) -- var(--green)/
+   var(--yellow)/var(--red), the same three status colors myscape.css
+   already reserves for exactly this kind of state, not new picks of
+   their own. Fixed height + its own scrollbar rather than growing the
+   card (and therefore the whole .co-quad-row) to fit ~196 rows --
+   same convention .clog-pages/.clog-items already use one row up. */
+.quests-list {
+  height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 6px;
+}
+.quests-group-title {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  font-weight: normal;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+}
+.quests-group-title:first-child { margin-top: 0; }
+.quest-row {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.quest-row--completed { color: var(--green); }
+.quest-row--in_progress { color: var(--yellow); }
+.quest-row--not_started { color: var(--red); }
+.quests-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Achievement Diaries card -- one .diary-row per area
+   (app.character_progress_data.get_diary_tier_totals, same 12 areas
+   DIARY_AREAS in app/mindmaps.py already names), each pairing that
+   area's own elite-tier reward-item icon (same DIARY_AREA_ICON URLs
+   the Mindmaps goal editor's own diary-area picker already uses, see
+   render_mindmaps in app/pages.py) and in-game label with a
+   completed/total count and a four-segment tier bar underneath: one
+   segment per DIARY_TIERS tier, solid green if that tier is at or
+   below the area's own highest-completed tier (GameAccount.
+   diary_tiers), solid red otherwise -- no partial fill within the
+   current tier, see /api/character-overview/progress's own docstring
+   in app/main.py for why. */
+.diary-row { margin-bottom: 10px; }
+.diary-row:last-child { margin-bottom: 0; }
+.diary-row-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.diary-row-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex: none;
+}
+.diary-row-label {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diary-row-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: none;
+}
+.diary-row-bar {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+}
+.diary-tier-seg {
+  flex: 1 1 0;
+  background: var(--red);
+  opacity: 0.55;
+}
+.diary-tier-seg--completed {
+  background: var(--green);
+  opacity: 1;
+}
+
+/* Combat Achievements card -- one .ca-tile per tier
+   (app.character_progress_data.get_ca_tier_totals), each pairing that
+   tier's own wiki-sourced icon (app/static/img/combat-achievement-
+   tiers/<tier>.png, the same small pixel-art sword icon the real
+   in-game Combat Achievements tab uses for that tier) and label with
+   a completed/total count and a single proportional fill bar (unlike
+   .diary-tier-seg above, this IS true within-tier progress -- the six
+   COMBAT_ACHIEVEMENT_COMPLETED_VARBITS this is read from are each a
+   real live "tasks completed in this tier" count, not a derived
+   highest-tier flag, see MyscapePlugin#patchCombatAchievementStats in
+   the Mootrius/myscape-plugin repo). completed being null (never
+   synced) renders as an em dash and a zero-width bar, same as every
+   other never-synced stat on this page. */
+.ca-tile { margin-bottom: 10px; }
+.ca-tile:last-child { margin-bottom: 0; }
+.ca-tile-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.ca-tile-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex: none;
+}
+.ca-tile-label {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1 1 auto;
+}
+.ca-tile-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: none;
+}
+.ca-tile-bar {
+  height: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.ca-tile-bar-fill {
+  height: 100%;
+  background: var(--gold-dim);
 }

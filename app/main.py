@@ -51,7 +51,14 @@ from app.collectionlog import get_collection_log_tabs, get_valid_item_ids
 from app.item_ids import find_item_ids
 from app.npc_names import search_npc_names
 from app.quest_names import search_quest_names
+from app.character_progress_data import (
+    get_ca_tier_totals,
+    get_diary_tier_totals,
+    get_quest_list,
+)
 from app.mindmaps import (
+    DIARY_TIERS,
+    _normalize_lookup_name,
     add_node,
     add_shared_child,
     build_mindmaps_state,
@@ -1437,21 +1444,26 @@ def sync_quests(
     """Full replace of the player's completed quest/miniquest list --
     see GameAccount.completed_quests' own comment in app/models.py and
     MyscapeClient#syncQuests in the Mootrius/myscape-plugin repo."""
-    if len(payload.completed_quests) > MAX_QUESTS_PER_SYNC:
+    if len(payload.completed_quests) > MAX_QUESTS_PER_SYNC or len(payload.in_progress_quests) > MAX_QUESTS_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Too many quests in one sync (max {MAX_QUESTS_PER_SYNC}).",
         )
     game_account.completed_quests = [q.strip() for q in payload.completed_quests if q and q.strip()]
+    game_account.in_progress_quests = [q.strip() for q in payload.in_progress_quests if q and q.strip()]
     db.commit()
     return QuestsSyncResponse(quest_count=len(game_account.completed_quests))
 
 
 @app.get("/api/players/me/quests")
 def read_quests(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The website's own read of the last-synced completed-quests
-    snapshot -- session-authenticated like every other GET here."""
-    return {"completedQuests": game_account.completed_quests or []}
+    """The website's own read of the last-synced completed/in-progress-
+    quests snapshot -- session-authenticated like every other GET
+    here."""
+    return {
+        "completedQuests": game_account.completed_quests or [],
+        "inProgressQuests": game_account.in_progress_quests or [],
+    }
 
 
 @app.post("/api/players/me/diaries", response_model=DiariesSyncResponse)
@@ -1567,6 +1579,7 @@ def sync_character_summary(
     game_account.character_summary_combat_tasks_total = payload.combat_tasks_total
     game_account.character_summary_collections_completed = payload.collections_completed
     game_account.character_summary_collections_total = payload.collections_total
+    game_account.character_summary_combat_task_tier_completed = payload.combat_task_tier_completed
     game_account.character_summary_synced_at = datetime.now(timezone.utc)
     db.commit()
     return CharacterSummarySyncResponse(stat_count=11)
@@ -1596,6 +1609,89 @@ def character_overview_summary(game_account: GameAccount = Depends(get_current_v
         "collectionsTotal": game_account.character_summary_collections_total,
         "syncedAt": game_account.character_summary_synced_at.isoformat() if game_account.character_summary_synced_at else None,
     }
+
+
+@app.get("/api/character-overview/progress")
+def character_overview_progress(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """Character Overview's quests/achievement-diaries/combat-
+    achievements section payload -- session-authenticated like
+    character_overview_summary above. Each section pairs this
+    account's own live-synced progress (completed_quests/
+    in_progress_quests, diary_tiers, character_summary_combat_task_
+    tier_completed -- all in app/models.py) against the fixed,
+    every-player-identical totals app.character_progress_data loads
+    from app/data/*.json, rather than deriving anything from the
+    account alone.
+
+    Quests: {"free": [...], "members": [...]}, each a list of
+    {"name", "state"} in the same order get_quest_list() returns --
+    state is "completed"/"in_progress"/"not_started", matched
+    case-insensitively against completed_quests/in_progress_quests
+    (same normalization goal-node quest matching already uses, see
+    app.mindmaps._normalize_lookup_name) since RuneLite's own quest
+    names and this snapshot's wiki-sourced names don't always agree on
+    case.
+
+    Diaries: one entry per DIARY_AREAS area (app/mindmaps.py) with
+    completed/total task counts and a per-tier "completed"/
+    "not_completed" state -- diary_tiers only ever stores an area's
+    HIGHEST completed tier (see that column's own comment), so every
+    tier at or below it counts as completed and every tier above it
+    as not, with no partial-progress-within-a-tier state: the game
+    itself has no persisted "N of M tasks done in this not-yet-
+    finished tier" value to read (each task is a live-evaluated
+    requirement, not a stored completion flag), and a spot check
+    against RuneProfile.com (a popular third-party OSRS profile
+    tracker) confirmed it shows this same simple per-tier "done" vs.
+    "not done" split rather than any interpolated percentage.
+
+    Combat achievements: one entry per tier with a completed count (or
+    null if this account has never synced a Character Summary panel
+    read since combat_task_tier_completed was added) and that tier's
+    fixed total."""
+    quest_list = get_quest_list()
+    completed_lookup = {_normalize_lookup_name(n) for n in (game_account.completed_quests or [])}
+    in_progress_lookup = {_normalize_lookup_name(n) for n in (game_account.in_progress_quests or [])}
+
+    def quest_state(name: str) -> str:
+        normalized = _normalize_lookup_name(name)
+        if normalized in completed_lookup:
+            return "completed"
+        if normalized in in_progress_lookup:
+            return "in_progress"
+        return "not_started"
+
+    quests = {
+        group: [{"name": name, "state": quest_state(name)} for name in names]
+        for group, names in quest_list.items()
+    }
+
+    diary_totals = get_diary_tier_totals()
+    account_diary_tiers = game_account.diary_tiers or {}
+    diaries = []
+    for area, tier_totals in diary_totals.items():
+        highest = account_diary_tiers.get(area)
+        highest_index = DIARY_TIERS.index(highest) if highest in DIARY_TIERS else -1
+        completed = sum(tier_totals[t] for i, t in enumerate(DIARY_TIERS) if i <= highest_index and t in tier_totals)
+        total = sum(tier_totals.values())
+        tiers = {
+            t: ("completed" if i <= highest_index else "not_completed")
+            for i, t in enumerate(DIARY_TIERS)
+        }
+        diaries.append({"area": area, "completed": completed, "total": total, "tiers": tiers})
+
+    ca_totals = get_ca_tier_totals()
+    ca_completed = game_account.character_summary_combat_task_tier_completed
+    combat_achievements = [
+        {
+            "tier": tier,
+            "completed": (ca_completed or {}).get(tier) if ca_completed is not None else None,
+            "total": total,
+        }
+        for tier, total in ca_totals.items()
+    ]
+
+    return {"quests": quests, "diaries": diaries, "combatAchievements": combat_achievements}
 
 
 @app.post("/api/players/me/character-model", response_model=CharacterModelSyncResponse)

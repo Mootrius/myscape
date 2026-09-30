@@ -1,0 +1,74 @@
+{
+  "ardougne": {
+    "easy": 10,
+    "medium": 12,
+    "hard": 12,
+    "elite": 8
+  },
+  "desert": {
+    "easy": 11,
+    "medium": 12,
+    "hard": 10,
+    "elite": 6
+  },
+  "falador": {
+    "easy": 11,
+    "medium": 14,
+    "hard": 11,
+    "elite": 6
+  },
+  "fremennik": {
+    "easy": 10,
+    "medium": 9,
+    "hard": 9,
+    "elite": 6
+  },
+  "kandarin": {
+    "easy": 11,
+    "medium": 14,
+    "hard": 11,
+    "elite": 7
+  },
+  "karamja": {
+    "easy": 10,
+    "medium": 19,
+    "hard": 10,
+    "elite": 5
+  },
+  "kourend_kebos": {
+    "easy": 12,
+    "medium": 13,
+    "hard": 10,
+    "elite": 8
+  },
+  "lumbridge_draynor": {
+    "easy": 12,
+    "medium": 12,
+    "hard": 11,
+    "elite": 6
+  },
+  "morytania": {
+    "easy": 11,
+    "medium": 11,
+    "hard": 10,
+    "elite": 6
+  },
+  "varrock": {
+    "easy": 14,
+    "medium": 13,
+    "hard": 10,
+    "elite": 5
+  },
+  "western_provinces": {
+    "easy": 11,
+    "medium": 13,
+    "hard": 13,
+    "elite": 7
+  },
+  "wilderness": {
+    "easy": 12,
+    "medium": 11,
+    "hard": 10,
+    "elite": 7
+  }
+}
