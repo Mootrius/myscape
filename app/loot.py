@@ -478,17 +478,45 @@ def clue_casket_icon_url(tier: str) -> str:
 # noted/unnoted pair of one of these (not that any currently are
 # noteable) would still resolve to the same override. Confirmed
 # directly against the wiki, same as every other hand-picked filename
-# in this module -- "Bird nest (empty)" specifically, not any of the
-# wiki's several other bird-nest-with-contents variants, which keep
-# their usual small CDN icon. Every entry here also gets the matching
-# 70%-scale treatment the casket/impling/pouch NPC tiles already have
-# (see isDetailItemIcon/.loot-item-box-icon-detail in
-# render_loot_tracker/loot-tracker.css) -- the wiki's detail renders
-# read a bit large next to a typical item's own CDN icon at this box's
-# shared 28px sizing, same story as those NPC tiles at their own 56px.
+# in this module.
+#
+# Bird nest is 8 separate live item ids (2 more, 5073/7413/13653, are
+# permanently-discontinued event variants nobody can drop any more --
+# left out, they'd never match a real canonical_id) all mapped to the
+# same "(empty)" detail render: this first shipped keyed on 5075 alone
+# ("Bird nest (empty)" itself) on the theory that the other variants
+# were a separate concern, but a real woodcutting nest is essentially
+# never actually the (empty) one specifically -- it's whatever the
+# game randomly fills it with (an egg, a ring, seeds) -- so that left
+# the override effectively never firing for a real drop, which is
+# exactly the "still wrong" the user reported after the ReferenceError
+# fix (fd9d1f2) went out and the *icon itself* turned out to be the
+# next bug, not just the crash. Every other variant here has its own
+# wiki page/detail render too (Bird_nest_(egg) for the 3 egg colors,
+# Bird_nest_(ring), Bird_nest_(seeds), Bird_nest_(Wyson)), but there's
+# no reason to track 5 more per-variant filenames just to show a
+# different nest picture depending on what happened to be inside --
+# reusing the one (empty) render the user already picked for every
+# variant is both simpler and closer to what they actually asked for
+# ("change the bird nest icon"), same as how untradeable_mapping.json
+# already treats every one of these ids as equivalent to 5075 for
+# pricing purposes.
+#
+# Every entry here also gets the matching 70%-scale treatment the
+# casket/impling/pouch NPC tiles already have (see isDetailItemIcon/
+# .loot-item-box-icon-detail in render_loot_tracker/loot-tracker.css)
+# -- the wiki's detail renders read a bit large next to a typical
+# item's own CDN icon at this box's shared 28px sizing, same story as
+# those NPC tiles at their own 56px.
 _ITEM_DETAIL_ICON_OVERRIDES: Dict[int, str] = {
     22993: "Seed pack detail.png",
+    5070: "Bird nest (empty) detail.png",  # Bird nest (egg) -- red
+    5071: "Bird nest (empty) detail.png",  # Bird nest (egg) -- green
+    5072: "Bird nest (empty) detail.png",  # Bird nest (egg) -- blue
+    5074: "Bird nest (empty) detail.png",  # Bird nest (ring)
     5075: "Bird nest (empty) detail.png",
+    22798: "Bird nest (empty) detail.png",  # Bird nest (seeds)
+    22800: "Bird nest (empty) detail.png",  # Bird nest (Wyson)
     32847: "Small salvage detail.png",
     32849: "Fishy salvage detail.png",
     32851: "Barracuda salvage detail.png",

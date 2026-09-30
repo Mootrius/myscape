@@ -6145,9 +6145,18 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       // kept in sync with _ITEM_DETAIL_ICON_OVERRIDES by hand -- there's
       // no shared source of truth between this file and app/loot.py
       // for either list.
+      // Every live bird nest id maps here too, not just (empty) --
+      // see _ITEM_DETAIL_ICON_OVERRIDES in app/loot.py for why (a real
+      // nest drop is essentially never actually the empty one).
       var DETAIL_ICON_ITEM_IDS = {
         22993: true, // Seed pack
+        5070: true, // Bird nest (egg) -- red
+        5071: true, // Bird nest (egg) -- green
+        5072: true, // Bird nest (egg) -- blue
+        5074: true, // Bird nest (ring)
         5075: true, // Bird nest (empty)
+        22798: true, // Bird nest (seeds)
+        22800: true, // Bird nest (Wyson)
         32847: true, // Small salvage
         32849: true, // Fishy salvage
         32851: true, // Barracuda salvage
