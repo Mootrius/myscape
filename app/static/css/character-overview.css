@@ -298,12 +298,12 @@
 }
 /* Backdrop image behind the (alpha:true) canvas below -- see
    applyBackground/modelViewerBg in the module script for how the
-   current image is chosen (prev/next arrows, remembered across
-   reloads via localStorage) and applied. Plain CSS background rather
-   than anything three.js renders, since it never needs to rotate,
-   light, or otherwise interact with the model scene -- just sit
-   behind it. z-index 0, one below the canvas just after it, so it
-   shows through the transparent parts of the render. */
+   current image is chosen (shuffle button, remembered across reloads
+   via localStorage) and applied. Plain CSS background rather than
+   anything three.js renders, since it never needs to rotate, light,
+   or otherwise interact with the model scene -- just sit behind it.
+   z-index 0, one below the canvas just after it, so it shows through
+   the transparent parts of the render. */
 .model-viewer-bg {
   position: absolute;
   inset: 0;
@@ -311,6 +311,12 @@
   background-position: center;
   background-repeat: no-repeat;
   z-index: 0;
+  /* Slight desaturate + darken, per explicit instruction, on this
+     backdrop only -- applies to nothing else since filter only
+     affects this element (a bare <div> with no children) and CSS
+     filter never bleeds across sibling elements like the canvas or
+     the button row below. */
+  filter: saturate(0.75) brightness(0.8);
 }
 /* No more grab/grabbing cursor -- the camera no longer takes pointer
    input (see controls.enableRotate/autoRotate in the module script
@@ -327,10 +333,10 @@
   height: 100%;
 }
 
-/* Bottom button row (info / prev-bg / play-pause / reset / next-bg),
+/* Bottom button row (info / shuffle-bg / play-pause / reset),
    overlaid on the viewport itself per explicit instruction -- the
    camera fit in the module script (CAMERA_DISTANCE_MULTIPLIER/
-   VERTICAL_FRAME_SHIFT) shrinks and raises the character a bit
+   applyVerticalFramePan) shrinks and raises the character a bit
    specifically to leave this strip clear at the bottom rather than
    sitting on top of the model. z-index 2, above both the backdrop and
    the canvas. */
@@ -347,11 +353,11 @@
 }
 /* Same icon-only footprint as .clog-sync-btn (29px squares, panel/
    border/radius, see that rule's own comment) but sized down slightly
-   to 26px to fit five of these across this narrower column, and a
-   translucent dark scrim instead of that rule's opaque --panel-2 --
-   these sit on top of a photo backdrop of unpredictable brightness
-   rather than this page's own dark panel, so a fixed dark background
-   keeps the icon legible against any of them. */
+   to 26px to fit these across this narrower column, and a translucent
+   dark scrim instead of that rule's opaque --panel-2 -- these sit on
+   top of a photo backdrop of unpredictable brightness rather than
+   this page's own dark panel, so a fixed dark background keeps the
+   icon legible against any of them. */
 .model-viewer-btn {
   flex: 0 0 auto;
   width: 26px;
@@ -368,6 +374,15 @@
 }
 .model-viewer-btn:hover { border-color: var(--gold); color: var(--gold); }
 .model-viewer-btn svg { display: block; }
+/* The rule above sets `display` on every icon inside a button,
+   including the play/pause pair's two stacked SVGs -- author CSS
+   like that always outranks the browser's own [hidden]{display:none}
+   default stylesheet rule, no matter how low its specificity looks,
+   so without this the `hidden` attribute setPlayPauseIcon toggles
+   (see the module script) had no visible effect and both icons
+   showed at once. This rule's own specificity (an added attribute
+   selector) is what lets it win back that case correctly. */
+.model-viewer-btn svg[hidden] { display: none; }
 
 /* Info popup -- fixed copy is set once in the markup itself
    (render_character_overview), not the script. Shown/hidden by

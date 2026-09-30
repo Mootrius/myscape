@@ -1477,20 +1477,44 @@ _SKILL_GRID_ORDER = (
 )
 
 
-# Background images cycled by the model viewer's prev/next arrow
-# buttons (see the module script below) -- served straight out of
+# Background images the shuffle button (see the module script below)
+# picks at random from -- served straight out of
 # app/static/img/model-viewer-bg/, plain files rather than anything
 # GameAccount stores, since these are decorative and the same for
 # every player (unlike the character model itself, which is real
 # per-account data from the plugin). Index 0 is the default shown on
-# a player's first visit, before they've picked anything -- see
+# a player's first visit, before they've shuffled -- see
 # MODEL_VIEWER_BG_STORAGE_KEY in the script below for how a later
-# choice is remembered after that. Order here is also cycle order for
-# the prev/next buttons; append future images to the end so existing
-# players' stored indexes keep pointing at the same picture.
+# choice is remembered after that. Order otherwise doesn't matter
+# (shuffle, not a cycle) -- append future images anywhere.
 _MODEL_VIEWER_BACKGROUNDS = (
     "/static/img/model-viewer-bg/castle-courtyard.jpg",
     "/static/img/model-viewer-bg/garden-bridge.jpg",
+    "/static/img/model-viewer-bg/scene-01.jpg",
+    "/static/img/model-viewer-bg/scene-02.jpg",
+    "/static/img/model-viewer-bg/scene-03.jpg",
+    "/static/img/model-viewer-bg/scene-04.jpg",
+    "/static/img/model-viewer-bg/scene-05.jpg",
+    "/static/img/model-viewer-bg/scene-06.jpg",
+    "/static/img/model-viewer-bg/scene-07.jpg",
+    "/static/img/model-viewer-bg/scene-08.jpg",
+    "/static/img/model-viewer-bg/scene-09.jpg",
+    "/static/img/model-viewer-bg/scene-10.jpg",
+    "/static/img/model-viewer-bg/scene-11.jpg",
+    "/static/img/model-viewer-bg/scene-12.jpg",
+    "/static/img/model-viewer-bg/scene-13.jpg",
+    "/static/img/model-viewer-bg/scene-14.jpg",
+    "/static/img/model-viewer-bg/scene-15.jpg",
+    "/static/img/model-viewer-bg/scene-16.jpg",
+    "/static/img/model-viewer-bg/scene-17.jpg",
+    "/static/img/model-viewer-bg/scene-18.jpg",
+    "/static/img/model-viewer-bg/scene-19.jpg",
+    "/static/img/model-viewer-bg/scene-20.jpg",
+    "/static/img/model-viewer-bg/scene-21.jpg",
+    "/static/img/model-viewer-bg/scene-22.jpg",
+    "/static/img/model-viewer-bg/scene-23.jpg",
+    "/static/img/model-viewer-bg/scene-24.jpg",
+    "/static/img/model-viewer-bg/scene-25.jpg",
 )
 
 _MODEL_VIEWER_HEAD = """
@@ -1516,22 +1540,21 @@ _MODEL_VIEWER_HEAD = """
     var bgEl = document.getElementById("modelViewerBg");
     var infoBtn = document.getElementById("mvInfoBtn");
     var infoPopup = document.getElementById("modelViewerInfoPopup");
-    var bgPrevBtn = document.getElementById("mvBgPrevBtn");
-    var bgNextBtn = document.getElementById("mvBgNextBtn");
+    var bgShuffleBtn = document.getElementById("mvBgShuffleBtn");
     var playPauseBtn = document.getElementById("mvPlayPauseBtn");
     var playIcon = document.getElementById("mvPlayIcon");
     var pauseIcon = document.getElementById("mvPauseIcon");
     var resetBtn = document.getElementById("mvResetBtn");
 
-    // Backdrop images cycled by the prev/next arrow buttons -- a
-    // plain <div> behind the (alpha:true) canvas below rather than
-    // anything three.js renders, since it never needs to rotate,
-    // light, or otherwise interact with the model scene; see
-    // .model-viewer-bg's own stacking-order comment in character-
-    // overview.css. The list itself comes from _MODEL_VIEWER_BACKGROUNDS
-    // (app/pages.py), baked in here as JSON since this script isn't
-    // one this page re-renders per request in any other way -- see
-    // that constant's own comment for why index 0 is the default.
+    // Backdrop image behind the (alpha:true) canvas below, changed by
+    // the shuffle button -- a plain <div> rather than anything
+    // three.js renders, since it never needs to rotate, light, or
+    // otherwise interact with the model scene; see .model-viewer-bg's
+    // own stacking-order comment in character-overview.css. The list
+    // itself comes from _MODEL_VIEWER_BACKGROUNDS (app/pages.py),
+    // baked in here as JSON since this script isn't one this page
+    // re-renders per request in any other way -- see that constant's
+    // own comment for why index 0 is the default.
     var MODEL_VIEWER_BACKGROUNDS = __MODEL_VIEWER_BACKGROUNDS_JSON__;
     // Remembers the player's chosen background across sessions/
     // reloads, per explicit instruction -- localStorage rather than
@@ -1556,16 +1579,27 @@ _MODEL_VIEWER_HEAD = """
     }
     applyBackground();
 
-    function cycleBackground(delta) {
-      if (!MODEL_VIEWER_BACKGROUNDS.length) return;
-      bgIndex = (bgIndex + delta + MODEL_VIEWER_BACKGROUNDS.length) % MODEL_VIEWER_BACKGROUNDS.length;
+    function shuffleBackground() {
+      // Guards both the "nothing to shuffle" case (0 or 1 image) and
+      // what would otherwise be an infinite loop just below it (with
+      // exactly one option, next can never land on anything but the
+      // index it started at).
+      if (MODEL_VIEWER_BACKGROUNDS.length < 2) return;
+      var next = bgIndex;
+      // A single Math.random() pick has a 1-in-N chance of landing
+      // back on the current image, which reads as "shuffle did
+      // nothing" -- especially noticeable with a small pool. Re-roll
+      // until it actually changes.
+      while (next === bgIndex) {
+        next = Math.floor(Math.random() * MODEL_VIEWER_BACKGROUNDS.length);
+      }
+      bgIndex = next;
       applyBackground();
       try {
         localStorage.setItem(MODEL_VIEWER_BG_STORAGE_KEY, String(bgIndex));
       } catch (e) {}
     }
-    if (bgPrevBtn) bgPrevBtn.addEventListener("click", function () { cycleBackground(-1); });
-    if (bgNextBtn) bgNextBtn.addEventListener("click", function () { cycleBackground(1); });
+    if (bgShuffleBtn) bgShuffleBtn.addEventListener("click", shuffleBackground);
 
     // Small popup with the fixed copy below -- toggled by its own
     // button, dismissed by a click anywhere else on the page. The two
@@ -1626,8 +1660,16 @@ _MODEL_VIEWER_HEAD = """
     fetch("/api/character-overview/model")
       .then(function (r) {
         if (r.status === 404) {
-          showEmpty();
-          return null;
+          // No captured model yet -- rather than the empty
+          // placeholder this used to show, fall back to a shared
+          // default model (a static, same-for-everyone asset, not
+          // per-account data, so a plain unauthenticated /static/
+          // fetch rather than another hit on the API above) so the
+          // viewer always has *something* to show. The info button's
+          // popup still explains how to replace it with their own.
+          return fetch("/static/models/default-character.glb").then(function (r2) {
+            return r2.ok ? r2.arrayBuffer() : Promise.reject();
+          });
         }
         return r.ok ? r.arrayBuffer() : Promise.reject();
       })
@@ -2220,10 +2262,9 @@ def render_character_overview(player: PlayerView) -> str:
             <canvas id="modelViewerCanvas"></canvas>
             <div class="model-viewer-controls" id="modelViewerControls">
               <button class="model-viewer-btn" id="mvInfoBtn" type="button" title="About this viewer" aria-label="About this viewer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
-              <button class="model-viewer-btn" id="mvBgPrevBtn" type="button" title="Previous background" aria-label="Previous background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+              <button class="model-viewer-btn" id="mvBgShuffleBtn" type="button" title="Shuffle background" aria-label="Shuffle background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg></button>
               <button class="model-viewer-btn" id="mvPlayPauseBtn" type="button" title="Pause rotation" aria-label="Pause rotation"><svg id="mvPlayIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" hidden><polygon points="6 3 20 12 6 21 6 3"></polygon></svg><svg id="mvPauseIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></button>
-              <button class="model-viewer-btn" id="mvResetBtn" type="button" title="Reset view" aria-label="Reset view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle><circle cx="12" cy="12" r="0.5" fill="currentColor" stroke="none"></circle></svg></button>
-              <button class="model-viewer-btn" id="mvBgNextBtn" type="button" title="Next background" aria-label="Next background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+              <button class="model-viewer-btn" id="mvResetBtn" type="button" title="Reset view" aria-label="Reset view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg></button>
             </div>
             <div class="model-viewer-info-popup" id="modelViewerInfoPopup" hidden>Set your character model in the myscape plugin sidebar on RuneLite.</div>
           </div>
