@@ -1507,19 +1507,30 @@ def sync_collection_log(
     Mootrius/myscape-plugin repo for how the plugin actually captures
     this at all (unlike skills/quests/diaries above, it isn't cache
     data -- the collection log widget has to actually be opened
-    in-game). Each item_id is validated against the real collection
-    log structure (CollectionLogItemIn in app/schemas.py), so a stale
-    plugin build reporting an id from a since-changed schema fails
-    that one item's validation rather than silently storing junk."""
+    in-game). Each item_id is checked against the real collection log
+    structure (get_valid_item_ids in app/collectionlog.py) and each
+    quantity against >= 1 (an obtained item is never sent at 0) --
+    dropped individually rather than failing the whole sync the way a
+    per-item CollectionLogItemIn field_validator would have (see that
+    model's own comment in app/schemas.py for why this check
+    deliberately lives here instead): a single stale id from an
+    outdated plugin build otherwise silently zeroed out every sync a
+    player made, with collection log data never populating and no
+    error visible anywhere to explain why."""
     if len(payload.items) > MAX_COLLECTION_LOG_ITEMS_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Too many collection log items in one sync (max {MAX_COLLECTION_LOG_ITEMS_PER_SYNC}).",
         )
-    game_account.collection_log_items = {str(i.item_id): i.quantity for i in payload.items}
+    valid_item_ids = get_valid_item_ids()
+    game_account.collection_log_items = {
+        str(item.item_id): item.quantity
+        for item in payload.items
+        if item.item_id in valid_item_ids and item.quantity >= 1
+    }
     game_account.collection_log_synced_at = datetime.now(timezone.utc)
     db.commit()
-    return CollectionLogSyncResponse(item_count=len(payload.items))
+    return CollectionLogSyncResponse(item_count=len(game_account.collection_log_items))
 
 
 @app.get("/api/players/me/collection-log")

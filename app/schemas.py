@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from app.collectionlog import get_valid_item_ids
 from app.mindmaps import DIARY_AREAS, DIARY_TIERS, SKILL_NAMES
 
 # The 11 real, in-game equipment slots -- matches EQUIPMENT_SLOTS in the
@@ -1058,30 +1057,23 @@ class DiariesSyncResponse(BaseModel):
 
 # -- Collection log: unlike skills/quests/diaries just above, this
 # isn't a small fixed-shape snapshot -- it's a per-item obtained/
-# quantity map, checked item by item against the real collection log
-# structure (get_valid_item_ids in app/collectionlog.py) rather than
-# against a small hardcoded set the way skill/diary-area/diary-tier
-# names are above. Still a full replace on every sync, same as every
-# other current-state sync in this file -- see
+# quantity map. Deliberately NOT validated item-by-item here the way
+# every other synced item type above is (compare BankItemIn etc.) --
+# Pydantic fails a List[Model] field's ENTIRE request the instant any
+# one element's own field_validator raises, so a per-item raising
+# validator here would zero out a player's whole collection log sync
+# over a single bad item_id/quantity (a stale id from an outdated
+# plugin build, say) with no obvious symptom besides the page simply
+# never populating. sync_collection_log in app/main.py checks each
+# item against get_valid_item_ids()/quantity >= 1 itself instead, and
+# drops only the offending items rather than failing the whole
+# request. Still a full replace on every sync, same as every other
+# current-state sync in this file -- see
 # GameAccount.collection_log_items' own comment in app/models.py. -----
 
 class CollectionLogItemIn(BaseModel):
     item_id: int
     quantity: int
-
-    @field_validator("item_id")
-    @classmethod
-    def check_item_id(cls, value: int) -> int:
-        if value not in get_valid_item_ids():
-            raise ValueError(f"item_id {value} is not a real collection log item id.")
-        return value
-
-    @field_validator("quantity")
-    @classmethod
-    def check_quantity(cls, value: int) -> int:
-        if value < 1:
-            raise ValueError("quantity must be at least 1 (an obtained item is never sent at 0).")
-        return value
 
 
 class CollectionLogSyncRequest(BaseModel):
