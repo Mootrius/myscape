@@ -1,20 +1,21 @@
 databases:
   - name: myscape-db
-    plan: free
+    plan: 0.1c-256mb
     postgresMajorVersion: "16"
 
 services:
   - type: web
     name: myscape-web
     runtime: python
-    plan: free
+    plan: 1c-2g
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-    # Disks only attach to a paid service (see the disk docs) -- pointless
-    # on the free plan, which has no persistent disk to mount at all.
-    # Update `plan` above to whatever paid tier this account is actually
-    # on before this takes effect; left as `free` here since that's not
-    # something to guess at in a billing-affecting file.
+    # Disks only attach to a paid service (see the disk docs) -- this
+    # service is on the 1c-2g plan now, which does support one, so
+    # ICON_CACHE_DIR below (app/icon_cache.py's whole reason to exist --
+    # see that module's own top-of-file comment) finally persists across
+    # redeploys and spin-downs instead of silently pointing at ephemeral
+    # container storage that looked identical to a real mounted disk.
     disk:
       name: icon-cache
       mountPath: /var/data/item-icons
@@ -42,8 +43,9 @@ services:
         # Signs website login session cookies. generateValue makes Render
         # create a random value once and keep it stable across deploys and
         # restarts -- if this changed on every restart, everyone's login
-        # session would silently break every time the free-tier service
-        # spins down from inactivity and wakes back up.
+        # session would silently break every time the service restarts
+        # (redeploys, or -- back when this was on the free plan -- a
+        # spin-down from inactivity waking back up).
         generateValue: true
       - key: RESEND_API_KEY
         # Used by app/email_client.py to send password-reset emails via
