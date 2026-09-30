@@ -2078,7 +2078,7 @@ _MODEL_VIEWER_HEAD = """
       // scaling/stretching: see the call site above for why this
       // replaced an earlier attempt that moved camera.position and
       // controls.target instead.
-      var VERTICAL_FRAME_PAN_FRACTION = 0.1;
+      var VERTICAL_FRAME_PAN_FRACTION = 0.03;
       function applyVerticalFramePan() {
         var w = wrap.clientWidth;
         var h = wrap.clientHeight;
