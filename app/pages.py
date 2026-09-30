@@ -1517,13 +1517,6 @@ _MODEL_VIEWER_BACKGROUNDS = (
     "/static/img/model-viewer-bg/scene-25.jpg",
 )
 
-# A soft contact-shadow decal rendered under the character's feet in
-# the 3D viewer (see initViewer's shadow-plane block below) -- same
-# "plain static file, not per-player data" reasoning as
-# _MODEL_VIEWER_BACKGROUNDS above, just a single fixed image rather
-# than a shuffled list.
-_MODEL_SHADOW_TEXTURE_URL = "/static/img/model-viewer-shadow.png"
-
 _MODEL_VIEWER_HEAD = """
 <script type="importmap">
 {
@@ -1563,7 +1556,6 @@ _MODEL_VIEWER_HEAD = """
     // re-renders per request in any other way -- see that constant's
     // own comment for why index 0 is the default.
     var MODEL_VIEWER_BACKGROUNDS = __MODEL_VIEWER_BACKGROUNDS_JSON__;
-    var MODEL_SHADOW_TEXTURE_URL = __MODEL_SHADOW_TEXTURE_URL_JSON__;
     // Remembers the player's chosen background across sessions/
     // reloads, per explicit instruction -- localStorage rather than
     // anything server-side since this is a pure per-browser display
@@ -1987,56 +1979,6 @@ _MODEL_VIEWER_HEAD = """
           var box = new THREE.Box3().setFromObject(model);
           var size = box.getSize(new THREE.Vector3());
           var center = box.getCenter(new THREE.Vector3());
-
-          // A soft contact shadow under the character's feet -- a
-          // flat, alpha-blended decal rather than a real three.js
-          // shadow map, since nothing in this scene casts or
-          // receives shadows (there are no lights at all -- every
-          // material here is already fully baked/unlit, see the
-          // missing-texture dimming comment above). The texture
-          // itself (model-viewer-shadow.png) is a pre-rendered soft
-          // elliptical gradient authored once, with a real alpha
-          // channel (transparent at its edges, darkest at center) --
-          // not drawn procedurally here, since three.js has no
-          // built-in radial-gradient primitive to draw it with.
-          //
-          // Sized off the model's own HEIGHT (size.y), not its
-          // footprint (size.x/size.z) -- a held weapon or a long
-          // cape can make the bounding box far wider or deeper than
-          // the character's actual stance, which would size the
-          // shadow off equipment instead of the body wearing it.
-          // Height stays stable regardless of gear.
-          var SHADOW_WIDTH_TO_HEIGHT_RATIO = 0.55;
-          new THREE.TextureLoader().load(MODEL_SHADOW_TEXTURE_URL, function (shadowTexture) {
-            var shadowWidth = size.y * SHADOW_WIDTH_TO_HEIGHT_RATIO;
-            // Match the texture's own aspect ratio (600x350) rather
-            // than forcing a square, so the oval shape baked into it
-            // isn't stretched back toward round.
-            var shadowHeight = shadowWidth * (shadowTexture.image.height / shadowTexture.image.width);
-            var shadowMesh = new THREE.Mesh(
-              new THREE.PlaneGeometry(shadowWidth, shadowHeight),
-              new THREE.MeshBasicMaterial({
-                map: shadowTexture,
-                transparent: true,
-                // No depth WRITE (so it can't occlude anything drawn
-                // after it) but depth TEST stays on, the default --
-                // this only ever needs to sit visibly on "the
-                // ground" under the feet, never behind the model.
-                depthWrite: false,
-              })
-            );
-            // PlaneGeometry is authored facing +Z; laid flat
-            // (rotated -90 degrees about X) it faces +Y, i.e. up,
-            // like a real ground decal.
-            shadowMesh.rotation.x = -Math.PI / 2;
-            // A hair below the model's own lowest point (box.min.y)
-            // rather than exactly on it, so the flat decal doesn't
-            // z-fight with the feet geometry sitting right at that
-            // same height.
-            var shadowYOffset = Math.max(size.y * 0.001, 0.001);
-            shadowMesh.position.set(center.x, box.min.y - shadowYOffset, center.z);
-            scene.add(shadowMesh);
-          });
 
           // A snug fit -- just enough padding that the model doesn't
           // touch the frame edges -- rather than the roomier framing a
@@ -3077,8 +3019,6 @@ def render_character_overview(player: PlayerView) -> str:
         f'<link rel="stylesheet" href="/static/css/character-overview.css?v={_CHARACTER_OVERVIEW_CSS_VERSION}" />'
         + _MODEL_VIEWER_HEAD.replace(
             "__MODEL_VIEWER_BACKGROUNDS_JSON__", json.dumps(_MODEL_VIEWER_BACKGROUNDS)
-        ).replace(
-            "__MODEL_SHADOW_TEXTURE_URL_JSON__", json.dumps(_MODEL_SHADOW_TEXTURE_URL)
         )
     )
     return _shell(
