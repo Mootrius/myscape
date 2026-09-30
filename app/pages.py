@@ -1976,22 +1976,25 @@ _MODEL_VIEWER_HEAD = """
           var defaultSpherical = new THREE.Spherical(distance, Math.PI / 2 - DEFAULT_VERTICAL_TILT, 0);
           camera.position.setFromSpherical(defaultSpherical).add(center);
 
-          // Shift the whole camera rig -- the eye and what it looks
-          // at -- down by a fraction of the model's own height,
-          // without touching distance, tilt, or facing: camera.position
-          // and controls.target move by the identical vector, so the
-          // view direction and zoom are unchanged, only where that
-          // view sits inside the canvas. Aiming lower makes the
-          // character read higher in frame, opening up clearance at
-          // the bottom for .model-viewer-controls below so the button
-          // row doesn't overlap the model.
-          var VERTICAL_FRAME_SHIFT = size.y * 0.16;
-          camera.position.y -= VERTICAL_FRAME_SHIFT;
-          controls.target.y -= VERTICAL_FRAME_SHIFT;
-
           camera.near = distance / 100;
           camera.far = distance * 100;
           camera.updateProjectionMatrix();
+
+          // Pan the rendered image up a bit -- via a pure 2D
+          // projection shift (applyVerticalFramePan, defined below
+          // near onResize), not by moving camera.position or
+          // controls.target. An equal downward move of both (tried
+          // first) preserves the angle *relative to controls.target*,
+          // but target itself ends up aimed at a different, lower
+          // point on the model, so the angle the (unmoved) character
+          // is actually seen from still shifts -- that's what read as
+          // "viewed from below." setViewOffset shears the projection
+          // matrix instead, leaving the 3D camera -- distance, tilt,
+          // facing, and what reset/pause freeze back to -- completely
+          // untouched; only where that unchanged view sits inside the
+          // canvas moves, opening up clearance at the bottom for
+          // .model-viewer-controls.
+          applyVerticalFramePan();
 
           // No orbit limits any more -- the old +-45 degree horizontal /
           // +-15 degree vertical window existed to keep a user's drag
@@ -2066,6 +2069,23 @@ _MODEL_VIEWER_HEAD = """
         }
       );
 
+      // Fraction of the canvas height to pan the rendered image
+      // upward by, via camera.setViewOffset -- a pure post-projection
+      // shift of what part of the (unchanged) 3D view is displayed,
+      // rather than moving the camera. width/height passed as both
+      // the "full" frame and the visible size (with only offsetY
+      // nonzero) is what keeps this a plain shift with no side
+      // scaling/stretching: see the call site above for why this
+      // replaced an earlier attempt that moved camera.position and
+      // controls.target instead.
+      var VERTICAL_FRAME_PAN_FRACTION = 0.1;
+      function applyVerticalFramePan() {
+        var w = wrap.clientWidth;
+        var h = wrap.clientHeight;
+        if (w <= 0 || h <= 0) return;
+        camera.setViewOffset(w, h, 0, h * VERTICAL_FRAME_PAN_FRACTION, w, h);
+      }
+
       function onResize() {
         var w = wrap.clientWidth;
         var h = wrap.clientHeight;
@@ -2073,6 +2093,7 @@ _MODEL_VIEWER_HEAD = """
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
+        applyVerticalFramePan();
       }
       window.addEventListener("resize", onResize);
 
