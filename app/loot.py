@@ -407,17 +407,20 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     # Searching/opening these is its own RuneLite LootReceived event
     # (source_type "event", named after the thing itself -- same
     # "Intricate pouch" shape as above), entirely separate from ever
-    # holding one as a plain dropped ITEM (item_id-keyed, see
-    # _ITEM_DETAIL_ICON_OVERRIDES far above in this module) -- this is
-    # the tile that shows up in the Loot Tracker's left (NPC/source)
-    # panel when you search one, not the right (item) panel, and it
-    # was still on npc_icon_url's bare guessed-filename default (the
-    # small flat wiki icon, not the detail render) even after
-    # _ITEM_DETAIL_ICON_OVERRIDES shipped -- reported as "the bird nest
-    # [and] seed pack ... icons are still wrong" after that fix, with a
-    # screenshot showing exactly this panel (KC-labeled sort tabs) for
-    # a "seed" search. Same detail-render filenames as their item-panel
-    # counterparts, so the two tiles for the same thing look the same.
+    # holding one as a plain dropped ITEM (item_icon_url's ordinary
+    # RuneLite-CDN pixel icon, same as every other item -- see
+    # _resolve_loot_items below, and this function's own docstring for
+    # why the NPC/source panel and the item panel deliberately show
+    # different art for the same thing now, per explicit instruction:
+    # NPC/source-panel tiles always get the wiki's bigger "detail"
+    # render, item-panel tiles always get the small flat pixel icon,
+    # full stop, no per-item exceptions either way). This is the tile
+    # that shows up in the Loot Tracker's left (NPC/source) panel when
+    # you search one, not the right (item) panel, and it was still on
+    # npc_icon_url's bare guessed-filename default (the small flat wiki
+    # icon, not the detail render) -- reported as "the bird nest [and]
+    # seed pack ... icons are still wrong", with a screenshot showing
+    # exactly this panel (KC-labeled sort tabs) for a "seed" search.
     "seed pack": (None, "Seed pack detail.png"),
     "bird nest": (None, "Bird nest (empty) detail.png"),
 }
@@ -480,77 +483,6 @@ def clue_casket_icon_url(tier: str) -> str:
     guess too. Routed through the same /icon-cache/<filename> route as
     npc_icon_url, for the same rate-limiting reason."""
     filename = f"Reward casket ({tier.lower()}) detail.png"
-    return "/icon-cache/" + urllib.parse.quote(filename)
-
-
-# A handful of individual ITEMS whose RuneLite-CDN pixel icon
-# (item_icon_url's usual route, straight off the small flat in-game
-# inventory sprite) reads too flat/small at this app's loot-tracker
-# sizing -- the wiki's own larger "detail" item-page render swapped in
-# instead, per explicit instruction, same reasoning (and the same
-# /icon-cache/<filename> route) as clue_casket_icon_url's own tier
-# caskets above. Keyed by the real numeric item id
-# _resolve_loot_items already canonicalizes every drop down to, so a
-# noted/unnoted pair of one of these (not that any currently are
-# noteable) would still resolve to the same override. Confirmed
-# directly against the wiki, same as every other hand-picked filename
-# in this module.
-#
-# Bird nest is 8 separate live item ids (2 more, 5073/7413/13653, are
-# permanently-discontinued event variants nobody can drop any more --
-# left out, they'd never match a real canonical_id) all mapped to the
-# same "(empty)" detail render: this first shipped keyed on 5075 alone
-# ("Bird nest (empty)" itself) on the theory that the other variants
-# were a separate concern, but a real woodcutting nest is essentially
-# never actually the (empty) one specifically -- it's whatever the
-# game randomly fills it with (an egg, a ring, seeds) -- so that left
-# the override effectively never firing for a real drop, which is
-# exactly the "still wrong" the user reported after the ReferenceError
-# fix (fd9d1f2) went out and the *icon itself* turned out to be the
-# next bug, not just the crash. Every other variant here has its own
-# wiki page/detail render too (Bird_nest_(egg) for the 3 egg colors,
-# Bird_nest_(ring), Bird_nest_(seeds), Bird_nest_(Wyson)), but there's
-# no reason to track 5 more per-variant filenames just to show a
-# different nest picture depending on what happened to be inside --
-# reusing the one (empty) render the user already picked for every
-# variant is both simpler and closer to what they actually asked for
-# ("change the bird nest icon"), same as how untradeable_mapping.json
-# already treats every one of these ids as equivalent to 5075 for
-# pricing purposes.
-#
-# Every entry here also gets the matching 70%-scale treatment the
-# casket/impling/pouch NPC tiles already have (see isDetailItemIcon/
-# .loot-item-box-icon-detail in render_loot_tracker/loot-tracker.css)
-# -- the wiki's detail renders read a bit large next to a typical
-# item's own CDN icon at this box's shared 28px sizing, same story as
-# those NPC tiles at their own 56px.
-_ITEM_DETAIL_ICON_OVERRIDES: Dict[int, str] = {
-    22993: "Seed pack detail.png",
-    5070: "Bird nest (empty) detail.png",  # Bird nest (egg) -- red
-    5071: "Bird nest (empty) detail.png",  # Bird nest (egg) -- green
-    5072: "Bird nest (empty) detail.png",  # Bird nest (egg) -- blue
-    5074: "Bird nest (empty) detail.png",  # Bird nest (ring)
-    5075: "Bird nest (empty) detail.png",
-    22798: "Bird nest (empty) detail.png",  # Bird nest (seeds)
-    22800: "Bird nest (empty) detail.png",  # Bird nest (Wyson)
-    32847: "Small salvage detail.png",
-    32849: "Fishy salvage detail.png",
-    32851: "Barracuda salvage detail.png",
-    32853: "Large salvage detail.png",
-    32855: "Plundered salvage detail.png",
-    32857: "Martial salvage detail.png",
-    32859: "Fremennik salvage detail.png",
-    32861: "Opulent salvage detail.png",
-}
-
-
-def _item_detail_icon_url(item_id: int) -> str:
-    """The override URL for one of _ITEM_DETAIL_ICON_OVERRIDES' own
-    item ids -- same /icon-cache/<filename> routing as npc_icon_url/
-    clue_casket_icon_url above, for the same rate-limiting reason.
-    Only ever called once a caller has already confirmed item_id is a
-    key of that dict."""
-    filename = _ITEM_DETAIL_ICON_OVERRIDES[item_id]
     return "/icon-cache/" + urllib.parse.quote(filename)
 
 
@@ -688,11 +620,22 @@ def _resolve_loot_items(raw_items: list, mapping: dict, prices: dict, hidden_ite
         # URL directly from it, tradeable or not, so unlike before there's
         # no need to fall back to guessing a wiki filename off the bare
         # item name for an untradeable drop any more.
-        icon = (
-            _item_detail_icon_url(canonical_id)
-            if canonical_id in _ITEM_DETAIL_ICON_OVERRIDES
-            else item_icon_url(canonical_id)
-        )
+        #
+        # Always the small flat pixel icon here, never the wiki's
+        # bigger "detail" render, no per-item exceptions -- this used
+        # to swap in the detail render for a handful of items (seed
+        # pack, bird nest, every salvage tier), but per explicit
+        # instruction the item panel and the NPC/source panel now
+        # deliberately show different art for the very same thing:
+        # item-panel tiles (here) always get the plain pixel icon,
+        # NPC/source-panel tiles (see _NPC_DISPLAY_OVERRIDES above)
+        # always get the detail render. Reported as the item panel
+        # showing Bird nest's detail render when it shouldn't (pixel
+        # icon expected there), right after the NPC-panel entries for
+        # Seed pack/Bird nest were added and confirmed working --
+        # two DIFFERENT tiles for the same thing were never supposed
+        # to converge on looking the same.
+        icon = item_icon_url(canonical_id)
         resolved.append({
             "itemId": canonical_id,
             "itemName": item_name,

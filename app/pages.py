@@ -6031,15 +6031,17 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         // Searching/opening a seed pack or a bird nest is its own
         // event-type loot source (see _NPC_DISPLAY_OVERRIDES in
         // app/loot.py), entirely separate from ever holding one as a
-        // plain dropped item (see isDetailItemIcon/DETAIL_ICON_ITEM_IDS
-        // below for that tile) -- sourceName is always exactly "Seed
-        // pack"/"Bird nest" for these (build_loot_state keeps the raw
-        // event name as-is for both, same as Intricate pouch above), so
-        // a plain equality check is enough. Same 70%-oversized "detail"
-        // render as the casket tier/Intricate pouch above, so they get
-        // the same scale-not-resize treatment via their own dedicated
-        // classes (see .loot-npc-box-icon-seedpack/-birdnest in
-        // loot-tracker.css).
+        // plain dropped item (renderItemList below always shows the
+        // plain pixel icon for that -- per explicit instruction, this
+        // NPC/source panel is the ONLY place either of these ever gets
+        // the wiki's bigger "detail" render) -- sourceName is always
+        // exactly "Seed pack"/"Bird nest" for these (build_loot_state
+        // keeps the raw event name as-is for both, same as Intricate
+        // pouch above), so a plain equality check is enough. Same
+        // 70%-oversized "detail" render as the casket tier/Intricate
+        // pouch above, so they get the same scale-not-resize treatment
+        // via their own dedicated classes (see
+        // .loot-npc-box-icon-seedpack/-birdnest in loot-tracker.css).
         function isSeedPackSource(n) {
           return n.sourceName === 'Seed pack';
         }
@@ -6146,48 +6148,21 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       // Same reasoning/guard as npcRowRenderToken above.
       var itemListRenderToken = 0;
 
-      // Item-side counterpart to the NPC-side isCasketNpc/isImpling/
-      // etc. inside renderNpcRow above -- a handful of individual
-      // items (see _ITEM_DETAIL_ICON_OVERRIDES in app/loot.py) are
-      // shown under the wiki's own larger "detail" item-page render
-      // instead of the usual small flat RuneLite-CDN inventory sprite
-      // it.icon otherwise points at, and read a bit large next to a
-      // typical item's own CDN icon at this box's shared 28px sizing,
-      // same story as those NPC tiles at their own 56px -- so they get
-      // the same 70%-scale treatment (see .loot-item-box-icon-detail
-      // in loot-tracker.css), keyed by itemId rather than a name
-      // pattern since these are a fixed, specific set of items rather
-      // than an open-ended family like "every impling type." Declared
-      // out here (not nested inside renderNpcRow the way isImpling is)
-      // since renderItemList below -- a sibling function, not nested
-      // inside renderNpcRow -- is the one that actually calls this;
-      // kept in sync with _ITEM_DETAIL_ICON_OVERRIDES by hand -- there's
-      // no shared source of truth between this file and app/loot.py
-      // for either list.
-      // Every live bird nest id maps here too, not just (empty) --
-      // see _ITEM_DETAIL_ICON_OVERRIDES in app/loot.py for why (a real
-      // nest drop is essentially never actually the empty one).
-      var DETAIL_ICON_ITEM_IDS = {
-        22993: true, // Seed pack
-        5070: true, // Bird nest (egg) -- red
-        5071: true, // Bird nest (egg) -- green
-        5072: true, // Bird nest (egg) -- blue
-        5074: true, // Bird nest (ring)
-        5075: true, // Bird nest (empty)
-        22798: true, // Bird nest (seeds)
-        22800: true, // Bird nest (Wyson)
-        32847: true, // Small salvage
-        32849: true, // Fishy salvage
-        32851: true, // Barracuda salvage
-        32853: true, // Large salvage
-        32855: true, // Plundered salvage
-        32857: true, // Martial salvage
-        32859: true, // Fremennik salvage
-        32861: true, // Opulent salvage
-      };
-      function isDetailItemIcon(it) {
-        return !!DETAIL_ICON_ITEM_IDS[it.itemId];
-      }
+      // The item panel never shows the wiki's bigger "detail" render
+      // for anything -- always the plain small flat RuneLite-CDN
+      // pixel icon it.icon already points at (item_icon_url in
+      // app/loot.py), full stop. This used to carry its own
+      // DETAIL_ICON_ITEM_IDS override (seed pack, every bird nest id,
+      // every salvage tier) mirroring _ITEM_DETAIL_ICON_OVERRIDES in
+      // app/loot.py, swapping in the detail render here the same way
+      // the NPC/source panel's own isCasketNpc/isSeedPackSource/etc.
+      // still do above -- removed per explicit instruction: the two
+      // panels deliberately show different art for the same thing now
+      // (NPC/source-panel tiles always detailed, item-panel tiles
+      // always plain pixel, no per-item exceptions on this side),
+      // after Bird nest's item-panel tile started showing the detail
+      // render it was never supposed to once the NPC-panel entry for
+      // it (isBirdNestSource above) was added and working correctly.
 
       function renderItemList(items) {
         var emptyEl = document.getElementById('lootItemEmpty');
@@ -6239,7 +6214,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             // an <a> can't validly contain a <button> either.
             return '<div class="loot-item-box-wrap' + (it.hidden ? ' hidden-entry' : '') + '">' +
               '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" title="' + escapeHtml(itemTitle(it)) + '">' +
-                iconImg(it.icon, it.itemName, 'loot-item-box-icon' + (isDetailItemIcon(it) ? ' loot-item-box-icon-detail' : '')) +
+                iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
                 '<div class="loot-item-box-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
                 '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
               '</a>' +
