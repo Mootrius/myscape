@@ -151,6 +151,27 @@
   min-width: 0;
 }
 
+/* .skills-grid/.ca-list are sized to their own (fixed-count) content
+   rather than a fixed height, unlike .quests-list/.diaries-list next
+   to them -- see each one's own comment. Because co-quad-row's default
+   align-items: stretch still stretches .skills-card/.ca-card to match
+   their 272px-tall siblings, any gap between that stretched card
+   height and the content's own natural height doesn't vanish, it just
+   lands somewhere -- and left to the block-layout default (content
+   top-aligned within the card's padding box), it always lands as extra
+   space under the content, not above it. That's what made the bottom
+   padding read as bigger than the top per explicit report. Centering
+   each card's own (single) content block vertically instead means
+   that same leftover gap splits evenly above and below, so top/bottom
+   padding always looks equal regardless of exactly how many px of
+   slack there happens to be. */
+.skills-card,
+.ca-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 /* A fixed 3-track grid -- the three columns are always there, and each
    track just splits .skills-card's own width (set by the shared
    flex: 1 1 0 rule above, same as its three siblings in .co-quad-row)
