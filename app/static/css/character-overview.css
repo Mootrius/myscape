@@ -1176,56 +1176,61 @@
    that earns permanent space above it on every load. ---------- */
 
 /* Settings-cog button sitting inline inside <h2 class="page-title">,
-   right after the "Character Overview" text -- same cog glyph/colors/
-   states as the Storages Viewer's own .pm-settings-btn (possessions.
-   css), per explicit instruction, rather than the export-style button
-   Loot Tracker/Purchase Goals' own triggers use -- this one opens a
-   settings panel (private/public + the share link), not an export
-   flow. Smaller than that exact match (24px, not .pm-settings-btn's
-   own 32px, and smaller again than this rule's own first revised
-   size of 26px) after two rounds of explicit follow-up feedback that
-   it kept reading too big -- same 24px size Loot Tracker/Purchase
-   Goals' own export-icon triggers now use too, so all four of these
-   buttons match each other exactly. The cog glyph itself (see its own
-   <svg> in app/pages.py) got a size bump of its own alongside this
-   shrink -- bigger relative to this smaller box than it was relative
-   to the old 26px one, per that same explicit feedback, rather than
-   just shrinking in lockstep with the button around it.
-   .co-settings-wrap is what .pm-settings-wrap is to .pm-settings-btn/
-   .pm-settings-menu -- the position: relative anchor .public-profile-
-   card below is positioned absolute against. */
-.co-settings-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
-.co-settings-btn {
-  width: 24px; height: 24px; box-sizing: border-box;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text-dim); cursor: pointer;
+   right after the "Character Overview" text -- back to a plain icon
+   (no border/background box), per explicit instruction, after three
+   rounds of feedback on the button-chrome version all landed on
+   "too big". Still the same cog glyph as the Storages Viewer's own
+   .pm-settings-btn (possessions.css), per the original explicit
+   instruction to use that same glyph, just without that button's own
+   box styling now -- this one opens a settings panel (private/public
+   + the share link), not an export flow, but reads the same bare-
+   icon-next-to-a-heading way Loot Tracker/Purchase Goals' own export
+   triggers do. The cog glyph's own <svg> (app/pages.py) dropped back
+   from 16px to 15px to match -- 1px bigger than the 14px feather
+   icons those export triggers use, same "cog needs slightly more
+   detail to read clearly" margin .pm-settings-btn's own glyph
+   already gave it before any of this. .co-settings-wrap carries what
+   used to live directly on this button -- vertical-align: middle
+   plus the cap-height-compensating translateY (all-caps title text
+   has no descenders, so plain vertical-align: middle alone lands a
+   hair low, same -2.4px value this exact button used for its own
+   original pre-cog icon) -- now that the button itself is just the
+   wrap's one child; it's also still the position: relative anchor
+   .public-profile-card below is positioned absolute against, for
+   this popup's own floating behavior, kept unchanged from the
+   button-chrome version. */
+.co-settings-wrap {
+  position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
+  transform: translateY(-2.4px);
 }
-.co-settings-btn:hover { border-color: var(--gold-dim); color: var(--text); }
-/* Same active treatment as .pm-settings-btn.active -- gold border and
-   icon while the panel is open (see setPublicProfileOpen in the
-   script, which keeps this in sync on every path that closes the
-   panel, not just the button's own click). */
-.co-settings-btn.active { border-color: var(--gold); color: var(--gold); }
+.co-settings-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 0; margin: 0;
+  color: var(--text-faint); cursor: pointer; line-height: 1;
+  transition: color 0.15s ease;
+}
+.co-settings-btn:hover { color: var(--text-dim); }
+.co-settings-btn.active { color: var(--gold); }
 
 /* Floats directly under its own trigger button (position: absolute
    against .co-settings-wrap above), same shape as .pm-settings-menu
-   (possessions.css) -- 30px top offset is this button's own 24px
-   height plus the same 6px gap .pm-settings-menu itself uses below
-   its (taller, 32px) own trigger. Opaque (--panel, not the --panel-
-   translucent cards elsewhere on this page use) -- same reasoning
-   .tracker-menu's own comment in purchase-goals.css gives: this
-   floats directly over whatever's below it on the page, and at 82%
-   opacity that showed through distractingly. box-shadow matches
-   Loot Tracker's own .loot-range-menu identical value exactly (loot-
-   tracker.css) -- same subtle "floating above the page" depth cue,
-   per explicit instruction to bring every one of these popups in
-   line with that one. Closeable by re-clicking the trigger OR
-   clicking anywhere else on the page (see publicProfileSettingsBtn's
-   own click handler and the outside-click listener beside it, app/
-   pages.py). */
+   (possessions.css) -- 21px top offset is this icon's own ~15px
+   rendered height (.co-settings-btn has no padding/border of its
+   own, back to a bare icon) plus a 6px gap, same small gap .pm-
+   settings-menu itself uses below its own (boxed, taller) trigger.
+   Opaque (--panel, not the --panel-translucent cards elsewhere on
+   this page use) -- same reasoning .tracker-menu's own comment in
+   purchase-goals.css gives: this floats directly over whatever's
+   below it on the page, and at 82% opacity that showed through
+   distractingly. box-shadow matches Loot Tracker's own .loot-range-
+   menu identical value exactly (loot-tracker.css) -- same subtle
+   "floating above the page" depth cue, per explicit instruction to
+   bring every one of these popups in line with that one. Closeable
+   by re-clicking the trigger OR clicking anywhere else on the page
+   (see publicProfileSettingsBtn's own click handler and the
+   outside-click listener beside it, app/pages.py). */
 .public-profile-card {
-  position: absolute; top: 30px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 21px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 6px;

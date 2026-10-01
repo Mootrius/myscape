@@ -764,71 +764,82 @@ button.primary#pgNameSave, .pg-setup-form-save {
 /* ---------- Export icon (next to "Purchase Goals" -- see
    purchase_share_icon_btn in _purchase_goals_panel_markup,
    app/pages.py) + the floating popup it toggles open right beneath
-   itself. Same button-chrome + anchored-popup pattern as Loot
-   Tracker's own .loot-share-icon-btn and the Purchase Goal share
-   page's own .pg-import-icon-btn (duplicated here, not shared across
-   these pages' own stylesheets, same "cross-page style overlap"
-   convention .loot-share-icon-btn's own comment in loot-tracker.css
-   already documents) -- matching visual values throughout, just this
-   file's own pg- prefix. Bordered like .icon-menu-btn above (the
-   "Setup options" hamburger trigger) rather than a bare glyph, per
-   explicit instruction that these should read as actual buttons, but
-   smaller still (24px, not that button's own 36px, and smaller yet
-   again than this rule's own first revised size of 28px) per a
-   second round of explicit follow-up feedback that it still read too
-   big. .pg-share-wrap is what .tracker-menu-wrap is to .icon-menu-
-   btn/.tracker-menu -- the position: relative anchor .pg-share-card
-   below is positioned absolute against. ---------- */
-.pg-share-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
+   itself. Back to a plain icon (no border/background box) per
+   explicit instruction, after this and the next two rounds of
+   feedback on the button-chrome version all landed on "too big" --
+   same bare-icon-next-to-a-heading shape this started with, same
+   14px SVG size (unchanged throughout every revision above -- only
+   the box around it ever grew or shrank) and same color states as
+   Loot Tracker's own .loot-share-icon-btn and the Purchase Goal
+   share page's own .pg-import-icon-btn (duplicated here, not shared
+   across these pages' own stylesheets, same "cross-page style
+   overlap" convention .loot-share-icon-btn's own comment in loot-
+   tracker.css already documents). .pg-share-wrap carries what used
+   to live directly on this button -- vertical-align: middle plus the
+   cap-height-compensating translateY (all-caps title text has no
+   descenders, so plain vertical-align: middle alone lands a hair
+   low) -- now that the button itself is just the wrap's one child;
+   it's also still the position: relative anchor .pg-share-card below
+   is positioned absolute against, for this popup's own floating
+   behavior, kept unchanged from the button-chrome version. ---------- */
+.pg-share-wrap {
+  position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
+  transform: translateY(-2.4px);
+}
 .pg-share-icon-btn {
-  width: 24px; height: 24px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
   cursor: pointer;
-  color: var(--text-dim);
-  transition: color 0.15s ease, border-color 0.15s ease;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
 }
-.pg-share-icon-btn:hover { border-color: var(--gold-dim); color: var(--text); }
-.pg-share-icon-btn.open { border-color: var(--gold); color: var(--gold); }
+.pg-share-icon-btn:hover { color: var(--text-dim); }
+.pg-share-icon-btn.open { color: var(--gold); }
 
 /* The download icon next to "Shared by <name>" on a Purchase Goal
    share page (render_purchase_goals_share's own import_icon_btn,
-   app/pages.py) -- same button-chrome/floating-popup shape (and same
-   28px size, see .pg-share-icon-btn's own comment above) as
-   .pg-share-icon-btn above (it sits next to the exact same kind of
-   all-caps .page-title text, just a different heading, and the same
-   24px size after two rounds of explicit follow-up feedback that it
-   kept reading too big). Toggles .pg-import-card below open/closed,
-   same .open-on-the-button convention as .pg-share-icon-btn above --
-   this used to be a one-shot action button itself, but per explicit
-   instruction it's now a toggle for a confirming popup instead (see
-   .pg-import-card below), so it picked up the same .open state
-   .pg-share-icon-btn already has. Rendered as either a real <button>
-   (signed-in visitor) or a plain <a> (signed-out, no popup, no .open
-   ever toggled onto it, and no .pg-import-wrap around it either --
-   see import_icon_btn's own comment in app/pages.py) depending on
-   viewer at render time -- this rule targets the class alone rather
-   than a tag name, so both look identical regardless of which
-   element it ends up on. */
-.pg-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
+   app/pages.py) -- back to a plain icon (no border/background box),
+   same bare shape and same 14px SVG size as .pg-share-icon-btn above
+   (it sits next to the exact same kind of all-caps .page-title text,
+   just a different heading), per the same explicit follow-up
+   feedback that button-chrome's own doc comment describes. Toggles
+   .pg-import-card below open/closed, same .open-on-the-icon
+   convention as .pg-share-icon-btn above -- this used to be a
+   one-shot action button itself, but per explicit instruction it's
+   now a toggle for a confirming popup instead (see .pg-import-card
+   below), so it picked up the same .open state .pg-share-icon-btn
+   already has. Rendered as either a real <button> (signed-in
+   visitor) or a plain <a> (signed-out, no popup, no .open ever
+   toggled onto it, and no .pg-import-wrap around it either -- see
+   import_icon_btn's own comment in app/pages.py) depending on viewer
+   at render time -- this rule targets the class alone rather than a
+   tag name, so both look identical regardless of which element it
+   ends up on. */
+.pg-import-wrap {
+  position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
+  transform: translateY(-2.4px);
+}
 .pg-import-icon-btn {
-  width: 24px; height: 24px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
   cursor: pointer;
-  color: var(--text-dim);
-  transition: color 0.15s ease, border-color 0.15s ease;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
 }
-.pg-import-icon-btn:hover { border-color: var(--gold-dim); color: var(--text); }
-.pg-import-icon-btn.open { border-color: var(--gold); color: var(--gold); }
+.pg-import-icon-btn:hover { color: var(--text-dim); }
+.pg-import-icon-btn.open { color: var(--gold); }
 
 /* The popup pgImportBtn above toggles open -- same shape/sizing as
    .pg-share-card below, floating directly under its own trigger
@@ -843,15 +854,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
    (--panel, not the --panel-translucent cards elsewhere on this page
    use) -- same reasoning .tracker-menu's own comment above gives:
    this floats directly over whatever's below it on the page, and at
-   82% opacity that showed through distractingly. 32px top offset is
-   this button's own 24px height plus the same 8px gap .tracker-menu
-   itself uses below its (taller, 36px) own trigger. box-shadow
-   matches .loot-range-menu's own identical value exactly (loot-
-   tracker.css) -- same subtle "floating above the page" depth cue,
-   per explicit instruction to bring every one of these popups in
-   line with that one. */
+   82% opacity that showed through distractingly. 20px top offset is
+   this icon's own ~14px rendered height (.pg-import-icon-btn has no
+   padding/border of its own, back to a bare icon) plus a 6px gap,
+   same small gap .pm-settings-menu (possessions.css) uses below its
+   own trigger. box-shadow matches .loot-range-menu's own identical
+   value exactly (loot-tracker.css) -- same subtle "floating above
+   the page" depth cue, per explicit instruction to bring every one
+   of these popups in line with that one. */
 .pg-import-card {
-  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -902,14 +914,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
    elsewhere on this page use) -- same reasoning .tracker-menu's own
    comment above gives: this floats directly over whatever's below it
    on the page, and at 82% opacity that showed through distractingly.
-   32px top offset is this button's own 24px height plus the same
-   8px gap .tracker-menu itself uses below its (taller, 36px) own
-   trigger. box-shadow matches .loot-range-menu's own identical value
-   exactly (loot-tracker.css) -- same subtle "floating above the
-   page" depth cue, per explicit instruction to bring every one of
-   these popups in line with that one. */
+   20px top offset is this icon's own ~14px rendered height
+   (.pg-share-icon-btn has no padding/border of its own, back to a
+   bare icon) plus a 6px gap, same small gap .pm-settings-menu
+   (possessions.css) uses below its own trigger. box-shadow matches
+   .loot-range-menu's own identical value exactly (loot-tracker.css)
+   -- same subtle "floating above the page" depth cue, per explicit
+   instruction to bring every one of these popups in line with that
+   one. */
 .pg-share-card {
-  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;

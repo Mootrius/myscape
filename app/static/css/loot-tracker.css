@@ -128,35 +128,44 @@
 
 /* ---------- Export icon (next to the "Loot Tracker" .page-title, see
    render_loot_tracker in app/pages.py) + the floating popup it
-   toggles open right beneath itself -- same button-chrome +
-   anchored-popup pattern as Purchase Goals' own .pg-share-icon-btn
-   (duplicated here, not shared across these pages' own stylesheets,
-   same as every other cross-page style overlap on this site), just
-   with its own loot- prefix and its own SVG stroke-width (duplicated
-   too, same reasoning). Bordered like .icon-menu-btn (purchase-
-   goals.css) rather than a bare glyph, per explicit instruction that
-   these should read as actual buttons, but smaller still (24px, not
-   that button's own 36px, and smaller yet again than this rule's own
-   first revised size of 28px) per a second round of explicit
-   follow-up feedback that it still read too big -- same revised size
-   Purchase Goals' own .pg-share-icon-btn/.pg-import-icon-btn now use.
-   .loot-share-wrap is the position: relative anchor .loot-share-card
-   below is positioned absolute against. ---------- */
-.loot-share-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
+   toggles open right beneath itself. Back to a plain icon (no
+   border/background box) per explicit instruction, after three
+   rounds of feedback on the button-chrome version all landed on
+   "too big" -- same bare-icon-next-to-a-heading shape this started
+   with, same 14px SVG size (unchanged throughout every revision
+   above -- only the box around it ever grew or shrank) and same
+   color states as Purchase Goals' own .pg-share-icon-btn (duplicated
+   here, not shared across these pages' own stylesheets, same as
+   every other cross-page style overlap on this site), just with its
+   own loot- prefix and its own SVG stroke-width (duplicated too,
+   same reasoning). .loot-share-wrap carries what used to live
+   directly on this button -- vertical-align: middle plus the
+   cap-height-compensating translateY (all-caps title text has no
+   descenders, so plain vertical-align: middle alone lands a hair
+   low) -- now that the button itself is just the wrap's one child;
+   it's also still the position: relative anchor .loot-share-card
+   below is positioned absolute against, for this popup's own
+   floating behavior, kept unchanged from the button-chrome
+   version. ---------- */
+.loot-share-wrap {
+  position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
+  transform: translateY(-2.4px);
+}
 .loot-share-icon-btn {
-  width: 24px; height: 24px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
   cursor: pointer;
-  color: var(--text-dim);
-  transition: color 0.15s ease, border-color 0.15s ease;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
 }
-.loot-share-icon-btn:hover { border-color: var(--gold-dim); color: var(--text); }
-.loot-share-icon-btn.open { border-color: var(--gold); color: var(--gold); }
+.loot-share-icon-btn:hover { color: var(--text-dim); }
+.loot-share-icon-btn.open { color: var(--gold); }
 
 /* Floats directly under its own trigger button (position: absolute
    against .loot-share-wrap above) rather than a full-width row
@@ -172,14 +181,16 @@
    this page use) -- same reasoning .tracker-menu's own comment in
    purchase-goals.css gives: this floats directly over whatever's
    below it on the page, and at 82% opacity that showed through
-   distractingly. 32px top offset is this button's own 24px height
-   plus the same 8px gap .tracker-menu itself uses below its (taller,
-   36px) own trigger. box-shadow matches .loot-range-menu's own
-   identical value exactly below -- same subtle "floating above the
-   page" depth cue, per explicit instruction to bring every one of
-   these popups in line with that one. */
+   distractingly. 20px top offset is this icon's own ~14px rendered
+   height (.loot-share-icon-btn has no padding/border of its own,
+   back to a bare icon) plus a 6px gap, same small gap .pm-settings-
+   menu (possessions.css) uses below its own trigger. box-shadow
+   matches .loot-range-menu's own identical value exactly below --
+   same subtle "floating above the page" depth cue, per explicit
+   instruction to bring every one of these popups in line with that
+   one. */
 .loot-share-card {
-  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
