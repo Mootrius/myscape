@@ -6245,11 +6245,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
     <div class="loot-share-card-row">
       <div class="loot-share-card" id="lootShareCard" hidden>
         <button type="button" class="loot-share-generate-btn" id="lootShareGenerateBtn">GENERATE SHAREABLE LINK</button>
-        <div class="loot-share-link-row" id="lootShareLinkRow" hidden>
-          <input type="text" class="loot-share-link-input" id="lootShareLinkInput" readonly />
-          <button type="button" class="loot-share-link-btn" id="lootShareCopyBtn">Copy</button>
-        </div>
-        <p class="loot-share-popup-hint" id="lootSharePopupHint" hidden>Generated links automatically expire after 30 days, but can be deleted sooner on your ACCOUNT page.</p>
+        <button type="button" class="loot-share-link-btn" id="lootShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>
       </div>
     </div>
 
@@ -7959,18 +7955,14 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       // GENERATE SHAREABLE LINK -- creates a frozen, point-in-time
       // snapshot of whatever range is currently selected (same
       // state.rangeKey/customStart/customEnd lootUrl() above already
-      // reads) and reveals the resulting myscape.io/s/<code> link
-      // (plus its Copy button and the expiry hint) below the button,
-      // all three hidden until this first click so nothing is
-      // generated just from opening the card. The button stays live
-      // afterward -- clicking it again creates (and shows) a brand
-      // new link for whatever range is selected at that moment, same
-      // "each click makes a fresh link, no cooldown" behavior the old
-      // "Share" button had (unlike the public-profile card's own "New
-      // link" button, sharing multiple different sessions over time
-      // is normal usage here, not a mistake worth throttling against).
-      // See build_loot_share_snapshot in app/loot.py and SharedContent
-      // in app/models.py for what that link actually freezes.
+      // reads). Nothing is generated just from opening the card --
+      // only this click does that -- and once it succeeds this button
+      // is replaced for good by lootShareLinkBtn showing the actual
+      // link (not shown alongside it), same "click the button to
+      // first generate a link, then that's what's there" shape as
+      // this page's own task asked for. See build_loot_share_snapshot
+      // in app/loot.py and SharedContent in app/models.py for what
+      // that link actually freezes.
       document.getElementById('lootShareGenerateBtn').addEventListener('click', function () {
         var btn = this;
         btn.disabled = true;
@@ -7986,9 +7978,11 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         })
           .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
           .then(function (data) {
-            document.getElementById('lootShareLinkInput').value = data.url;
-            document.getElementById('lootShareLinkRow').hidden = false;
-            document.getElementById('lootSharePopupHint').hidden = false;
+            var linkBtn = document.getElementById('lootShareLinkBtn');
+            linkBtn.dataset.url = data.url;
+            linkBtn.textContent = data.url;
+            btn.hidden = true;
+            linkBtn.hidden = false;
           })
           .catch(function () {
             btn.classList.add('action-failed');
@@ -7996,15 +7990,32 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           })
           .then(function () { btn.disabled = false; });
       });
-      document.getElementById('lootShareCopyBtn').addEventListener('click', function () {
-        var input = document.getElementById('lootShareLinkInput');
-        if (!input.value) return;
+
+      // lootShareLinkBtn itself IS the link, once generated above --
+      // clicking it copies its own URL (held in data-url, since its
+      // own textContent swaps to "COPIED" and back below) to the
+      // clipboard and flashes "COPIED" for a moment before reverting,
+      // same silent-copy-with-brief-confirmation pattern as the
+      // Account page's own Shared Links table code buttons
+      // (.shared-link-code-btn's click handler, app/pages.py).
+      document.getElementById('lootShareLinkBtn').addEventListener('click', function () {
+        var btn = this;
+        var url = btn.dataset.url;
+        if (!url) return;
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(input.value);
+          navigator.clipboard.writeText(url);
         } else {
-          input.select();
+          var temp = document.createElement('textarea');
+          temp.value = url;
+          temp.style.position = 'fixed';
+          temp.style.opacity = '0';
+          document.body.appendChild(temp);
+          temp.select();
           document.execCommand('copy');
+          document.body.removeChild(temp);
         }
+        btn.textContent = 'COPIED';
+        setTimeout(function () { btn.textContent = url; }, 1200);
       });
 
       loadState();

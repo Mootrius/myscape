@@ -1195,6 +1195,16 @@
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
+  /* vertical-align: middle lines this button's box up with roughly
+     half-an-ex above the title text's baseline -- not quite the same
+     point as that all-caps text's own visual (glyph) center, which
+     measures ~1.4px lower. transform (not a layout-affecting nudge
+     like margin/top) closes that last bit so the icon reads as truly
+     centered on the title text next to it, same kind of cap-height
+     compensation .nav-side's own `top: 3px` already does elsewhere
+     on this site for the same "all-caps text has no descenders"
+     reason. */
+  transform: translateY(-1.4px);
 }
 .co-share-icon-btn:hover { color: var(--text-dim); }
 .co-share-icon-btn.open { color: var(--gold); }
