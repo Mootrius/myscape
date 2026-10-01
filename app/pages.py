@@ -7834,6 +7834,10 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         // was clicked -- switching ranges invalidates it the same way
         // it already invalidates an NPC selection just above.
         clearSelectedBucket();
+        // A link already generated for the PREVIOUS range would
+        // silently go on describing that old range forever -- see
+        // resetLootShareState's own comment below.
+        resetLootShareState();
         closeRangeMenu();
         updateRangeMenuActive();
         loadState();
@@ -7853,6 +7857,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         state.customEnd = endVal;
         state.selectedNpcs = [];
         clearSelectedBucket();
+        resetLootShareState();
         closeRangeMenu();
         updateRangeMenuActive();
         loadState();
@@ -8043,15 +8048,54 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         });
       }
 
+      // Puts the share card back to its own starting state -- the
+      // GENERATE SHAREABLE LINK button showing, any already-generated
+      // link cleared out and hidden -- called from both range-change
+      // paths above (a preset click and CUSTOM's own Apply) any time
+      // state.rangeKey/customStart/customEnd actually changes. Without
+      // this, a link generated for one range stuck around looking
+      // current after switching to a different one -- the only way
+      // back to GENERATE SHAREABLE LINK for the new range was a full
+      // page refresh. Deliberately NOT called just from opening/
+      // closing lootShareCard itself (see that toggle above), nor
+      // from anything else that reloads state (the 10-second poll
+      // below, a bucket click) -- only an actual range change
+      // invalidates an already-generated link; this is intentionally
+      // the one new thing added to that same invalidation list
+      // selectedNpcs/clearSelectedBucket already appear on above, not
+      // a general-purpose "link generated" guard against spamming
+      // more links for the SAME range, which is still exactly one
+      // click of GENERATE SHAREABLE LINK away from lootShareLinkBtn
+      // every time, same as before.
+      function resetLootShareState() {
+        var genBtn = document.getElementById('lootShareGenerateBtn');
+        var linkBtn = document.getElementById('lootShareLinkBtn');
+        // Both null on the share page itself and the landing preview
+        // -- .loot-share-card-row (holding both) is stripped from
+        // those entirely by their own wrapper scripts (see
+        // render_loot_tracker_share/render_landing_loot_preview in
+        // this file), and this reused script runs unmodified on both.
+        if (!genBtn || !linkBtn) return;
+        genBtn.hidden = false;
+        genBtn.disabled = false;
+        genBtn.classList.remove('action-failed');
+        linkBtn.hidden = true;
+        linkBtn.textContent = '';
+        delete linkBtn.dataset.url;
+      }
+
       // GENERATE SHAREABLE LINK -- creates a frozen, point-in-time
       // snapshot of whatever range is currently selected (same
       // state.rangeKey/customStart/customEnd lootUrl() above already
       // reads). Nothing is generated just from opening the card --
       // only this click does that -- and once it succeeds this button
-      // is replaced for good by lootShareLinkBtn showing the actual
-      // link (not shown alongside it), same "click the button to
-      // first generate a link, then that's what's there" shape as
-      // this page's own task asked for. See build_loot_share_snapshot
+      // is replaced by lootShareLinkBtn showing the actual link (not
+      // shown alongside it, same "click the button to first generate
+      // a link, then that's what's there" shape as this page's own
+      // task asked for) until resetLootShareState above brings it
+      // back, on an actual range change -- not just by refreshing the
+      // page, which used to be the only way back to this button once
+      // a link existed for the old range. See build_loot_share_snapshot
       // in app/loot.py and SharedContent in app/models.py for what
       // that link actually freezes.
       document.getElementById('lootShareGenerateBtn').addEventListener('click', function () {
