@@ -836,19 +836,20 @@
 .loot-range-btn--static { cursor: default; }
 .loot-range-btn--static .loot-range-caret { display: none; }
 
-/* The one-line "Shared by <name> -- <range>" byline on a Loot Tracker
-   share page (myscape.io/s/<code>, see render_loot_tracker_share in
-   app/pages.py), sitting right below the reused body's own unmodified
-   "Loot Tracker" .page-title heading -- centered under it the same
-   way, and pulled up close with a negative top margin (.page-title's
-   own bottom margin already pushes the chart card down, so this just
-   borrows a little of that gap rather than adding its own on top of
-   it) rather than spacing this out as its own separate block. Reuses
-   .subtitle's own muted color/size (myscape.css) wholesale -- this
-   rule only adds the centering/spacing .subtitle doesn't already have
-   on its own, same "augment a shared class with a page-specific
-   modifier" pattern .loot-range-btn--static above already follows. */
-.loot-share-banner { text-align: center; margin-top: -12px; margin-bottom: 20px; }
+/* The two-line title row on a Loot Tracker share page (myscape.io/
+   s/<code>, see render_loot_tracker_share in app/pages.py), which
+   strips the reused body's own "Loot Tracker" .page-title heading out
+   entirely and takes its place: the share's own date/time range on
+   this small line first (reusing .subtitle's own muted color/size
+   from myscape.css wholesale -- this rule only adds the centering/
+   spacing .subtitle doesn't already have on its own, same "augment a
+   shared class with a page-specific modifier" pattern .loot-range-
+   btn--static above already follows), then "Shared by <name>" right
+   below it on its own line, carrying .page-title itself (unmodified,
+   no modifier class needed -- it's the exact same heading treatment
+   the stripped "Loot Tracker" text used to have, just different
+   text), so this page still has exactly one title-sized heading. */
+.loot-share-range { text-align: center; margin: 0 0 4px; }
 
 /* ---------- Landing-preview-only hero row: character + tagline,
    replacing the reused page's own "Loot Tracker" heading -- see

@@ -8407,20 +8407,25 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
     to share. Freezing the payload at share time is what keeps this
     link's own exposure bounded to exactly that choice.
 
-    The only other visible difference from the real page is a two-line
-    byline prepended above the reused body's own "Loot Tracker" <h2>
-    (left untouched, unlike the landing preview's version of this same
-    heading, which gets hidden via CSS instead -- this page is a real
-    data view, not marketing copy, so there's no reason to hide it):
-    the exact range this share covers on its first line, who shared it
-    on its second. game_account is the share's own owner, looked up by
-    the caller (GET /s/{{code}} in app/main.py) from SharedContent.
-    game_account_id, which can in principle be None if that account's
-    own row is ever deleted after the fact (see that column's own
-    comment in app/models.py -- there's no cascade delete wired up for
-    it yet); falls back to "A player" the same way GameAccount.
-    runescape_name itself does everywhere else it's shown with no
-    value synced yet.
+    The only other visible difference from the real page is its own
+    title row, entirely replacing the reused body's own "Loot Tracker"
+    <h2> -- stripped out of the reused body string outright here (not
+    just hidden via CSS the way the landing preview's own version of
+    this same heading is, see .landing-loot-preview .page-title in
+    loot-tracker.css), since this page needs no generic "Loot Tracker"
+    label at all -- with the exact range this share covers on its own
+    small line first, then "Shared by <name>" taking over the removed
+    heading's own .page-title treatment (size, color, weight,
+    uppercase, centering) wholesale, so this page still reads as
+    having one clear, title-sized heading up top -- just this share's
+    own, not the feature's generic name. game_account is the share's
+    own owner, looked up by the caller (GET /s/{{code}} in app/main.py)
+    from SharedContent.game_account_id, which can in principle be None
+    if that account's own row is ever deleted after the fact (see that
+    column's own comment in app/models.py -- there's no cascade delete
+    wired up for it yet); falls back to "A player" the same way
+    GameAccount.runescape_name itself does everywhere else it's shown
+    with no value synced yet.
 
     The range line itself is filled in client-side, by a small inline
     script of its own (not the reused body's own script above, which
@@ -8437,8 +8442,23 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
     "(LOCAL)" so a visitor never mistakes this for the UTC-labeled
     range the server briefly renders as a fallback (immediately
     overwritten once that script runs -- there for the rare case it
-    doesn't, e.g. JS disabled, not a flash anyone's meant to see)."""
+    doesn't, e.g. JS disabled, not a flash anyone's meant to see). The
+    owner line below it needs no such conversion -- "Shared by <name>"
+    reads the same in any timezone -- so it's left as a plain,
+    server-rendered string with no script of its own."""
     extra_head, body, script = _loot_tracker_panel_markup()
+    # Strips the reused body's own "Loot Tracker" <h2 class="page-
+    # title"> (and the share/export icon button inside it -- see
+    # loot_share_icon_btn in _loot_tracker_panel_markup -- which was
+    # getting stripped via the JS further down anyway, since a viewer
+    # here isn't this share's owner) outright, rather than leaving it
+    # in place or hiding it via CSS the way the landing preview's own
+    # version of this same heading is. banner_markup below replaces it
+    # with this page's own title instead. The reused body always opens
+    # with exactly one such heading (see that function's own body
+    # string), so splitting on the first "</h2>" and keeping only what
+    # follows it is all stripping it out takes.
+    _, _, body = body.partition("</h2>")
 
     owner_name = (game_account.runescape_name if game_account else None) or "A player"
     range_start_iso = share.payload["full"]["rangeStart"]
@@ -8454,8 +8474,16 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
         f"{range_start.strftime('%b %-d, %Y, %-I:%M %p')} "
         f"– {range_end.strftime('%b %-d, %Y, %-I:%M %p')} UTC"
     )
+    # The range line keeps .subtitle's own small, muted treatment;
+    # "Shared by <name>" takes over .page-title wholesale instead
+    # (same size/color/weight/uppercase/centering the stripped "Loot
+    # Tracker" heading above had) so this page still has exactly one
+    # title-sized heading -- just this share's own, not the feature's
+    # generic name. See .loot-share-range in loot-tracker.css for the
+    # one small spacing tweak that still needs on top.
     banner_markup = f"""
-    <p class="subtitle loot-share-banner"><span id="lootShareRangeLine">{escape(range_label_fallback)}</span><br>Shared by {escape(owner_name)}</p>
+    <p class="subtitle loot-share-range"><span id="lootShareRangeLine">{escape(range_label_fallback)}</span></p>
+    <h2 class="page-title">Shared by {escape(owner_name)}</h2>
     <script>
     (function () {{
       // Zero-padded 'YYYY-MM-DD' for a plain JS Date, in local time --
