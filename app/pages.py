@@ -3119,6 +3119,21 @@ def render_landing_character_overview_preview() -> Optional[Tuple[str, str, str]
       if (clogSyncBtn) {{
         clogSyncBtn.replaceWith(clogSyncBtn.cloneNode(true));
       }}
+
+      // Net worth hard-coded to this one fixed number (2,147,483,647
+      // gp -- max signed 32-bit int), per explicit instruction, rather
+      // than summed live the way the real page's own geValue tile
+      // does (see that fetch's own comment above _character_overview_
+      // panel_markup's reused script, fed here through the shim's own
+      // GET /api/possessions/summary catch-all failure, which leaves
+      // the reused script's own em dash showing) -- GE prices drift
+      // day to day regardless, so this preview was never going to show
+      // a genuinely current net worth either way. Set directly rather
+      // than through the fetch shim (there's no real items list that
+      // would honestly sum to this number) and after {{script}} runs so
+      // it overwrites that em dash instead of racing it.
+      var geValueEl = document.getElementById('co-geValue');
+      if (geValueEl) geValueEl.textContent = '2,147,483,647 gp';
     }})();
     """
     return extra_head, body, wrapper_script
