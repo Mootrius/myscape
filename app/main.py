@@ -94,6 +94,7 @@ from app.models import (
     _utcnow,
 )
 from app.pages import (
+    _MODEL_VIEWER_BACKGROUNDS,
     _SITE_URL,
     PlayerView,
     build_player_view,
@@ -198,6 +199,7 @@ from app.schemas import (
     MasterScrollBookItemOut,
     MasterScrollBookSyncRequest,
     MasterScrollBookSyncResponse,
+    ModelViewerBackgroundUpdateRequest,
     MoveGearSlotItemRequest,
     NpcSearchResponse,
     PlayerOut,
@@ -1589,7 +1591,14 @@ def _character_overview_summary_payload(game_account: GameAccount) -> dict:
     exact same shape for someone else's GameAccount without
     duplicating this dict -- single source of truth for what that row
     shows, whether the viewer is the account's own owner or a visitor
-    with a public link."""
+    with a public link. modelViewerBackgroundIndex rides along here
+    too (not a Character Summary stat at all) purely so the public
+    page's own fetch of this same endpoint -- see the model-viewer
+    script's applyServerBackground in app/pages.py -- can pick up the
+    owner's current background without a second round trip; the
+    authenticated page ignores this field entirely and keeps using its
+    own localStorage pick instead (see MODEL_VIEWER_BG_STORAGE_KEY's
+    own comment there)."""
     return {
         "combatLevel": game_account.character_summary_combat_level,
         "totalLevel": game_account.character_summary_total_level,
@@ -1603,6 +1612,7 @@ def _character_overview_summary_payload(game_account: GameAccount) -> dict:
         "collectionsCompleted": game_account.character_summary_collections_completed,
         "collectionsTotal": game_account.character_summary_collections_total,
         "accountType": game_account.account_type,
+        "modelViewerBackgroundIndex": game_account.model_viewer_background_index,
         "syncedAt": game_account.character_summary_synced_at.isoformat() if game_account.character_summary_synced_at else None,
     }
 
@@ -1847,6 +1857,35 @@ def regenerate_public_profile_code(
     game_account.public_code_regenerated_at = _utcnow()
     db.commit()
     return _public_profile_payload(game_account)
+
+
+@app.post("/api/players/me/model-viewer-background")
+def update_model_viewer_background(
+    payload: ModelViewerBackgroundUpdateRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Called by Character Overview's own shuffle button (see
+    shuffleBackground in app/pages.py) each time it actually changes
+    the index, session-authenticated like every other /api/players/
+    me/* website (not plugin) endpoint here. Fire-and-forget from the
+    page's own side -- the browser's localStorage pick is already
+    applied instantly, before this ever lands -- so all this does is
+    let GameAccount.model_viewer_background_index catch up to it,
+    which only matters to someone else loading this player's public
+    profile later (see that column's own comment in app/models.py).
+    index's lower bound (>= 0) is already checked by the schema
+    itself; the upper bound has to live here instead, since it's
+    _MODEL_VIEWER_BACKGROUNDS' own length in app/pages.py, not
+    anything schemas.py knows about."""
+    if payload.index >= len(_MODEL_VIEWER_BACKGROUNDS):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"index must be less than {len(_MODEL_VIEWER_BACKGROUNDS)}.",
+        )
+    game_account.model_viewer_background_index = payload.index
+    db.commit()
+    return {"index": game_account.model_viewer_background_index}
 
 
 # ---- Public, unauthenticated reads for myscape.io/c/<code> ----------

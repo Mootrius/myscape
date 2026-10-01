@@ -142,6 +142,25 @@ class PublicProfileUpdateRequest(BaseModel):
     is_public: bool
 
 
+class ModelViewerBackgroundUpdateRequest(BaseModel):
+    """Body for POST /api/players/me/model-viewer-background -- see
+    GameAccount.model_viewer_background_index's own comment in app/
+    models.py. Only a non-negative check here; the real upper bound
+    (how many backgrounds actually exist) lives in
+    _MODEL_VIEWER_BACKGROUNDS in app/pages.py, which that endpoint
+    checks against directly rather than this schema importing from
+    pages.py just for one bound, same as e.g. sync_boat_cargo's own
+    slot-range check in app/main.py isn't a schema validator either."""
+    index: int
+
+    @field_validator("index")
+    @classmethod
+    def check_index(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("index must not be negative.")
+        return value
+
+
 class LinkStartResponse(BaseModel):
     code: str
     expires_at: datetime

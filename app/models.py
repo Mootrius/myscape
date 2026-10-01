@@ -404,6 +404,29 @@ class GameAccount(Base):
     character_model_glb = Column(LargeBinary, nullable=True)
     character_model_synced_at = Column(DateTime(timezone=True), nullable=True)
 
+    # The account's currently-selected Character Overview model-viewer
+    # background -- an index into _MODEL_VIEWER_BACKGROUNDS (app/
+    # pages.py), set by POST /api/players/me/model-viewer-background
+    # whenever the player clicks that panel's own shuffle button on
+    # their real, authenticated Character Overview page (see that
+    # button's own click handler in app/pages.py). Unlike every column
+    # above, this one is never touched by the plugin at all -- it's a
+    # pure website/browser preference, and the BROWSER itself still
+    # remains the primary place it's remembered (localStorage, see
+    # MODEL_VIEWER_BG_STORAGE_KEY's own comment in app/pages.py), since
+    # that's instant and needs no round trip for the player's own page.
+    # This column exists only so a visitor to this player's PUBLIC
+    # profile -- who has no localStorage history of their own to fall
+    # back on, and no shuffle button of their own at all, see
+    # mv_shuffle_btn's own public_code comment -- sees whatever
+    # background the owner is CURRENTLY using instead of always the
+    # index-0 default. Null until the player's first shuffle ever (on
+    # any browser); _character_overview_summary_payload below and the
+    # script's own applyServerBackground function both treat null the
+    # same way: fall back to index 0, exactly the pre-shuffle default
+    # every Character Overview already opens on anyway.
+    model_viewer_background_index = Column(Integer, nullable=True)
+
     # The social/public-profile pair: whether this character's own
     # Character Overview is visible to anyone with the link, and the
     # link's own stable identifier. Deliberately per-GameAccount, not

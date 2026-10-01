@@ -1499,8 +1499,74 @@ _MODEL_VIEWER_HEAD = """
           localStorage.setItem(MODEL_VIEWER_BG_STORAGE_KEY, String(bgIndex));
         } catch (e) {}
       }
+      // Fire-and-forget sync to GameAccount.model_viewer_background_
+      // index (see that column's own comment in app/models.py) so a
+      // visitor to this player's public profile later sees whatever
+      // background is CURRENTLY picked, not always the index-0
+      // default -- see applyServerBackground below for the other
+      // half of this. Checking for the real page's own exact,
+      // non-namespaced storage key (rather than just "truthy") is
+      // what keeps this from ever firing on the landing preview
+      // (null -- no real GameAccount behind it to begin with) or a
+      // public visitor's own view (a different, per-public-code key,
+      // see that substitution's own comment above) -- not that
+      // either of those could reach this line anyway, since
+      // bgShuffleBtn/mvBgShuffleBtn itself doesn't exist on a public
+      // page at all (see mv_shuffle_btn's own public_code comment in
+      // _character_overview_panel_markup).
+      if (MODEL_VIEWER_BG_STORAGE_KEY === "myscape.modelViewerBgIndex") {
+        fetch("/api/players/me/model-viewer-background", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ index: bgIndex }),
+        }).catch(function () {
+          // Nothing useful to do here -- the player's own page already
+          // reflects the new background either way (applyBackground
+          // above already ran), this just failed to tell the server.
+        });
+      }
     }
     if (bgShuffleBtn) bgShuffleBtn.addEventListener("click", shuffleBackground);
+
+    // Lets a WRAPPER script -- outside this IIFE's own module scope
+    // entirely, so this is the only way in -- push the account
+    // owner's currently-synced background (GameAccount.model_viewer_
+    // background_index, read off the same /api/public/<code>/summary
+    // response every other summary-row stat already rides in) into
+    // this viewer directly. Only render_public_character_overview's
+    // own wrapper_script ever actually calls this (see its fetch
+    // shim's own '/api/character-overview/summary' branch in app/
+    // pages.py) -- a public visitor has no shuffle button or
+    // localStorage history of their own for this module to apply a
+    // background from on its own the way it does for the real,
+    // authenticated page and the landing preview above. Defined
+    // unconditionally (cheap, and simplest, to leave in on those
+    // other two pages even though nothing ever calls it there).
+    function applyModelViewerBackgroundFromServer(index) {
+      if (typeof index !== "number" || isNaN(index) || index < 0 || index >= MODEL_VIEWER_BACKGROUNDS.length) {
+        return;
+      }
+      bgIndex = index;
+      applyBackground();
+    }
+    window.myscapeApplyModelViewerBackground = applyModelViewerBackgroundFromServer;
+    // This module script tag is deferred (type="module" always is,
+    // same as a plain script[defer]) -- it only runs once the whole
+    // document has finished parsing. The wrapper's own classic
+    // <script> below runs synchronously as the parser reaches it,
+    // well before that, and its fetch shim's response (especially a
+    // fast/cached one) can easily resolve and call
+    // window.myscapeApplyModelViewerBackground before this line above
+    // even exists yet -- a real race, not a hypothetical one (caught
+    // by an actual headless-browser run landing exactly that way).
+    // window.__myscapePendingModelViewerBg below is the other half of
+    // the handshake: the wrapper always stashes the value there
+    // too, in case this module hasn't run yet, and this picks it up
+    // the instant it does, covering whichever of the two actually
+    // finishes second.
+    if (typeof window.__myscapePendingModelViewerBg !== "undefined") {
+      applyModelViewerBackgroundFromServer(window.__myscapePendingModelViewerBg);
+    }
 
     // Small popup with the fixed copy below -- toggled by its own
     // button, dismissed by a click anywhere else on the page. The two
@@ -3249,7 +3315,35 @@ def render_public_character_overview(game_account: "GameAccount", viewer: Option
         function fail() {{ return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{}}); }} }}); }}
 
         if (url === '/api/character-overview/summary' && method === 'GET') {{
-          return window.fetch('/api/public/' + PUBLIC_CODE + '/summary');
+          return window.fetch('/api/public/' + PUBLIC_CODE + '/summary').then(function (r) {{
+            // Piggybacks the owner's currently-synced model-viewer
+            // background (modelViewerBackgroundIndex, in this same
+            // response -- see that field's own comment in app/main.py)
+            // straight into the 3D viewer, since a visitor has no
+            // shuffle button or localStorage history of their own for
+            // the reused script below to apply this from on its own
+            // the way setAccountType handles every other field here --
+            // see myscapeApplyModelViewerBackground's own comment in
+            // _MODEL_VIEWER_HEAD for the other half of this. r.clone()
+            // because the reused script's own .then(r => r.json())
+            // just below still needs to read this same response body
+            // itself -- a Response's body can only be consumed once.
+            if (r.ok) {{
+              r.clone().json().then(function (data) {{
+                // Stashed on window regardless of whether the bridge
+                // function exists yet -- see that handshake's own
+                // comment next to window.myscapeApplyModelViewerBackground's
+                // definition in _MODEL_VIEWER_HEAD for why this fetch
+                // can resolve before that deferred module script has
+                // even run yet.
+                window.__myscapePendingModelViewerBg = data.modelViewerBackgroundIndex;
+                if (window.myscapeApplyModelViewerBackground) {{
+                  window.myscapeApplyModelViewerBackground(data.modelViewerBackgroundIndex);
+                }}
+              }}).catch(function () {{}});
+            }}
+            return r;
+          }});
         }}
         if (url === '/api/character-overview/progress' && method === 'GET') {{
           return window.fetch('/api/public/' + PUBLIC_CODE + '/progress');
