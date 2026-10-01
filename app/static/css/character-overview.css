@@ -1176,18 +1176,21 @@
    that earns permanent space above it on every load. ---------- */
 
 /* Settings-cog button sitting inline inside <h2 class="page-title">,
-   right after the "Character Overview" text -- visually identical to
-   the Storages Viewer's own .pm-settings-btn (possessions.css: same
-   32x32 box, same cog glyph, same colors/states), per explicit
-   instruction, rather than the export-style button Loot Tracker/
-   Purchase Goals' own triggers use -- this one opens a settings
-   panel (private/public + the share link), not an export flow.
-   .co-settings-wrap is what .pm-settings-wrap is to .pm-settings-btn/
-   .pm-settings-menu -- the position: relative anchor .public-profile-
-   card below is positioned absolute against. */
+   right after the "Character Overview" text -- same cog glyph/colors/
+   states as the Storages Viewer's own .pm-settings-btn (possessions.
+   css), per explicit instruction, rather than the export-style button
+   Loot Tracker/Purchase Goals' own triggers use -- this one opens a
+   settings panel (private/public + the share link), not an export
+   flow. Sized smaller than that exact match (26px, not .pm-settings-
+   btn's own 32px) per explicit follow-up feedback that the first pass
+   read too big, same reduction Loot Tracker/Purchase Goals' own
+   export-icon triggers got. .co-settings-wrap is what .pm-settings-
+   wrap is to .pm-settings-btn/.pm-settings-menu -- the position:
+   relative anchor .public-profile-card below is positioned absolute
+   against. */
 .co-settings-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .co-settings-btn {
-  width: 32px; height: 32px; box-sizing: border-box;
+  width: 26px; height: 26px; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--text-dim); cursor: pointer;
@@ -1200,18 +1203,19 @@
 .co-settings-btn.active { border-color: var(--gold); color: var(--gold); }
 
 /* Floats directly under its own trigger button (position: absolute
-   against .co-settings-wrap above), same as .pm-settings-menu
-   (possessions.css) -- 38px top offset matches that menu's own gap
-   below its identical 32px-tall trigger. Opaque (--panel, not the
-   --panel-translucent cards elsewhere on this page use) -- same
-   reasoning .tracker-menu's own comment in purchase-goals.css gives:
-   this floats directly over whatever's below it on the page, and at
-   82% opacity that showed through distractingly. Closeable by
+   against .co-settings-wrap above), same shape as .pm-settings-menu
+   (possessions.css) -- 32px top offset is this button's own 26px
+   height plus the same 6px gap .pm-settings-menu itself uses below
+   its (taller, 32px) own trigger. Opaque (--panel, not the --panel-
+   translucent cards elsewhere on this page use) -- same reasoning
+   .tracker-menu's own comment in purchase-goals.css gives: this
+   floats directly over whatever's below it on the page, and at 82%
+   opacity that showed through distractingly. Closeable by
    re-clicking the trigger OR clicking anywhere else on the page (see
    publicProfileSettingsBtn's own click handler and the outside-click
    listener beside it, app/pages.py). */
 .public-profile-card {
-  position: absolute; top: 38px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 6px;

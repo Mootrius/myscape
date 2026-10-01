@@ -770,15 +770,17 @@ button.primary#pgNameSave, .pg-setup-form-save {
    these pages' own stylesheets, same "cross-page style overlap"
    convention .loot-share-icon-btn's own comment in loot-tracker.css
    already documents) -- matching visual values throughout, just this
-   file's own pg- prefix. Sized/bordered like .icon-menu-btn above
-   (the "Setup options" hamburger trigger) rather than a bare glyph,
-   per explicit instruction that these should read as actual buttons;
-   .pg-share-wrap is what .tracker-menu-wrap is to .icon-menu-btn/
-   .tracker-menu -- the position: relative anchor .pg-share-card
-   below is positioned absolute against. ---------- */
+   file's own pg- prefix. Bordered like .icon-menu-btn above (the
+   "Setup options" hamburger trigger) rather than a bare glyph, per
+   explicit instruction that these should read as actual buttons, but
+   smaller (28px, not that button's own 36px) per explicit follow-up
+   feedback that the first pass read too big. .pg-share-wrap is what
+   .tracker-menu-wrap is to .icon-menu-btn/.tracker-menu -- the
+   position: relative anchor .pg-share-card below is positioned
+   absolute against. ---------- */
 .pg-share-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .pg-share-icon-btn {
-  width: 36px; height: 36px; box-sizing: border-box;
+  width: 28px; height: 28px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -794,7 +796,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 /* The download icon next to "Shared by <name>" on a Purchase Goal
    share page (render_purchase_goals_share's own import_icon_btn,
-   app/pages.py) -- same button-chrome/floating-popup shape as
+   app/pages.py) -- same button-chrome/floating-popup shape (and same
+   28px size, see .pg-share-icon-btn's own comment above) as
    .pg-share-icon-btn above (it sits next to the exact same kind of
    all-caps .page-title text, just a different heading). Toggles
    .pg-import-card below open/closed, same .open-on-the-button
@@ -810,7 +813,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
    identical regardless of which element it ends up on. */
 .pg-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .pg-import-icon-btn {
-  width: 36px; height: 36px; box-sizing: border-box;
+  width: 28px; height: 28px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -837,11 +840,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
    (--panel, not the --panel-translucent cards elsewhere on this page
    use) -- same reasoning .tracker-menu's own comment above gives:
    this floats directly over whatever's below it on the page, and at
-   82% opacity that showed through distractingly. 44px top offset
-   matches .tracker-menu's own gap below its 36px-tall trigger
-   (.icon-menu-btn) -- this button is the same height. */
+   82% opacity that showed through distractingly. 36px top offset is
+   this button's own 28px height plus the same 8px gap .tracker-menu
+   itself uses below its (taller, 36px) own trigger. */
 .pg-import-card {
-  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 36px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -887,10 +890,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
    elsewhere on this page use) -- same reasoning .tracker-menu's own
    comment above gives: this floats directly over whatever's below it
    on the page, and at 82% opacity that showed through distractingly.
-   44px top offset matches .tracker-menu's own gap below its 36px-tall
-   trigger (.icon-menu-btn) -- this button is the same height. */
+   36px top offset is this button's own 28px height plus the same
+   8px gap .tracker-menu itself uses below its (taller, 36px) own
+   trigger. */
 .pg-share-card {
-  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 36px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
