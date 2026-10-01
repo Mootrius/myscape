@@ -785,8 +785,9 @@ button.primary#pgNameSave, .pg-setup-form-save {
   transition: color 0.15s ease;
   /* Same cap-height compensation .loot-share-icon-btn's own identical
      rule documents -- all-caps title text has no descenders to visually
-     center against, so a plain vertical-align: middle lands a hair low. */
-  transform: translateY(-1.4px);
+     center against, so a plain vertical-align: middle lands a hair low.
+     -2.4px, matching that same rule's own revised value. */
+  transform: translateY(-2.4px);
 }
 .pg-share-icon-btn:hover { color: var(--text-dim); }
 .pg-share-icon-btn.open { color: var(--gold); }
