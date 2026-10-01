@@ -3610,7 +3610,7 @@ def render_account(player: PlayerView) -> str:
                   <th>App</th>
                   <th>Code</th>
                   <th>Expiration</th>
-                  <th></th>
+                  <th>Deactivation</th>
                 </tr>
               </thead>
               <tbody id="sharedLinksTableBody"></tbody>
@@ -3620,58 +3620,85 @@ def render_account(player: PlayerView) -> str:
         </div>
 
         <div class="account-section">
-          <div class="auth-error" id="emailError"></div>
-          <div class="auth-success" id="emailSuccess"></div>
-          <form id="emailForm">
-            <div class="field">
-              <label for="newEmail">New email</label>
-              <input type="email" id="newEmail" name="newEmail" placeholder="you@example.com" required />
-            </div>
-            <div class="field">
-              <label for="emailPassword">Password</label>
-              <input type="password" id="emailPassword" name="emailPassword" placeholder="Your password" required />
-            </div>
-            <button class="primary" type="submit">UPDATE EMAIL</button>
-          </form>
+          <button class="secondary" type="button" id="emailToggleBtn">UPDATE EMAIL</button>
+          <div class="account-collapse-body" id="emailBody" hidden>
+            <div class="auth-error" id="emailError"></div>
+            <div class="auth-success" id="emailSuccess"></div>
+            <form id="emailForm">
+              <div class="field">
+                <label for="newEmail">New email</label>
+                <input type="email" id="newEmail" name="newEmail" placeholder="you@example.com" required />
+              </div>
+              <div class="field">
+                <label for="emailPassword">Password</label>
+                <input type="password" id="emailPassword" name="emailPassword" placeholder="Your password" required />
+              </div>
+              <button class="primary" type="submit">UPDATE EMAIL</button>
+            </form>
+          </div>
         </div>
 
         <div class="account-section">
-          <div class="auth-error" id="passwordError"></div>
-          <div class="auth-success" id="passwordSuccess"></div>
-          <form id="passwordForm">
-            <div class="field">
-              <label for="currentPassword">Current password</label>
-              <input type="password" id="currentPassword" name="currentPassword" placeholder="Current password" required />
-            </div>
-            <div class="field">
-              <label for="newPassword">New password</label>
-              <input type="password" id="newPassword" name="newPassword" placeholder="At least 8 characters" required minlength="8" />
-            </div>
-            <div class="field">
-              <label for="confirmNewPassword">Confirm new password</label>
-              <input type="password" id="confirmNewPassword" name="confirmNewPassword" placeholder="Re-enter your new password" required minlength="8" />
-            </div>
-            <button class="primary" type="submit">UPDATE PASSWORD</button>
-          </form>
+          <button class="secondary" type="button" id="passwordToggleBtn">UPDATE PASSWORD</button>
+          <div class="account-collapse-body" id="passwordBody" hidden>
+            <div class="auth-error" id="passwordError"></div>
+            <div class="auth-success" id="passwordSuccess"></div>
+            <form id="passwordForm">
+              <div class="field">
+                <label for="currentPassword">Current password</label>
+                <input type="password" id="currentPassword" name="currentPassword" placeholder="Current password" required />
+              </div>
+              <div class="field">
+                <label for="newPassword">New password</label>
+                <input type="password" id="newPassword" name="newPassword" placeholder="At least 8 characters" required minlength="8" />
+              </div>
+              <div class="field">
+                <label for="confirmNewPassword">Confirm new password</label>
+                <input type="password" id="confirmNewPassword" name="confirmNewPassword" placeholder="Re-enter your new password" required minlength="8" />
+              </div>
+              <button class="primary" type="submit">UPDATE PASSWORD</button>
+            </form>
+          </div>
         </div>
 
         <div class="account-section account-section--danger">
-          <p class="account-section-title account-section-title--danger">ACCOUNT DELETION</p>
-          <p class="account-section-hint">This will PERMANENTLY delete your myscape account and all data attached to it. You can create a new account afterward, but you CANNOT undo this action.</p>
-          <div class="auth-error" id="deleteError"></div>
-          <form id="deleteForm">
-            <div class="field">
-              <label for="deletePassword">Password</label>
-              <input type="password" id="deletePassword" name="deletePassword" placeholder="Your password" required />
-            </div>
-            <button class="danger" type="submit" id="deleteSubmitBtn" data-armed="false">DELETE ACCOUNT</button>
-          </form>
+          <button class="danger" type="button" id="deleteToggleBtn">DELETE ACCOUNT</button>
+          <div class="account-collapse-body" id="deleteBody" hidden>
+            <p class="account-section-hint">This will PERMANENTLY delete your myscape account and all data attached to it. You can create a new account afterward, but you CANNOT undo this action.</p>
+            <div class="auth-error" id="deleteError"></div>
+            <form id="deleteForm">
+              <div class="field">
+                <label for="deletePassword">Password</label>
+                <input type="password" id="deletePassword" name="deletePassword" placeholder="Your password" required />
+              </div>
+              <button class="danger" type="submit" id="deleteSubmitBtn" data-armed="false">DELETE ACCOUNT</button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
     """
     script = """
     (function () {
+      // Update Email / Update Password / Delete Account -- each
+      // starts collapsed behind its own button.secondary/button.danger
+      // (see the matching markup above); clicking it just shows/hides
+      // the form beneath, same hidden-attribute toggle convention as
+      // publicProfileCard's own caret elsewhere on this site. Plain
+      // show/hide, not an accordion -- opening one doesn't close the
+      // others.
+      [
+        ['emailToggleBtn', 'emailBody'],
+        ['passwordToggleBtn', 'passwordBody'],
+        ['deleteToggleBtn', 'deleteBody'],
+      ].forEach(([toggleId, bodyId]) => {
+        const toggleBtn = document.getElementById(toggleId);
+        const body = document.getElementById(bodyId);
+        toggleBtn.addEventListener('click', () => {
+          body.hidden = !body.hidden;
+        });
+      });
+
       const emailForm = document.getElementById('emailForm');
       emailForm.addEventListener('submit', async (e) => {
         e.preventDefault();

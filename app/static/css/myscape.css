@@ -636,6 +636,19 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   color: var(--red);
 }
 
+/* Update Email / Update Password / Delete Account -- each shrunk to
+   just its own button.secondary (or button.danger for the delete-
+   account one, keeping its red "careful" cue even collapsed) until
+   clicked, revealing the actual form beneath (render_account,
+   app/pages.py). Same hidden-attribute toggle convention as the
+   Character Overview page's own publicProfileCard, just without that
+   one's rotating-caret indicator -- the button IS the whole header
+   here, nothing smaller sitting beside a separate title to click
+   instead. */
+.account-collapse-body {
+  margin-top: 16px;
+}
+
 /* Linked Accounts list (render_account, app/pages.py -- step 7 of
    docs/multi-account-scoping.md). One .game-account-row per GameAccount
    under the signed-in Account. */
@@ -739,6 +752,7 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   text-transform: uppercase;
   letter-spacing: 0.03em;
   font-size: 10.5px;
+  text-align: center;
   border-bottom: 1px solid var(--border);
 }
 
@@ -757,9 +771,11 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
    myscape.io/s/<code> URL, not just this text -- see the button's own
    click handler in app/pages.py. */
 .shared-link-code-btn {
-  padding: 4px 8px;
+  width: 92px;
+  padding: 4px 0;
   font-size: 12px;
   font-family: inherit;
+  text-align: center;
   color: var(--text-dim);
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
