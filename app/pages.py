@@ -9518,7 +9518,7 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     <div class="pg-import-card-row">
       <div class="pg-import-card" id="pgImportCard" hidden>
         <button type="button" class="pg-import-save-btn" id="pgImportSaveBtn">SAVE TO MY MYSCAPE</button>
-        <p class="pg-import-popup-hint">Clicking the button above will save a copy of this setup to your Purchase Goals.</p>
+        <p class="pg-import-popup-hint">Clicking the button above will save a copy<br>of this setup to your Purchase Goals.</p>
       </div>
     </div>
     """
