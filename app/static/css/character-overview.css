@@ -1068,13 +1068,14 @@
 
 /* ---------- Landing page preview (render_landing_character_overview_
    preview in app/pages.py) -- the real page's own body/script reused
-   completely unmodified (minus Skills/Quests/Achievement Diaries/
-   Combat Achievements, left out before this ever reaches the browser
-   -- see _character_overview_panel_markup's own preview-mode comment)
+   completely unmodified, all six sections included (Skills/Quests/
+   Achievement Diaries/Combat Achievements too, see
+   _character_overview_panel_markup's own preview-mode comment),
    inside one scroll-snap panel on the landing page. These rules are
    the only preview-specific additions character-overview.css needed;
-   everything else above (summary row, model viewer, collection log)
-   is shared, unscoped CSS the real, authenticated page uses too. ---------- */
+   everything else above (summary row, model viewer, skills/quests/
+   diaries/combat achievements, collection log) is shared, unscoped
+   CSS the real, authenticated page uses too. ---------- */
 
 /* Same fixed-height/clipped/feathered treatment every other landing
    preview's own container already uses -- see .landing-loot-preview's

@@ -287,17 +287,16 @@ def _get_landing_goal_tracking_demo_data() -> Optional[dict]:
 # preview (render_landing_character_overview_preview): one real,
 # one-time pull of the account's own actual summary/progress stats
 # (GET /api/character-overview/summary + GET /api/character-overview/
-# progress) and real collection log (GET /api/players/me/collection-
-# log), all three frozen together into one JSON file -- summary feeds
-# the preview's own co-summary-row, collectionLog feeds the clog card,
-# and progress is included purely so the reused script's own fetch
-# shim has something faithful to answer with even though this preview
-# never renders the three .co-quad-row cards (skills/quests/diaries/
-# combat achievements) that progress would otherwise feed -- see
-# _character_overview_panel_markup's own preview-mode comment for why
-# those three are left out. The 3D model itself is a separate static
-# asset (app/static/img/landing-character-overview-demo-model.glb, a
-# real one-time GET /api/character-overview/model pull, saved as its
+# progress), real skill levels (GET /api/players/me/skills), and real
+# collection log (GET /api/players/me/collection-log), all four frozen
+# together into one JSON file -- summary feeds the preview's own
+# co-summary-row, progress and skills together feed the four
+# .co-quad-row cards (skills/quests/diaries/combat achievements, all
+# shown in full here now, same as the real page -- see
+# _character_overview_panel_markup's own preview-mode comment), and
+# collectionLog feeds the clog card. The 3D model itself is a separate
+# static asset (app/static/img/landing-character-overview-demo-model.glb,
+# a real one-time GET /api/character-overview/model pull, saved as its
 # own file rather than folded into this JSON since it's binary glTF,
 # not JSON) that the preview's own extra_head just points its model
 # viewer at directly -- no fetch shim needed for that one at all, see
@@ -2047,19 +2046,20 @@ def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, s
     _goal_tracking_panel_markup, etc.). render_character_overview below
     is now just this function plus a _shell(...) call.
 
-    preview=True (only ever passed by that landing preview) trims this
-    down to just three of Character Overview's six sections -- the
-    summary row, the 3D model viewer, and the collection log -- leaving
-    out Skills/Quests/Achievement Diaries/Combat Achievements entirely
-    (see quad_row_section below), and swaps two of extra_head's own
-    _MODEL_VIEWER_HEAD substitutions (the background-persistence
-    storage key and the model-fetch URL -- see that constant's own
-    comment) so the viewer always opens on the castle courtyard default
-    and always shows this preview's own frozen demo model rather than
-    remembering a shuffle across visits or hitting the real,
-    session-authenticated endpoint. Everything else (summary stats,
-    collection log tabs/pages/items, the whole 3D viewer) is the exact
-    same markup/script a real, logged-in player gets.
+    preview=True (only ever passed by that landing preview) renders all
+    six of Character Overview's sections, same as the real page -- the
+    summary row, the 3D model viewer, the collection log, and all four
+    .co-quad-row cards (Skills/Quests/Achievement Diaries/Combat
+    Achievements, see quad_row_section below). The only preview-mode
+    difference left is two of extra_head's own _MODEL_VIEWER_HEAD
+    substitutions (the background-persistence storage key and the
+    model-fetch URL -- see that constant's own comment) so the viewer
+    always opens on the castle courtyard default and always shows this
+    preview's own frozen demo model rather than remembering a shuffle
+    across visits or hitting the real, session-authenticated endpoint.
+    Everything else (summary stats, skill levels, quests/diaries/combat
+    achievements, collection log tabs/pages/items, the whole 3D viewer)
+    is the exact same markup/script a real, logged-in player gets.
 
     Character Overview: the summary row (.co-summary-row in
     character-overview.css) holding all eight icon+stat pairs (see
@@ -2158,22 +2158,16 @@ def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, s
     )
 
     # Skills/Quests/Achievement Diaries/Combat Achievements (.co-quad-row
-    # and its own four cards) are left out of the landing page's own
-    # Character Overview preview entirely, per explicit instruction --
-    # just the summary row, the 3D model viewer, and the collection log
-    # show there. Built as one whole optional block (rather than, say,
-    # four smaller preview-gated pieces) since all four cards are one
-    # self-contained unit that's either shown or not -- there's no
-    # partial state between them. The reused script below still fetches
-    # GET /api/character-overview/progress and calls renderQuests/
-    # renderDiaries/renderCombatAchievements completely unconditionally
-    # either way (preview or not) -- each of those three already starts
-    # with its own `if (!listEl ...) return;` guard (listEl being one of
-    # #questsList/#diariesList/#caList, all absent here), so this being
-    # skipped client-side rather than the fetch itself being skipped is
-    # a silent, harmless no-op in preview mode, not a second preview-only
-    # code path to keep in sync with this one.
-    quad_row_section = "" if preview else f"""
+    # and its own four cards) -- rendered unconditionally now, in both
+    # the real page and the landing page's own Character Overview
+    # preview, per explicit instruction. The reused script below
+    # fetches GET /api/character-overview/progress and GET /api/
+    # players/me/skills and renders all four cards the exact same way
+    # either way (preview or not) -- the preview's own wrapper script
+    # just answers both through its fetch shim now (see
+    # render_landing_character_overview_preview's own DEMO_SKILLS/
+    # DEMO_PROGRESS) instead of leaving this whole block out.
+    quad_row_section = f"""
     <div class="co-quad-row" id="coQuadRow">
       <div class="skills-card" id="skillsCard">
         <div class="skills-grid">
@@ -2988,34 +2982,46 @@ def render_landing_character_overview_preview() -> Optional[Tuple[str, str, str]
     the page now (placed right after the intro panel, ahead of Loot
     Tracker), per explicit instruction.
 
-    preview=True on the reused call already strips Skills/Quests/
-    Achievement Diaries/Combat Achievements out of the markup entirely
-    (see that function's own docstring) -- just the summary row, the
-    3D model viewer, and the collection log show here. Both genuinely
-    work exactly like the real page: the model viewer's own rotate/
-    pan/zoom, play-pause, reset, and background-shuffle controls are
-    all real (shuffling still works here -- it just never persists
-    across visits/refreshes, always reopening on the castle courtyard
-    default, see that function's own __MODEL_VIEWER_BG_STORAGE_KEY_JSON__
-    substitution), and the collection log's own tab/page/item drill-
-    down is real too. The one piece of real, authenticated behavior
-    deliberately NOT offered is the collection log's own "refresh kill/
-    completion counts from the hiscores" button (#clogSyncBtn) -- left
-    fully visible and hoverable (see the cloneNode+replaceWith strip
-    below, the same "hoverable but not clickable" treatment Loot
-    Tracker's own range button already gets) but inert, since a click
-    would otherwise re-sync this demo's own numbers against a visitor's
-    own (nonexistent, for a logged-out visitor, or simply not this
+    preview=True on the reused call now renders all six of Character
+    Overview's sections, same as the real page -- the summary row, the
+    3D model viewer, the collection log, and all four .co-quad-row
+    cards (Skills/Quests/Achievement Diaries/Combat Achievements), per
+    explicit instruction. All of it genuinely works exactly like the
+    real page: the model viewer's own rotate/pan/zoom, play-pause,
+    reset, and background-shuffle controls are all real (shuffling
+    still works here -- it just never persists across visits/refreshes,
+    always reopening on the castle courtyard default, see that
+    function's own __MODEL_VIEWER_BG_STORAGE_KEY_JSON__ substitution),
+    the collection log's own tab/page/item drill-down is real too, and
+    so are the skill levels/quests/diaries/combat achievements cards,
+    each fed from this snapshot's own real data the same way the
+    summary row and collection log already were. The preview container
+    below the hero row keeps the same fixed-height/clipped/feathered
+    treatment every other landing preview's own container uses (see
+    .landing-character-overview-preview in character-overview.css) --
+    these four extra cards push this preview's own content well past
+    one screen, same as e.g. Mindmaps'/Goal Tracking's own previews
+    already do, reachable the same way theirs are (touch drag/keyboard,
+    not the landing page's own one-stop-per-wheel-tick scroll-snap).
+    The one piece of real, authenticated behavior deliberately NOT
+    offered is the collection log's own "refresh kill/completion
+    counts from the hiscores" button (#clogSyncBtn) -- left fully
+    visible and hoverable (see the cloneNode+replaceWith strip below,
+    the same "hoverable but not clickable" treatment Loot Tracker's
+    own range button already gets) but inert, since a click would
+    otherwise re-sync this demo's own numbers against a visitor's own
+    (nonexistent, for a logged-out visitor, or simply not this
     account's) hiscores rather than the account this snapshot was
     actually captured from.
 
     1. A `fetch` shim, scoped to just this wrapper, answering GET
        /api/character-overview/summary, GET /api/character-overview/
-       progress (unused by the trimmed-down markup, but still answered
-       faithfully -- see _character_overview_panel_markup's own
-       comment for why), and GET /api/players/me/collection-log out of
-       the static snapshot. The hiscores-sync POST is answered too
-       (a graceful failure), even though #clogSyncBtn's own click
+       progress, GET /api/players/me/skills, and GET /api/players/me/
+       collection-log out of the static snapshot -- all four now feed
+       real, visible sections (summary row, the three progress-backed
+       .co-quad-row cards, the skills card, and the collection log,
+       respectively). The hiscores-sync POST is answered too (a
+       graceful failure), even though #clogSyncBtn's own click
        listener never survives to fire it in practice -- same "a
        complete, faithful stand-in for every request the reused script
        could ever issue is worth more than trimming a path that's
@@ -3026,8 +3032,9 @@ def render_landing_character_overview_preview() -> Optional[Tuple[str, str, str]
        straight at a plain static asset instead.
     2. setInterval-free already -- unlike every other previewed page,
        Character Overview's own reused script only ever fetches each
-       of its endpoints once, on load, so there's no polling interval
-       to leave running or neutralize here.
+       of its endpoints once, on load (now four GETs instead of three),
+       so there's no polling interval to leave running or neutralize
+       here.
     """
     demo = _get_landing_character_overview_demo_data()
     if demo is None:
@@ -3060,16 +3067,18 @@ def render_landing_character_overview_preview() -> Optional[Tuple[str, str, str]
 
     summary_json = json.dumps(demo.get("summary") or {})
     progress_json = json.dumps(demo.get("progress") or {})
+    skills_json = json.dumps(demo.get("skills") or {})
     collection_log_json = json.dumps(demo.get("collectionLog") or {})
     wrapper_script = f"""
     (function () {{
       // The captured snapshot itself -- see
       // _get_landing_character_overview_demo_data's own comment for
-      // exactly where each of these three came from. Plain, static
+      // exactly where each of these four came from. Plain, static
       // data (unlike e.g. Goal Tracking's own DEMO_GOALS), since
-      // nothing in this trimmed-down preview ever mutates any of it.
+      // nothing in this preview ever mutates any of it.
       var DEMO_SUMMARY = {summary_json};
       var DEMO_PROGRESS = {progress_json};
+      var DEMO_SKILLS = {skills_json};
       var DEMO_COLLECTION_LOG = {collection_log_json};
 
       // ---- fetch shim -----------------------------------------------------
@@ -3084,6 +3093,9 @@ def render_landing_character_overview_preview() -> Optional[Tuple[str, str, str]
         }}
         if (url === '/api/character-overview/progress' && method === 'GET') {{
           return ok(DEMO_PROGRESS);
+        }}
+        if (url === '/api/players/me/skills' && method === 'GET') {{
+          return ok(DEMO_SKILLS);
         }}
         if (url === '/api/players/me/collection-log' && method === 'GET') {{
           return ok(DEMO_COLLECTION_LOG);
