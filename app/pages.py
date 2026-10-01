@@ -8407,30 +8407,82 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
     to share. Freezing the payload at share time is what keeps this
     link's own exposure bounded to exactly that choice.
 
-    The only other visible difference from the real page is a one-line
+    The only other visible difference from the real page is a two-line
     byline prepended above the reused body's own "Loot Tracker" <h2>
     (left untouched, unlike the landing preview's version of this same
     heading, which gets hidden via CSS instead -- this page is a real
-    data view, not marketing copy, so there's no reason to hide it)
-    naming who shared this and which exact range it covers -- game_
-    account is the share's own owner, looked up by the caller (GET
-    /s/{{code}} in app/main.py) from SharedContent.game_account_id,
-    which can in principle be None if that account's own row is ever
-    deleted after the fact (see that column's own comment in
-    app/models.py -- there's no cascade delete wired up for it yet);
-    falls back to "A player" the same way GameAccount.runescape_name
-    itself does everywhere else it's shown with no value synced yet."""
+    data view, not marketing copy, so there's no reason to hide it):
+    the exact range this share covers on its first line, who shared it
+    on its second. game_account is the share's own owner, looked up by
+    the caller (GET /s/{{code}} in app/main.py) from SharedContent.
+    game_account_id, which can in principle be None if that account's
+    own row is ever deleted after the fact (see that column's own
+    comment in app/models.py -- there's no cascade delete wired up for
+    it yet); falls back to "A player" the same way GameAccount.
+    runescape_name itself does everywhere else it's shown with no
+    value synced yet.
+
+    The range line itself is filled in client-side, by a small inline
+    script of its own (not the reused body's own script above, which
+    has no public hook for this and keeps its own date-formatting
+    helpers private inside its IIFE anyway -- duplicated here, not
+    shared, same convention as everywhere else cross-script/cross-file
+    on this site) -- rangeStart/rangeEnd are UTC instants
+    (SharedContent.payload's own "full" range, frozen at share time),
+    and the only way to show them in whichever timezone THIS visitor
+    is actually in is to let their own browser do that conversion,
+    which a server-rendered string never could. YYYY-MM-DD (not the
+    locale-formatted "Sep 4, 2026" this page's own chart-title
+    formatting uses) per explicit instruction, with a trailing
+    "(LOCAL)" so a visitor never mistakes this for the UTC-labeled
+    range the server briefly renders as a fallback (immediately
+    overwritten once that script runs -- there for the rare case it
+    doesn't, e.g. JS disabled, not a flash anyone's meant to see)."""
     extra_head, body, script = _loot_tracker_panel_markup()
 
     owner_name = (game_account.runescape_name if game_account else None) or "A player"
-    range_start = datetime.fromisoformat(share.payload["full"]["rangeStart"])
-    range_end = datetime.fromisoformat(share.payload["full"]["rangeEnd"])
-    range_label = (
+    range_start_iso = share.payload["full"]["rangeStart"]
+    range_end_iso = share.payload["full"]["rangeEnd"]
+    range_start = datetime.fromisoformat(range_start_iso)
+    range_end = datetime.fromisoformat(range_end_iso)
+    # Fallback only -- overwritten the instant the inline script below
+    # runs, by the same range converted into the visitor's own local
+    # timezone instead. Kept in the server-rendered UTC form (not
+    # YYYY-MM-DD) specifically so it never gets mistaken for the real,
+    # local-time line if it's ever actually what a visitor sees.
+    range_label_fallback = (
         f"{range_start.strftime('%b %-d, %Y, %-I:%M %p')} "
         f"– {range_end.strftime('%b %-d, %Y, %-I:%M %p')} UTC"
     )
     banner_markup = f"""
-    <p class="subtitle loot-share-banner">Shared by {escape(owner_name)} &middot; {escape(range_label)}</p>
+    <p class="subtitle loot-share-banner"><span id="lootShareRangeLine">{escape(range_label_fallback)}</span><br>Shared by {escape(owner_name)}</p>
+    <script>
+    (function () {{
+      // Zero-padded 'YYYY-MM-DD' for a plain JS Date, in local time --
+      // same hand-built convention fmtIsoDateLocal uses in the reused
+      // script above (duplicated, not called into -- see this
+      // function's own doc comment for why), since toLocaleDateString
+      // has no built-in ISO-basic output format.
+      function fmtIsoDateLocal(d) {{
+        var month = String(d.getMonth() + 1);
+        if (month.length < 2) month = '0' + month;
+        var day = String(d.getDate());
+        if (day.length < 2) day = '0' + day;
+        return d.getFullYear() + '-' + month + '-' + day;
+      }}
+      var start = new Date("{range_start_iso}");
+      var end = new Date("{range_end_iso}");
+      var timeOpts = {{ hour: 'numeric', minute: '2-digit' }};
+      var startDateStr = fmtIsoDateLocal(start);
+      var endDateStr = fmtIsoDateLocal(end);
+      var startTimeStr = start.toLocaleTimeString('en-US', timeOpts);
+      var endTimeStr = end.toLocaleTimeString('en-US', timeOpts);
+      var rangeText = (startDateStr === endDateStr)
+        ? (startDateStr + ', ' + startTimeStr + ' \u2013 ' + endTimeStr)
+        : (startDateStr + ', ' + startTimeStr + ' \u2013 ' + endDateStr + ', ' + endTimeStr);
+      document.getElementById('lootShareRangeLine').textContent = rangeText + ' (LOCAL)';
+    }})();
+    </script>
     """
     body = banner_markup + body
 
@@ -8591,7 +8643,7 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
         extra_script=wrapper_script,
         meta_description=(
             f"{owner_name} shared their Loot Tracker on myscape — "
-            f"{range_label}."
+            f"{range_label_fallback}."
         ),
     )
 
