@@ -2038,7 +2038,7 @@ _MODEL_VIEWER_HEAD = """
 """
 
 
-def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, str]:
+def _character_overview_panel_markup(preview: bool = False, public_code: Optional[str] = None) -> Tuple[str, str, str]:
     """Character Overview's real body/script, split out into its own
     reusable function so the landing page's own interactive preview
     (render_landing_character_overview_preview) can reuse it verbatim --
@@ -2061,6 +2061,23 @@ def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, s
     Everything else (summary stats, skill levels, quests/diaries/combat
     achievements, collection log tabs/pages/items, the whole 3D viewer)
     is the exact same markup/script a real, logged-in player gets.
+
+    public_code (only ever passed by render_public_character_overview,
+    and only when preview is False -- a public visitor never also sees
+    the frozen landing demo) swaps the same two extra_head
+    substitutions preview does, but to a specific OTHER account's own
+    live model instead of a frozen one: the model-fetch URL becomes
+    GET /api/public/<code>/model, and the background-shuffle storage
+    key is scoped per code (myscape.modelViewerBgIndex.public.<code>)
+    rather than the one, global key the real authenticated page uses --
+    so shuffling the background on one visited profile doesn't also
+    silently change what a DIFFERENT visited profile (or this player's
+    own real page) opens on next time, all three sharing one browser's
+    localStorage. The public-profile settings card just below
+    (public_profile_card_section) is the one piece of this markup that
+    does NOT appear in public_code mode (nor in preview mode) -- it's
+    a control for the account's own owner to manage their own share
+    link, meaningless to show someone just visiting that link.
 
     Character Overview: the summary row (.co-summary-row in
     character-overview.css) holding all eight icon+stat pairs (see
@@ -2190,8 +2207,35 @@ def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, s
       </div>
     </div>"""
 
+    # The owner's own share-link control -- absent in both preview
+    # (the landing demo) and public_code (a visitor's own view of
+    # someone else's link) modes, since in either of those this
+    # player isn't looking at their own settings. #publicProfileToggle
+    # not existing at all is exactly what the script's own `if
+    # (!toggle) return;` guard below checks for, same "just don't wire
+    # it up" pattern Skills/Quests/etc. already use for their own
+    # absent-in-some-modes elements.
+    public_profile_card_section = "" if (preview or public_code) else """
+    <div class="public-profile-card" id="publicProfileCard">
+      <div class="public-profile-row">
+        <span class="public-profile-label">Public profile</span>
+        <label class="public-profile-switch">
+          <input type="checkbox" id="publicProfileToggle" />
+          <span class="public-profile-switch-track"></span>
+        </label>
+      </div>
+      <p class="public-profile-hint" id="publicProfileHint">Share this Character Overview with a link -- anyone with it can view it, without signing in.</p>
+      <div class="public-profile-link-row" id="publicProfileLinkRow" hidden>
+        <input type="text" class="public-profile-link-input" id="publicProfileLinkInput" readonly />
+        <button class="public-profile-link-btn" id="publicProfileCopyBtn" type="button">Copy</button>
+        <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working">New link</button>
+      </div>
+    </div>"""
+
     body = f"""
     <h2 class="page-title">Character Overview</h2>
+
+    {public_profile_card_section}
 
     <div class="co-summary-row" id="coSummaryRow">
       {stat_tiles}
@@ -2927,6 +2971,79 @@ def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, s
             });
         });
       }
+
+      // ---- Public-profile settings card (#publicProfileCard) -------
+      // Absent entirely in preview/public_code mode (see
+      // public_profile_card_section's own comment above) -- this
+      // guard is what makes that a harmless no-op here rather than a
+      // second code path that has to be kept in preview/public-aware,
+      // same convention Skills/Quests/Diaries/Combat Achievements
+      // already use for their own absent-in-some-modes elements.
+      var publicProfileToggle = document.getElementById('publicProfileToggle');
+      if (publicProfileToggle) {
+        var publicProfileLinkRow = document.getElementById('publicProfileLinkRow');
+        var publicProfileLinkInput = document.getElementById('publicProfileLinkInput');
+        var publicProfileCopyBtn = document.getElementById('publicProfileCopyBtn');
+        var publicProfileRegenerateBtn = document.getElementById('publicProfileRegenerateBtn');
+
+        function applyPublicProfileState(data) {
+          if (!data) return;
+          publicProfileToggle.checked = !!data.isPublic;
+          if (data.isPublic && data.url) {
+            publicProfileLinkRow.hidden = false;
+            publicProfileLinkInput.value = data.url;
+          } else {
+            publicProfileLinkRow.hidden = true;
+            publicProfileLinkInput.value = '';
+          }
+        }
+
+        fetch('/api/players/me/public-profile')
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(applyPublicProfileState)
+          .catch(function () { /* leave the toggle at its default (off) */ });
+
+        publicProfileToggle.addEventListener('change', function () {
+          var wantPublic = publicProfileToggle.checked;
+          publicProfileToggle.disabled = true;
+          fetch('/api/players/me/public-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_public: wantPublic }),
+          })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+            .then(applyPublicProfileState)
+            .catch(function () { publicProfileToggle.checked = !wantPublic; })
+            .then(function () { publicProfileToggle.disabled = false; });
+        });
+
+        publicProfileCopyBtn.addEventListener('click', function () {
+          if (!publicProfileLinkInput.value) return;
+          var resetLabel = function () {
+            setTimeout(function () { publicProfileCopyBtn.textContent = 'Copy'; }, 1500);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(publicProfileLinkInput.value).then(function () {
+              publicProfileCopyBtn.textContent = 'Copied!';
+              resetLabel();
+            });
+          } else {
+            publicProfileLinkInput.select();
+            document.execCommand('copy');
+            publicProfileCopyBtn.textContent = 'Copied!';
+            resetLabel();
+          }
+        });
+
+        publicProfileRegenerateBtn.addEventListener('click', function () {
+          publicProfileRegenerateBtn.disabled = true;
+          fetch('/api/players/me/public-profile/regenerate-code', { method: 'POST' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+            .then(applyPublicProfileState)
+            .catch(function () {})
+            .then(function () { publicProfileRegenerateBtn.disabled = false; });
+        });
+      }
     })();
     """
 
@@ -2936,12 +3053,16 @@ def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, s
             "__MODEL_VIEWER_BACKGROUNDS_JSON__", json.dumps(_MODEL_VIEWER_BACKGROUNDS)
         ).replace(
             "__MODEL_VIEWER_BG_STORAGE_KEY_JSON__",
-            json.dumps(None if preview else "myscape.modelViewerBgIndex"),
+            json.dumps(
+                None if preview
+                else f"myscape.modelViewerBgIndex.public.{public_code}" if public_code
+                else "myscape.modelViewerBgIndex"
+            ),
         ).replace(
             "__MODEL_VIEWER_MODEL_URL_JSON__",
             json.dumps(
-                "/static/img/landing-character-overview-demo-model.glb"
-                if preview
+                "/static/img/landing-character-overview-demo-model.glb" if preview
+                else f"/api/public/{public_code}/model" if public_code
                 else "/api/character-overview/model"
             ),
         )
@@ -2951,11 +3072,14 @@ def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, s
 
 def render_character_overview(player: PlayerView) -> str:
     """The real, authenticated Character Overview page -- just
-    _character_overview_panel_markup's own default (preview=False)
-    output, wrapped in the page shell. See that function's own
-    docstring for everything about what this page actually shows; the
-    landing page's own preview of it is render_landing_character_overview_preview
-    below, which calls the same function with preview=True instead."""
+    _character_overview_panel_markup's own default (preview=False,
+    public_code=None) output, wrapped in the page shell. See that
+    function's own docstring for everything about what this page
+    actually shows; the landing page's own preview of it is
+    render_landing_character_overview_preview below (preview=True),
+    and a visitor's own view of someone else's shared link is
+    render_public_character_overview further below (public_code=
+    that code) -- three callers, one reused body/script."""
     extra_head, body, script = _character_overview_panel_markup()
     return _shell(
         title="Character Overview — myscape",
@@ -2963,6 +3087,109 @@ def render_character_overview(player: PlayerView) -> str:
         body=body,
         extra_head=extra_head,
         extra_script=script,
+    )
+
+
+def render_public_character_overview(game_account: "GameAccount", viewer: Optional[PlayerView]) -> str:
+    """myscape.io/c/<code> -- a visitor's own view of someone else's
+    public Character Overview (app/main.py's public_character_overview_page
+    resolves the code to this game_account and 404s before ever
+    reaching here if it's missing/private; viewer is whoever's
+    actually signed in right now, if anyone, purely for the page's own
+    nav state -- unrelated to whose profile is being viewed).
+
+    Reuses _character_overview_panel_markup(public_code=game_account.
+    public_code) verbatim, same "layer a wrapper script on top of the
+    unmodified reused script" pattern render_landing_character_overview_preview
+    uses for the landing demo -- but where that one answers a frozen
+    JSON snapshot, this one's fetch shim makes REAL requests, just
+    against the public, code-scoped endpoints (GET /api/public/<code>/
+    summary|progress|skills|collection-log in app/main.py) instead of
+    either the frozen demo data or the authenticated "me" endpoints
+    the reused script's own fetch calls literally name. window.fetch
+    (the real one) is what the shim actually calls underneath --
+    `fetch` itself is shadowed only inside this IIFE's own scope, same
+    "never touches window.fetch" convention _MODEL_VIEWER_HEAD's own
+    comment already documents.
+
+    Net worth (co-geValue) is the one summary-row stat this
+    deliberately leaves at its em-dash default: that figure comes from
+    a *different*, bigger endpoint entirely (GET /api/possessions/
+    summary, this account's whole priced bank/inventory/etc. breakdown
+    -- see possessions_summary in app/main.py), and making THAT
+    publicly readable is a materially bigger exposure than "the same
+    six sections Character Overview already shows," which is what
+    going public was actually scoped to. Nothing stops a later,
+    separate decision to expose a public net-worth figure too; this
+    function just doesn't shim that endpoint, so the reused script's
+    own geValue fetch fails closed exactly the way it already does for
+    an account that's simply never synced a storage.
+
+    The one mutating control the reused script has (#clogSyncBtn, the
+    collection log's "refresh kill/completion counts from the
+    hiscores" button) gets the same hoverable-but-inert cloneNode+
+    replaceWith treatment render_landing_character_overview_preview's
+    own wrapper script already uses -- a visitor isn't this account's
+    owner, so there's nothing for that click to legitimately do here
+    either."""
+    code = game_account.public_code
+    extra_head, body, script = _character_overview_panel_markup(public_code=code)
+
+    display_name = game_account.runescape_name or "This player"
+    wrapper_script = f"""
+    (function () {{
+      var PUBLIC_CODE = {json.dumps(code)};
+
+      // ---- fetch shim -- forwards to the real, public endpoints ---------
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        function fail() {{ return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{}}); }} }}); }}
+
+        if (url === '/api/character-overview/summary' && method === 'GET') {{
+          return window.fetch('/api/public/' + PUBLIC_CODE + '/summary');
+        }}
+        if (url === '/api/character-overview/progress' && method === 'GET') {{
+          return window.fetch('/api/public/' + PUBLIC_CODE + '/progress');
+        }}
+        if (url === '/api/players/me/skills' && method === 'GET') {{
+          return window.fetch('/api/public/' + PUBLIC_CODE + '/skills');
+        }}
+        if (url === '/api/players/me/collection-log' && method === 'GET') {{
+          return window.fetch('/api/public/' + PUBLIC_CODE + '/collection-log');
+        }}
+        // #clogSyncBtn's own click listener would otherwise fire this --
+        // unreachable in practice (see the cloneNode+replaceWith strip
+        // below), answered the same graceful-failure way regardless.
+        if (url === '/api/players/me/hiscores/sync' && method === 'POST') {{
+          return fail();
+        }}
+        // Not shimmed on purpose -- see this function's own net-worth
+        // comment above -- and anything else the reused script could
+        // ever call that isn't one of the five cases above.
+        return fail();
+      }};
+
+      {script}
+
+      var clogSyncBtn = document.getElementById('clogSyncBtn');
+      if (clogSyncBtn) {{
+        clogSyncBtn.replaceWith(clogSyncBtn.cloneNode(true));
+      }}
+    }})();
+    """
+
+    return _shell(
+        title=f"{display_name} — myscape",
+        player=viewer,
+        body=body,
+        extra_head=extra_head,
+        extra_script=wrapper_script,
+        meta_description=(
+            f"{display_name}'s Character Overview on myscape -- stats, "
+            "collection log, quests, and more, synced straight from "
+            "RuneLite."
+        ),
     )
 
 

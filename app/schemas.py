@@ -136,6 +136,12 @@ class DeleteAccountRequest(BaseModel):
     current_password: str
 
 
+class PublicProfileUpdateRequest(BaseModel):
+    """Body for POST /api/players/me/public-profile -- see
+    GameAccount.is_public_profile's own comment in app/models.py."""
+    is_public: bool
+
+
 class LinkStartResponse(BaseModel):
     code: str
     expires_at: datetime

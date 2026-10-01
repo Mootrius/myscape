@@ -108,12 +108,14 @@ from app.pages import (
     render_mindmaps,
     render_not_found,
     render_possessions,
+    render_public_character_overview,
     render_purchase_goals,
     render_reset_password,
     render_signup,
     render_verify_email,
     render_verify_email_required,
 )
+from app.public_profile import find_public_game_account, generate_public_code
 from app.possessions import (
     build_possession_views,
     build_possessions_summary,
@@ -212,6 +214,7 @@ from app.schemas import (
     PotionStorageItemOut,
     PotionStorageSyncRequest,
     PotionStorageSyncResponse,
+    PublicProfileUpdateRequest,
     QuestSearchResponse,
     QuestsSyncRequest,
     QuestsSyncResponse,
@@ -1387,11 +1390,17 @@ def sync_skills(
     return SkillsSyncResponse(skill_count=len(payload.skills))
 
 
+def _skills_payload(game_account: GameAccount) -> dict:
+    """Factored out of read_skills below for the same single-source-
+    of-truth reason as _character_overview_summary_payload above."""
+    return {"skills": game_account.skills or {}}
+
+
 @app.get("/api/players/me/skills")
 def read_skills(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """The website's own read of the last-synced skills snapshot --
     session-authenticated like every other GET here."""
-    return {"skills": game_account.skills or {}}
+    return _skills_payload(game_account)
 
 
 @app.post("/api/players/me/quests", response_model=QuestsSyncResponse)
@@ -1492,16 +1501,10 @@ def sync_collection_log(
     return CollectionLogSyncResponse(item_count=len(game_account.collection_log_items))
 
 
-@app.get("/api/players/me/collection-log")
-def read_collection_log(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The website's own read of the last-synced collection log
-    snapshot -- session-authenticated like every other GET here.
-    Returns the player's own obtained/quantity state alongside the
-    full static tab/page/item structure (get_collection_log_tabs in
-    app/collectionlog.py) in one response, so the Character Overview
-    page's collection log renderer doesn't need a second request just
-    to know what a page's OWN items are before it can mark which of
-    them this player already has."""
+def _collection_log_payload(game_account: GameAccount) -> dict:
+    """Factored out of read_collection_log below for the same single-
+    source-of-truth reason as _character_overview_summary_payload
+    above."""
     return {
         "tabs": get_collection_log_tabs(),
         "obtainedItems": game_account.collection_log_items or {},
@@ -1520,6 +1523,19 @@ def read_collection_log(game_account: GameAccount = Depends(get_current_verified
             game_account.clue_scroll_counts or {},
         ),
     }
+
+
+@app.get("/api/players/me/collection-log")
+def read_collection_log(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """The website's own read of the last-synced collection log
+    snapshot -- session-authenticated like every other GET here.
+    Returns the player's own obtained/quantity state alongside the
+    full static tab/page/item structure (get_collection_log_tabs in
+    app/collectionlog.py) in one response, so the Character Overview
+    page's collection log renderer doesn't need a second request just
+    to know what a page's OWN items are before it can mark which of
+    them this player already has."""
+    return _collection_log_payload(game_account)
 
 
 @app.post("/api/players/me/character-summary", response_model=CharacterSummarySyncResponse)
@@ -1555,16 +1571,14 @@ def sync_character_summary(
     return CharacterSummarySyncResponse(stat_count=11)
 
 
-@app.get("/api/character-overview/summary")
-def character_overview_summary(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Character Overview's own summary-row payload -- session-
-    authenticated like /api/possessions/summary below, since only the
-    website UI calls this. The seven Character Summary stats are read
-    straight off GameAccount as last synced by POST
-    /api/players/me/character-summary above; null for any stat (or all
-    seven, on an account that's never opened that in-game tab with the
-    plugin running) renders as an em dash rather than a wrong number --
-    see render_character_overview in app/pages.py."""
+def _character_overview_summary_payload(game_account: GameAccount) -> dict:
+    """The actual summary-row payload, factored out of
+    character_overview_summary below so the public, code-scoped
+    counterpart (public_character_overview_summary) can return the
+    exact same shape for someone else's GameAccount without
+    duplicating this dict -- single source of truth for what that row
+    shows, whether the viewer is the account's own owner or a visitor
+    with a public link."""
     return {
         "combatLevel": game_account.character_summary_combat_level,
         "totalLevel": game_account.character_summary_total_level,
@@ -1581,17 +1595,24 @@ def character_overview_summary(game_account: GameAccount = Depends(get_current_v
     }
 
 
-@app.get("/api/character-overview/progress")
-def character_overview_progress(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Character Overview's quests/achievement-diaries/combat-
-    achievements section payload -- session-authenticated like
-    character_overview_summary above. Each section pairs this
-    account's own live-synced progress (completed_quests/
-    in_progress_quests, diary_tiers, character_summary_combat_task_
-    tier_completed -- all in app/models.py) against the fixed,
-    every-player-identical totals app.character_progress_data loads
-    from app/data/*.json, rather than deriving anything from the
-    account alone.
+@app.get("/api/character-overview/summary")
+def character_overview_summary(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """Character Overview's own summary-row payload -- session-
+    authenticated like /api/possessions/summary below, since only the
+    website UI calls this. The seven Character Summary stats are read
+    straight off GameAccount as last synced by POST
+    /api/players/me/character-summary above; null for any stat (or all
+    seven, on an account that's never opened that in-game tab with the
+    plugin running) renders as an em dash rather than a wrong number --
+    see render_character_overview in app/pages.py."""
+    return _character_overview_summary_payload(game_account)
+
+
+def _character_overview_progress_payload(game_account: GameAccount) -> dict:
+    """The actual quests/diaries/combat-achievements payload, factored
+    out of character_overview_progress below for the same reason
+    _character_overview_summary_payload above was -- one body shared
+    by the session-scoped endpoint and the public, code-scoped one.
 
     Quests: {"free": [...], "members": [...], "miniquests": [...]},
     each a list of {"name", "state"} in the same order
@@ -1666,6 +1687,14 @@ def character_overview_progress(game_account: GameAccount = Depends(get_current_
     return {"quests": quests, "diaries": diaries, "combatAchievements": combat_achievements}
 
 
+@app.get("/api/character-overview/progress")
+def character_overview_progress(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """Session-authenticated wrapper around
+    _character_overview_progress_payload above -- see that function's
+    own docstring (moved there in full) for what each section means."""
+    return _character_overview_progress_payload(game_account)
+
+
 @app.post("/api/players/me/character-model", response_model=CharacterModelSyncResponse)
 def sync_character_model(
     payload: CharacterModelSyncRequest,
@@ -1707,6 +1736,20 @@ def sync_character_model(
     return CharacterModelSyncResponse(byte_count=len(glb_bytes))
 
 
+def _character_overview_model_response(game_account: GameAccount) -> Response:
+    """The actual .glb response, factored out of character_overview_model
+    below for the same single-source-of-truth reason as
+    _character_overview_summary_payload above -- shared by the
+    session-scoped endpoint and the public, code-scoped one."""
+    if not game_account.character_model_glb:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No character model captured yet.")
+    return Response(
+        content=game_account.character_model_glb,
+        media_type="model/gltf-binary",
+        headers={"Cache-Control": "private, max-age=0, must-revalidate"},
+    )
+
+
 @app.get("/api/character-overview/model")
 def character_overview_model(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Character Overview's own 3D-viewer payload -- session-
@@ -1722,13 +1765,138 @@ def character_overview_model(game_account: GameAccount = Depends(get_current_ver
     nothing's been captured yet (an account that's never clicked
     "Export 3D model" in the plugin's side panel) -- the frontend's own
     fetch treats that as "show the not-captured-yet placeholder"."""
-    if not game_account.character_model_glb:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No character model captured yet.")
-    return Response(
-        content=game_account.character_model_glb,
-        media_type="model/gltf-binary",
-        headers={"Cache-Control": "private, max-age=0, must-revalidate"},
-    )
+    return _character_overview_model_response(game_account)
+
+
+def _public_profile_payload(game_account: GameAccount) -> dict:
+    """Shared by read_public_profile/update_public_profile/
+    regenerate_public_profile_code below -- always the current
+    is_public/code/url trio, so the settings UI (the public-profile
+    card in render_character_overview's own script, app/pages.py) can
+    treat every one of those three endpoints' responses identically."""
+    return {
+        "isPublic": game_account.is_public_profile,
+        "code": game_account.public_code,
+        "url": f"{_SITE_URL}/c/{game_account.public_code}" if game_account.public_code else None,
+    }
+
+
+@app.get("/api/players/me/public-profile")
+def read_public_profile(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
+    """The settings card's own initial-state read -- session-
+    authenticated like every other /api/players/me/* GET here."""
+    return _public_profile_payload(game_account)
+
+
+@app.post("/api/players/me/public-profile")
+def update_public_profile(
+    payload: PublicProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Flips GameAccount.is_public_profile. A code is generated here
+    the first time a character ever goes public (see that column's own
+    comment in app/models.py) and kept from then on, even across a
+    later flip back to private -- going public again later reuses the
+    same link rather than silently handing out a different one than
+    whatever might already be shared."""
+    game_account.is_public_profile = payload.is_public
+    if payload.is_public and not game_account.public_code:
+        game_account.public_code = generate_public_code(db)
+    db.commit()
+    return _public_profile_payload(game_account)
+
+
+@app.post("/api/players/me/public-profile/regenerate-code")
+def regenerate_public_profile_code(
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Issues a fresh code, abandoning whatever one this character had
+    before -- the only way to kill an already-shared link short of
+    going private outright (going private and public again would just
+    hand back the SAME code, per update_public_profile's own comment,
+    since it only generates a new one when there wasn't one yet)."""
+    game_account.public_code = generate_public_code(db)
+    db.commit()
+    return _public_profile_payload(game_account)
+
+
+# ---- Public, unauthenticated reads for myscape.io/c/<code> ----------
+#
+# Each of these mirrors one of the session-authenticated endpoints
+# above exactly (same payload-builder function, so there is never a
+# second, drifting copy of what either one actually returns) but
+# resolves its GameAccount by public_code instead of "whoever's
+# signed in", and 404s with the same message whether the code doesn't
+# exist at all or exists on a profile that's currently private --
+# find_public_game_account's own comment in app/public_profile.py is
+# why those two cases are made to look identical. Rate-limited, unlike
+# their session-authenticated counterparts, since this is the first
+# surface in the app actually reachable by someone who isn't signed in
+# at all -- a generous-enough per-IP limit that a real visitor loading
+# one public profile (one page load, five fetches) never notices it,
+# while still bounding how fast the ~28.6 million possible codes could
+# ever be enumerated from one address.
+def _get_public_game_account_or_404(db: Session, code: str) -> GameAccount:
+    game_account = find_public_game_account(db, code)
+    if game_account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+    return game_account
+
+
+@app.get("/api/public/{code}/summary")
+@limiter.limit("30/minute")
+def public_character_overview_summary(code: str, request: Request, db: Session = Depends(get_db)):
+    return _character_overview_summary_payload(_get_public_game_account_or_404(db, code))
+
+
+@app.get("/api/public/{code}/progress")
+@limiter.limit("30/minute")
+def public_character_overview_progress(code: str, request: Request, db: Session = Depends(get_db)):
+    return _character_overview_progress_payload(_get_public_game_account_or_404(db, code))
+
+
+@app.get("/api/public/{code}/skills")
+@limiter.limit("30/minute")
+def public_skills(code: str, request: Request, db: Session = Depends(get_db)):
+    return _skills_payload(_get_public_game_account_or_404(db, code))
+
+
+@app.get("/api/public/{code}/collection-log")
+@limiter.limit("30/minute")
+def public_collection_log(code: str, request: Request, db: Session = Depends(get_db)):
+    return _collection_log_payload(_get_public_game_account_or_404(db, code))
+
+
+@app.get("/api/public/{code}/model")
+@limiter.limit("30/minute")
+def public_character_overview_model(code: str, request: Request, db: Session = Depends(get_db)):
+    return _character_overview_model_response(_get_public_game_account_or_404(db, code))
+
+
+@app.get("/c/{code}", response_class=HTMLResponse)
+@limiter.limit("30/minute")
+def public_character_overview_page(
+    code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    viewer: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
+):
+    """The actual shared-link page -- reuses
+    render_character_overview's own panel markup verbatim (see
+    render_public_character_overview in app/pages.py), wired to this
+    code's real, live data through the public endpoints just above
+    instead of either the authenticated "me" endpoints or a frozen
+    demo snapshot. A missing or currently-private code 404s into the
+    same styled not-found page every other broken link on the site
+    gets (see _styled_not_found_handler above) -- not a special
+    "this profile is private" page, so a guess can't tell a wrong code
+    apart from a real, private one."""
+    game_account = find_public_game_account(db, code)
+    if game_account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+    return render_public_character_overview(game_account, viewer)
 
 
 @app.post("/api/players/me/hiscores/sync")

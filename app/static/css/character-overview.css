@@ -1161,3 +1161,128 @@
   width: auto;
   max-width: none;
 }
+
+
+/* ---------- Public profile card (#publicProfileCard, only on the
+   real, authenticated page -- see public_profile_card_section's own
+   comment in app/pages.py for why it's absent from both the landing
+   preview and a visitor's own view of someone else's link). Sits
+   between the page title and the summary row, its own small card
+   rather than folded into either neighbor, since it's a settings
+   control, not game data -- same "own translucent panel box" look
+   .co-summary-row above already uses, just shorter. ---------- */
+.public-profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 18px;
+}
+.public-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.public-profile-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* A plain checkbox styled as a track+knob switch -- the checkbox
+   itself stays in the DOM (and functional, it's what the page's own
+   script reads/sets) but visually hidden, with the two sibling spans
+   below doing the actual drawing, same "real input, custom paint"
+   technique as every other non-native-looking control already needs
+   on the web. */
+.public-profile-switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.public-profile-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.public-profile-switch-track {
+  position: absolute;
+  inset: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.public-profile-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.public-profile-switch input:checked ~ .public-profile-switch-track {
+  background: var(--gold-dim);
+  border-color: var(--gold);
+}
+.public-profile-switch input:checked ~ .public-profile-switch-track::after {
+  transform: translateX(16px);
+  background: var(--gold);
+}
+.public-profile-switch input:disabled ~ .public-profile-switch-track {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.public-profile-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.public-profile-link-row {
+  display: flex;
+  gap: 8px;
+}
+.public-profile-link-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+.public-profile-link-btn {
+  flex: 0 0 auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+.public-profile-link-btn:hover {
+  border-color: var(--gold-dim);
+  color: var(--text);
+}
+.public-profile-link-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
