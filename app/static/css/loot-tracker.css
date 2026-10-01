@@ -285,7 +285,12 @@
   font-size: 15px;
   font-family: inherit;
   color: var(--text-dim);
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  /* --panel-2, not --panel -- matches .loot-share-generate-btn's own
+     identical swap above (this button replaces it in place once a
+     link exists), same "raised control, not flush with the popup
+     behind it" reasoning, per explicit instruction to bring the two
+     in line with each other. */
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
