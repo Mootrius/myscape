@@ -775,16 +775,28 @@ button.primary#pgNameSave, .pg-setup-form-save {
    across these pages' own stylesheets, same "cross-page style
    overlap" convention .loot-share-icon-btn's own comment in loot-
    tracker.css already documents). .pg-share-wrap carries what used
-   to live directly on this button -- vertical-align: middle plus the
-   cap-height-compensating translateY (all-caps title text has no
-   descenders, so plain vertical-align: middle alone lands a hair
-   low) -- now that the button itself is just the wrap's one child;
-   it's also still the position: relative anchor .pg-share-card below
+   to live directly on this button -- just vertical-align: middle now
+   (no translateY cap-height nudge any more -- removed per explicit
+   follow-up feedback that the icon sat a few px too high, same fix
+   and same reasoning as .loot-share-wrap's own identical rule in
+   loot-tracker.css: empirically, a transform-based nudge here isn't
+   needed at all once this wrap's own inherited 22px .page-title
+   font-size is accounted for, AND a transform on this element was
+   separately the root cause of a "title/content text shows through
+   the popup" bug -- any transform value other than none opens a new
+   CSS stacking context, which walled .pg-share-card's own z-index: 5
+   off from the rest of the page, so later-in-DOM page content with
+   the default z-index: auto could still paint over the "opaque"
+   popup despite its explicit z-index. Removing the transform removes
+   that extra context, so the popup's z-index now actually competes
+   (and wins) in the page's one shared root stacking context -- see
+   .loot-share-wrap's own comment for the fuller writeup, not
+   reproduced identically in every one of these duplicated rule sets.
+   It's also still the position: relative anchor .pg-share-card below
    is positioned absolute against, for this popup's own floating
    behavior, kept unchanged from the button-chrome version. ---------- */
 .pg-share-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
-  transform: translateY(-2.4px);
 }
 .pg-share-icon-btn {
   display: inline-flex;
@@ -822,8 +834,15 @@ button.primary#pgNameSave, .pg-setup-form-save {
    tag name, so both look identical regardless of which element it
    ends up on. */
 .pg-import-wrap {
+  /* No translateY cap-height nudge any more (and no top offset to
+     replace it with) -- same fix/reasoning as .pg-share-wrap's own
+     identical rule above: empirically unneeded once this wrap's
+     inherited .page-title font-size is accounted for, and a
+     transform here was separately the root cause of a stacking-
+     context bug that let later page content paint over this
+     "opaque" popup. See .loot-share-wrap's own comment in loot-
+     tracker.css for the fuller writeup. */
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
-  transform: translateY(-2.4px);
 }
 .pg-import-icon-btn {
   display: inline-flex;
@@ -854,16 +873,22 @@ button.primary#pgNameSave, .pg-setup-form-save {
    (--panel, not the --panel-translucent cards elsewhere on this page
    use) -- same reasoning .tracker-menu's own comment above gives:
    this floats directly over whatever's below it on the page, and at
-   82% opacity that showed through distractingly. 20px top offset is
-   this icon's own ~14px rendered height (.pg-import-icon-btn has no
-   padding/border of its own, back to a bare icon) plus a 6px gap,
-   same small gap .pm-settings-menu (possessions.css) uses below its
-   own trigger. box-shadow matches .loot-range-menu's own identical
-   value exactly (loot-tracker.css) -- same subtle "floating above
-   the page" depth cue, per explicit instruction to bring every one
-   of these popups in line with that one. */
+   82% opacity that showed through distractingly. box-shadow matches
+   .loot-range-menu's own identical value exactly (loot-tracker.css)
+   -- same subtle "floating above the page" depth cue, per explicit
+   instruction to bring every one of these popups in line with that
+   one. top: 32px, not the old "icon height + 6px gap" math (20px)
+   -- that assumed this card's own positioning context (.pg-import-
+   wrap) rendered flush with the icon's own top edge, but the wrap
+   sits inside .page-title and inherits ITS larger font-size, so its
+   own line box reserves a taller invisible font "strut" than the
+   14px icon alone needs, pushing the wrap's rendered top several px
+   above the icon's own top edge -- see .loot-share-card's own
+   comment in loot-tracker.css for the fuller writeup (same bug, same
+   fix, same empirical Playwright-rendered measurement, just this
+   file's own pg- prefix). */
 .pg-import-card {
-  position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -914,16 +939,21 @@ button.primary#pgNameSave, .pg-setup-form-save {
    elsewhere on this page use) -- same reasoning .tracker-menu's own
    comment above gives: this floats directly over whatever's below it
    on the page, and at 82% opacity that showed through distractingly.
-   20px top offset is this icon's own ~14px rendered height
-   (.pg-share-icon-btn has no padding/border of its own, back to a
-   bare icon) plus a 6px gap, same small gap .pm-settings-menu
-   (possessions.css) uses below its own trigger. box-shadow matches
-   .loot-range-menu's own identical value exactly (loot-tracker.css)
-   -- same subtle "floating above the page" depth cue, per explicit
-   instruction to bring every one of these popups in line with that
-   one. */
+   box-shadow matches .loot-range-menu's own identical value exactly
+   (loot-tracker.css) -- same subtle "floating above the page" depth
+   cue, per explicit instruction to bring every one of these popups
+   in line with that one. top: 32px, not the old "icon height + 6px
+   gap" math (20px) -- that assumed this card's own positioning
+   context (.pg-share-wrap) rendered flush with the icon's own top
+   edge, but the wrap sits inside .page-title and inherits ITS larger
+   font-size, so its own line box reserves a taller invisible font
+   "strut" than the 14px icon alone needs, pushing the wrap's
+   rendered top several px above the icon's own top edge -- see
+   .loot-share-card's own comment in loot-tracker.css for the fuller
+   writeup (same bug, same fix, same empirical Playwright-rendered
+   measurement, just this file's own pg- prefix). */
 .pg-share-card {
-  position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;

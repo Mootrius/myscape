@@ -139,17 +139,38 @@
    every other cross-page style overlap on this site), just with its
    own loot- prefix and its own SVG stroke-width (duplicated too,
    same reasoning). .loot-share-wrap carries what used to live
-   directly on this button -- vertical-align: middle plus the
-   cap-height-compensating translateY (all-caps title text has no
-   descenders, so plain vertical-align: middle alone lands a hair
-   low) -- now that the button itself is just the wrap's one child;
-   it's also still the position: relative anchor .loot-share-card
-   below is positioned absolute against, for this popup's own
-   floating behavior, kept unchanged from the button-chrome
-   version. ---------- */
+   directly on this button -- just vertical-align: middle now (no
+   translateY cap-height nudge any more -- see its own former comment
+   here, removed below); it's also still the position: relative
+   anchor .loot-share-card below is positioned absolute against, for
+   this popup's own floating behavior, kept unchanged from the
+   button-chrome version. The translateY(-2.4px) this rule used to
+   carry (meant to compensate for all-caps title text having no
+   descenders) is gone per explicit follow-up feedback that the icon
+   sat a few px too high -- empirically (a real Playwright render of
+   this exact markup/CSS/font, not more guessed pixel math, after two
+   rounds of guessed values already landed wrong) the icon reads as
+   centered against the title text with NO vertical nudge at all once
+   .loot-share-wrap's own inherited font-size is accounted for (see
+   .loot-share-card's own comment below for why that inherited
+   font-size matters here too). A `transform` on this element was
+   also, separately, the root cause of the "ALL NPCs text shows
+   through the popup" bug reported alongside the too-high icon: any
+   transform value other than none establishes a new CSS stacking
+   context on the element carrying it, which silently walled off
+   .loot-share-card's own z-index: 5 (below) from the rest of the
+   page -- it could only out-rank OTHER elements inside that same new
+   context, not .loot-chart-title (also position: absolute, but
+   z-index: auto, painted in the page's own root stacking context)
+   sitting later in the DOM. Later-in-DOM auto/0-stacked content
+   paints over earlier same-level content by default, which is
+   exactly backwards from what this popup needs -- removing the
+   transform removes the extra stacking context altogether, so
+   .loot-share-card's z-index: 5 now actually competes against (and
+   wins against) .loot-chart-title in the one shared root context, no
+   more bleed-through. ---------- */
 .loot-share-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
-  transform: translateY(-2.4px);
 }
 .loot-share-icon-btn {
   display: inline-flex;
@@ -181,16 +202,26 @@
    this page use) -- same reasoning .tracker-menu's own comment in
    purchase-goals.css gives: this floats directly over whatever's
    below it on the page, and at 82% opacity that showed through
-   distractingly. 20px top offset is this icon's own ~14px rendered
-   height (.loot-share-icon-btn has no padding/border of its own,
-   back to a bare icon) plus a 6px gap, same small gap .pm-settings-
-   menu (possessions.css) uses below its own trigger. box-shadow
-   matches .loot-range-menu's own identical value exactly below --
-   same subtle "floating above the page" depth cue, per explicit
-   instruction to bring every one of these popups in line with that
-   one. */
+   distractingly. box-shadow matches .loot-range-menu's own identical
+   value exactly below -- same subtle "floating above the page" depth
+   cue, per explicit instruction to bring every one of these popups
+   in line with that one. top: 32px, NOT the old "icon height + 6px
+   gap" math (20px) that reasoning used to use -- that assumed this
+   card's own positioning context (.loot-share-wrap) rendered flush
+   with the icon's own top edge, but .loot-share-wrap sits inside
+   .page-title and inherits ITS 22px font-size/1.5 line-height, so
+   even though the icon is this wrap's only visible content, the
+   wrap's own line box still reserves a full ~33px-tall invisible
+   font "strut" at that inherited size -- which is taller than the
+   14px icon itself, and pushes the wrap's own rendered top several
+   px above the icon's own top edge. The old top: 20px, counted from
+   that higher wrap edge, landed barely past the icon's own bottom
+   edge in practice -- exactly the near-zero gap/overlap reported.
+   32px was measured empirically (a real Playwright render of this
+   exact markup/CSS/font), landing a clean ~10px below the icon's
+   actual rendered bottom. */
 .loot-share-card {
-  position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;

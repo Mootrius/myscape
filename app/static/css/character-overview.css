@@ -1190,18 +1190,31 @@
    icons those export triggers use, same "cog needs slightly more
    detail to read clearly" margin .pm-settings-btn's own glyph
    already gave it before any of this. .co-settings-wrap carries what
-   used to live directly on this button -- vertical-align: middle
-   plus the cap-height-compensating translateY (all-caps title text
-   has no descenders, so plain vertical-align: middle alone lands a
-   hair low, same -2.4px value this exact button used for its own
-   original pre-cog icon) -- now that the button itself is just the
-   wrap's one child; it's also still the position: relative anchor
+   used to live directly on this button -- just vertical-align:
+   middle now (no translateY cap-height nudge any more, the -2.4px
+   value this exact button used for its own original pre-cog icon
+   too) -- now that the button itself is just the wrap's one child.
+   The translateY is gone per explicit follow-up feedback that the
+   icon sat a few px too high -- empirically (a real Playwright
+   render of this exact markup/CSS/font) the icon reads as centered
+   against the title text with NO vertical nudge at all once this
+   wrap's own inherited 22px .page-title font-size is accounted for.
+   A transform here was also, separately, the root cause of a
+   "content text shows through the popup" bug reported alongside the
+   too-high icon -- see .loot-share-wrap's own comment in loot-
+   tracker.css for the fuller writeup: any transform value other than
+   none opens a new CSS stacking context, which walled .public-
+   profile-card's own z-index: 5 (below) off from the rest of the
+   page, letting later-in-DOM content (default z-index: auto) paint
+   over this "opaque" popup despite its explicit z-index. Removing
+   the transform removes that extra context, so the popup's z-index
+   now actually competes (and wins) in the page's one shared root
+   stacking context. It's also still the position: relative anchor
    .public-profile-card below is positioned absolute against, for
    this popup's own floating behavior, kept unchanged from the
    button-chrome version. */
 .co-settings-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
-  transform: translateY(-2.4px);
 }
 .co-settings-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1214,23 +1227,31 @@
 
 /* Floats directly under its own trigger button (position: absolute
    against .co-settings-wrap above), same shape as .pm-settings-menu
-   (possessions.css) -- 21px top offset is this icon's own ~15px
-   rendered height (.co-settings-btn has no padding/border of its
-   own, back to a bare icon) plus a 6px gap, same small gap .pm-
-   settings-menu itself uses below its own (boxed, taller) trigger.
-   Opaque (--panel, not the --panel-translucent cards elsewhere on
-   this page use) -- same reasoning .tracker-menu's own comment in
-   purchase-goals.css gives: this floats directly over whatever's
-   below it on the page, and at 82% opacity that showed through
-   distractingly. box-shadow matches Loot Tracker's own .loot-range-
-   menu identical value exactly (loot-tracker.css) -- same subtle
-   "floating above the page" depth cue, per explicit instruction to
-   bring every one of these popups in line with that one. Closeable
-   by re-clicking the trigger OR clicking anywhere else on the page
-   (see publicProfileSettingsBtn's own click handler and the
-   outside-click listener beside it, app/pages.py). */
+   (possessions.css). Opaque (--panel, not the --panel-translucent
+   cards elsewhere on this page use) -- same reasoning .tracker-menu's
+   own comment in purchase-goals.css gives: this floats directly over
+   whatever's below it on the page, and at 82% opacity that showed
+   through distractingly. box-shadow matches Loot Tracker's own
+   .loot-range-menu identical value exactly (loot-tracker.css) -- same
+   subtle "floating above the page" depth cue, per explicit
+   instruction to bring every one of these popups in line with that
+   one. Closeable by re-clicking the trigger OR clicking anywhere else
+   on the page (see publicProfileSettingsBtn's own click handler and
+   the outside-click listener beside it, app/pages.py). top: 32px, not
+   the old "icon height + 6px gap" math (21px) -- that assumed this
+   card's own positioning context (.co-settings-wrap) rendered flush
+   with the icon's own top edge, but the wrap sits inside .page-title
+   and inherits ITS larger font-size, so its own line box reserves a
+   taller invisible font "strut" than the 15px cog icon alone needs,
+   pushing the wrap's rendered top several px above the icon's own top
+   edge -- see .loot-share-card's own comment in loot-tracker.css for
+   the fuller writeup (same bug, same fix, same empirical Playwright-
+   rendered measurement -- 32px landed the same here as the 14px
+   feather-icon triggers elsewhere, since the wrap's own strut height
+   is driven by the inherited .page-title font-size, not the icon's
+   own 1px size difference). */
 .public-profile-card {
-  position: absolute; top: 21px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 6px;
