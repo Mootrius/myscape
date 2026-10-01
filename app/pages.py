@@ -3600,6 +3600,12 @@ def render_account(player: PlayerView) -> str:
         </div>
 
         <div class="account-section">
+          <p class="account-section-title">SHARED LINKS</p>
+          <div class="auth-error" id="sharedLinksError"></div>
+          <div class="shared-links-list" id="sharedLinksList"></div>
+        </div>
+
+        <div class="account-section">
           <div class="auth-error" id="emailError"></div>
           <div class="auth-success" id="emailSuccess"></div>
           <form id="emailForm">
@@ -3932,7 +3938,107 @@ def render_account(player: PlayerView) -> str:
         }
       });
 
+      // Shared Links section -- one row per currently-valid share link
+      // created from any of this Account's own GameAccounts (GET
+      // /api/account/shared-links), with a DEACTIVATE button to revoke
+      // one early (DELETE /api/account/shared-links/<id> -- see
+      // app/routers/account.py for both). Fetched fresh on load, same
+      // reasoning as the Linked Accounts list just above: it's the
+      // same data this section's own DEACTIVATE button can immediately
+      // change.
+      const sharedLinksList = document.getElementById('sharedLinksList');
+      const sharedLinksError = document.getElementById('sharedLinksError');
+
+      function fmtExpiration(iso) {
+        return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+
+      function renderSharedLinkRow(link) {
+        const row = document.createElement('div');
+        row.className = 'shared-link-row';
+
+        const info = document.createElement('div');
+
+        const primary = document.createElement('div');
+        primary.className = 'shared-link-primary';
+        primary.textContent = `${link.content_type_label} \u2014 ${link.character_name || 'Unknown character'}`;
+        info.appendChild(primary);
+
+        const secondary = document.createElement('div');
+        secondary.className = 'shared-link-secondary';
+        secondary.textContent = `Code: ${link.code} \u00b7 Expires ${fmtExpiration(link.expires_at)}`;
+        info.appendChild(secondary);
+
+        row.appendChild(info);
+
+        const deactivateBtn = document.createElement('button');
+        deactivateBtn.type = 'button';
+        deactivateBtn.className = 'danger';
+        deactivateBtn.textContent = 'DEACTIVATE';
+        deactivateBtn.dataset.armed = 'false';
+        // Same arm-then-confirm two-step as DELETE CHARACTER/DELETE
+        // ACCOUNT above, for the same reason -- undoable only by
+        // sharing again, not a mistake worth one click.
+        deactivateBtn.addEventListener('click', async () => {
+          sharedLinksError.classList.remove('show');
+          if (deactivateBtn.dataset.armed !== 'true') {
+            deactivateBtn.dataset.armed = 'true';
+            deactivateBtn.textContent = 'ARE YOU SURE?';
+            return;
+          }
+          deactivateBtn.disabled = true;
+          try {
+            const res = await fetch(`/api/account/shared-links/${link.id}`, { method: 'DELETE' });
+            if (res.ok) {
+              await loadSharedLinks();
+              return;
+            }
+            const data = await res.json().catch(() => ({}));
+            sharedLinksError.textContent = describeError(data, 'Could not deactivate this link.');
+            sharedLinksError.classList.add('show');
+            deactivateBtn.dataset.armed = 'false';
+            deactivateBtn.textContent = 'DEACTIVATE';
+          } catch (err) {
+            sharedLinksError.textContent = 'Something went wrong. Please try again.';
+            sharedLinksError.classList.add('show');
+            deactivateBtn.dataset.armed = 'false';
+            deactivateBtn.textContent = 'DEACTIVATE';
+          } finally {
+            deactivateBtn.disabled = false;
+          }
+        });
+        row.appendChild(deactivateBtn);
+
+        return row;
+      }
+
+      async function loadSharedLinks() {
+        sharedLinksError.classList.remove('show');
+        try {
+          const res = await fetch('/api/account/shared-links');
+          if (!res.ok) {
+            sharedLinksError.textContent = 'Could not load your shared links.';
+            sharedLinksError.classList.add('show');
+            return;
+          }
+          const links = await res.json();
+          sharedLinksList.innerHTML = '';
+          if (links.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'shared-links-empty';
+            empty.textContent = 'No shared links yet.';
+            sharedLinksList.appendChild(empty);
+            return;
+          }
+          links.forEach((link) => sharedLinksList.appendChild(renderSharedLinkRow(link)));
+        } catch (err) {
+          sharedLinksError.textContent = 'Something went wrong. Please try again.';
+          sharedLinksError.classList.add('show');
+        }
+      }
+
       loadGameAccounts();
+      loadSharedLinks();
     })();
     """
     return _shell(title="Account — myscape", player=player, body=body, extra_script=script)

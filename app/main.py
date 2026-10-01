@@ -142,7 +142,7 @@ from app.purchase_goals import (
 )
 from app.recipes import expand_recipe_components
 from app.sharing import SHARE_DEFAULT_LIFETIME, find_valid_share, generate_share_code
-from app.routers import auth, linking
+from app.routers import account, auth, linking
 from app.schemas import (
     AddMindMapNodeRequest,
     AddMindMapSharedChildRequest,
@@ -437,6 +437,7 @@ app.add_middleware(
     https_only=os.environ.get("SESSION_COOKIE_HTTPS_ONLY", "true").lower() != "false",
     max_age=60 * 60 * 24 * 30,  # 30 days
 )
+app.include_router(account.router)
 app.include_router(auth.router)
 app.include_router(linking.router)
 

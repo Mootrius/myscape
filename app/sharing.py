@@ -35,6 +35,17 @@ SHARE_DEFAULT_LIFETIME = timedelta(days=30)
 # loudly here beats spinning forever if something's actually wrong.
 _MAX_ATTEMPTS = 500
 
+# Display label for the account page's Shared Links section (see
+# app/routers/account.py's list_shared_links) -- every app that ever
+# creates a SharedContent row needs an entry here, keyed by its own
+# content_type string. Not stored on the row itself since it's pure
+# presentation, not data -- this is the one place that needs updating
+# when a new app's share type is added, alongside that app's own
+# POST .../share endpoint and its SharedContent.content_type value.
+SHARE_CONTENT_TYPE_LABELS = {
+    "loot_tracker": "Loot Tracker",
+}
+
 
 def generate_share_code(db: Session) -> str:
     """Picks a fresh, unused, clean 10-character code -- same

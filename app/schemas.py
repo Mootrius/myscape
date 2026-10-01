@@ -190,6 +190,37 @@ class GameAccountSummary(BaseModel):
     active: bool
 
 
+class SharedLinkSummary(BaseModel):
+    """One row of the account page's Shared Links section -- GET
+    /api/account/shared-links, one per currently-valid SharedContent
+    row across every one of the signed-in Account's own GameAccounts
+    (see app/routers/account.py). character_name is whichever
+    GameAccount the link was created under, not necessarily the
+    account's currently-active one -- Optional only because
+    GameAccount.runescape_name itself is (an unlinked slot has none;
+    not a state any share could realistically be created from, but
+    the type follows the source field rather than asserting that can
+    never happen). Deleting that GameAccount entirely takes its
+    SharedContent rows with it (see the cascade on GameAccount.
+    shared_content in app/models.py), so this never needs to represent
+    "character since deleted" -- the row is simply gone too.
+    content_type_label is the
+    human-readable app name (SHARE_CONTENT_TYPE_LABELS in
+    app/sharing.py) -- content_type itself stays the raw internal
+    string, not shown anywhere, kept here mainly so a future
+    content-type-specific action (if one's ever needed) has something
+    to key off without another round trip. expires_at is a plain
+    datetime -- the frontend formats it for display itself, same as
+    every other timestamp this app's JSON already hands over raw."""
+
+    id: uuid.UUID
+    code: str
+    content_type: str
+    content_type_label: str
+    character_name: Optional[str] = None
+    expires_at: datetime
+
+
 class BankItemIn(BaseModel):
     item_id: int
     # Only meaningfully used for an untradeable item (see BankItem's
