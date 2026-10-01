@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_account_from_session
 from app.database import get_db
 from app.models import Account, GameAccount, SharedContent
+from app.pages import _SITE_URL
 from app.schemas import SharedLinkSummary
 from app.sharing import SHARE_CONTENT_TYPE_LABELS
 
@@ -56,6 +57,7 @@ def list_shared_links(
         SharedLinkSummary(
             id=share.id,
             code=share.code,
+            url=f"{_SITE_URL}/s/{share.code}",
             content_type=share.content_type,
             content_type_label=SHARE_CONTENT_TYPE_LABELS.get(share.content_type, share.content_type),
             character_name=runescape_name,

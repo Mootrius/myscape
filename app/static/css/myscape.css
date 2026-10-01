@@ -693,60 +693,94 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   margin-top: 0;
 }
 
-/* Shared Links section (render_account, app/pages.py) -- one row per
-   currently-valid SharedContent link created from any of the signed-
-   in Account's own GameAccounts, directly below the Linked Accounts
-   list above. Each row is a vertical stack (app/character on top,
-   code/expiration dim beneath, DEACTIVATE right-aligned under both)
-   rather than .game-account-row's single side-by-side line -- there's
-   simply more to show per row here than a name and a couple of short
-   buttons, and the card's own 420px max-width (.auth-card) has no
-   room to fit all of it on one line. */
-.shared-links-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* Shared Links section (render_account, app/pages.py) -- a real
+   table, one row per currently-valid SharedContent link created from
+   any of the signed-in Account's own GameAccounts, directly below
+   the Linked Accounts list above. */
+.account-section-title--center { text-align: center; }
+
+/* overflow handles both directions: -y so more than ~10 rows scrolls
+   instead of growing the card forever (max-height below is sized for
+   that -- a header row plus 10 body rows at this table's own row
+   height), -x as a safety net for the .auth-card's 420px max-width
+   against a long character/app name or the action cell's own widest
+   state (BUTTON text "ARE YOU SURE?"), same situation .loot-range-
+   menu's own box-shadow/overflow handling elsewhere on this site
+   already assumes a cramped container rather than an infinitely wide
+   one. */
+.shared-links-table-wrap {
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   margin-bottom: 16px;
 }
 
-.shared-link-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.shared-link-primary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shared-link-secondary {
-  color: var(--text-dim);
+.shared-links-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.shared-links-table th,
+.shared-links-table td {
+  padding: 7px 10px;
+  text-align: left;
   white-space: nowrap;
 }
+
+.shared-links-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--text-faint);
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 10.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shared-links-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--border);
+}
+
+.shared-links-table td:last-child {
+  text-align: right;
+}
+
+/* Shows the share's own lowercase code (not uppercased the way most
+   other buttons on this site are -- see .loot-range-btn and friends
+   -- since this is meant to visually match the exact characters that
+   get copied, not just a label). Click copies the FULL https://
+   myscape.io/s/<code> URL, not just this text -- see the button's own
+   click handler in app/pages.py. */
+.shared-link-code-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.shared-link-code-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 
 /* Same compact-button override .game-account-actions button above
-   uses, plus align-self to sit at the row's right edge under the two
-   text lines rather than stretching full-width the way button.danger
-   normally does (e.g. DELETE ACCOUNT further down this same page). */
-.shared-link-row .danger {
+   uses -- this table's own action cell is already narrow, no need
+   for button.danger's usual full-width treatment (e.g. DELETE
+   ACCOUNT further down this same page). */
+.shared-links-table .danger {
   width: auto;
-  align-self: flex-end;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: 12px;
   margin-top: 0;
 }
 
 .shared-links-empty {
   color: var(--text-dim);
   font-size: 13px;
+  text-align: center;
   padding: 2px;
 }
 

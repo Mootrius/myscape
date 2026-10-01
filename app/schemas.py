@@ -215,6 +215,13 @@ class SharedLinkSummary(BaseModel):
 
     id: uuid.UUID
     code: str
+    # Full https://myscape.io/s/<code> link -- built server-side (see
+    # list_shared_links in app/routers/account.py) from the same
+    # _SITE_URL constant every other share/public-profile link already
+    # uses, rather than having the frontend reassemble it from `code`
+    # alone -- one less place that would need updating if the URL
+    # scheme ever changed.
+    url: str
     content_type: str
     content_type_label: str
     character_name: Optional[str] = None

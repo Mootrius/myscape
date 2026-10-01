@@ -3600,9 +3600,23 @@ def render_account(player: PlayerView) -> str:
         </div>
 
         <div class="account-section">
-          <p class="account-section-title">SHARED LINKS</p>
+          <p class="account-section-title account-section-title--center">SHARED LINKS</p>
           <div class="auth-error" id="sharedLinksError"></div>
-          <div class="shared-links-list" id="sharedLinksList"></div>
+          <div class="shared-links-table-wrap" id="sharedLinksTableWrap" style="display:none;">
+            <table class="shared-links-table">
+              <thead>
+                <tr>
+                  <th>Character</th>
+                  <th>App</th>
+                  <th>Code</th>
+                  <th>Expiration</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="sharedLinksTableBody"></tbody>
+            </table>
+          </div>
+          <p class="shared-links-empty" id="sharedLinksEmpty" style="display:none;">No shared links yet.</p>
         </div>
 
         <div class="account-section">
@@ -3946,31 +3960,73 @@ def render_account(player: PlayerView) -> str:
       // reasoning as the Linked Accounts list just above: it's the
       // same data this section's own DEACTIVATE button can immediately
       // change.
-      const sharedLinksList = document.getElementById('sharedLinksList');
+      const sharedLinksTableWrap = document.getElementById('sharedLinksTableWrap');
+      const sharedLinksTableBody = document.getElementById('sharedLinksTableBody');
+      const sharedLinksEmpty = document.getElementById('sharedLinksEmpty');
       const sharedLinksError = document.getElementById('sharedLinksError');
 
+      // YYYY-MM-DD -- slicing the ISO string itself rather than going
+      // through toLocaleDateString's own formatting options, so this
+      // can't drift per-viewer with whatever locale/format their
+      // browser happens to default to.
       function fmtExpiration(iso) {
-        return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        return new Date(iso).toISOString().slice(0, 10);
       }
 
       function renderSharedLinkRow(link) {
-        const row = document.createElement('div');
-        row.className = 'shared-link-row';
+        const row = document.createElement('tr');
 
-        const info = document.createElement('div');
+        const characterCell = document.createElement('td');
+        characterCell.textContent = link.character_name || 'Unknown character';
+        row.appendChild(characterCell);
 
-        const primary = document.createElement('div');
-        primary.className = 'shared-link-primary';
-        primary.textContent = `${link.content_type_label} \u2014 ${link.character_name || 'Unknown character'}`;
-        info.appendChild(primary);
+        const appCell = document.createElement('td');
+        appCell.textContent = link.content_type_label;
+        row.appendChild(appCell);
 
-        const secondary = document.createElement('div');
-        secondary.className = 'shared-link-secondary';
-        secondary.textContent = `Code: ${link.code} \u00b7 Expires ${fmtExpiration(link.expires_at)}`;
-        info.appendChild(secondary);
+        const codeCell = document.createElement('td');
+        const codeBtn = document.createElement('button');
+        codeBtn.type = 'button';
+        codeBtn.className = 'shared-link-code-btn';
+        codeBtn.textContent = link.code;
+        codeBtn.title = 'Click to copy this link to your clipboard.';
+        // Copies the full https://myscape.io/s/<code> URL (link.url,
+        // built server-side -- see SharedLinkSummary in app/schemas.py),
+        // not just the bare code shown on the button -- same silent-
+        // copy-with-brief-confirmation pattern as the public-profile
+        // card's own publicProfileCopyBtn, just flashing back to the
+        // code afterward instead of staying locked on "COPIED" -- this
+        // button (unlike that one) is meant to be clicked again, for
+        // this row or any other.
+        codeBtn.addEventListener('click', async () => {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(link.url);
+            } else {
+              const temp = document.createElement('textarea');
+              temp.value = link.url;
+              temp.style.position = 'fixed';
+              temp.style.opacity = '0';
+              document.body.appendChild(temp);
+              temp.select();
+              document.execCommand('copy');
+              document.body.removeChild(temp);
+            }
+            codeBtn.textContent = 'COPIED';
+            setTimeout(() => { codeBtn.textContent = link.code; }, 1200);
+          } catch (err) {
+            sharedLinksError.textContent = 'Could not copy the link -- please copy it manually.';
+            sharedLinksError.classList.add('show');
+          }
+        });
+        codeCell.appendChild(codeBtn);
+        row.appendChild(codeCell);
 
-        row.appendChild(info);
+        const expirationCell = document.createElement('td');
+        expirationCell.textContent = fmtExpiration(link.expires_at);
+        row.appendChild(expirationCell);
 
+        const actionCell = document.createElement('td');
         const deactivateBtn = document.createElement('button');
         deactivateBtn.type = 'button';
         deactivateBtn.className = 'danger';
@@ -4007,7 +4063,8 @@ def render_account(player: PlayerView) -> str:
             deactivateBtn.disabled = false;
           }
         });
-        row.appendChild(deactivateBtn);
+        actionCell.appendChild(deactivateBtn);
+        row.appendChild(actionCell);
 
         return row;
       }
@@ -4022,15 +4079,15 @@ def render_account(player: PlayerView) -> str:
             return;
           }
           const links = await res.json();
-          sharedLinksList.innerHTML = '';
+          sharedLinksTableBody.innerHTML = '';
           if (links.length === 0) {
-            const empty = document.createElement('p');
-            empty.className = 'shared-links-empty';
-            empty.textContent = 'No shared links yet.';
-            sharedLinksList.appendChild(empty);
+            sharedLinksTableWrap.style.display = 'none';
+            sharedLinksEmpty.style.display = '';
             return;
           }
-          links.forEach((link) => sharedLinksList.appendChild(renderSharedLinkRow(link)));
+          sharedLinksEmpty.style.display = 'none';
+          sharedLinksTableWrap.style.display = '';
+          links.forEach((link) => sharedLinksTableBody.appendChild(renderSharedLinkRow(link)));
         } catch (err) {
           sharedLinksError.textContent = 'Something went wrong. Please try again.';
           sharedLinksError.classList.add('show');
