@@ -1068,6 +1068,79 @@ def _player_coins(db: Session, game_account: GameAccount) -> int:
     return total
 
 
+def _build_one_gear_setup(
+    s: GearSetup,
+    mapping: dict,
+    prices: dict,
+    coins: int,
+    base_pool_by_id: Dict[int, int],
+    base_pool_by_name: Dict[str, int],
+) -> dict:
+    """Resolves ONE GearSetup row into the full dict shape GET /api/
+    gear-setups hands back for it -- split out of build_gear_setups'
+    own former per-setup loop body so build_purchase_goal_share_
+    snapshot below (which only ever needs this for a single setup, not
+    every setup on the account) can call exactly the same resolution
+    logic rather than a second, drifting copy of it. base_pool_by_id/
+    base_pool_by_name are build_gear_setups' own base_pool_by_id/
+    base_pool_by_name (or an equivalent from build_owned_pools for a
+    single-setup caller) -- copied fresh here, not mutated in place,
+    for the same "setups are alternate goals, not simultaneous
+    requirements" reason the original inline comment gave: the same
+    owned Basilisk jaw can cover more than one setup's need for it, so
+    each setup's own resolution has to start from the same untouched
+    pool rather than one a sibling setup has already drawn down."""
+    total_cost = 0
+    total_full_cost = 0
+    pool_by_id = dict(base_pool_by_id)
+    pool_by_name = dict(base_pool_by_name)
+
+    equipment = {}
+    setup_equipment = s.equipment or {}
+    for slot in GEAR_SETUP_EQUIPMENT_SLOTS:
+        resolved = _mark_slot_affordability(
+            _resolve_gear_slot_item(setup_equipment.get(slot), mapping, prices, pool_by_id, pool_by_name),
+            coins,
+        )
+        equipment[slot] = resolved
+        if resolved:
+            total_cost += resolved["cost"]
+            total_full_cost += resolved["fullCost"]
+
+    inventory = []
+    setup_inventory = s.inventory or [None] * INVENTORY_SIZE
+    for raw_item in setup_inventory:
+        resolved = _mark_slot_affordability(
+            _resolve_gear_slot_item(raw_item, mapping, prices, pool_by_id, pool_by_name), coins
+        )
+        inventory.append(resolved)
+        if resolved:
+            total_cost += resolved["cost"]
+            total_full_cost += resolved["fullCost"]
+
+    progress_pct = 100.0 if total_cost <= 0 else round(min(coins, total_cost) / total_cost * 100, 1)
+    sort_mode = s.still_to_purchase_sort_mode or "low_to_high"
+    still_to_purchase, next_purchase = _still_to_purchase_summary(
+        equipment, inventory, coins, sort_mode, s.still_to_purchase_custom_order
+    )
+    return {
+        "id": str(s.id),
+        "name": s.name or "Untitled Setup",
+        "createdAt": s.created_at.isoformat() if s.created_at else None,
+        "icon": resolve_gear_setup_icon(s.icon, mapping),
+        "equipment": equipment,
+        "inventory": inventory,
+        "totalCost": total_cost,
+        "totalFullCost": total_full_cost,
+        "totalOwnedSavings": max(total_full_cost - total_cost, 0),
+        "progressPct": progress_pct,
+        "funded": coins >= total_cost,
+        "stillToPurchaseSort": sort_mode,
+        "stillToPurchase": still_to_purchase,
+        "nextPurchase": next_purchase,
+    }
+
+
 def build_gear_setups(db: Session, game_account: GameAccount, mapping: dict, prices: dict, coins: int) -> List[dict]:
     # sort_order first, created_at second -- see GearSetup's own
     # docstring in app/models.py. Postgres already sorts NULLs last on
@@ -1086,63 +1159,7 @@ def build_gear_setups(db: Session, game_account: GameAccount, mapping: dict, pri
         .all()
     )
     base_pool_by_id, base_pool_by_name = build_owned_pools(db, game_account)
-
-    results = []
-    for s in setups:
-        total_cost = 0
-        total_full_cost = 0
-        # Fresh copy per setup -- see the docstring on Maintrius's own
-        # build_gear_setups for why (setups are alternate goals, not
-        # simultaneous requirements; the same owned Basilisk jaw can
-        # cover more than one setup's need for it).
-        pool_by_id = dict(base_pool_by_id)
-        pool_by_name = dict(base_pool_by_name)
-
-        equipment = {}
-        setup_equipment = s.equipment or {}
-        for slot in GEAR_SETUP_EQUIPMENT_SLOTS:
-            resolved = _mark_slot_affordability(
-                _resolve_gear_slot_item(setup_equipment.get(slot), mapping, prices, pool_by_id, pool_by_name),
-                coins,
-            )
-            equipment[slot] = resolved
-            if resolved:
-                total_cost += resolved["cost"]
-                total_full_cost += resolved["fullCost"]
-
-        inventory = []
-        setup_inventory = s.inventory or [None] * INVENTORY_SIZE
-        for raw_item in setup_inventory:
-            resolved = _mark_slot_affordability(
-                _resolve_gear_slot_item(raw_item, mapping, prices, pool_by_id, pool_by_name), coins
-            )
-            inventory.append(resolved)
-            if resolved:
-                total_cost += resolved["cost"]
-                total_full_cost += resolved["fullCost"]
-
-        progress_pct = 100.0 if total_cost <= 0 else round(min(coins, total_cost) / total_cost * 100, 1)
-        sort_mode = s.still_to_purchase_sort_mode or "low_to_high"
-        still_to_purchase, next_purchase = _still_to_purchase_summary(
-            equipment, inventory, coins, sort_mode, s.still_to_purchase_custom_order
-        )
-        results.append({
-            "id": str(s.id),
-            "name": s.name or "Untitled Setup",
-            "createdAt": s.created_at.isoformat() if s.created_at else None,
-            "icon": resolve_gear_setup_icon(s.icon, mapping),
-            "equipment": equipment,
-            "inventory": inventory,
-            "totalCost": total_cost,
-            "totalFullCost": total_full_cost,
-            "totalOwnedSavings": max(total_full_cost - total_cost, 0),
-            "progressPct": progress_pct,
-            "funded": coins >= total_cost,
-            "stillToPurchaseSort": sort_mode,
-            "stillToPurchase": still_to_purchase,
-            "nextPurchase": next_purchase,
-        })
-    return results
+    return [_build_one_gear_setup(s, mapping, prices, coins, base_pool_by_id, base_pool_by_name) for s in setups]
 
 
 def build_purchase_goals_state(db: Session, game_account: GameAccount) -> dict:
@@ -1178,4 +1195,57 @@ def build_purchase_goals_state(db: Session, game_account: GameAccount) -> dict:
         # docstring above has the full ordering story), unchanged here.
         "gearSetups": build_gear_setups(db, game_account, mapping, prices, coins),
         "ownedItems": pool_by_name,
+    }
+
+
+def build_purchase_goal_share_snapshot(db: Session, game_account: GameAccount, setup: GearSetup) -> dict:
+    """Freezes ONE of game_account's own gear setups (already resolved
+    and ownership-checked by the caller -- see _get_owned_gear_setup in
+    app/main.py, the same helper every other per-setup mutation
+    endpoint already uses) into the payload POST /api/gear-setups/
+    <id>/share (app/main.py) writes into a new SharedContent row, for
+    render_purchase_goals_share (app/pages.py) to read back later --
+    same "frozen, point-in-time, never live again" contract
+    SharedContent itself documents, and the same shape Loot Tracker's
+    own build_loot_share_snapshot already established for this table.
+
+    coins is deliberately frozen at 0 here, never the account's real
+    current GP -- per explicit instruction, the shared page's own
+    summary box never shows a current-GP figure at all, and its Next
+    Purchase widget (reusing _purchase_goals_panel_markup's own
+    updateOverlay untouched -- see render_purchase_goals_share's own
+    docstring) shows real GP progress toward the next item; freezing
+    coins at 0 is what makes that widget read as "0 / <cost> gp" with
+    an empty fill bar, for free, through that same unmodified code,
+    rather than needing a second, share-specific rendering path for
+    it. _still_to_purchase_summary itself is the only thing coins=0
+    actually changes here -- affordable vs. not-owned for the
+    doll/grid's own border color (see .purchase-goal-share's own
+    override in purchase-goals.css for why that distinction is hidden
+    anyway) and funded/progressPct on whatever still_to_purchase[0]
+    happens to be, both consistent with a page that never reveals this
+    account's actual GP.
+
+    still_to_purchase/next_purchase here are frozen in the setup's own
+    CURRENT sort mode (whatever still_to_purchase_sort_mode was at
+    share time) purely as a starting array to resort from -- the share
+    page always OPENS on "low_to_high" regardless (see
+    render_purchase_goals_share), and every other sort mode (including
+    "custom") is re-derived client-side from this same frozen list by
+    a JS port of _still_to_purchase_summary's own sort branches, the
+    exact technique render_landing_purchase_preview's own
+    sortStillToPurchase already uses for its own frozen demo list. The
+    setup's real still_to_purchase_custom_order is frozen alongside it
+    (customOrder below) so a visitor who clicks CUSTOM sees the actual
+    order the sharer last dragged it into, not whatever this falls
+    back to with no order at all."""
+    mapping, _ = get_mapping()
+    prices, _ = get_latest_prices()
+    base_pool_by_id, base_pool_by_name = build_owned_pools(db, game_account)
+    resolved = _build_one_gear_setup(setup, mapping, prices, 0, base_pool_by_id, base_pool_by_name)
+
+    return {
+        "coins": 0,
+        "gearSetup": resolved,
+        "customOrder": setup.still_to_purchase_custom_order,
     }

@@ -4747,8 +4747,27 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
     extra_head = (
         f'<link rel="stylesheet" href="/static/css/purchase-goals.css?v={_PURCHASE_GOALS_CSS_VERSION}" />'
     )
+
+    # Share icon next to the title (same inline-icon-next-to-a-heading
+    # pattern/markup/SVG as Loot Tracker's own loot_share_icon_btn --
+    # duplicated here, not shared across these two pages' own
+    # stylesheets, same "cross-page style overlap" convention
+    # .loot-share-icon-btn's own comment in loot-tracker.css already
+    # documents). Toggles pgShareCard open/closed; that card holds the
+    # actual GENERATE SHAREABLE LINK flow for whichever gear setup is
+    # currently active (PG.activeSetupId) -- see pgShareGenerateBtn's
+    # own click handler below and build_purchase_goal_share_snapshot in
+    # app/purchase_goals.py for exactly what a link freezes.
+    purchase_share_icon_btn = (
+        ' <button type="button" class="pg-share-icon-btn" id="pgShareIconBtn" aria-label="Export this setup" title="Export this setup">'
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
+        '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
+        '</svg></button>'
+    )
+
     body = f"""
-    <h2 class="page-title">Purchase Goals</h2>
+    <h2 class="page-title">Purchase Goals{purchase_share_icon_btn}</h2>
     <div class="pg-header">
       <div class="tracker-icon-row" id="setupIconRow"></div>
       <div class="tracker-menu-wrap">
@@ -4762,6 +4781,15 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         </div>
       </div>
     </div>
+
+    <div class="pg-share-card-row">
+      <div class="pg-share-card" id="pgShareCard" hidden>
+        <button type="button" class="pg-share-generate-btn" id="pgShareGenerateBtn">GENERATE SHAREABLE LINK</button>
+        <button type="button" class="pg-share-link-btn" id="pgShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>
+        <p class="pg-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>
+      </div>
+    </div>
+
     <div class="auth-error" id="pgError"></div>
     <div class="pg-setup-form" id="pgNameForm" style="display:none;">
       <input type="text" id="pgNameInput" placeholder="Setup name" maxlength="60" />
@@ -4869,6 +4897,16 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         try { return localStorage.getItem(ACTIVE_SETUP_STORAGE_KEY); } catch (e) { return null; }
       }
       function setActiveSetupId(id) {
+        // A link already generated (see pgShareGenerateBtn's own
+        // click handler further down) describes whatever setup was
+        // active at the moment it was made -- switching to a
+        // DIFFERENT one here would silently leave that old link
+        // showing as if it were for the setup now on screen. Resetting
+        // on every call (not just a "real" switch) is harmless: on
+        // boot, before anything's ever been generated, this is a
+        // no-op, same reasoning Loot Tracker's own resetLootShareState
+        // documents for its own two call sites.
+        resetGearSetupShareState();
         PG.activeSetupId = id;
         try {
           if (id) localStorage.setItem(ACTIVE_SETUP_STORAGE_KEY, id);
@@ -5023,6 +5061,15 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
 
       function renderIconRow() {
         var row = document.getElementById('setupIconRow');
+        // Null on any page that hides (rather than strips) .pg-header
+        // -- see render_purchase_goals_share's own docstring -- same
+        // defensive guard Loot Tracker's own render() path needed
+        // after a near-identical miss there (see resetLootShareState's
+        // sibling fix, the null-guard on lootShareIconBtn's own
+        // listener). Not currently load-bearing (nothing here strips
+        // this element, only hides it), but one line cheaper to add
+        // now than to debug blind again later.
+        if (!row) return;
         if (!PG.data) { row.innerHTML = ''; return; }
         row.innerHTML = PG.data.gearSetups.map(function (s) {
           var active = s.id === PG.activeSetupId ? ' active' : '';
@@ -6199,6 +6246,110 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
           if (data) { PG.stateVersion++; PG.data = data; render(); }
         }
       });
+
+      // ---- Share (export a frozen myscape.io/s/<code> link) -----------------
+
+      // Puts the share card back to its own starting state -- the
+      // GENERATE SHAREABLE LINK button showing, any already-generated
+      // link cleared out and hidden -- called from setActiveSetupId
+      // above any time the ACTIVE setup actually changes, same
+      // "an old link silently describing something that's no longer
+      // on screen" problem Loot Tracker's own resetLootShareState
+      // (app/pages.py) exists to fix, and the same fix shape: putting
+      // the button back doesn't touch any link already generated for
+      // the setup still showing right now, only ever fires on an
+      // actual switch.
+      function resetGearSetupShareState() {
+        var genBtn = document.getElementById('pgShareGenerateBtn');
+        var linkBtn = document.getElementById('pgShareLinkBtn');
+        // Both null on the landing preview and the share page itself --
+        // neither one renders .pg-share-card-row at all (the landing
+        // preview never had a share feature to begin with; a share
+        // page visitor isn't this setup's owner, so there's nothing
+        // for them to share -- see render_purchase_goals_share's own
+        // docstring) -- and this reused script runs unmodified on
+        // both.
+        if (!genBtn || !linkBtn) return;
+        genBtn.hidden = false;
+        genBtn.disabled = false;
+        genBtn.classList.remove('action-failed');
+        linkBtn.hidden = true;
+        linkBtn.textContent = '';
+        delete linkBtn.dataset.url;
+      }
+
+      // Share icon next to the title -- toggles pgShareCard below it,
+      // same plain show/hide-no-outside-click-auto-close pattern as
+      // Loot Tracker's own lootShareIconBtn/lootShareCard. Null-
+      // guarded for the same reason resetGearSetupShareState above is.
+      var pgShareIconBtn = document.getElementById('pgShareIconBtn');
+      var pgShareCard = document.getElementById('pgShareCard');
+      if (pgShareIconBtn) {
+        pgShareIconBtn.addEventListener('click', function () {
+          var nowHidden = !pgShareCard.hidden;
+          pgShareCard.hidden = nowHidden;
+          pgShareIconBtn.classList.toggle('open', !nowHidden);
+        });
+      }
+
+      // GENERATE SHAREABLE LINK -- freezes whichever gear setup is
+      // CURRENTLY active (same reasoning as Loot Tracker's own
+      // lootUrl() reading state.rangeKey at click time, not whatever
+      // it was when the card was opened) into a new SharedContent row.
+      // Nothing is generated just from opening the card -- only this
+      // click does that -- and once it succeeds this button is
+      // replaced by pgShareLinkBtn showing the actual link, until
+      // resetGearSetupShareState above brings it back on an actual
+      // setup switch. See build_purchase_goal_share_snapshot in
+      // app/purchase_goals.py for exactly what gets frozen.
+      var pgShareGenerateBtn = document.getElementById('pgShareGenerateBtn');
+      if (pgShareGenerateBtn) {
+        pgShareGenerateBtn.addEventListener('click', function () {
+          var btn = this;
+          if (!PG.activeSetupId) return;
+          btn.disabled = true;
+          fetch('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/share', { method: 'POST' })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+            .then(function (data) {
+              var linkBtn = document.getElementById('pgShareLinkBtn');
+              linkBtn.dataset.url = data.url;
+              linkBtn.textContent = data.url;
+              btn.hidden = true;
+              linkBtn.hidden = false;
+            })
+            .catch(function () {
+              btn.classList.add('action-failed');
+              setTimeout(function () { btn.classList.remove('action-failed'); }, 2500);
+            })
+            .then(function () { btn.disabled = false; });
+        });
+      }
+
+      // pgShareLinkBtn itself IS the link, once generated above --
+      // same click-to-copy-then-flash-"COPIED" pattern as Loot
+      // Tracker's own lootShareLinkBtn.
+      var pgShareLinkBtn = document.getElementById('pgShareLinkBtn');
+      if (pgShareLinkBtn) {
+        pgShareLinkBtn.addEventListener('click', function () {
+          var btn = this;
+          var url = btn.dataset.url;
+          if (!url) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url);
+          } else {
+            var temp = document.createElement('textarea');
+            temp.value = url;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+          }
+          btn.textContent = 'COPIED';
+          setTimeout(function () { btn.textContent = url; }, 1200);
+        });
+      }
 
       // ---- Boot + poll ------------------------------------------------------
 
@@ -9146,6 +9297,280 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
     }})();
     """
     return extra_head, body, wrapper_script
+
+
+def render_purchase_goals_share(share: "SharedContent", game_account: Optional["GameAccount"], viewer: Optional[PlayerView]) -> str:
+    """myscape.io/s/<code> for a Purchase Goals share (see POST
+    /api/gear-setups/{setup_id}/share in app/main.py and
+    build_purchase_goal_share_snapshot in app/purchase_goals.py for
+    exactly what's frozen into share.payload) -- a visitor's own
+    read-only view of the one gear setup the owner picked at share
+    time, nothing live, nothing outside it, same "frozen, point-in-
+    time, never live again" contract render_loot_tracker_share above
+    already established for this table.
+
+    Reuses _purchase_goals_panel_markup's body/script completely
+    unmodified, wrapped the same way render_landing_purchase_preview
+    above wraps it for the landing page's own demo (same fetch shim
+    shape for GET /api/gear-setups and the two still-to-purchase-sort/
+    still-to-purchase-order PUT endpoints, same #pgIconTrigger clone-
+    strip, same #pgGearFrame capturing-phase mousedown/dragstart/click
+    neutering) -- just sourced from share.payload (one real, frozen
+    gear setup) instead of the landing page's curated demo JSON, and
+    with three further differences the landing preview doesn't need:
+
+    1. currentSort is hardcoded to 'low_to_high' on load, ignoring
+       whatever sort the setup's own stillToPurchaseSort field was
+       frozen with -- per explicit instruction, a share link always
+       OPENS on the same default every visitor sees, regardless of
+       how the owner happened to leave their own view sorted.
+       Clicking CUSTOM still works, and lands on customOrder below
+       (not an empty order), since that's a frozen fact about the
+       setup itself, not a leftover UI state.
+    2. customOrder seeds from share.payload['customOrder'] (the
+       setup's own real still_to_purchase_custom_order, frozen
+       alongside everything else) rather than starting null the way
+       the landing preview's own single curated demo setup does --
+       a visitor who clicks CUSTOM here sees the actual order the
+       owner last dragged it into, not an empty fallback.
+    3. A same-origin localStorage shadow (see render_landing_mindmap_
+       preview's own identical shadow for the fuller reasoning) --
+       this reused script reads/writes the real
+       myscape:purchaseGoals:activeSetupId key, and /s/<code> shares
+       that origin with the real authenticated app, so a visitor who
+       also has their own myscape.io account would otherwise have
+       that real preference silently overwritten by this frozen
+       share's own single setup id. The landing preview doesn't need
+       this (it lives on a path the real app's own localStorage reads
+       never apply to in the same way this same-origin /s/ path
+       does).
+
+    coins is always 0 in share.payload (see build_purchase_goal_share_
+    snapshot's own docstring for why) -- the summary box's current-GP
+    number and progress bar are hidden outright via CSS instead
+    (.purchase-goal-share #pgCoinsAmount/.overlay-progress in
+    purchase-goals.css), per explicit instruction that a visitor never
+    sees a number implying this is the OWNER's own live GP; the coins
+    icon stays, now centered alongside the total cost and the setup's
+    own display icon (see .purchase-goal-share .overlay-card's own
+    justify-content:center override -- .overlay-target already renders
+    icon-then-amount thanks to its own row-reverse, so centering the
+    row needs no DOM reordering here). Leaving coins at 0 also, for
+    free, makes the untouched Next Purchase widget below read as
+    "0 / <cost> gp" with an empty progress bar -- exactly the frozen-
+    looking treatment asked for, with no client-side special-casing of
+    that widget at all.
+
+    The actual-setup gear slots also lose their green/amber/red owned-
+    ownership border colors here (.purchase-goal-share .gear-slot.
+    owned/.not-owned/.affordable all forced back to the same neutral
+    .gear-slot border everything else uses) -- those colors describe
+    whether THIS VISITOR's own bank could cover an item, which makes
+    no sense to show against a stranger's shared setup, per explicit
+    instruction.
+
+    The only other visible difference from the real page is its own
+    title row and setup switcher, same "strip, don't just hide" and
+    "hide via CSS" treatment Loot Tracker's own share page already
+    established for the analogous pieces:
+
+    - The reused body's own "Purchase Goals" <h2> (and the share icon
+      button inside it) is stripped outright via body.partition --
+      same reasoning as render_loot_tracker_share's own identical
+      partition call: a visitor here isn't this share's owner, so
+      there's nothing for them to export a SECOND time. banner_markup
+      replaces it with this share's own two-line heading instead: the
+      setup's own name on a small .subtitle-styled line first (not the
+      generic "Purchase Goals" label), then "Shared by <name>" taking
+      over .page-title's own size/color/weight/uppercase/centering
+      wholesale, so this page still reads as having exactly one clear,
+      title-sized heading.
+    - .pg-header (the setup-icon row + hamburger "New/Rename/Delete
+      setup" menu) is hidden via CSS instead of stripped -- per
+      explicit instruction this share page has neither, and hiding
+      (not stripping) is simplest here since nothing downstream reads
+      or depends on that markup being absent from the DOM, same
+      reasoning render_landing_purchase_preview's own identical
+      .pg-header override already gives.
+    - .pg-share-card-row (this setup's own GENERATE SHAREABLE LINK
+      card) is removed via the wrapper script, same as
+      render_loot_tracker_share's own lootShareIconBtn/loot-share-
+      card-row removal -- unlike .pg-header this sits OUTSIDE the
+      stripped <h2>, so partition alone doesn't touch it.
+
+    game_account is the share's own owner, looked up by the caller
+    (GET /s/{code} in app/main.py) from SharedContent.game_account_id,
+    which can in principle be None if that account's own row is ever
+    deleted after the fact (see that column's own comment in
+    app/models.py); falls back to "A player" the same way
+    render_loot_tracker_share's own owner_name does."""
+    extra_head, body, script = _purchase_goals_panel_markup()
+    # Strips the reused body's own "Purchase Goals" <h2 class="page-
+    # title"> (and the share/export icon button inside it) outright --
+    # see this function's own doc comment above for why. The reused
+    # body always opens with exactly one such heading (see
+    # _purchase_goals_panel_markup's own body string), so splitting on
+    # the first "</h2>" and keeping only what follows it is all
+    # stripping it out takes -- same technique render_loot_tracker_
+    # share already uses for its own analogous heading.
+    _, _, body = body.partition("</h2>")
+
+    owner_name = (game_account.runescape_name if game_account else None) or "A player"
+    setup_name = share.payload["gearSetup"]["name"]
+    banner_markup = f"""
+    <p class="subtitle pg-share-label">{escape(setup_name)} Purchase Goals Setup</p>
+    <h2 class="page-title">Shared by {escape(owner_name)}</h2>
+    """
+    body = banner_markup + body
+    body = f'<div class="purchase-goal-share">{body}</div>'
+
+    payload_json = json.dumps(share.payload)
+    wrapper_script = f"""
+    (function () {{
+      var PAYLOAD = {payload_json};
+      var SETUP_ID = PAYLOAD.gearSetup.id;
+
+      // Always opens on the site-wide default sort, ignoring whatever
+      // the owner's own view happened to be sorted by when they
+      // generated this link -- see this function's own doc comment,
+      // point 1. customOrder seeds from the real frozen order instead
+      // of starting null -- point 2.
+      var currentSort = 'low_to_high';
+      var customOrder = PAYLOAD.customOrder || null;
+
+      function stillToPurchaseKey(entry) {{ return entry.slotType + '::' + entry.slot; }}
+
+      // Identical port of render_landing_purchase_preview's own
+      // sortStillToPurchase -- see that function's own copy for the
+      // fuller comment, duplicated here rather than shared for the
+      // same "each wrapper script is a fully self-contained IIFE"
+      // reason every other reused-panel wrapper on this site already
+      // follows.
+      function sortStillToPurchase(items, mode, order) {{
+        var out = items.slice();
+        if (mode === 'high_to_low') {{
+          out.sort(function (a, b) {{ return b.cost - a.cost; }});
+        }} else if (mode === 'alphabetical') {{
+          out.sort(function (a, b) {{ return a.itemName.toLowerCase() < b.itemName.toLowerCase() ? -1 : a.itemName.toLowerCase() > b.itemName.toLowerCase() ? 1 : 0; }});
+        }} else if (mode === 'reverse_alphabetical') {{
+          out.sort(function (a, b) {{ return a.itemName.toLowerCase() < b.itemName.toLowerCase() ? 1 : a.itemName.toLowerCase() > b.itemName.toLowerCase() ? -1 : 0; }});
+        }} else if (mode === 'custom') {{
+          var orderIndex = {{}};
+          (order || []).forEach(function (entry, i) {{ orderIndex[stillToPurchaseKey(entry)] = i; }});
+          var fallbackIndex = (order || []).length;
+          out.sort(function (a, b) {{
+            var ia = orderIndex.hasOwnProperty(stillToPurchaseKey(a)) ? orderIndex[stillToPurchaseKey(a)] : fallbackIndex;
+            var ib = orderIndex.hasOwnProperty(stillToPurchaseKey(b)) ? orderIndex[stillToPurchaseKey(b)] : fallbackIndex;
+            if (ia !== ib) return ia - ib;
+            return a.cost - b.cost;
+          }});
+        }} else {{
+          out.sort(function (a, b) {{ return a.cost - b.cost; }});
+        }}
+        return out;
+      }}
+
+      function buildStatePayload() {{
+        var base = PAYLOAD.gearSetup;
+        var sorted = sortStillToPurchase(base.stillToPurchase, currentSort, customOrder);
+        var nextPurchase = null;
+        if (sorted.length) {{
+          var top = sorted[0];
+          var cost = top.cost;
+          nextPurchase = Object.assign({{}}, top, {{
+            progressPct: cost <= 0 ? 100 : Math.round(Math.min(PAYLOAD.coins, cost) / cost * 1000) / 10,
+            funded: PAYLOAD.coins >= cost,
+          }});
+        }}
+        var setup = Object.assign({{}}, base, {{
+          stillToPurchaseSort: currentSort,
+          stillToPurchase: sorted,
+          nextPurchase: nextPurchase,
+        }});
+        return {{ coins: PAYLOAD.coins, gearSetups: [setup] }};
+      }}
+
+      // Same-origin localStorage shadow -- see this function's own
+      // doc comment, point 3, and render_landing_mindmap_preview's
+      // own identical shadow for the fuller reasoning.
+      var localStorage = (function () {{
+        var store = {{}};
+        return {{
+          getItem: function (k) {{ return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; }},
+          setItem: function (k, v) {{ store[k] = String(v); }},
+          removeItem: function (k) {{ delete store[k]; }},
+        }};
+      }})();
+
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+
+        if (path === '/api/gear-setups' && method === 'GET') {{
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(buildStatePayload()); }} }});
+        }}
+        if (path === '/api/gear-setups/' + SETUP_ID + '/still-to-purchase-sort' && method === 'PUT') {{
+          var sortBody = opts.body ? JSON.parse(opts.body) : {{}};
+          currentSort = sortBody.sort_mode || currentSort;
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(buildStatePayload()); }} }});
+        }}
+        if (path === '/api/gear-setups/' + SETUP_ID + '/still-to-purchase-order' && method === 'PUT') {{
+          var orderBody = opts.body ? JSON.parse(opts.body) : {{}};
+          customOrder = (orderBody.order || []).map(function (e) {{ return {{ slotType: e.slot_type, slot: e.slot }}; }});
+          currentSort = 'custom';
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(buildStatePayload()); }} }});
+        }}
+        return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{ message: 'Not available on a shared link.' }}); }} }});
+      }};
+
+      {script}
+
+      var iconTrigger = document.getElementById('pgIconTrigger');
+      if (iconTrigger) {{
+        iconTrigger.replaceWith(iconTrigger.cloneNode(true));
+        document.getElementById('pgIconTrigger').style.cursor = 'default';
+      }}
+
+      var gearFrame = document.getElementById('pgGearFrame');
+      if (gearFrame) {{
+        ['mousedown', 'dragstart'].forEach(function (evt) {{
+          gearFrame.addEventListener(evt, function (e) {{
+            e.stopImmediatePropagation();
+            e.preventDefault();
+          }}, true);
+        }});
+        gearFrame.addEventListener('click', function (e) {{
+          if (e.shiftKey) {{ e.stopImmediatePropagation(); e.preventDefault(); return; }}
+          if (e.target.closest('.gear-slot-remove')) {{ e.stopImmediatePropagation(); e.preventDefault(); return; }}
+          var slotEl = e.target.closest('.gear-slot');
+          if (!slotEl || !slotEl.classList.contains('filled')) {{ e.stopImmediatePropagation(); e.preventDefault(); return; }}
+        }}, true);
+      }}
+
+      // Same reasoning as render_loot_tracker_share's own identical
+      // strip: a viewer here isn't this share's owner, so there's
+      // nothing for them to share -- this view is itself already a
+      // share of someone else's setup. pgShareIconBtn is already gone
+      // (it lived inside the stripped <h2> above), left here only as
+      // a defensive no-op in case that ever changes; .pg-share-card-
+      // row sits OUTSIDE that heading, so it needs its own removal.
+      var shareIconBtn = document.getElementById('pgShareIconBtn');
+      if (shareIconBtn) shareIconBtn.remove();
+      var shareCardRow = document.querySelector('.pg-share-card-row');
+      if (shareCardRow) shareCardRow.remove();
+    }})();
+    """
+
+    return _shell(
+        title=f"{owner_name}'s shared Purchase Goals setup — myscape",
+        player=viewer,
+        body=body,
+        extra_head=extra_head,
+        extra_script=wrapper_script,
+        meta_description=f'{owner_name} shared their "{setup_name}" Purchase Goals setup on myscape.',
+    )
 
 
 def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:

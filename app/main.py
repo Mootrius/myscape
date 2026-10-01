@@ -113,6 +113,7 @@ from app.pages import (
     render_possessions,
     render_public_character_overview,
     render_purchase_goals,
+    render_purchase_goals_share,
     render_reset_password,
     render_signup,
     render_verify_email,
@@ -134,6 +135,7 @@ from app.possessions import (
 from app.purchase_goals import (
     COINS_ITEM_ID,
     build_owned_pools,
+    build_purchase_goal_share_snapshot,
     build_purchase_goals_state,
     get_mapping,
     has_derived_price,
@@ -2008,6 +2010,8 @@ def shared_content_page(
     owner = db.query(GameAccount).filter(GameAccount.id == share.game_account_id).first()
     if share.content_type == "loot_tracker":
         return render_loot_tracker_share(share, owner, viewer)
+    if share.content_type == "purchase_goal":
+        return render_purchase_goals_share(share, owner, viewer)
     # Shouldn't be reachable -- every row's content_type is set by one
     # of this file's own create-share endpoints, all of which only
     # ever write a value this if-chain already knows. Same "something's
@@ -2936,6 +2940,38 @@ def set_still_to_purchase_order(
     ]
     db.commit()
     return build_purchase_goals_state(db, game_account)
+
+
+@app.post("/api/gear-setups/{setup_id}/share")
+def create_purchase_goal_share(
+    setup_id: str,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Freezes one gear setup into a new SharedContent row (see
+    build_purchase_goal_share_snapshot in app/purchase_goals.py for
+    exactly what gets frozen) and returns a myscape.io/s/<code> link to
+    it -- the Purchase Goals equivalent of POST /api/players/me/loot/
+    share above, same unthrottled/session-authenticated/no-cooldown
+    posture for the same reason (this is a signed-in owner choosing to
+    share one of their own setups, nothing GET /s/{code} below's own
+    rate limit doesn't already cover for an actual visitor). No request
+    body needed -- unlike Loot Tracker's own share endpoint, there's no
+    range to pick, the setup_id in the path is the entire choice."""
+    setup = _get_owned_gear_setup(db, game_account, setup_id)
+    snapshot = build_purchase_goal_share_snapshot(db, game_account, setup)
+    code = generate_share_code(db)
+    share = SharedContent(
+        id=uuid.uuid4(),
+        game_account_id=game_account.id,
+        code=code,
+        content_type="purchase_goal",
+        payload=snapshot,
+        expires_at=_utcnow() + SHARE_DEFAULT_LIFETIME,
+    )
+    db.add(share)
+    db.commit()
+    return {"code": code, "url": f"{_SITE_URL}/s/{code}"}
 
 
 def _build_goal_context(db: Session, game_account: GameAccount) -> dict:

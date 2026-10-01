@@ -760,3 +760,167 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .landing-purchase-preview .purchase-preview-char--flipped img {
   transform: scaleX(-1);
 }
+
+/* ---------- Share icon (next to "Purchase Goals" -- see
+   purchase_share_icon_btn in _purchase_goals_panel_markup,
+   app/pages.py) + the card it toggles open beneath the title. Same
+   inline-icon-next-to-a-heading pattern as Loot Tracker's own
+   .loot-share-icon-btn (duplicated here, not shared across these two
+   pages' own stylesheets, same "cross-page style overlap" convention
+   .loot-share-icon-btn's own comment in loot-tracker.css already
+   documents) -- matching visual values throughout, just this file's
+   own pg- prefix. ---------- */
+.pg-share-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0 0 0 8px;
+  margin: 0;
+  cursor: pointer;
+  vertical-align: middle;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
+  /* Same cap-height compensation .loot-share-icon-btn's own identical
+     rule documents -- all-caps title text has no descenders to visually
+     center against, so a plain vertical-align: middle lands a hair low. */
+  transform: translateY(-1.4px);
+}
+.pg-share-icon-btn:hover { color: var(--text-dim); }
+.pg-share-icon-btn.open { color: var(--gold); }
+
+/* Centered under the title the same way .loot-share-card-row centers
+   Loot Tracker's own card -- zero height (and this whole row with it)
+   while .pg-share-card is hidden, rather than permanently reserving
+   its margin on every page load. */
+.pg-share-card-row { display: flex; justify-content: center; }
+
+.pg-share-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 6px;
+  margin: 6px 0 14px;
+}
+/* Author CSS setting `display` on this element always outranks the
+   browser's own [hidden]{display:none} default stylesheet rule --
+   same gotcha/fix as .loot-share-card[hidden] in loot-tracker.css. */
+.pg-share-card[hidden] { display: none; }
+
+.pg-share-generate-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.pg-share-generate-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pg-share-generate-btn:disabled { cursor: default; opacity: 0.6; }
+.pg-share-generate-btn.action-failed { border-color: var(--red); color: var(--red); }
+
+/* Replaces pgShareGenerateBtn in place once a link exists (see that
+   button's own click handler in app/pages.py) -- the link itself IS
+   the button, clicking it copies to clipboard and flashes "COPIED"
+   for a moment, same pattern/sizing as .pg-share-generate-btn above
+   so the swap doesn't change the card's own layout. */
+.pg-share-link-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pg-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+
+.pg-share-popup-hint { margin: 0; font-size: 15px; color: var(--text-faint); text-align: center; }
+
+/* ---------- Share-viewing page (myscape.io/s/<code> for a Purchase
+   Goals share -- see render_purchase_goals_share's own docstring in
+   app/pages.py for the full breakdown of what's reused vs. overridden
+   here). .purchase-goal-share wraps that whole page's body. ---------- */
+
+/* Same "hide rather than strip from the markup itself" discipline as
+   .landing-purchase-preview .pg-header above -- this share page has
+   neither a setup switcher nor a New/Rename/Delete menu, per explicit
+   instruction, since a visitor is only ever looking at the one frozen
+   setup the owner chose to share. */
+.purchase-goal-share .pg-header {
+  display: none;
+}
+
+/* The summary box's current-GP number and progress bar are hidden
+   outright, per explicit instruction -- a visitor never sees a figure
+   that could read as the OWNER's own live GP. The coins icon
+   (#pgCoinsAmount's own sibling <img>, not touched here) stays, now
+   centered alongside the total cost and the setup's own display icon
+   by .overlay-card's own justify-content override below. */
+.purchase-goal-share #pgCoinsAmount,
+.purchase-goal-share .overlay-progress {
+  display: none;
+}
+
+/* Centers the two remaining children (.overlay-source's coins icon,
+   .overlay-target's cost + setup icon) now that the middle flex:1
+   .overlay-progress spacer is gone. .overlay-target already renders
+   icon-then-amount thanks to its own row-reverse (see purchase-
+   goals.css' own .overlay-side.overlay-target rule), so left-to-right
+   this reads exactly [coins icon][total cost][setup icon] with no
+   DOM reordering needed. */
+.purchase-goal-share .overlay-card {
+  justify-content: center;
+}
+
+/* The green/amber/red owned-ownership border colors describe whether
+   THIS VISITOR's own bank could cover an item -- meaningless (and
+   per explicit instruction, unwanted) against a stranger's shared
+   setup, so every gear slot here falls back to the same neutral
+   border every other .gear-slot uses by default. */
+.purchase-goal-share .gear-slot.owned,
+.purchase-goal-share .gear-slot.not-owned,
+.purchase-goal-share .gear-slot.affordable {
+  border-color: var(--border);
+}
+
+/* Nothing in the gear doll/inventory grid is interactive here (see
+   render_purchase_goals_share's own #pgGearFrame capturing-phase
+   listener) except a plain click on a filled slot, which still opens
+   that item's wiki page -- same cursor treatment as
+   .landing-purchase-preview's own identical override above, and same
+   reasoning: an EMPTY slot or the hover "x" remove button shouldn't
+   invite a click that's already being swallowed. */
+.purchase-goal-share .gear-slot:not(.filled),
+.purchase-goal-share .gear-slot-remove {
+  cursor: default;
+}
+
+/* The setup-icon trigger is read-only here too (see
+   render_purchase_goals_share's own #pgIconTrigger clone-strip) --
+   default cursor instead of .overlay-icon-wrap's own base
+   cursor: pointer, and its hover affordance (background tint +
+   gold dashed outline) neutralized back to its resting look so
+   hovering it doesn't suggest it's still clickable. */
+.purchase-goal-share #pgIconTrigger {
+  cursor: default;
+}
+.purchase-goal-share .overlay-icon-wrap:hover {
+  background: none;
+}
+.purchase-goal-share .overlay-icon-wrap:hover .overlay-icon-placeholder {
+  border-color: var(--text-faint);
+  color: var(--text-faint);
+}
+
+/* The setup-name line above "Shared by <name>" -- same small-line-
+   above-the-title treatment as .loot-share-range in loot-tracker.css,
+   just this page's own name. */
+.pg-share-label { text-align: center; margin: 0 0 4px; }
