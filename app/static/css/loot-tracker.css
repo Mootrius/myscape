@@ -167,15 +167,20 @@
    permanently reserving its margin on every page load. */
 .loot-share-card-row { display: flex; justify-content: center; }
 
+/* padding/gap match Character Overview's own .public-profile-card
+   exactly -- that card's small cushion around its (already bordered)
+   buttons, not this one's old, roomier 12px/8px, per explicit
+   instruction to bring the two popups' amount of inner cushion in
+   line with each other. */
 .loot-share-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: 280px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 12px;
+  padding: 5px 6px;
   margin: 6px 0 14px;
 }
 /* Author CSS setting `display` on this element always outranks the

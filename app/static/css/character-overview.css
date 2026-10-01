@@ -1305,13 +1305,17 @@
    display, not a plain action button like Generate new link beside
    it. 190px is enough to show a full myscape.io/c/<code> link
    without being anywhere near the width .co-summary-row's own full-
-   width stats row uses; text-align: left (buttons default to center)
-   matches the readonly input this used to be, and overflow/ellipsis
-   is a safety net for the rare case a link doesn't fit, same as
-   Loot Tracker's own .loot-share-link-btn. */
+   width stats row uses. text-transform: none overrides
+   .public-profile-link-btn's own uppercase -- a link reads naturally
+   in its own mixed/lowercase form, not shouted in caps -- and
+   text-align stays centered (buttons already default to center, so
+   no override needed) for both the link itself and the "COPIED"
+   flash that briefly replaces it. overflow/ellipsis is a safety net
+   for the rare case a link doesn't fit, same as Loot Tracker's own
+   .loot-share-link-btn. */
 .public-profile-link-display {
   width: 190px;
-  text-align: left;
+  text-transform: none;
   overflow: hidden;
   text-overflow: ellipsis;
 }
