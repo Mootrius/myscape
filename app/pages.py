@@ -9349,12 +9349,17 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     coins is always 0 in share.payload, and resolved against EMPTY
     owned-items pools rather than the sharer's own real ones (see
     build_purchase_goal_share_snapshot's own docstring for why) -- so
-    every item in the setup comes back owned: False, cost == fullCost.
+    every item in the setup comes back owned: False, cost == fullCost,
+    EXCEPT whatever _is_always_attainable_item (app/purchase_goals.py)
+    already force-owns regardless of any pool, real or empty -- those
+    still read as owned: True here exactly as they do everywhere else.
     Two visible effects, both per explicit instruction: Still to
-    Purchase/Next Purchase below cover the WHOLE setup rather than
+    Purchase/Next Purchase below cover the WHOLE setup (runes/food/
+    potions/ammunition excepted, same as the real page) rather than
     just what the sharer hadn't bought yet, and the summary box's own
-    total (#pgCostAmount) reads as the sum of every item's price, not
-    net of anything already owned. The current-GP number and progress
+    total (#pgCostAmount) reads as the sum of every item's price minus
+    whatever those always-attainable items would have cost, not net of
+    anything ELSE already owned. The current-GP number and progress
     bar that would normally sit alongside that total are hidden
     outright via CSS instead (.purchase-goal-share #pgCoinsAmount/
     .overlay-progress in purchase-goals.css), per explicit instruction
@@ -9369,13 +9374,20 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     progress bar -- exactly the frozen-looking treatment asked for,
     with no client-side special-casing of that widget at all.
 
-    The actual-setup gear slots also lose their green/amber/red owned-
-    ownership border colors here (.purchase-goal-share .gear-slot.
-    owned/.not-owned/.affordable all forced back to the same neutral
-    .gear-slot border everything else uses) -- those colors describe
-    whether THIS VISITOR's own bank could cover an item, which makes
-    no sense to show against a stranger's shared setup, per explicit
-    instruction. The hover-only "remove item" button (the red x/circle
+    The actual-setup gear slots also lose their amber/red ownership
+    border colors here (.purchase-goal-share .gear-slot.not-owned/
+    .affordable forced back to the same neutral .gear-slot border
+    everything else uses) -- those colors describe whether THIS
+    VISITOR's own bank could cover an item, which makes no sense to
+    show against a stranger's shared setup, per explicit instruction.
+    .gear-slot.owned's own green is deliberately left alone: since
+    build_purchase_goal_share_snapshot resolves everything against
+    EMPTY owned-items pools (see its own docstring), "owned" can only
+    ever mean one thing on this page -- a rune/food/potion/ammunition
+    item (see _is_always_attainable_item in app/purchase_goals.py) --
+    and those should read as green here exactly as they do on the real
+    page, per explicit instruction. The hover-only "remove item" button
+    (the red x/circle
     in a filled slot's corner) is hidden the same way
     (.purchase-goal-share .gear-slot.filled:hover .gear-slot-remove)
     -- a visitor can't delete anything here regardless (see

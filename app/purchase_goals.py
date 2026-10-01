@@ -853,9 +853,199 @@ def resolve_gear_setup_icon(raw_icon: Optional[dict], mapping: dict) -> Optional
     return {"itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False}
 
 
+# Runes, food, potions, and ammunition are always cheap and trivially
+# re-buyable -- nobody meaningfully tracks "do I own this Lobster yet"
+# as a purchase goal the way they would a Scythe of vitur, so a setup
+# slot holding one of these is always treated as already owned here
+# (green border, never a Still to Purchase/Next Purchase entry),
+# regardless of whether build_owned_pools' own real bank/inventory/
+# equipment/potion-storage pool actually has it or not. Per explicit
+# instruction, sourced from the OSRS Wiki's own "Runes", "Food/All
+# food", "Potions", and "Ammunition" pages (see _ALWAYS_ATTAINABLE_
+# RUNE_NAMES/_ALWAYS_ATTAINABLE_FOOD_NAMES/_ALWAYS_ATTAINABLE_AMMO_
+# NAMES' own comments below, and _is_dose_style_potion_name for how
+# potions are matched instead of a hand-typed list of every dose
+# variant of every potion). Applied once, centrally, inside
+# _mark_slot_affordability below (equipment and inventory both funnel
+# through it -- see _build_one_gear_setup) rather than inside each of
+# _resolve_gear_slot_item's own four return branches, so every caller
+# of _mark_slot_affordability gets this for free. Matched by name,
+# lowercased, same convention app/possessions.py's own _DOSE_MERGE_
+# EXCLUDE_BASE_NAMES/_find_item_ids_with_cosmetic_fallback's blocklists
+# already use for this kind of curated string-matching rule.
+
+# All 24 current rune types (elemental, catalytic, combination, plus
+# Sunfire/Wrath/the elemental-mix runes from Nightmare Zone/Desert
+# Treasure II, and the Cabbage rune joke item) -- see
+# https://oldschool.runescape.wiki/w/Runes. Runecrafting items like
+# talismans/tiaras aren't runes themselves and aren't included.
+_ALWAYS_ATTAINABLE_RUNE_NAMES = frozenset({
+    "air rune", "mind rune", "water rune", "earth rune", "fire rune",
+    "body rune", "cosmic rune", "chaos rune", "nature rune", "law rune",
+    "death rune", "sunfire rune", "astral rune", "blood rune", "soul rune",
+    "wrath rune", "mist rune", "dust rune", "mud rune", "smoke rune",
+    "steam rune", "lava rune", "aether rune", "cabbage rune",
+})
+
+# Every realistic cooked/edible/drinkable food item a gear setup might
+# actually hold -- see https://oldschool.runescape.wiki/w/Food/All_food
+# (and its own Category:Food). Deliberately leaves out raw/uncooked
+# ingredients (nobody eats a Raw shark for healing), half-finished pies
+# (a "Part admiral pie (salmon)" isn't something you'd pack to eat),
+# and one-off minigame/quest novelty food with no real GE presence
+# (e.g. the Trouble Brewing/Gnome Restaurant drinks' more obscure
+# variants, "Birthday cake (Mobile Anniversary)") -- none of those are
+# realistic Purchase Goals entries in the first place. Add more here as
+# new food gets added to the game.
+_ALWAYS_ATTAINABLE_FOOD_NAMES = frozenset({
+    # Fish
+    "shrimps", "anchovies", "sardine", "salmon", "trout", "giant carp",
+    "cod", "herring", "pike", "mackerel", "tuna", "bass", "swordfish",
+    "lobster", "shark", "manta ray", "sea turtle", "monkfish", "anglerfish",
+    "dark crab", "karambwan", "cooked karambwan", "blighted anglerfish",
+    "blighted karambwan", "blighted manta ray", "cave eel", "lava eel",
+    "bluefin", "marlin", "haddock", "halibut", "edible seaweed",
+    # Meat and other mains
+    "cooked chicken", "cooked meat", "cooked chompy", "cooked jubbly",
+    "cooked rabbit", "cooked t-bone steak", "cooked wild kebbit",
+    "cooked sweetcorn", "cooked oomlie wrap", "cooked giant crab meat",
+    "giant crab meat", "giant frog legs", "roast beast meat",
+    "roast bird meat", "roast rabbit", "ugthanki meat", "ugthanki kebab",
+    "ugthanki kebab (bad)", "kebab", "toad's legs", "spicy toad's legs",
+    # Pies and pizzas
+    "admiral pie", "apple pie", "botanical pie", "fish pie", "garden pie",
+    "meat pie", "mud pie", "mushroom pie", "pumpkin pie", "redberry pie",
+    "dragonfruit pie", "anchovy pizza", "meat pizza", "pineapple pizza",
+    "plain pizza",
+    # Potatoes, cakes, and other baked goods
+    "baked potato", "chilli potato", "egg potato", "mushroom potato",
+    "potato with butter", "potato with cheese", "potato", "tuna potato",
+    "cake", "chocolate cake", "chocolate bar", "chocolate bomb", "bread",
+    "baguette", "roll", "cooking apple",
+    # Fruit and vegetables
+    "banana", "bruised banana", "cabbage", "lemon", "lemon chunks",
+    "lemon slices", "lime", "lime chunks", "lime slices", "orange",
+    "orange chunks", "orange slices", "pineapple", "pineapple chunks",
+    "pineapple ring", "peach", "pumpkin", "tomato", "chopped tomato",
+    "onion", "chopped onion", "onion & tomato", "dragonfruit",
+    "dwellberries", "redberries", "jangerberries", "caerula berries",
+    "tenti pineapple", "equa leaves", "cheese",
+    # Drinks and other prepared food
+    "cup of tea", "cup of tea (nettle)", "cup of tea (damiana)",
+    "cup of tea (milky damiana)", "damiana tea", "damiana tea (milky)",
+    "tea flask", "poison chalice", "stew", "spicy stew", "curry",
+    "half full wine jug", "jug of wine", "pot of cream", "asgarnian ale",
+    "greenman's ale", "dragon bitter", "dwarven stout", "grog", "beer",
+    "wizard's mind bomb", "vodka", "whisky", "gin", "brandy",
+    "chocolatey milk", "karamjan rum", "spinach roll", "easter egg",
+    "pineapple punch", "wizard blizzard", "blurberry special",
+    "choc saturday", "short green guy", "fruit blast", "drunk dragon",
+})
+
+# Every ammunition type that actually sits in the ammo slot or an
+# inventory ammo stack -- see
+# https://oldschool.runescape.wiki/w/Ammunition. Crystal bow/Bow of
+# Faerdhinen are mentioned on that page too (they need no separate
+# ammo), but they're weapons, not ammunition, so they're left out here.
+# Chinchompas and throwing knives aren't on that page either (they're
+# wielded in the weapon slot, not worn as ammo) and are left out for
+# the same reason.
+_ALWAYS_ATTAINABLE_AMMO_NAMES = frozenset({
+    "bronze arrow", "iron arrow", "steel arrow", "mithril arrow",
+    "adamant arrow", "rune arrow", "amethyst arrow", "dragon arrow",
+    "seeking bronze arrow", "seeking iron arrow", "seeking steel arrow",
+    "seeking mithril arrow", "seeking adamant arrow", "seeking rune arrow",
+    "seeking amethyst arrow", "seeking dragon arrow", "training arrows",
+    "ogre arrow", "ice arrows", "broad arrows", "brutal arrows",
+    "fire arrows",
+    "bronze bolts", "opal bolts (e)", "blurite bolts", "jade bolts (e)",
+    "silver bolts", "iron bolts", "pearl bolts (e)", "steel bolts",
+    "topaz bolts (e)", "mithril bolts", "sapphire bolts (e)",
+    "emerald bolts (e)", "adamant bolts", "ruby bolts (e)",
+    "diamond bolts (e)", "kebbit bolts", "long kebbit bolts", "broad bolts",
+    "runite bolts", "dragonstone bolts (e)", "onyx bolts (e)",
+    "amethyst broad bolts", "dragon bolts", "sunlight antler bolts",
+    "moonlight antler bolts", "bolt rack",
+    "bronze dart", "iron dart", "steel dart", "black dart", "mithril dart",
+    "adamant dart", "rune dart", "amethyst dart", "dragon dart",
+    "atlatl dart",
+    "bronze javelin", "iron javelin", "steel javelin", "mithril javelin",
+    "adamant javelin", "rune javelin", "amethyst javelin", "dragon javelin",
+    "morrigan's javelin",
+    "guam tar", "marrentill tar", "tarromin tar", "harralander tar",
+    "irit tar",
+    "steel cannonball", "granite cannonball",
+})
+
+# Potions aren't matched by a hand-typed list of every dose variant of
+# every potion (210+ and counting) -- same insight app/possessions.py's
+# own _dose_family already uses for a different purpose (merging dose
+# variants for display): OSRS names every dose-specific potion item
+# "<base name>(<dose>)", 1-4, and nothing else in the game uses that
+# exact pattern except a handful of charge-based jewelry/accessories
+# (an Amulet of glory(1) isn't "1/4 of a shared potion"). Duplicated
+# here rather than imported from app/possessions.py -- that module
+# already imports FROM this one (app/possessions.py:53), so importing
+# the reverse direction would be a circular import; same "duplicate,
+# cross-reference, never share" convention this codebase's own CSS
+# files already follow for cross-file overlap.
+_POTION_DOSE_NAME_RE = re.compile(r"^(.*\S)\s*\((\d)\)$")
+_POTION_DOSE_EXCLUDE_BASE_NAMES = frozenset({
+    "amulet of glory", "amulet of chemistry", "ring of wealth",
+    "ring of dueling", "ring of the elements", "combat bracelet",
+    "skills necklace", "games necklace", "necklace of passage",
+    "digsite pendant", "slayer ring", "burning amulet",
+    "trailblazer amulet",
+})
+
+
+def _is_dose_style_potion_name(name: str) -> bool:
+    """True for a dose-specific potion name like "Super restore(3)" or
+    "Saradomin brew(4)" -- see _POTION_DOSE_NAME_RE's own comment above
+    for why this covers every potion in the game (current and future)
+    without a hardcoded list, and _POTION_DOSE_EXCLUDE_BASE_NAMES for
+    the handful of non-potion items this same "(N)" naming pattern
+    would otherwise also match."""
+    match = _POTION_DOSE_NAME_RE.match(name.strip())
+    if not match:
+        return False
+    base, dose = match.group(1).strip(), int(match.group(2))
+    if dose < 1 or dose > 4:
+        return False
+    return base.lower() not in _POTION_DOSE_EXCLUDE_BASE_NAMES
+
+
+def _is_always_attainable_item(name: Optional[str]) -> bool:
+    """True for any rune, food, potion, or ammunition item -- see the
+    constants/comments above for exactly what each category covers and
+    why. Case-insensitive, same convention every other curated name-set
+    in this codebase already matches by."""
+    if not name:
+        return False
+    lowered = name.strip().lower()
+    return (
+        lowered in _ALWAYS_ATTAINABLE_RUNE_NAMES
+        or lowered in _ALWAYS_ATTAINABLE_FOOD_NAMES
+        or lowered in _ALWAYS_ATTAINABLE_AMMO_NAMES
+        or _is_dose_style_potion_name(name)
+    )
+
+
 def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[dict]:
     if resolved is None:
         return None
+    # Runes/food/potions/ammunition are always treated as already
+    # owned -- see _is_always_attainable_item's own docstring above.
+    # Forcing cost to 0 alongside owned keeps the two fields consistent
+    # with what "owned" means everywhere else in this dict shape (cost
+    # is "what's left to buy"; fullCost, untouched below, stays the
+    # item's real price if anything ever needs it). This runs before
+    # purchasable/affordable are computed, so both naturally follow
+    # from owned=True the same way they would for anything genuinely
+    # owned.
+    if _is_always_attainable_item(resolved.get("itemName")):
+        resolved["owned"] = True
+        resolved["cost"] = 0
     # A plain-untradeable item can still carry a real unitPrice -- any
     # item the ported RuneLite table has a linked value for (see
     # derived_price_by_name) -- and that's just as much a real,
@@ -1216,23 +1406,31 @@ def build_purchase_goal_share_snapshot(setup: GearSetup) -> dict:
     real ones build_gear_setups itself resolves against -- so every
     item in _resolve_gear_slot_item comes back owned: False, cost ==
     fullCost, regardless of what the sharer's own bank actually held
-    at share time. Per explicit instruction: a visitor isn't shown
-    this setup net of the sharer's own belongings, they're shown the
-    setup itself -- EVERY item in it, each at its full undiscounted
-    price. Concretely, that means: _still_to_purchase_summary's own
-    "pending = [... if not owned]" filter now keeps every item (it
-    excluded already-owned ones before), so Still to Purchase/Next
-    Purchase cover the whole setup, not just whatever was left to buy;
-    and totalCost (which .purchase-goal-share's own #pgCostAmount
-    reads) becomes the sum of every item's price -- same value as
-    totalFullCost now, rather than totalCost's own usual "net of what's
-    already owned" meaning everywhere else this dict shape is built.
-    The gear doll/inventory grid's own green/amber/red ownership
-    border colors are already neutralized back to gray by
-    .purchase-goal-share's own override in purchase-goals.css (nothing
-    about this account's real bank should be implied either way), so
-    owned always resolving to False here costs that page nothing --
-    it was already hidden there.
+    at share time, EXCEPT whatever _mark_slot_affordability's own
+    _is_always_attainable_item check force-owns regardless of any
+    pool -- a rune/food/potion/ammunition item still reads owned:
+    True/cost: 0 here exactly as it does everywhere else (see that
+    function's own comment for why this rule applies globally, not
+    just on the share page). Per explicit instruction: a visitor isn't
+    shown this setup net of the sharer's own belongings, they're shown
+    the setup itself -- every item that's a genuine purchase goal, at
+    its full undiscounted price. Concretely, that means:
+    _still_to_purchase_summary's own "pending = [... if not owned]"
+    filter now keeps every item except the always-attainable ones (it
+    excluded every already-owned item before), so Still to Purchase/
+    Next Purchase cover the whole setup minus runes/food/potions/
+    ammunition, not just whatever was left to buy; and totalCost
+    (which .purchase-goal-share's own #pgCostAmount reads) becomes the
+    sum of every item's price minus those same always-attainable ones
+    -- same value as totalFullCost minus their fullCost, rather than
+    totalCost's own usual "net of what's already owned" meaning
+    everywhere else this dict shape is built. The gear doll/inventory
+    grid's own amber/red (but not green) ownership border colors are
+    already neutralized back to gray by .purchase-goal-share's own
+    override in purchase-goals.css (nothing about this account's real
+    bank should be implied either way) -- green stays, since on this
+    page "owned" can now only ever mean "always-attainable item," and
+    those should read as green here exactly as on the real page.
 
     coins is also frozen at 0 here, never the account's real current
     GP -- per explicit instruction, the shared page's own summary box
