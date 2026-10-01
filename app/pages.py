@@ -4182,14 +4182,22 @@ def render_account(player: PlayerView) -> str:
           }
         });
       }
+      // Three-click cycle per column: ascending, then descending,
+      // then back to no sort at all (sharedLinksSortKey = null, which
+      // renderSharedLinksTable already treats as "show the original
+      // fetch order") -- a 4th click starts the same cycle over from
+      // ascending, same as clicking a column that wasn't already
+      // active.
       sharedLinkSortHeaders.forEach((btn) => {
         btn.addEventListener('click', () => {
           const key = btn.getAttribute('data-sort-key');
-          if (key === sharedLinksSortKey) {
-            sharedLinksSortDir = sharedLinksSortDir === 'asc' ? 'desc' : 'asc';
-          } else {
+          if (key !== sharedLinksSortKey) {
             sharedLinksSortKey = key;
             sharedLinksSortDir = 'asc';
+          } else if (sharedLinksSortDir === 'asc') {
+            sharedLinksSortDir = 'desc';
+          } else {
+            sharedLinksSortKey = null;
           }
           updateSharedLinkSortHeaders();
           renderSharedLinksTable();

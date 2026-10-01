@@ -811,7 +811,16 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 }
 .shared-link-sort-header:hover { color: var(--text); }
 .shared-link-sort-header.active { color: var(--gold); }
-.shared-link-sort-arrow { display: inline-block; }
+/* Fixed width (not min-width -- a floor alone would still let the
+   header grow when the real glyph is wider than it) rather than
+   sized by content, so this reserves the exact same space whether
+   it's empty (not the active sort column) or showing an arrow --
+   without this, a header's own natural width (and with it, every
+   other column's share of the table's fixed 100% width, since this
+   table uses auto layout) changed every time a column's sort state
+   turned on or off. 12px comfortably fits " \u2191"/" \u2193" at this
+   header's own 10.5px font. */
+.shared-link-sort-arrow { display: inline-block; width: 12px; }
 
 /* Shared gray-trash-can -> red-on-hover -> red "confirm" label delete
    button -- used by both DEACTIVATE (Shared Links table) and DELETE
