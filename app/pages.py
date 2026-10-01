@@ -3606,11 +3606,11 @@ def render_account(player: PlayerView) -> str:
             <table class="shared-links-table">
               <thead>
                 <tr>
-                  <th>Character</th>
-                  <th>App</th>
-                  <th>Code</th>
-                  <th>Expiration</th>
-                  <th>Deactivation</th>
+                  <th><button type="button" class="shared-link-sort-header" data-sort-key="character">Character<span class="shared-link-sort-arrow"></span></button></th>
+                  <th><button type="button" class="shared-link-sort-header" data-sort-key="app">App<span class="shared-link-sort-arrow"></span></button></th>
+                  <th><button type="button" class="shared-link-sort-header" data-sort-key="code">Code<span class="shared-link-sort-arrow"></span></button></th>
+                  <th><button type="button" class="shared-link-sort-header" data-sort-key="expiration">Expiration<span class="shared-link-sort-arrow"></span></button></th>
+                  <th>Deletion</th>
                 </tr>
               </thead>
               <tbody id="sharedLinksTableBody"></tbody>
@@ -3680,6 +3680,44 @@ def render_account(player: PlayerView) -> str:
     """
     script = """
     (function () {
+      // Same trash-can icon Goal Tracking's own .gt-goal-delete button
+      // draws (see goalRowHtml in this file) -- shared here by both
+      // DEACTIVATE (Shared Links table) and DELETE CHARACTER (Linked
+      // Accounts list below) via trashDeleteBtnHtml, rather than each
+      // re-drawing its own copy.
+      const TRASH_ICON_SVG = '<svg class="trash-delete-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 4H14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M6 4V2.5C6 2.22386 6.22386 2 6.5 2H9.5C9.77614 2 10 2.22386 10 2.5V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 4L4.1 13.2C4.13 13.66 4.51 14 4.97 14H11.03C11.49 14 11.87 13.66 11.9 13.2L12.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 6.5V11.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M9.5 6.5V11.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+
+      function trashDeleteBtnHtml(confirmLabel) {
+        return TRASH_ICON_SVG + '<span class="trash-delete-confirm">' + confirmLabel + '</span>';
+      }
+
+      // Arms a trash-delete button on its first click (just shows the
+      // confirm label in place of the icon); a second click while
+      // already armed runs `onConfirm`. Clicking anywhere else on the
+      // page disarms it again -- see the shared outside-click listener
+      // further down, registered once for every button this renders,
+      // same two-step-with-click-away-to-cancel UX as Goal Tracking's
+      // own delete button.
+      function wireTrashDeleteBtn(btn, onConfirm) {
+        btn.addEventListener('click', () => {
+          if (btn.classList.contains('trash-delete-btn--confirm')) {
+            onConfirm();
+            return;
+          }
+          document.querySelectorAll('.trash-delete-btn--confirm').forEach((b) => {
+            if (b !== btn) b.classList.remove('trash-delete-btn--confirm');
+          });
+          btn.classList.add('trash-delete-btn--confirm');
+        });
+      }
+
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('.trash-delete-btn')) return;
+        document.querySelectorAll('.trash-delete-btn--confirm').forEach((b) => {
+          b.classList.remove('trash-delete-btn--confirm');
+        });
+      });
+
       // Update Email / Update Password / Delete Account -- each
       // starts collapsed behind its own button.secondary/button.danger
       // (see the matching markup above); clicking it just shows/hides
@@ -3894,20 +3932,16 @@ def render_account(player: PlayerView) -> str:
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
-        removeBtn.className = 'danger';
-        removeBtn.textContent = 'DELETE CHARACTER';
-        removeBtn.dataset.armed = 'false';
-        // Same arm-then-confirm two-step as DELETE ACCOUNT above, for
-        // the same reason -- this is also a permanent, undoable-only-
-        // by-losing-data action, just scoped to one character instead
-        // of the whole login.
-        removeBtn.addEventListener('click', async () => {
+        removeBtn.className = 'trash-delete-btn';
+        removeBtn.title = 'Delete character';
+        removeBtn.setAttribute('aria-label', 'Delete character');
+        removeBtn.innerHTML = trashDeleteBtnHtml('ARE YOU SURE?');
+        // Same two-step, click-away-to-cancel confirm as the Shared
+        // Links table's own DEACTIVATE button -- this is also a
+        // permanent, undoable-only-by-losing-data action, just scoped
+        // to one character instead of the whole login.
+        wireTrashDeleteBtn(removeBtn, async () => {
           gameAccountsError.classList.remove('show');
-          if (removeBtn.dataset.armed !== 'true') {
-            removeBtn.dataset.armed = 'true';
-            removeBtn.textContent = 'ARE YOU SURE?';
-            return;
-          }
           removeBtn.disabled = true;
           try {
             const res = await fetch(`/api/link/game-accounts/${gameAccount.id}`, { method: 'DELETE' });
@@ -3918,13 +3952,11 @@ def render_account(player: PlayerView) -> str:
             const data = await res.json().catch(() => ({}));
             gameAccountsError.textContent = describeError(data, 'Could not remove this account.');
             gameAccountsError.classList.add('show');
-            removeBtn.dataset.armed = 'false';
-            removeBtn.textContent = 'DELETE CHARACTER';
+            removeBtn.classList.remove('trash-delete-btn--confirm');
           } catch (err) {
             gameAccountsError.textContent = 'Something went wrong. Please try again.';
             gameAccountsError.classList.add('show');
-            removeBtn.dataset.armed = 'false';
-            removeBtn.textContent = 'DELETE CHARACTER';
+            removeBtn.classList.remove('trash-delete-btn--confirm');
           } finally {
             removeBtn.disabled = false;
           }
@@ -3986,11 +4018,17 @@ def render_account(player: PlayerView) -> str:
       // app/routers/account.py for both). Fetched fresh on load, same
       // reasoning as the Linked Accounts list just above: it's the
       // same data this section's own DEACTIVATE button can immediately
-      // change.
+      // change. sharedLinksData holds whatever that fetch last
+      // returned, re-sorted and re-rendered in place by the column
+      // headers below without a re-fetch -- same split as Storages
+      // Viewer's own state.items/renderTable.
       const sharedLinksTableWrap = document.getElementById('sharedLinksTableWrap');
       const sharedLinksTableBody = document.getElementById('sharedLinksTableBody');
       const sharedLinksEmpty = document.getElementById('sharedLinksEmpty');
       const sharedLinksError = document.getElementById('sharedLinksError');
+      let sharedLinksData = [];
+      let sharedLinksSortKey = null;
+      let sharedLinksSortDir = 'asc';
 
       // YYYY-MM-DD -- slicing the ISO string itself rather than going
       // through toLocaleDateString's own formatting options, so this
@@ -3998,6 +4036,14 @@ def render_account(player: PlayerView) -> str:
       // browser happens to default to.
       function fmtExpiration(iso) {
         return new Date(iso).toISOString().slice(0, 10);
+      }
+
+      function sharedLinkSortValue(link, key) {
+        if (key === 'character') return (link.character_name || 'Unknown character').toLowerCase();
+        if (key === 'app') return link.content_type_label.toLowerCase();
+        if (key === 'code') return link.code.toLowerCase();
+        if (key === 'expiration') return new Date(link.expires_at).getTime();
+        return '';
       }
 
       function renderSharedLinkRow(link) {
@@ -4024,7 +4070,9 @@ def render_account(player: PlayerView) -> str:
         // card's own publicProfileCopyBtn, just flashing back to the
         // code afterward instead of staying locked on "COPIED" -- this
         // button (unlike that one) is meant to be clicked again, for
-        // this row or any other.
+        // this row or any other. The button's own fixed width (see
+        // .shared-link-code-btn in myscape.css) is what keeps it from
+        // resizing while "COPIED" is showing.
         codeBtn.addEventListener('click', async () => {
           try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -4056,19 +4104,15 @@ def render_account(player: PlayerView) -> str:
         const actionCell = document.createElement('td');
         const deactivateBtn = document.createElement('button');
         deactivateBtn.type = 'button';
-        deactivateBtn.className = 'danger';
-        deactivateBtn.textContent = 'DEACTIVATE';
-        deactivateBtn.dataset.armed = 'false';
-        // Same arm-then-confirm two-step as DELETE CHARACTER/DELETE
-        // ACCOUNT above, for the same reason -- undoable only by
-        // sharing again, not a mistake worth one click.
-        deactivateBtn.addEventListener('click', async () => {
+        deactivateBtn.className = 'trash-delete-btn';
+        deactivateBtn.title = 'Deactivate link';
+        deactivateBtn.setAttribute('aria-label', 'Deactivate link');
+        deactivateBtn.innerHTML = trashDeleteBtnHtml('SURE?');
+        // Same two-step, click-away-to-cancel confirm as DELETE
+        // CHARACTER below -- undoable only by sharing again, not a
+        // mistake worth one click.
+        wireTrashDeleteBtn(deactivateBtn, async () => {
           sharedLinksError.classList.remove('show');
-          if (deactivateBtn.dataset.armed !== 'true') {
-            deactivateBtn.dataset.armed = 'true';
-            deactivateBtn.textContent = 'ARE YOU SURE?';
-            return;
-          }
           deactivateBtn.disabled = true;
           try {
             const res = await fetch(`/api/account/shared-links/${link.id}`, { method: 'DELETE' });
@@ -4079,13 +4123,11 @@ def render_account(player: PlayerView) -> str:
             const data = await res.json().catch(() => ({}));
             sharedLinksError.textContent = describeError(data, 'Could not deactivate this link.');
             sharedLinksError.classList.add('show');
-            deactivateBtn.dataset.armed = 'false';
-            deactivateBtn.textContent = 'DEACTIVATE';
+            deactivateBtn.classList.remove('trash-delete-btn--confirm');
           } catch (err) {
             sharedLinksError.textContent = 'Something went wrong. Please try again.';
             sharedLinksError.classList.add('show');
-            deactivateBtn.dataset.armed = 'false';
-            deactivateBtn.textContent = 'DEACTIVATE';
+            deactivateBtn.classList.remove('trash-delete-btn--confirm');
           } finally {
             deactivateBtn.disabled = false;
           }
@@ -4096,6 +4138,62 @@ def render_account(player: PlayerView) -> str:
         return row;
       }
 
+      function renderSharedLinksTable() {
+        sharedLinksTableBody.innerHTML = '';
+        if (sharedLinksData.length === 0) {
+          sharedLinksTableWrap.style.display = 'none';
+          sharedLinksEmpty.style.display = '';
+          return;
+        }
+        sharedLinksEmpty.style.display = 'none';
+        sharedLinksTableWrap.style.display = '';
+        let rows = sharedLinksData;
+        if (sharedLinksSortKey) {
+          rows = rows.slice().sort((a, b) => {
+            const av = sharedLinkSortValue(a, sharedLinksSortKey);
+            const bv = sharedLinkSortValue(b, sharedLinksSortKey);
+            if (av < bv) return sharedLinksSortDir === 'asc' ? -1 : 1;
+            if (av > bv) return sharedLinksSortDir === 'asc' ? 1 : -1;
+            return 0;
+          });
+        }
+        rows.forEach((link) => sharedLinksTableBody.appendChild(renderSharedLinkRow(link)));
+      }
+
+      // Clicking a column header sorts the already-fetched data in
+      // place (no re-fetch) -- a second click on the already-active
+      // column flips direction, same click-to-sort/click-again-to-
+      // flip convention as Storages Viewer's own .pm-sort-header.
+      // Deletion isn't a column anyone would sort by, so it's plain
+      // text with no header button at all.
+      const sharedLinkSortHeaders = document.querySelectorAll('.shared-link-sort-header');
+      function updateSharedLinkSortHeaders() {
+        sharedLinkSortHeaders.forEach((btn) => {
+          const key = btn.getAttribute('data-sort-key');
+          const arrow = btn.querySelector('.shared-link-sort-arrow');
+          if (key === sharedLinksSortKey) {
+            btn.classList.add('active');
+            arrow.textContent = sharedLinksSortDir === 'asc' ? ' \u2191' : ' \u2193';
+          } else {
+            btn.classList.remove('active');
+            arrow.textContent = '';
+          }
+        });
+      }
+      sharedLinkSortHeaders.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-sort-key');
+          if (key === sharedLinksSortKey) {
+            sharedLinksSortDir = sharedLinksSortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            sharedLinksSortKey = key;
+            sharedLinksSortDir = 'asc';
+          }
+          updateSharedLinkSortHeaders();
+          renderSharedLinksTable();
+        });
+      });
+
       async function loadSharedLinks() {
         sharedLinksError.classList.remove('show');
         try {
@@ -4105,16 +4203,8 @@ def render_account(player: PlayerView) -> str:
             sharedLinksError.classList.add('show');
             return;
           }
-          const links = await res.json();
-          sharedLinksTableBody.innerHTML = '';
-          if (links.length === 0) {
-            sharedLinksTableWrap.style.display = 'none';
-            sharedLinksEmpty.style.display = '';
-            return;
-          }
-          sharedLinksEmpty.style.display = 'none';
-          sharedLinksTableWrap.style.display = '';
-          links.forEach((link) => sharedLinksTableBody.appendChild(renderSharedLinkRow(link)));
+          sharedLinksData = await res.json();
+          renderSharedLinksTable();
         } catch (err) {
           sharedLinksError.textContent = 'Something went wrong. Please try again.';
           sharedLinksError.classList.add('show');

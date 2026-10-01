@@ -743,6 +743,16 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   white-space: nowrap;
 }
 
+/* CODE is the 3rd column -- a fixed-width button (see
+   .shared-link-code-btn below) inside an otherwise-plain cell, so its
+   own cell padding is the other place extra side-space was coming
+   from alongside the button's own width. */
+.shared-links-table th:nth-child(3),
+.shared-links-table td:nth-child(3) {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
 .shared-links-table th {
   position: sticky;
   top: 0;
@@ -771,7 +781,7 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
    myscape.io/s/<code> URL, not just this text -- see the button's own
    click handler in app/pages.py. */
 .shared-link-code-btn {
-  width: 92px;
+  width: 68px;
   padding: 4px 0;
   font-size: 12px;
   font-family: inherit;
@@ -782,16 +792,63 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 }
 .shared-link-code-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 
-/* Same compact-button override .game-account-actions button above
-   uses -- this table's own action cell is already narrow, no need
-   for button.danger's usual full-width treatment (e.g. DELETE
-   ACCOUNT further down this same page). */
-.shared-links-table .danger {
-  width: auto;
-  padding: 6px 12px;
-  font-size: 12px;
-  margin-top: 0;
+/* Sortable column headers (Character/App/Code/Expiration -- Deletion
+   isn't sortable, plain text) -- same plain-button-reset-to-text,
+   active-column-in-gold convention as Storages Viewer's own
+   .pm-sort-header/.pm-sort-arrow, just inheriting this table's own
+   centered/uppercase th styling instead of overriding it, since
+   every header here is centered rather than Storages Viewer's
+   left/center mix. */
+.shared-link-sort-header {
+  background: none; border: none; padding: 0; margin: 0; font: inherit;
+  color: inherit; letter-spacing: inherit; text-transform: inherit;
+  cursor: pointer;
 }
+.shared-link-sort-header:hover { color: var(--text); }
+.shared-link-sort-header.active { color: var(--gold); }
+.shared-link-sort-arrow { display: inline-block; }
+
+/* Shared gray-trash-can -> red-on-hover -> red "confirm" label delete
+   button -- used by both DEACTIVATE (Shared Links table) and DELETE
+   CHARACTER (Linked Accounts list below), same SVG-swaps-for-a-text-
+   label-on-click pattern Goal Tracking's own .gt-goal-delete already
+   uses per-goal. Inline in its own cell/slot in both layouts rather
+   than overlaid on a card's corner the way that one is -- there's
+   already a dedicated spot reserved for it either way, so no
+   position: absolute needed here. The confirm text itself ("SURE?"/
+   "ARE YOU SURE?") differs per caller and lives in the markup each
+   one renders -- only the swap mechanics are shared here. button.
+   (type + class) on both this and its --confirm variant so each
+   beats .game-account-actions button's own generic button override
+   at equal specificity, by coming later in this file. */
+button.trash-delete-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-faint);
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+button.trash-delete-btn:hover { color: var(--red); }
+.trash-delete-icon { display: block; }
+.trash-delete-confirm {
+  display: none;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+button.trash-delete-btn--confirm {
+  color: var(--red);
+  border-color: var(--red);
+  padding: 4px 10px;
+}
+button.trash-delete-btn--confirm .trash-delete-icon { display: none; }
+button.trash-delete-btn--confirm .trash-delete-confirm { display: block; }
 
 .shared-links-empty {
   color: var(--text-dim);
