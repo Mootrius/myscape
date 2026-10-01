@@ -748,7 +748,8 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 .shared-links-table th,
 .shared-links-table td {
   padding: 7px 10px;
-  text-align: left;
+  text-align: center;
+  vertical-align: middle;
   white-space: nowrap;
 }
 
@@ -771,16 +772,11 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   text-transform: uppercase;
   letter-spacing: 0.03em;
   font-size: 10.5px;
-  text-align: center;
   border-bottom: 1px solid var(--border);
 }
 
 .shared-links-table tbody tr:not(:last-child) td {
   border-bottom: 1px solid var(--border);
-}
-
-.shared-links-table td:last-child {
-  text-align: right;
 }
 
 /* Shows the share's own lowercase code (not uppercased the way most
@@ -868,11 +864,38 @@ button.trash-delete-btn--confirm .trash-delete-confirm { display: block; }
    to the same fixed width here keeps the icon <-> "SURE?" swap from
    resizing anything -- same fix as the Code column's own button
    gets from .shared-link-code-btn's fixed width above. */
+/* display: flex (not the base rule's inline-flex) takes this button
+   out of the TD's inline formatting context entirely -- an inline-
+   flex child's own line-box metrics were still inflating the row's
+   height in the icon state vs. the "SURE?" text state even with an
+   explicit height set on the button itself (confirmed by measuring
+   the button's own box at a steady 23px in both states while the
+   surrounding <tr> still grew/shrank by 2px). margin: 0 auto takes
+   over the centering .shared-links-table td's own text-align: center
+   provided for the old inline-flex version. */
 .shared-links-table .trash-delete-btn,
 .shared-links-table .trash-delete-btn--confirm {
+  display: flex;
   width: 44px;
+  height: 23px;
+  margin: 0 auto;
   padding: 4px 0;
 }
+
+/* DELETE ACCOUNT's own inner submit button -- the one revealed inside
+   the collapsed "ACCOUNT DELETION" section (render_account,
+   app/pages.py), not the DELETE ACCOUNT toggle button that opens it.
+   Filled solid red rather than button.danger's usual red-outline-on-
+   transparent, so the one button that actually deletes the account
+   reads as more final than the toggle above it. Combined with
+   .danger (not a replacement for it) so it keeps that class's shape/
+   sizing -- this only overrides color. */
+button.danger--filled {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+}
+button.danger--filled:hover { background: #a84a3d; }
 
 .shared-links-empty {
   color: var(--text-dim);

@@ -3671,7 +3671,7 @@ def render_account(player: PlayerView) -> str:
                 <label for="deletePassword">Password</label>
                 <input type="password" id="deletePassword" name="deletePassword" placeholder="Your password" required />
               </div>
-              <button class="danger" type="submit" id="deleteSubmitBtn" data-armed="false">DELETE ACCOUNT</button>
+              <button class="danger danger--filled" type="submit" id="deleteSubmitBtn" data-armed="false">DELETE ACCOUNT</button>
             </form>
           </div>
         </div>
