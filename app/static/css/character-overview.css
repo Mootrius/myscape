@@ -529,9 +529,33 @@
   color: var(--text-dim);
   cursor: pointer;
 }
-.clog-sync-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
-.clog-sync-btn:disabled { opacity: 0.5; cursor: default; }
+/* Idle hover only highlights the border -- the icon itself (color:
+   currentColor in its own SVG, same as every other icon-only button
+   on this page) stays the dim default until a sync is actually
+   running, per explicit instruction: a plain hover is "you could
+   click this", not "this is doing something" the way .syncing below
+   is. */
+.clog-sync-btn:hover { border-color: var(--gold-dim); }
+/* No more opacity dimming here -- disabled is only ever true while
+   .syncing is also set (see this button's own click handler above),
+   and that state is now a deliberate full highlight (below), not a
+   faded one. cursor stays plain regardless, since a click genuinely
+   does nothing while a sync is already in flight. */
+.clog-sync-btn:disabled { cursor: default; }
 .clog-sync-btn svg { display: block; }
+/* While a sync is actually in flight: both the border AND the icon
+   go gold (unlike the idle :hover above, which is border-only), on
+   top of the spin below -- "this is doing something" reads as a
+   stronger highlight than "you could click this", per explicit
+   instruction. Declared after :hover so it wins the tie on
+   border-color if the pointer happens to still be sitting over the
+   button when a sync starts (same specificity, source order decides),
+   rather than this fading back to :hover's own weaker border color
+   the instant the mouse so much as twitches. Clearing this class once
+   the request settles (success or failure -- see that handler's own
+   final .then) is what makes the button "go back to normal" -- there
+   is no separate rule to remove, just this one no longer matching. */
+.clog-sync-btn.syncing { border-color: var(--gold); color: var(--gold); }
 /* Spins the icon itself (not the button's own border/background)
    while a sync is in flight, so the button's square footprint never
    shifts. */
