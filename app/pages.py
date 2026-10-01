@@ -1171,26 +1171,28 @@ _ICON_SUMMARY_COLLECTIONS = _wiki_icon_url("Character_Summary_-_Collections_Logg
 
 # The account-type tile's own seven icons (one per GameAccount.
 # account_type code -- see that column's own comment in app/models.py)
-# plus the readable label shown as this tile's "value" text, same
-# "icon's alt/title names the category, the co-stat-value div holds
-# the actual value" split every other summary tile uses -- except here
-# the icon ITSELF is also part of the value (there's no single fixed
-# icon for "account type" the way there is for, say, combat level), so
-# the script below (ACCOUNT_TYPE_INFO, baked in from this same dict)
-# swaps the <img>'s src/alt/title to match once the sync'd account_type
-# is known, same "server already knows this, but fetch it client-side
-# like every other summary stat" convention _SUMMARY_STATS' own
-# comment below explains. MAIN's coin icon is this tile's default/
-# pre-fetch appearance, same arbitrary-but-reasonable default role
+# plus the all-caps label shown as this tile's "value" text (same
+# string as this dict's own key, e.g. "UGIM" not "Unranked Group
+# Ironman" -- shown that way on request), same "icon's alt/title names
+# the category, the co-stat-value div holds the actual value" split
+# every other summary tile uses -- except here the icon ITSELF is also
+# part of the value (there's no single fixed icon for "account type"
+# the way there is for, say, combat level), so the script below
+# (ACCOUNT_TYPE_INFO, baked in from this same dict) swaps the <img>'s
+# src/alt/title to match once the sync'd account_type is known, same
+# "server already knows this, but fetch it client-side like every
+# other summary stat" convention _SUMMARY_STATS' own comment below
+# explains. MAIN's coin icon is this tile's default/pre-fetch
+# appearance, same arbitrary-but-reasonable default role
 # _ICON_SUMMARY_GE_VALUE used to play for the tile this replaced.
 _ACCOUNT_TYPE_INFO = {
-    "MAIN": (_wiki_icon_url("Coins_10000.png"), "Main"),
-    "IRONMAN": (_wiki_icon_url("Ironman_helm.png"), "Ironman"),
-    "UIM": (_wiki_icon_url("Ultimate_ironman_helm.png"), "Ultimate Ironman"),
-    "HCIM": (_wiki_icon_url("Hardcore_ironman_helm.png"), "Hardcore Ironman"),
-    "GIM": (_wiki_icon_url("Group_ironman_helm.png"), "Group Ironman"),
-    "HCGIM": (_wiki_icon_url("Hardcore_group_ironman_helm.png"), "Hardcore Group Ironman"),
-    "UGIM": (_wiki_icon_url("Group_ironman_helm_(unranked).png"), "Unranked Group Ironman"),
+    "MAIN": (_wiki_icon_url("Coins_10000.png"), "MAIN"),
+    "IRONMAN": (_wiki_icon_url("Ironman_helm.png"), "IRONMAN"),
+    "UIM": (_wiki_icon_url("Ultimate_ironman_helm.png"), "UIM"),
+    "HCIM": (_wiki_icon_url("Hardcore_ironman_helm.png"), "HCIM"),
+    "GIM": (_wiki_icon_url("Group_ironman_helm.png"), "GIM"),
+    "HCGIM": (_wiki_icon_url("Hardcore_group_ironman_helm.png"), "HCGIM"),
+    "UGIM": (_wiki_icon_url("Group_ironman_helm_(unranked).png"), "UGIM"),
 }
 
 
