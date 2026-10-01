@@ -7968,13 +7968,23 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       // publicProfileCard (no data to refetch on open either, since
       // nothing here is generated until GENERATE SHAREABLE LINK is
       // actually clicked -- see that button's own handler below).
+      // Null-guarded (unlike that Character Overview pair, which
+      // always has both elements present) because
+      // render_loot_tracker_share strips this icon's own <h2> out of
+      // the reused body string entirely before this script ever runs
+      // -- a visitor there isn't this share's owner, so there's
+      // nothing for them to share -- leaving lootShareIconBtn missing
+      // from the very start rather than removed afterward the way the
+      // landing preview's own copy of this same icon is.
       var lootShareIconBtn = document.getElementById('lootShareIconBtn');
       var lootShareCard = document.getElementById('lootShareCard');
-      lootShareIconBtn.addEventListener('click', function () {
-        var nowHidden = !lootShareCard.hidden;
-        lootShareCard.hidden = nowHidden;
-        lootShareIconBtn.classList.toggle('open', !nowHidden);
-      });
+      if (lootShareIconBtn) {
+        lootShareIconBtn.addEventListener('click', function () {
+          var nowHidden = !lootShareCard.hidden;
+          lootShareCard.hidden = nowHidden;
+          lootShareIconBtn.classList.toggle('open', !nowHidden);
+        });
+      }
 
       // GENERATE SHAREABLE LINK -- creates a frozen, point-in-time
       // snapshot of whatever range is currently selected (same
