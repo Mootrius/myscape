@@ -4325,11 +4325,32 @@ def render_account(player: PlayerView) -> str:
     return _shell(title="Account — myscape", player=player, body=body, extra_script=script)
 
 
-def render_signup() -> str:
-    body = """
+def render_signup(from_share: bool = False) -> str:
+    """from_share is set by signup_page (app/main.py) only when this
+    visitor arrived via a Purchase Goal share page's own download icon
+    (render_purchase_goals_share below) rather than this link going
+    somewhere they weren't already signed in -- see that function's
+    own docstring for why the click lands here instead of importing
+    directly. Shows one extra .auth-info banner above the form when
+    set; everything else about this page (and the signup flow itself)
+    is unchanged -- there's no code or redirect threaded through
+    signup/verification here, just a plain heads-up, so finishing the
+    actual import still means going back to that same share link
+    afterward (the browser's own back button lands there -- this
+    page's own redirect to it, in render_purchase_goals_share's
+    wrapper script, is a plain navigation, not a history replace)."""
+    share_notice = (
+        '<div class="auth-info show">Sign up to save this Purchase Goal to your own myscape '
+        "account \u2014 then use your browser's back button to return to the "
+        "shared link and finish importing it.</div>"
+        if from_share
+        else ""
+    )
+    body = f"""
     <div class="auth-shell">
       <div class="auth-card">
         <h2>SIGN UP</h2>
+        {share_notice}
         <div class="auth-error" id="formError"></div>
         <form id="signupForm">
           <div class="field">
@@ -9446,9 +9467,52 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
 
     owner_name = (game_account.runescape_name if game_account else None) or "A player"
     setup_name = share.payload["gearSetup"]["name"]
+
+    # The download icon next to "Shared by <name>" -- same tray-shaped
+    # icon as pg-share-icon-btn/loot-share-icon-btn's own export icon
+    # elsewhere on this site (see purchase_share_icon_btn just above
+    # in _purchase_goals_panel_markup), mirrored into a download icon
+    # (arrow pointing into the tray instead of out of it) since this
+    # is the opposite action: pulling someone ELSE's setup in, rather
+    # than exporting one of your own out. Decided server-side, not in
+    # the wrapper script below, per explicit instruction's own two
+    # distinct behaviors:
+    # - Signed in (viewer is not None): a real <button> whose click
+    #   handler (see the wrapper script below) POSTs to /api/shares/
+    #   <code>/import, then -- only once that succeeds -- navigates to
+    #   this player's own Purchase Goals page, where the import now
+    #   shows up at the end of their setup list (see import_gear_
+    #   setup_from_share_payload's own docstring in
+    #   app/purchase_goals.py for why no special-casing is needed to
+    #   land it there).
+    # - Signed out: a plain <a> straight to /signup?from_share=1 --
+    #   no fetch, no JS at all -- per explicit instruction ("take them
+    #   to the sign up page, indicating that they should sign up to
+    #   save it"). from_share just shows one extra notice there (see
+    #   render_signup's own docstring); nothing is imported until this
+    #   same visitor comes back to this exact share link afterward
+    #   (the plain navigation below leaves it one "back" away) and
+    #   clicks this icon again, now signed in.
+    import_icon_svg = (
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
+        '<polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>'
+        '</svg>'
+    )
+    if viewer is not None:
+        import_icon_btn = (
+            ' <button type="button" class="pg-import-icon-btn" id="pgImportBtn" aria-label="Save to your account" title="Save to your account">'
+            f'{import_icon_svg}</button>'
+        )
+    else:
+        import_icon_btn = (
+            ' <a class="pg-import-icon-btn" href="/signup?from_share=1" aria-label="Sign up to save this" title="Sign up to save this">'
+            f'{import_icon_svg}</a>'
+        )
+
     banner_markup = f"""
     <p class="subtitle pg-share-label">{escape(setup_name)}</p>
-    <h2 class="page-title">Shared by {escape(owner_name)}</h2>
+    <h2 class="page-title">Shared by {escape(owner_name)}{import_icon_btn}</h2>
     """
     body = banner_markup + body
     body = f'<div class="purchase-goal-share">{body}</div>'
@@ -9589,6 +9653,41 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
       if (shareIconBtn) shareIconBtn.remove();
       var shareCardRow = document.querySelector('.pg-share-card-row');
       if (shareCardRow) shareCardRow.remove();
+
+      // The download icon next to "Shared by <name>" above -- only
+      // ever rendered as a real <button> (this listener's own
+      // null-guard is just the same defensive convention every other
+      // reused-script lookup here already follows) when viewer was
+      // signed in at render time; signed out, it's a plain <a
+      // href="/signup?...">  with no JS behavior at all -- see this
+      // function's own doc comment above for why the two differ.
+      // Imports THIS share's own frozen setup into the signed-in
+      // visitor's own Purchase Goals list (POST /api/shares/{share.code}/import
+      // in app/main.py), then -- only once that succeeds -- navigates
+      // there so they land right on it, appended at the end of their
+      // own setup list. A failed import (expired link, or this
+      // specific race: the code was still valid when the page loaded
+      // but lapses before the click) leaves this page exactly as-is
+      // and flashes red for 2.5s the same way pgShareGenerateBtn's own
+      // .action-failed click handler already does elsewhere on this
+      // page, rather than silently going nowhere.
+      var pgImportBtn = document.getElementById('pgImportBtn');
+      if (pgImportBtn) {{
+        pgImportBtn.addEventListener('click', function () {{
+          var btn = this;
+          btn.disabled = true;
+          fetch('/api/shares/{share.code}/import', {{ method: 'POST' }})
+            .then(function (res) {{ return res.ok ? res.json() : Promise.reject(); }})
+            .then(function () {{
+              window.location.href = '/dashboard/purchase-goals';
+            }})
+            .catch(function () {{
+              btn.disabled = false;
+              btn.classList.add('action-failed');
+              setTimeout(function () {{ btn.classList.remove('action-failed'); }}, 2500);
+            }});
+        }});
+      }}
     }})();
     """
 

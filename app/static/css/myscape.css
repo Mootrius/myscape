@@ -559,6 +559,27 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 
 .auth-success.show { display: block; }
 
+/* Same shape as .auth-error/.auth-success above -- gold instead of
+   red/green, since this one isn't a problem or a confirmation, just a
+   neutral heads-up about why this visitor landed on /signup at all.
+   Shown by render_signup (app/pages.py) only when from_share is set
+   -- see that function's own docstring -- so unlike the other two
+   this is never toggled client-side; it's either rendered .show or
+   not rendered at all. */
+.auth-info {
+  display: none;
+  background: rgba(207, 122, 23, 0.12);
+  border: 1px solid var(--gold-dim);
+  color: #e3c08c;
+  font-size: 14.5px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.auth-info.show { display: block; }
+
 .auth-switch {
   text-align: center;
   font-size: 14.5px;

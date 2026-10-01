@@ -139,6 +139,7 @@ from app.purchase_goals import (
     build_purchase_goals_state,
     get_mapping,
     has_derived_price,
+    import_gear_setup_from_share_payload,
     item_icon_url,
     search_items,
 )
@@ -582,10 +583,23 @@ def sitemap_xml():
 
 
 @app.get("/signup", response_class=HTMLResponse)
-def signup_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
+def signup_page(
+    from_share: Optional[str] = None,
+    player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
+):
+    """from_share is set only by a Purchase Goal share page's own
+    download icon (render_purchase_goals_share, app/pages.py) sending
+    a signed-out visitor here instead of importing directly -- see
+    that function's own docstring. Never looked up or validated
+    against anything here (an expired/bogus code would 404 on GET
+    /s/{code} long before a visitor ever reaches this page in the
+    first place) -- it exists purely to let render_signup show a
+    one-line "sign up to save this" notice; the actual import only
+    ever happens later, back on the share page itself, once this
+    visitor has an account to sign back into it with."""
     if player:
         return RedirectResponse("/dashboard", status_code=302)
-    return render_signup()
+    return render_signup(from_share=bool(from_share))
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -2019,6 +2033,43 @@ def shared_content_page(
     # generate_share_code's own _MAX_ATTEMPTS exhaustion in
     # app/sharing.py.
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
+
+
+@app.post("/api/shares/{code}/import")
+def import_shared_purchase_goal(
+    code: str,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """The download icon on a Purchase Goal share page (render_
+    purchase_goals_share, app/pages.py, right next to its own "Shared
+    by <name>" heading) -- the counterpart to POST /api/gear-setups/
+    {setup_id}/share above, in the other direction: someone ELSE's
+    myscape.io/s/<code> link in, as a brand new GearSetup of this
+    signed-in player's own, rather than one of this player's own
+    setups out. Session-authenticated (get_current_verified_game_
+    account_from_session, same dependency every other gear-setup
+    mutation endpoint here already uses) -- a signed-out visitor's
+    click never reaches this at all, since render_purchase_goals_
+    share's own script sends it straight to /signup instead (see that
+    function's own docstring).
+
+    content_type="purchase_goal" on the find_valid_share call below
+    means an invalid, expired, or loot_tracker code all 404 exactly
+    alike -- same "a wrong code can't be told apart from a dead one"
+    posture GET /s/{code} above already takes, and loot_tracker shares
+    have no import feature to begin with. See import_gear_setup_from_
+    share_payload in app/purchase_goals.py for the actual reverse-
+    resolution (undoing build_purchase_goal_share_snapshot's own
+    pricing/resolution) that turns the frozen payload back into a
+    normal, editable setup -- including why it lands at the END of
+    this player's own setup list with no special-casing needed here."""
+    share = find_valid_share(db, code, content_type="purchase_goal")
+    if share is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
+    import_gear_setup_from_share_payload(db, game_account, share.payload)
+    db.commit()
+    return build_purchase_goals_state(db, game_account)
 
 
 @app.post("/api/players/me/hiscores/sync")

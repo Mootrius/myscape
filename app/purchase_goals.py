@@ -1506,3 +1506,102 @@ def build_purchase_goal_share_snapshot(setup: GearSetup) -> dict:
         "gearSetup": resolved,
         "customOrder": setup.still_to_purchase_custom_order,
     }
+
+
+def _raw_slot_item_from_resolved(resolved: Optional[dict]) -> Optional[dict]:
+    """Reverses _resolve_gear_slot_item above: turns one of the
+    already-priced/iconed slot dicts GET /api/gear-setups (and a
+    Purchase Goal share's own frozen payload -- see
+    build_purchase_goal_share_snapshot just above) hands back into the
+    plain {"itemId", "itemName", "components"} shape GearSetup.
+    equipment/inventory actually stores (see set_gear_slot's own
+    identical construction in app/main.py, and GearSlotItemIn's
+    docstring in app/schemas.py for the three shapes this produces).
+
+    Used only by import_gear_setup_from_share_payload below, to rebuild
+    a real, editable GearSetup row out of a share link's own frozen,
+    already-resolved snapshot -- itemId/itemName/quantity are the only
+    fields a resolved dict carries that a raw stored one needs;
+    everything else (icon URL, unit price, owned/cost) is dropped here
+    the same way it's recomputed fresh on every future read, not
+    stored. A combo item's own components round-trip the same way,
+    one level down."""
+    if resolved is None:
+        return None
+    components = resolved.get("components")
+    if components:
+        return {
+            "itemId": None,
+            "itemName": resolved.get("itemName"),
+            "components": [
+                {
+                    "itemId": c.get("itemId"),
+                    "itemName": c.get("itemName"),
+                    "quantity": c.get("quantity") or 1,
+                }
+                for c in components
+            ],
+        }
+    return {"itemId": resolved.get("itemId"), "itemName": resolved.get("itemName")}
+
+
+def import_gear_setup_from_share_payload(db: Session, game_account: GameAccount, payload: dict) -> GearSetup:
+    """The reverse of build_purchase_goal_share_snapshot above: takes a
+    Purchase Goal share's own frozen payload (SharedContent.payload --
+    see POST /api/shares/{code}/import in app/main.py, the download
+    icon's own endpoint on render_purchase_goals_share's share page)
+    and creates a brand new, completely normal, editable GearSetup row
+    for game_account out of it -- "importing" someone else's shared
+    setup into your own Purchase Goals list.
+
+    payload['gearSetup']['equipment']/['inventory'] are already-
+    resolved slot dicts (priced, iconed, owned/cost-marked against the
+    EMPTY pools build_purchase_goal_share_snapshot resolves a share
+    against -- see its own docstring), not the plain raw shape
+    GearSetup.equipment/inventory actually stores, so each slot is run
+    back through _raw_slot_item_from_resolved above before being
+    assigned here. equipment is rebuilt sparse (only a slot
+    _raw_slot_item_from_resolved didn't come back None for is ever
+    given a key), matching GearSetup's own docstring ("only filled
+    slots are present") -- unlike the resolved dict this reads from,
+    which _build_one_gear_setup always fills with a None entry for
+    every one of GEAR_SETUP_EQUIPMENT_SLOTS whether or not the setup
+    actually had anything in it. inventory stays a plain positional
+    list (filled-or-None for each of its 28 entries, same shape either
+    way), since that's the convention for that column regardless.
+
+    The new setup's name is the sharer's own setup name, verbatim --
+    per explicit instruction, no "Copy of" prefix. sort_order is left
+    at its column default (NULL), the same as every other freshly
+    created setup (see create_gear_setup in app/main.py) -- build_gear_
+    setups' own ordering (sort_order asc, created_at asc, NULLs sorting
+    last) is exactly what lands a plain, never-reordered new setup at
+    the END of the player's own setup list, which is exactly where an
+    imported setup belongs, with no special-casing needed here at all.
+
+    Caller commits (same convention _get_owned_gear_setup's own
+    mutation endpoints already follow throughout app/main.py)."""
+    gear_setup = payload["gearSetup"]
+
+    equipment = {}
+    for slot, resolved in (gear_setup.get("equipment") or {}).items():
+        raw = _raw_slot_item_from_resolved(resolved)
+        if raw is not None:
+            equipment[slot] = raw
+
+    inventory = [_raw_slot_item_from_resolved(entry) for entry in (gear_setup.get("inventory") or [])]
+
+    raw_icon = None
+    icon = gear_setup.get("icon")
+    if icon:
+        raw_icon = {"itemId": icon.get("itemId"), "itemName": icon.get("itemName")}
+
+    setup = GearSetup(
+        game_account_id=game_account.id,
+        name=gear_setup.get("name") or "New Setup",
+        icon=raw_icon,
+        equipment=equipment,
+        inventory=inventory,
+    )
+    db.add(setup)
+    return setup
