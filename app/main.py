@@ -1848,7 +1848,7 @@ def regenerate_public_profile_code(
     Throttled to once per day (see PUBLIC_CODE_REGENERATE_COOLDOWN's
     own comment in app/public_profile.py) -- 429s, not a silent no-op,
     so a caller actually finds out why nothing changed; the website's
-    own "New link" button just flashes briefly rather than surfacing
+    own "Generate new link" button just flashes briefly rather than surfacing
     this detail message anywhere (see that button's own click handler
     in app/pages.py), but a non-browser caller still gets a real
     reason."""

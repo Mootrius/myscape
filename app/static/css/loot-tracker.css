@@ -191,10 +191,15 @@
    "primary action" button) rather than the plain --panel-2 look
    .loot-range-btn/.loot-share-link-btn use, since this is the single
    thing to click here until a link exists. */
+/* font-size: 15px matches the rest of this card and Character
+   Overview's own public-profile-card/public-profile-link-btn --
+   this page's own future sharing popups should keep that same
+   15px-text convention too, not this page's smaller ~11px site-wide
+   button default. */
 .loot-share-generate-btn {
   height: 28px;
   padding: 0 10px;
-  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--gold);
   background: var(--panel); border: 1px solid var(--gold-dim); border-radius: var(--radius);
   cursor: pointer;
@@ -217,7 +222,7 @@
 .loot-share-link-btn {
   height: 28px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: 15px;
   font-family: inherit;
   color: var(--text-dim);
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);

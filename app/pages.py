@@ -2388,9 +2388,8 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           <button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>
           <button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>
         </div>
-        <input type="text" class="public-profile-link-input" id="publicProfileLinkInput" readonly />
-        <button class="public-profile-link-btn" id="publicProfileCopyBtn" type="button">Copy</button>
-        <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">New link</button>
+        <button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" title="Click to copy this link to your clipboard."></button>
+        <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">Generate new link</button>
       </div>
     </div>"""
 
@@ -3148,8 +3147,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
       if (publicProfileShareBtn) {
         var publicProfileCard = document.getElementById('publicProfileCard');
         var publicProfileSegBtns = [document.getElementById('publicProfileSegPrivate'), document.getElementById('publicProfileSegPublic')];
-        var publicProfileLinkInput = document.getElementById('publicProfileLinkInput');
-        var publicProfileCopyBtn = document.getElementById('publicProfileCopyBtn');
+        var publicProfileLinkBtn = document.getElementById('publicProfileLinkBtn');
         var publicProfileRegenerateBtn = document.getElementById('publicProfileRegenerateBtn');
 
         // Collapsed by default -- clicking the share icon just shows/
@@ -3169,7 +3167,8 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           publicProfileSegBtns.forEach(function (btn) {
             btn.classList.toggle('active', btn.getAttribute('data-segment-value') === activeValue);
           });
-          publicProfileLinkInput.value = data.url || '';
+          publicProfileLinkBtn.dataset.url = data.url || '';
+          publicProfileLinkBtn.textContent = data.url || '';
         }
 
         fetch('/api/players/me/public-profile')
@@ -3194,16 +3193,30 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           });
         });
 
-        // Silent -- no "Copied!" label swap, just copies the current
-        // link to the clipboard, per explicit instruction.
-        publicProfileCopyBtn.addEventListener('click', function () {
-          if (!publicProfileLinkInput.value) return;
+        // The link display IS the copy button, click-to-copy same as
+        // Loot Tracker's own lootShareLinkBtn (app/pages.py) and the
+        // Account page's Shared Links table code buttons -- copies
+        // its own URL (held in data-url, since its own textContent
+        // swaps to "COPIED" and back below) and flashes "COPIED" for
+        // a moment before reverting, rather than the old readonly
+        // input + separate Copy button pair this card used to have.
+        publicProfileLinkBtn.addEventListener('click', function () {
+          var url = publicProfileLinkBtn.dataset.url;
+          if (!url) return;
           if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(publicProfileLinkInput.value);
+            navigator.clipboard.writeText(url);
           } else {
-            publicProfileLinkInput.select();
+            var temp = document.createElement('textarea');
+            temp.value = url;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
             document.execCommand('copy');
+            document.body.removeChild(temp);
           }
+          publicProfileLinkBtn.textContent = 'COPIED';
+          setTimeout(function () { publicProfileLinkBtn.textContent = url; }, 1200);
         });
 
         // Once-per-day server-side (see regenerate_public_profile_code
@@ -4087,14 +4100,12 @@ def render_account(player: PlayerView) -> str:
         codeBtn.title = 'Click to copy this link to your clipboard.';
         // Copies the full https://myscape.io/s/<code> URL (link.url,
         // built server-side -- see SharedLinkSummary in app/schemas.py),
-        // not just the bare code shown on the button -- same silent-
-        // copy-with-brief-confirmation pattern as the public-profile
-        // card's own publicProfileCopyBtn, just flashing back to the
-        // code afterward instead of staying locked on "COPIED" -- this
-        // button (unlike that one) is meant to be clicked again, for
-        // this row or any other. The button's own fixed width (see
-        // .shared-link-code-btn in myscape.css) is what keeps it from
-        // resizing while "COPIED" is showing.
+        // not just the bare code shown on the button -- same click-to-
+        // copy-then-flash-"COPIED"-then-revert pattern as Character
+        // Overview's own publicProfileLinkBtn and Loot Tracker's own
+        // lootShareLinkBtn (both in this file). The button's own fixed
+        // width (see .shared-link-code-btn in myscape.css) is what
+        // keeps it from resizing while "COPIED" is showing.
         codeBtn.addEventListener('click', async () => {
           try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
