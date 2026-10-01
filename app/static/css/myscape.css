@@ -763,11 +763,15 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
    state (BUTTON text "ARE YOU SURE?"), same situation .loot-range-
    menu's own box-shadow/overflow handling elsewhere on this site
    already assumes a cramped container rather than an infinitely wide
-   one. */
+   one. overscroll-behavior: contain stops scrolling past this box's
+   own top/bottom limit from chaining into a scroll of the whole
+   account page underneath it (the default browser behavior once an
+   inner scroll container runs out of room to scroll further). */
 .shared-links-table-wrap {
   max-height: 340px;
   overflow-y: auto;
   overflow-x: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   margin-bottom: 16px;

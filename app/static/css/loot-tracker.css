@@ -53,12 +53,6 @@
    old hardcoded "LAST 24H" text in the chart header's left slot. A
    plain dropdown menu, same open/close-on-outside-click pattern as
    Purchase Goals' own .tracker-menu-wrap/#setupMenu. ---------- */
-/* display:flex (was just position:relative -- a single button was
-   the only child) now that the Share button sits beside the range
-   button as a second child -- see .loot-share-wrap below. Neither
-   dropdown (this one's own .loot-range-menu, or .loot-share-popup)
-   is affected by that: position:absolute takes both out of flow
-   regardless of the parent's own display type. */
 .loot-chart-range { position: relative; z-index: 2; display: flex; align-items: center; gap: 6px; }
 /* height: 25px pins this to the same site-wide button height
    .loot-sort-tab below already renders at naturally (that's where the
@@ -132,30 +126,73 @@
 }
 .loot-range-apply:hover { border-color: var(--gold); }
 
-/* ---------- Share button + its link popup -- sits beside the range
-   button in .loot-chart-range (see that class's own comment above).
-   The button itself reuses .loot-range-btn wholesale (classList is
-   "loot-range-btn loot-share-btn") rather than redefining the same
-   25px-tall/uppercase/--panel-2 properties a third time -- same
-   reasoning character-overview.css's own .public-profile-link-btn
-   comment gives for mirroring that class. .loot-share-btn only ever
-   needs its own rule for the one state .loot-range-btn doesn't
-   already cover: the brief red "that didn't work" flash (same
-   pattern as .public-profile-link-btn.action-failed there, and
-   .clog-sync-btn.sync-failed elsewhere). ---------- */
-.loot-share-wrap { position: relative; }
-.loot-share-btn.action-failed { border-color: var(--red); color: var(--red); }
-.loot-share-btn:disabled { cursor: default; opacity: 0.6; }
-.loot-share-popup {
-  position: absolute; top: calc(100% + 4px); left: 0; z-index: 3;
-  display: flex; flex-direction: column; gap: 6px;
-  width: 260px; padding: 10px;
-  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+/* ---------- Share icon (next to the "Loot Tracker" .page-title, see
+   render_loot_tracker in app/pages.py) + the card it toggles open
+   beneath the title -- same inline-icon-next-to-a-heading pattern as
+   Character Overview's own .co-share-icon-btn (duplicated here, not
+   shared across these two pages' own stylesheets, same as every
+   other cross-page style overlap on this site), just with its own
+   loot- prefix and its own SVG stroke-width (duplicated too, same
+   reasoning). ---------- */
+.loot-share-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0 0 0 8px;
+  margin: 0;
+  cursor: pointer;
+  vertical-align: middle;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
 }
-.loot-share-popup-label {
-  font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
+.loot-share-icon-btn:hover { color: var(--text-dim); }
+.loot-share-icon-btn.open { color: var(--gold); }
+
+/* Centered under the title the same way .public-profile-card-row
+   centers Character Overview's own card -- zero height (and this
+   whole row with it) while .loot-share-card is hidden, rather than
+   permanently reserving its margin on every page load. */
+.loot-share-card-row { display: flex; justify-content: center; }
+
+.loot-share-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 280px;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin: 6px 0 14px;
 }
+/* Author CSS setting `display` on this element always outranks the
+   browser's own [hidden]{display:none} default stylesheet rule --
+   same gotcha/fix as .public-profile-card[hidden] in character-
+   overview.css. */
+.loot-share-card[hidden] { display: none; }
+
+/* The only thing visible in the card until it's actually clicked
+   (see lootShareGenerateBtn's own handler in app/pages.py) -- nothing
+   is generated just from opening the card, per explicit instruction.
+   Styled like .loot-range-apply above (this page's one other
+   "primary action" button) rather than the plain --panel-2 look
+   .loot-range-btn/.loot-share-link-btn use, since this is the single
+   thing to click here until a link exists. */
+.loot-share-generate-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--gold);
+  background: var(--panel); border: 1px solid var(--gold-dim); border-radius: var(--radius);
+  cursor: pointer;
+}
+.loot-share-generate-btn:hover { border-color: var(--gold); }
+.loot-share-generate-btn:disabled { cursor: default; opacity: 0.6; }
+.loot-share-generate-btn.action-failed { border-color: var(--red); color: var(--red); }
+
 .loot-share-link-row { display: flex; gap: 6px; }
 /* input. (type + class), not just . -- myscape.css's own shared
    input[type="text"] rule beats a bare class selector on specificity

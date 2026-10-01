@@ -1174,12 +1174,15 @@
    settings control opened rarely, not game data that earns
    permanent space above it on every load. ---------- */
 
-/* The caret button sits inline inside <h2 class="page-title">, right
-   after the "Character Overview" text -- a plain icon button, not
-   styled like a real button (no border/background of its own) so it
-   reads as part of the heading rather than a separate control next
-   to it. */
-.co-public-caret-btn {
+/* The share icon button sits inline inside <h2 class="page-title">,
+   right after the "Character Overview" text -- a plain icon button,
+   not styled like a real button (no border/background of its own) so
+   it reads as part of the heading rather than a separate control
+   next to it. Its own SVG (currentColor stroke) just inherits this
+   button's color, so toggling .open below is the only state needed --
+   no separate inner element the way the old disclosure-caret version
+   of this button needed one to rotate. */
+.co-share-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1190,20 +1193,11 @@
   cursor: pointer;
   vertical-align: middle;
   line-height: 1;
-}
-/* font-size matches .loot-range-caret's own 9px (loot-tracker.css) --
-   same "small, recessive caret" look as every other disclosure arrow
-   on the site. Rotated 180deg while the card is open (toggled via the
-   caret button's own click handler in app/pages.py) rather than a
-   separate up/down glyph swap. */
-.co-public-caret {
-  display: inline-block;
-  font-size: 13px;
   color: var(--text-faint);
-  transition: transform 0.15s ease;
+  transition: color 0.15s ease;
 }
-.co-public-caret-btn:hover .co-public-caret { color: var(--text-dim); }
-.co-public-caret.open { transform: rotate(180deg); }
+.co-share-icon-btn:hover { color: var(--text-dim); }
+.co-share-icon-btn.open { color: var(--gold); }
 
 /* Centers .public-profile-card when it's open -- a plain flex row,
    same justify-content: center every other centered row on this page
@@ -1229,7 +1223,7 @@
    browser's own [hidden]{display:none} default stylesheet rule, no
    matter how low its specificity looks -- same gotcha, same fix, as
    .model-viewer-btn svg[hidden] above: without this, toggling the
-   `hidden` attribute (publicProfileCaretBtn's own click handler)
+   `hidden` attribute (publicProfileShareBtn's own click handler)
    had no visible effect at all. */
 .public-profile-card[hidden] { display: none; }
 

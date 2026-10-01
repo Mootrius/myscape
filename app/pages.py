@@ -2174,11 +2174,12 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     silently change what a DIFFERENT visited profile (or this player's
     own real page) opens on next time, all three sharing one browser's
     localStorage. The public-profile settings card, tucked behind a
-    caret next to the page's own title (public_profile_card_section
-    and public_profile_caret below), is the one piece of this markup
-    that does NOT appear in public_code mode (nor in preview mode) --
-    it's a control for the account's own owner to manage their own
-    share link, meaningless to show someone just visiting that link.
+    share icon next to the page's own title (public_profile_card_section
+    and public_profile_share_btn below), is the one piece of this
+    markup that does NOT appear in public_code mode (nor in preview
+    mode) -- it's a control for the account's own owner to manage
+    their own share link, meaningless to show someone just visiting
+    that link.
 
     public_character_name (only ever passed alongside public_code, by
     that same caller) swaps the page's own "Character Overview" <h2>
@@ -2338,17 +2339,25 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     # The owner's own share-link control -- absent in both preview
     # (the landing demo) and public_code (a visitor's own view of
     # someone else's link) modes, since in either of those this
-    # player isn't looking at their own settings. #publicProfileCaret
+    # player isn't looking at their own settings. #publicProfileShareBtn
     # not existing at all is exactly what the script's own `if
-    # (!caret) return;` guard below checks for, same "just don't wire
-    # it up" pattern Skills/Quests/etc. already use for their own
-    # absent-in-some-modes elements. A plain disclosure triangle next
-    # to the title (collapsed by default, see .co-public-caret's own
-    # comment in character-overview.css) rather than its own always-
-    # visible row -- this is a settings control a player opens
-    # rarely, not something that deserves permanent space above the
-    # actual game data every time this page loads.
-    public_profile_caret = "" if (preview or public_code) else ' <button type="button" class="co-public-caret-btn" id="publicProfileCaretBtn" aria-label="Public profile settings" title="Public profile settings"><span class="co-public-caret" id="publicProfileCaret">&#9662;</span></button>'
+    # (publicProfileShareBtn) {...}` guard below checks for, same
+    # "just don't wire it up" pattern Skills/Quests/etc. already use
+    # for their own absent-in-some-modes elements. A plain share icon
+    # next to the title (see .co-share-icon-btn's own comment in
+    # character-overview.css) rather than its own always-visible row --
+    # this is a settings control a player opens rarely, not something
+    # that deserves permanent space above the actual game data every
+    # time this page loads. Same Feather "share-2" glyph (duplicated,
+    # not shared across stylesheets/functions, per this file's usual
+    # convention) as the Loot Tracker's own share-icon trigger uses.
+    public_profile_share_btn = "" if (preview or public_code) else (
+        ' <button type="button" class="co-share-icon-btn" id="publicProfileShareBtn" aria-label="Public profile settings" title="Public profile settings">'
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>'
+        '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>'
+        '</svg></button>'
+    )
 
     # A visitor's own view of someone else's shared link names the
     # page after THAT character instead of the generic "Character
@@ -2386,7 +2395,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     </div>"""
 
     body = f"""
-    <h2 class="page-title">{page_heading}{public_profile_caret}</h2>
+    <h2 class="page-title">{page_heading}{public_profile_share_btn}</h2>
 
     {public_profile_card_section}
 
@@ -3135,24 +3144,23 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
       // second code path that has to be kept in preview/public-aware,
       // same convention Skills/Quests/Diaries/Combat Achievements
       // already use for their own absent-in-some-modes elements.
-      var publicProfileCaretBtn = document.getElementById('publicProfileCaretBtn');
-      if (publicProfileCaretBtn) {
-        var publicProfileCaret = document.getElementById('publicProfileCaret');
+      var publicProfileShareBtn = document.getElementById('publicProfileShareBtn');
+      if (publicProfileShareBtn) {
         var publicProfileCard = document.getElementById('publicProfileCard');
         var publicProfileSegBtns = [document.getElementById('publicProfileSegPrivate'), document.getElementById('publicProfileSegPublic')];
         var publicProfileLinkInput = document.getElementById('publicProfileLinkInput');
         var publicProfileCopyBtn = document.getElementById('publicProfileCopyBtn');
         var publicProfileRegenerateBtn = document.getElementById('publicProfileRegenerateBtn');
 
-        // Collapsed by default -- clicking the caret just shows/hides
-        // the card (no data refetch on open; the initial GET below
-        // already ran at load, same as every other section on this
-        // page loading its own data up front regardless of whether
-        // its card happens to be visible yet).
-        publicProfileCaretBtn.addEventListener('click', function () {
+        // Collapsed by default -- clicking the share icon just shows/
+        // hides the card (no data refetch on open; the initial GET
+        // below already ran at load, same as every other section on
+        // this page loading its own data up front regardless of
+        // whether its card happens to be visible yet).
+        publicProfileShareBtn.addEventListener('click', function () {
           var nowHidden = !publicProfileCard.hidden;
           publicProfileCard.hidden = nowHidden;
-          publicProfileCaret.classList.toggle('open', !nowHidden);
+          publicProfileShareBtn.classList.toggle('open', !nowHidden);
         });
 
         function applyPublicProfileState(data) {
@@ -6213,8 +6221,38 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           </div>
         """
 
+    # Share icon next to the title (same pattern/markup shape as
+    # Character Overview's own .co-share-icon-btn -- see that button's
+    # comment in app/pages.py/character-overview.css), replacing the
+    # old "Share" text button that used to sit beside the range button
+    # in .loot-chart-range below. Toggles .lootShareCard open/closed;
+    # that card itself (not a dropdown anchored to this icon, a
+    # centered row under the title instead -- see .loot-share-card-row
+    # in loot-tracker.css) holds the actual GENERATE SHAREABLE LINK
+    # flow, same lazy-generate-on-click shape request as this page's
+    # own task asked for.
+    loot_share_icon_btn = (
+        ' <button type="button" class="loot-share-icon-btn" id="lootShareIconBtn" aria-label="Share this loot" title="Share this loot">'
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>'
+        '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>'
+        '</svg></button>'
+    )
+
     body = f"""
-    <h2 class="page-title">Loot Tracker</h2>
+    <h2 class="page-title">Loot Tracker{loot_share_icon_btn}</h2>
+
+    <div class="loot-share-card-row">
+      <div class="loot-share-card" id="lootShareCard" hidden>
+        <button type="button" class="loot-share-generate-btn" id="lootShareGenerateBtn">GENERATE SHAREABLE LINK</button>
+        <div class="loot-share-link-row" id="lootShareLinkRow" hidden>
+          <input type="text" class="loot-share-link-input" id="lootShareLinkInput" readonly />
+          <button type="button" class="loot-share-link-btn" id="lootShareCopyBtn">Copy</button>
+        </div>
+        <p class="loot-share-popup-hint" id="lootSharePopupHint" hidden>Generated links automatically expire after 30 days, but can be deleted sooner on your ACCOUNT page.</p>
+      </div>
+    </div>
+
     <div class="auth-error" id="lootError"></div>
     <p class="pg-empty" id="lootEmptyMsg">Loading&hellip;</p>
     <div id="lootBody" style="display:none;">
@@ -6240,17 +6278,6 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
                   <input type="text" id="lootRangeEnd" value="____-__-__" placeholder="YYYY-MM-DD" inputmode="numeric" autocomplete="off" spellcheck="false" />
                 </label>
                 <button type="button" class="loot-range-apply" id="lootRangeApply">Apply</button>
-              </div>
-            </div>
-            <div class="loot-share-wrap" id="lootShareWrap">
-              <button type="button" class="loot-range-btn loot-share-btn" id="lootShareBtn">Share</button>
-              <div class="loot-share-popup" id="lootSharePopup" style="display:none;">
-                <p class="loot-share-popup-label">Link to this range</p>
-                <div class="loot-share-link-row">
-                  <input type="text" class="loot-share-link-input" id="lootShareLinkInput" readonly />
-                  <button type="button" class="loot-share-link-btn" id="lootShareCopyBtn">Copy</button>
-                </div>
-                <p class="loot-share-popup-hint">Expires in 30 days.</p>
               </div>
             </div>
           </div>
@@ -7915,21 +7942,36 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         }
       }
 
-      // "Share" button -- creates a frozen, point-in-time snapshot of
-      // whatever range is currently selected (same state.rangeKey/
-      // customStart/customEnd lootUrl() above already reads) and shows
-      // the resulting myscape.io/s/<code> link in a small popup below
-      // the button. Each click creates a brand new link -- no cooldown
-      // like the public-profile card's own "New link" button has,
-      // since sharing multiple different sessions over time is normal
-      // usage here, not a mistake worth throttling against. See
-      // build_loot_share_snapshot in app/loot.py and SharedContent in
-      // app/models.py for what that link actually freezes.
-      function closeSharePopup() {
-        document.getElementById('lootSharePopup').style.display = 'none';
-      }
+      // Share icon next to the title -- toggles the lootShareCard
+      // below it, same plain show/hide-no-outside-click-auto-close
+      // pattern as Character Overview's own publicProfileShareBtn/
+      // publicProfileCard (no data to refetch on open either, since
+      // nothing here is generated until GENERATE SHAREABLE LINK is
+      // actually clicked -- see that button's own handler below).
+      var lootShareIconBtn = document.getElementById('lootShareIconBtn');
+      var lootShareCard = document.getElementById('lootShareCard');
+      lootShareIconBtn.addEventListener('click', function () {
+        var nowHidden = !lootShareCard.hidden;
+        lootShareCard.hidden = nowHidden;
+        lootShareIconBtn.classList.toggle('open', !nowHidden);
+      });
 
-      document.getElementById('lootShareBtn').addEventListener('click', function () {
+      // GENERATE SHAREABLE LINK -- creates a frozen, point-in-time
+      // snapshot of whatever range is currently selected (same
+      // state.rangeKey/customStart/customEnd lootUrl() above already
+      // reads) and reveals the resulting myscape.io/s/<code> link
+      // (plus its Copy button and the expiry hint) below the button,
+      // all three hidden until this first click so nothing is
+      // generated just from opening the card. The button stays live
+      // afterward -- clicking it again creates (and shows) a brand
+      // new link for whatever range is selected at that moment, same
+      // "each click makes a fresh link, no cooldown" behavior the old
+      // "Share" button had (unlike the public-profile card's own "New
+      // link" button, sharing multiple different sessions over time
+      // is normal usage here, not a mistake worth throttling against).
+      // See build_loot_share_snapshot in app/loot.py and SharedContent
+      // in app/models.py for what that link actually freezes.
+      document.getElementById('lootShareGenerateBtn').addEventListener('click', function () {
         var btn = this;
         btn.disabled = true;
         var body = { range: state.rangeKey };
@@ -7945,7 +7987,8 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
           .then(function (data) {
             document.getElementById('lootShareLinkInput').value = data.url;
-            document.getElementById('lootSharePopup').style.display = 'flex';
+            document.getElementById('lootShareLinkRow').hidden = false;
+            document.getElementById('lootSharePopupHint').hidden = false;
           })
           .catch(function () {
             btn.classList.add('action-failed');
@@ -7962,10 +8005,6 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           input.select();
           document.execCommand('copy');
         }
-      });
-      document.addEventListener('click', function (e) {
-        var wrap = document.getElementById('lootShareWrap');
-        if (wrap && !wrap.contains(e.target)) closeSharePopup();
       });
 
       loadState();
@@ -8274,13 +8313,16 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
         document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
       }}
 
-      // Same reasoning, for the Share button -- nothing real to share
-      // from an anonymous demo. Removed outright (not just hidden):
-      // nothing else in the reused script above ever looks it up
+      // Same reasoning, for the share icon (next to the title) and
+      // the card it would open -- nothing real to share from an
+      // anonymous demo. Removed outright (not just hidden): nothing
+      // else in the reused script above ever looks either one up
       // again the way it keeps re-querying lootRangeMenu, so there's
-      // no null-safety reason to leave it in the DOM.
-      var shareWrap = document.getElementById('lootShareWrap');
-      if (shareWrap) shareWrap.remove();
+      // no null-safety reason to leave them in the DOM.
+      var shareIconBtn = document.getElementById('lootShareIconBtn');
+      if (shareIconBtn) shareIconBtn.remove();
+      var shareCardRow = document.querySelector('.loot-share-card-row');
+      if (shareCardRow) shareCardRow.remove();
 
       // The bottom-edge feather itself (.landing-loot-preview::after)
       // is a plain, unconditional CSS rule now -- see loot-tracker.
@@ -8499,8 +8541,10 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
       // strip: a viewer here isn't this share's owner, so there's
       // nothing for them to share -- this view is itself already a
       // share of someone else's range.
-      var shareWrap = document.getElementById('lootShareWrap');
-      if (shareWrap) shareWrap.remove();
+      var shareIconBtn = document.getElementById('lootShareIconBtn');
+      if (shareIconBtn) shareIconBtn.remove();
+      var shareCardRow = document.querySelector('.loot-share-card-row');
+      if (shareCardRow) shareCardRow.remove();
     }})();
     """
 
