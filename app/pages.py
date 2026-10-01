@@ -2414,7 +2414,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     public_profile_settings_btn = "" if (preview or public_code) else (
         ' <span class="co-settings-wrap">'
         '<button type="button" class="co-settings-btn" id="publicProfileSettingsBtn" aria-label="Public profile settings" title="Public profile settings">'
-        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M8.65 6.20 L9.54 2.82 L14.46 2.82 L15.35 6.20 L18.72 5.28 L21.18 9.54 L18.70 12.00 L21.18 14.46 L18.72 18.72 L15.35 17.80 L14.46 21.18 L9.54 21.18 L8.65 17.80 L5.28 18.72 L2.82 14.46 L5.30 12.00 L2.82 9.54 L5.28 5.28 Z"></path>'
         '<circle cx="12" cy="12" r="3.1"></circle>'
         '</svg></button>'

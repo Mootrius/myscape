@@ -135,15 +135,16 @@
    with its own loot- prefix and its own SVG stroke-width (duplicated
    too, same reasoning). Bordered like .icon-menu-btn (purchase-
    goals.css) rather than a bare glyph, per explicit instruction that
-   these should read as actual buttons, but smaller (28px, not that
-   button's own 36px) per explicit follow-up feedback that the first
-   pass read too big -- same revised size Purchase Goals' own .pg-
-   share-icon-btn/.pg-import-icon-btn now use. .loot-share-wrap is the
-   position: relative anchor .loot-share-card below is positioned
-   absolute against. ---------- */
+   these should read as actual buttons, but smaller still (24px, not
+   that button's own 36px, and smaller yet again than this rule's own
+   first revised size of 28px) per a second round of explicit
+   follow-up feedback that it still read too big -- same revised size
+   Purchase Goals' own .pg-share-icon-btn/.pg-import-icon-btn now use.
+   .loot-share-wrap is the position: relative anchor .loot-share-card
+   below is positioned absolute against. ---------- */
 .loot-share-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .loot-share-icon-btn {
-  width: 28px; height: 28px; box-sizing: border-box;
+  width: 24px; height: 24px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -171,11 +172,14 @@
    this page use) -- same reasoning .tracker-menu's own comment in
    purchase-goals.css gives: this floats directly over whatever's
    below it on the page, and at 82% opacity that showed through
-   distractingly. 36px top offset is this button's own 28px height
+   distractingly. 32px top offset is this button's own 24px height
    plus the same 8px gap .tracker-menu itself uses below its (taller,
-   36px) own trigger. */
+   36px) own trigger. box-shadow matches .loot-range-menu's own
+   identical value exactly below -- same subtle "floating above the
+   page" depth cue, per explicit instruction to bring every one of
+   these popups in line with that one. */
 .loot-share-card {
-  position: absolute; top: 36px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -184,6 +188,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 /* Author CSS setting `display` on this element always outranks the
    browser's own [hidden]{display:none} default stylesheet rule --
@@ -210,7 +215,11 @@
   padding: 0 10px;
   font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  /* --panel-2, not --panel -- a bit lighter than .loot-share-card's
+     own now-opaque --panel background it sits inside, per explicit
+     instruction, so the button reads as a raised control rather than
+     disappearing flush into the popup behind it. */
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
 }
 .loot-share-generate-btn:hover { border-color: var(--gold-dim); color: var(--text); }

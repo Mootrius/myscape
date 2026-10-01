@@ -773,14 +773,15 @@ button.primary#pgNameSave, .pg-setup-form-save {
    file's own pg- prefix. Bordered like .icon-menu-btn above (the
    "Setup options" hamburger trigger) rather than a bare glyph, per
    explicit instruction that these should read as actual buttons, but
-   smaller (28px, not that button's own 36px) per explicit follow-up
-   feedback that the first pass read too big. .pg-share-wrap is what
-   .tracker-menu-wrap is to .icon-menu-btn/.tracker-menu -- the
-   position: relative anchor .pg-share-card below is positioned
-   absolute against. ---------- */
+   smaller still (24px, not that button's own 36px, and smaller yet
+   again than this rule's own first revised size of 28px) per a
+   second round of explicit follow-up feedback that it still read too
+   big. .pg-share-wrap is what .tracker-menu-wrap is to .icon-menu-
+   btn/.tracker-menu -- the position: relative anchor .pg-share-card
+   below is positioned absolute against. ---------- */
 .pg-share-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .pg-share-icon-btn {
-  width: 28px; height: 28px; box-sizing: border-box;
+  width: 24px; height: 24px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -799,21 +800,23 @@ button.primary#pgNameSave, .pg-setup-form-save {
    app/pages.py) -- same button-chrome/floating-popup shape (and same
    28px size, see .pg-share-icon-btn's own comment above) as
    .pg-share-icon-btn above (it sits next to the exact same kind of
-   all-caps .page-title text, just a different heading). Toggles
-   .pg-import-card below open/closed, same .open-on-the-button
-   convention as .pg-share-icon-btn above -- this used to be a one-shot
-   action button itself, but per explicit instruction it's now a
-   toggle for a confirming popup instead (see .pg-import-card below),
-   so it picked up the same .open state .pg-share-icon-btn already
-   has. Rendered as either a real <button> (signed-in visitor) or a
-   plain <a> (signed-out, no popup, no .open ever toggled onto it, and
-   no .pg-import-wrap around it either -- see import_icon_btn's own
-   comment in app/pages.py) depending on viewer at render time -- this
-   rule targets the class alone rather than a tag name, so both look
-   identical regardless of which element it ends up on. */
+   all-caps .page-title text, just a different heading, and the same
+   24px size after two rounds of explicit follow-up feedback that it
+   kept reading too big). Toggles .pg-import-card below open/closed,
+   same .open-on-the-button convention as .pg-share-icon-btn above --
+   this used to be a one-shot action button itself, but per explicit
+   instruction it's now a toggle for a confirming popup instead (see
+   .pg-import-card below), so it picked up the same .open state
+   .pg-share-icon-btn already has. Rendered as either a real <button>
+   (signed-in visitor) or a plain <a> (signed-out, no popup, no .open
+   ever toggled onto it, and no .pg-import-wrap around it either --
+   see import_icon_btn's own comment in app/pages.py) depending on
+   viewer at render time -- this rule targets the class alone rather
+   than a tag name, so both look identical regardless of which
+   element it ends up on. */
 .pg-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .pg-import-icon-btn {
-  width: 28px; height: 28px; box-sizing: border-box;
+  width: 24px; height: 24px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -840,11 +843,15 @@ button.primary#pgNameSave, .pg-setup-form-save {
    (--panel, not the --panel-translucent cards elsewhere on this page
    use) -- same reasoning .tracker-menu's own comment above gives:
    this floats directly over whatever's below it on the page, and at
-   82% opacity that showed through distractingly. 36px top offset is
-   this button's own 28px height plus the same 8px gap .tracker-menu
-   itself uses below its (taller, 36px) own trigger. */
+   82% opacity that showed through distractingly. 32px top offset is
+   this button's own 24px height plus the same 8px gap .tracker-menu
+   itself uses below its (taller, 36px) own trigger. box-shadow
+   matches .loot-range-menu's own identical value exactly (loot-
+   tracker.css) -- same subtle "floating above the page" depth cue,
+   per explicit instruction to bring every one of these popups in
+   line with that one. */
 .pg-import-card {
-  position: absolute; top: 36px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -853,6 +860,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 /* Same [hidden] override as .pg-share-card[hidden] below -- author
    CSS setting `display` always outranks the browser's own
@@ -872,7 +880,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
   padding: 0 10px;
   font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  /* --panel-2, not --panel -- a bit lighter than .pg-import-card's
+     own now-opaque --panel background it sits inside, per explicit
+     instruction, so the button reads as a raised control rather than
+     disappearing flush into the popup behind it. */
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
 }
 .pg-import-save-btn:hover { border-color: var(--gold-dim); color: var(--text); }
@@ -890,11 +902,14 @@ button.primary#pgNameSave, .pg-setup-form-save {
    elsewhere on this page use) -- same reasoning .tracker-menu's own
    comment above gives: this floats directly over whatever's below it
    on the page, and at 82% opacity that showed through distractingly.
-   36px top offset is this button's own 28px height plus the same
+   32px top offset is this button's own 24px height plus the same
    8px gap .tracker-menu itself uses below its (taller, 36px) own
-   trigger. */
+   trigger. box-shadow matches .loot-range-menu's own identical value
+   exactly (loot-tracker.css) -- same subtle "floating above the
+   page" depth cue, per explicit instruction to bring every one of
+   these popups in line with that one. */
 .pg-share-card {
-  position: absolute; top: 36px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -903,6 +918,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 /* Author CSS setting `display` on this element always outranks the
    browser's own [hidden]{display:none} default stylesheet rule --
@@ -914,7 +930,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
   padding: 0 10px;
   font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  /* --panel-2, not --panel -- a bit lighter than .pg-share-card's own
+     now-opaque --panel background it sits inside, per explicit
+     instruction, so the button reads as a raised control rather than
+     disappearing flush into the popup behind it. */
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
 }
 .pg-share-generate-btn:hover { border-color: var(--gold-dim); color: var(--text); }

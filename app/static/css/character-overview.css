@@ -1181,16 +1181,22 @@
    css), per explicit instruction, rather than the export-style button
    Loot Tracker/Purchase Goals' own triggers use -- this one opens a
    settings panel (private/public + the share link), not an export
-   flow. Sized smaller than that exact match (26px, not .pm-settings-
-   btn's own 32px) per explicit follow-up feedback that the first pass
-   read too big, same reduction Loot Tracker/Purchase Goals' own
-   export-icon triggers got. .co-settings-wrap is what .pm-settings-
-   wrap is to .pm-settings-btn/.pm-settings-menu -- the position:
-   relative anchor .public-profile-card below is positioned absolute
-   against. */
+   flow. Smaller than that exact match (24px, not .pm-settings-btn's
+   own 32px, and smaller again than this rule's own first revised
+   size of 26px) after two rounds of explicit follow-up feedback that
+   it kept reading too big -- same 24px size Loot Tracker/Purchase
+   Goals' own export-icon triggers now use too, so all four of these
+   buttons match each other exactly. The cog glyph itself (see its own
+   <svg> in app/pages.py) got a size bump of its own alongside this
+   shrink -- bigger relative to this smaller box than it was relative
+   to the old 26px one, per that same explicit feedback, rather than
+   just shrinking in lockstep with the button around it.
+   .co-settings-wrap is what .pm-settings-wrap is to .pm-settings-btn/
+   .pm-settings-menu -- the position: relative anchor .public-profile-
+   card below is positioned absolute against. */
 .co-settings-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .co-settings-btn {
-  width: 26px; height: 26px; box-sizing: border-box;
+  width: 24px; height: 24px; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--text-dim); cursor: pointer;
@@ -1204,18 +1210,22 @@
 
 /* Floats directly under its own trigger button (position: absolute
    against .co-settings-wrap above), same shape as .pm-settings-menu
-   (possessions.css) -- 32px top offset is this button's own 26px
+   (possessions.css) -- 30px top offset is this button's own 24px
    height plus the same 6px gap .pm-settings-menu itself uses below
    its (taller, 32px) own trigger. Opaque (--panel, not the --panel-
    translucent cards elsewhere on this page use) -- same reasoning
    .tracker-menu's own comment in purchase-goals.css gives: this
    floats directly over whatever's below it on the page, and at 82%
-   opacity that showed through distractingly. Closeable by
-   re-clicking the trigger OR clicking anywhere else on the page (see
-   publicProfileSettingsBtn's own click handler and the outside-click
-   listener beside it, app/pages.py). */
+   opacity that showed through distractingly. box-shadow matches
+   Loot Tracker's own .loot-range-menu identical value exactly (loot-
+   tracker.css) -- same subtle "floating above the page" depth cue,
+   per explicit instruction to bring every one of these popups in
+   line with that one. Closeable by re-clicking the trigger OR
+   clicking anywhere else on the page (see publicProfileSettingsBtn's
+   own click handler and the outside-click listener beside it, app/
+   pages.py). */
 .public-profile-card {
-  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 30px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1223,6 +1233,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 /* Author CSS setting `display` on this element always outranks the
    browser's own [hidden]{display:none} default stylesheet rule, no
