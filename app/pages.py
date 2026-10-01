@@ -1156,7 +1156,11 @@ def _wiki_icon_url(filename: str) -> str:
 # given directly by the wiki's own /images/<filename>?<hash> URLs (the
 # hash is a cache-busting suffix on that direct path, irrelevant to
 # Special:FilePath's own redirect resolution -- see app/icon_cache.py).
-_ICON_SUMMARY_GE_VALUE = _wiki_icon_url("Guide_prices.png")
+# _ICON_SUMMARY_GE_VALUE/_ACCOUNT_TYPE_INFO's own default below is the
+# one survivor of what used to be an eighth _ICON_SUMMARY_* constant
+# here (_ICON_SUMMARY_ACCOUNT_TYPE, before account type needed seven
+# DIFFERENT icons rather than one fixed one -- see _ACCOUNT_TYPE_INFO
+# below instead).
 _ICON_SUMMARY_COMBAT_LEVEL = _wiki_icon_url("Character_Summary_-_Combat_Level_icon.png")
 _ICON_SUMMARY_TOTAL_LEVEL = _wiki_icon_url("Character_Summary_-_Total_Level.png")
 _ICON_SUMMARY_TOTAL_XP = _wiki_icon_url("Character_Summary_-_Total_XP_icon.png")
@@ -1164,6 +1168,30 @@ _ICON_SUMMARY_QUESTS = _wiki_icon_url("Quest_List_tab_icon.png")
 _ICON_SUMMARY_ACHIEVEMENTS = _wiki_icon_url("Achievement_Diaries_tab_icon.png")
 _ICON_SUMMARY_COMBAT_TASKS = _wiki_icon_url("Character_Summary_-_Combat_Tasks_Completed_icon.png")
 _ICON_SUMMARY_COLLECTIONS = _wiki_icon_url("Character_Summary_-_Collections_Logged_icon.png")
+
+# The account-type tile's own seven icons (one per GameAccount.
+# account_type code -- see that column's own comment in app/models.py)
+# plus the readable label shown as this tile's "value" text, same
+# "icon's alt/title names the category, the co-stat-value div holds
+# the actual value" split every other summary tile uses -- except here
+# the icon ITSELF is also part of the value (there's no single fixed
+# icon for "account type" the way there is for, say, combat level), so
+# the script below (ACCOUNT_TYPE_INFO, baked in from this same dict)
+# swaps the <img>'s src/alt/title to match once the sync'd account_type
+# is known, same "server already knows this, but fetch it client-side
+# like every other summary stat" convention _SUMMARY_STATS' own
+# comment below explains. MAIN's coin icon is this tile's default/
+# pre-fetch appearance, same arbitrary-but-reasonable default role
+# _ICON_SUMMARY_GE_VALUE used to play for the tile this replaced.
+_ACCOUNT_TYPE_INFO = {
+    "MAIN": (_wiki_icon_url("Coins_10000.png"), "Main"),
+    "IRONMAN": (_wiki_icon_url("Ironman_helm.png"), "Ironman"),
+    "UIM": (_wiki_icon_url("Ultimate_ironman_helm.png"), "Ultimate Ironman"),
+    "HCIM": (_wiki_icon_url("Hardcore_ironman_helm.png"), "Hardcore Ironman"),
+    "GIM": (_wiki_icon_url("Group_ironman_helm.png"), "Group Ironman"),
+    "HCGIM": (_wiki_icon_url("Hardcore_group_ironman_helm.png"), "Hardcore Group Ironman"),
+    "UGIM": (_wiki_icon_url("Group_ironman_helm_(unranked).png"), "Unranked Group Ironman"),
+}
 
 
 def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
@@ -1289,20 +1317,20 @@ def render_dashboard(player: PlayerView) -> str:
 
 
 _SUMMARY_STATS = (
-    # (element key, icon, alt text) -- geValue is computed client-side
-    # from /api/possessions/summary (the same GE-priced snapshot
-    # Storages Viewer's own section 3 uses, see build_possessions_summary
-    # in app/possessions.py) rather than anything GameAccount stores;
-    # the other seven come from /api/character-overview/summary, i.e.
-    # GameAccount.character_summary_* as last synced by
+    # (element key, icon, alt text) -- all eight now come from
+    # /api/character-overview/summary, i.e. GameAccount.character_
+    # summary_* (plus the standalone account_type) as last synced by
     # MyscapeClient#syncCharacterSummary in the Mootrius/myscape-plugin
     # repo (see that endpoint's own comment in app/main.py, and
     # GameAccount's own comment in app/models.py for why "Quests
     # Completed" stands in for quest points). alt text is the only
     # label left anywhere for these -- there's no visible per-stat
     # caption on the page any more (see render_character_overview's own
-    # comment), just each icon's hover tooltip.
-    ("geValue", _ICON_SUMMARY_GE_VALUE, "Net worth"),
+    # comment), just each icon's hover tooltip -- accountType is the
+    # one exception, where the script below swaps BOTH the icon and
+    # this alt text (see _ACCOUNT_TYPE_INFO above), since the icon
+    # itself is the value here, not a fixed category label.
+    ("accountType", _ACCOUNT_TYPE_INFO["MAIN"][0], "Account type"),
     ("combatLevel", _ICON_SUMMARY_COMBAT_LEVEL, "Combat level"),
     ("totalLevel", _ICON_SUMMARY_TOTAL_LEVEL, "Total level"),
     ("totalXp", _ICON_SUMMARY_TOTAL_XP, "Total XP"),
@@ -2097,19 +2125,17 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     regardless of each wiki image's own native dimensions. No caption
     under each value any more (was "GE VALUE" / "COMBAT LEVEL" / etc.)
     -- each icon's alt text is still there as a hover tooltip, just not
-    printed on the page. Every value starts as an em dash and is filled
-    in by the script below once its fetch resolves -- server-rendered
-    rather than server-computed, since geValue needs a live GE-price
-    pass over the player's whole inventory (already exactly what
-    /api/possessions/summary does for Storages Viewer) and the other
-    seven are already a simple session-authenticated GET away (see
-    /api/character-overview/summary in app/main.py) -- no reason to
-    duplicate either computation here just to embed a number server-side
-    that a fresh page load re-fetches from the exact same place a
-    moment later anyway. An account that's never synced one of these
-    (no Storages Viewer data yet, or the plugin's Character Summary tab
-    has never been opened) simply leaves that tile's em dash showing,
-    same as every other "nothing synced yet" spot in this app.
+    printed on the page (accountType is the one exception -- see
+    _ACCOUNT_TYPE_INFO's own comment above). Every value starts as an
+    em dash and is filled in by the script below once its fetch
+    resolves -- server-rendered rather than server-computed, since
+    embedding a number server-side here would just have a fresh page
+    load re-fetch it from the exact same /api/character-overview/
+    summary a moment later anyway. An account that's never synced
+    these (the plugin's Character Summary tab has never been opened)
+    simply leaves every tile's em dash (and accountType's default MAIN
+    coin icon) showing, same as every other "nothing synced yet" spot
+    in this app.
 
     Combat level is shown rounded to a whole number (126, not 126.1 --
     the in-game panel's own decimal-precision option) and total level
@@ -2171,7 +2197,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     built and kept in sync."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
-        <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" />
+        <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" {f'id="co-icon-{key}"' if key == "accountType" else ""} />
         <div class="co-stat-value" id="co-{key}">&mdash;</div>
       </div>"""
         for key, icon, alt in _SUMMARY_STATS
@@ -2354,6 +2380,25 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         if (completed == null || total == null) return;
         setStat(key, formatInt(completed) + ' / ' + formatInt(total));
       }
+      // One (icon url, readable label) pair per GameAccount.account_
+      // type code -- see _ACCOUNT_TYPE_INFO's own comment in
+      // app/pages.py. Unlike every other tile's fixed icon, this
+      // tile's <img> (#co-icon-accountType) has no single correct src
+      // of its own in the markup -- MAIN's coin icon is just this
+      // tile's pre-fetch default -- so this is the one setStat
+      // caller that also swaps an icon, not just the value text.
+      var ACCOUNT_TYPE_INFO = __ACCOUNT_TYPE_INFO_JSON__;
+      function setAccountType(code) {
+        var info = code != null ? ACCOUNT_TYPE_INFO[code] : null;
+        if (!info) return;
+        var icon = document.getElementById('co-icon-accountType');
+        if (icon) {
+          icon.src = info[0];
+          icon.alt = info[1];
+          icon.title = info[1];
+        }
+        setStat('accountType', info[1]);
+      }
       // The OSRS xp-per-level curve, levels 1-126 including the
       // "virtual" levels above the real level-99 cap -- see
       // https://oldschool.runescape.wiki/w/Experience for the formula
@@ -2404,6 +2449,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (!data) return;
+          setAccountType(data.accountType);
           if (data.combatLevel != null) setStat('combatLevel', formatIntPlain(data.combatLevel));
           if (data.totalLevel != null) setStat('totalLevel', formatIntPlain(data.totalLevel));
           if (data.totalXp != null) setStat('totalXp', formatInt(data.totalXp) + ' xp');
@@ -2413,23 +2459,6 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           setFraction('collections', data.collectionsCompleted, data.collectionsTotal);
         })
         .catch(function () { /* leave this row's em dashes showing */ });
-
-      // Same GE-priced item list Storages Viewer's section 3 renders
-      // (build_possessions_summary in app/possessions.py) -- summed
-      // here rather than added as a second server-side total, so this
-      // tile always matches whatever Storages Viewer itself would add
-      // up to a keystroke later.
-      fetch('/api/possessions/summary')
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (data) {
-          if (!data || !Array.isArray(data.items)) return;
-          var total = 0;
-          data.items.forEach(function (item) {
-            if (item.gePrice != null) total += item.total * item.gePrice;
-          });
-          setStat('geValue', formatInt(total) + ' gp');
-        })
-        .catch(function () { /* leave the em dash showing */ });
 
       // Same GameAccount.skills snapshot Mindmaps/Goal Tracking's own
       // skill-goal picker reads -- see /api/players/me/skills in
@@ -3115,7 +3144,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         });
       }
     })();
-    """
+    """.replace("__ACCOUNT_TYPE_INFO_JSON__", json.dumps(_ACCOUNT_TYPE_INFO))
 
     extra_head = (
         f'<link rel="stylesheet" href="/static/css/character-overview.css?v={_CHARACTER_OVERVIEW_CSS_VERSION}" />'
@@ -3182,18 +3211,17 @@ def render_public_character_overview(game_account: "GameAccount", viewer: Option
     "never touches window.fetch" convention _MODEL_VIEWER_HEAD's own
     comment already documents.
 
-    Net worth (co-geValue) is the one summary-row stat this
-    deliberately leaves at its em-dash default: that figure comes from
-    a *different*, bigger endpoint entirely (GET /api/possessions/
-    summary, this account's whole priced bank/inventory/etc. breakdown
-    -- see possessions_summary in app/main.py), and making THAT
-    publicly readable is a materially bigger exposure than "the same
-    six sections Character Overview already shows," which is what
-    going public was actually scoped to. Nothing stops a later,
-    separate decision to expose a public net-worth figure too; this
-    function just doesn't shim that endpoint, so the reused script's
-    own geValue fetch fails closed exactly the way it already does for
-    an account that's simply never synced a storage.
+    Account type (accountType, in the same /api/public/<code>/summary
+    response every other summary-row stat already rides in) is shown
+    here same as the real page -- unlike the old geValue/"Net worth"
+    tile this replaced (which deliberately stayed at its em-dash
+    default for a visitor, since that figure came from a *different*,
+    bigger, genuinely sensitive endpoint -- this account's whole
+    priced bank/inventory/etc. breakdown), an account type isn't a
+    comparable exposure. It's a single, usually-public-knowledge label
+    (most players' own in-game names already carry an ironman icon),
+    well within "the same six sections Character Overview already
+    shows," which is what going public was actually scoped to.
 
     The one mutating control the reused script has (#clogSyncBtn, the
     collection log's "refresh kill/completion counts from the
@@ -3236,9 +3264,12 @@ def render_public_character_overview(game_account: "GameAccount", viewer: Option
         if (url === '/api/players/me/hiscores/sync' && method === 'POST') {{
           return fail();
         }}
-        // Not shimmed on purpose -- see this function's own net-worth
-        // comment above -- and anything else the reused script could
-        // ever call that isn't one of the five cases above.
+        // Anything else the reused script could ever call that isn't
+        // one of the five cases above -- there's no longer a
+        // deliberately-unshimmed endpoint here the way /api/
+        // possessions/summary used to be back when this page's own
+        // geValue tile fetched it directly (see this function's own
+        // account-type comment above for what replaced that tile).
         return fail();
       }};
 
@@ -3432,20 +3463,13 @@ def render_landing_character_overview_preview() -> Optional[Tuple[str, str, str]
         clogSyncBtn.replaceWith(clogSyncBtn.cloneNode(true));
       }}
 
-      // Net worth hard-coded to this one fixed number (2,147,483,647
-      // gp -- max signed 32-bit int), per explicit instruction, rather
-      // than summed live the way the real page's own geValue tile
-      // does (see that fetch's own comment above _character_overview_
-      // panel_markup's reused script, fed here through the shim's own
-      // GET /api/possessions/summary catch-all failure, which leaves
-      // the reused script's own em dash showing) -- GE prices drift
-      // day to day regardless, so this preview was never going to show
-      // a genuinely current net worth either way. Set directly rather
-      // than through the fetch shim (there's no real items list that
-      // would honestly sum to this number) and after {{script}} runs so
-      // it overwrites that em dash instead of racing it.
-      var geValueEl = document.getElementById('co-geValue');
-      if (geValueEl) geValueEl.textContent = '2,147,483,647 gp';
+      // accountType ("MAIN", see app/data/landing_character_overview_
+      // demo.json's own summary.accountType) flows through the same
+      // GET /api/character-overview/summary shim above as every other
+      // summary stat now -- no separate override needed here the way
+      // the old geValue tile this replaced used to require (that one
+      // came from a different, bigger endpoint this preview never
+      // shimmed at all -- see DEMO_SUMMARY's own fetch handler above).
     }})();
     """
     return extra_head, body, wrapper_script

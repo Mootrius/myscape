@@ -1549,11 +1549,15 @@ def sync_character_summary(
     app/models.py and MyscapeClient#syncCharacterSummary in the
     Mootrius/myscape-plugin repo for how these seven stats are actually
     read (InterfaceID.AccountSummarySidepanel's dynamic children, at
-    fixed indices confirmed with a live widget dump). stat_count is
-    always 11 on success -- there's only ever one summary to send, so
-    unlike every other sync* endpoint's count this isn't counting
-    anything meaningful, just satisfying MyscapeClient#syncPayload's
-    shared countField contract (see that method's own comment)."""
+    fixed indices confirmed with a live widget dump). account_type
+    (optional, see that field's own comment in app/schemas.py) rides
+    along in this same payload for the plugin's own convenience, even
+    though it's actually read off client.getVarbitValue(Varbits.
+    ACCOUNT_TYPE) rather than that same widget. stat_count is always
+    11 on success -- there's only ever one summary to send, so unlike
+    every other sync* endpoint's count this isn't counting anything
+    meaningful, just satisfying MyscapeClient#syncPayload's shared
+    countField contract (see that method's own comment)."""
     game_account.character_summary_combat_level = payload.combat_level
     game_account.character_summary_total_level = payload.total_level
     game_account.character_summary_total_xp = payload.total_xp
@@ -1566,6 +1570,13 @@ def sync_character_summary(
     game_account.character_summary_collections_completed = payload.collections_completed
     game_account.character_summary_collections_total = payload.collections_total
     game_account.character_summary_combat_task_tier_completed = payload.combat_task_tier_completed
+    # Optional (see CharacterSummarySyncRequest.account_type's own
+    # comment in app/schemas.py) -- only overwritten when THIS sync
+    # actually sent one, so an older plugin build that doesn't know
+    # about account_type yet doesn't wipe out a value a newer build
+    # already synced.
+    if payload.account_type is not None:
+        game_account.account_type = payload.account_type
     game_account.character_summary_synced_at = datetime.now(timezone.utc)
     db.commit()
     return CharacterSummarySyncResponse(stat_count=11)
@@ -1591,6 +1602,7 @@ def _character_overview_summary_payload(game_account: GameAccount) -> dict:
         "combatTasksTotal": game_account.character_summary_combat_tasks_total,
         "collectionsCompleted": game_account.character_summary_collections_completed,
         "collectionsTotal": game_account.character_summary_collections_total,
+        "accountType": game_account.account_type,
         "syncedAt": game_account.character_summary_synced_at.isoformat() if game_account.character_summary_synced_at else None,
     }
 

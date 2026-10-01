@@ -347,6 +347,34 @@ class GameAccount(Base):
     # get_ca_tier_totals), which is static game content, not something
     # synced from the plugin at all.
     character_summary_combat_task_tier_completed = Column(JSONB, nullable=True)
+    # account_type: the account's actual OSRS account type -- one of
+    # "MAIN", "IRONMAN", "UIM" (Ultimate Ironman), "HCIM" (Hardcore
+    # Ironman), "GIM" (Group Ironman), "HCGIM" (Hardcore Group
+    # Ironman), "UGIM" (Unranked Group Ironman). Read directly off
+    # client.getVarbitValue(Varbits.ACCOUNT_TYPE) (0-6, in that exact
+    # order -- see MyscapeClient#syncCharacterSummary in the
+    # Mootrius/myscape-plugin repo), not derived or guessed; that
+    # varbit is what RuneLite's own Hiscore plugin and friends read
+    # too, now that the old Client#getAccountType() this app used to
+    # reference is deprecated specifically for not being able to tell
+    # unranked group ironman apart from a normal account. Bundled into
+    # the same POST /api/players/me/character-summary sync as the rest
+    # of this panel for the plugin's own convenience (it's trivial to
+    # read alongside everything else that sync already sends), even
+    # though unlike those seven it isn't actually scraped off the
+    # Character Summary tab's own widget -- a standalone, non-prefixed
+    # column (like runescape_name above) rather than another
+    # character_summary_* field, since this is a durable property of
+    # the account itself, not a snapshot of that one panel. Replaces
+    # the old geValue/"Net worth" tile in Character Overview's summary
+    # row (render_character_overview in app/pages.py) with an account-
+    # type icon instead, per explicit instruction -- and unlike net
+    # worth, this is shown on a public profile too (_character_overview_
+    # summary_payload in app/main.py), since an account type isn't the
+    # kind of exposure net worth was. Null until the first sync, same
+    # "never synced" meaning every other character_summary_* field
+    # uses.
+    account_type = Column(String, nullable=True)
     character_summary_synced_at = Column(DateTime(timezone=True), nullable=True)
 
     # The player's current 3D model export (POST

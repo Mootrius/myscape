@@ -1090,6 +1090,9 @@ class CollectionLogSyncResponse(BaseModel):
     item_count: int
 
 
+ACCOUNT_TYPE_CODES = {"MAIN", "IRONMAN", "UIM", "HCIM", "GIM", "HCGIM", "UGIM"}
+
+
 class CharacterSummarySyncRequest(BaseModel):
     """The seven stats the myscape-plugin repo reads straight off the
     in-game "Character Summary" tab -- see GameAccount's own
@@ -1118,6 +1121,15 @@ class CharacterSummarySyncRequest(BaseModel):
     # than required, same backward-compatibility reasoning
     # QuestsSyncRequest.in_progress_quests above gives.
     combat_task_tier_completed: Dict[str, int] = {}
+    # New: one of ACCOUNT_TYPE_CODES above -- see GameAccount.
+    # account_type's own comment in app/models.py for where this comes
+    # from (client.getVarbitValue(Varbits.ACCOUNT_TYPE), not the panel
+    # itself) and what it replaces. Optional/defaulted to None rather
+    # than required, same backward-compatibility reasoning
+    # combat_task_tier_completed above gives -- an older plugin build
+    # that doesn't send this yet shouldn't have every other field in
+    # this same sync start failing because of it.
+    account_type: Optional[str] = None
 
     @field_validator("combat_task_tier_completed")
     @classmethod
@@ -1126,6 +1138,13 @@ class CharacterSummarySyncRequest(BaseModel):
         bad = set(value) - valid_tiers
         if bad:
             raise ValueError(f"combat_task_tier_completed has unknown tier(s): {sorted(bad)}")
+        return value
+
+    @field_validator("account_type")
+    @classmethod
+    def check_account_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in ACCOUNT_TYPE_CODES:
+            raise ValueError(f"account_type must be one of {sorted(ACCOUNT_TYPE_CODES)}, got {value!r}")
         return value
 
 
