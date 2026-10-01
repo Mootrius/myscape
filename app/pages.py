@@ -2038,7 +2038,7 @@ _MODEL_VIEWER_HEAD = """
 """
 
 
-def _character_overview_panel_markup(preview: bool = False, public_code: Optional[str] = None) -> Tuple[str, str, str]:
+def _character_overview_panel_markup(preview: bool = False, public_code: Optional[str] = None, public_character_name: Optional[str] = None) -> Tuple[str, str, str]:
     """Character Overview's real body/script, split out into its own
     reusable function so the landing page's own interactive preview
     (render_landing_character_overview_preview) can reuse it verbatim --
@@ -2079,6 +2079,15 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     that does NOT appear in public_code mode (nor in preview mode) --
     it's a control for the account's own owner to manage their own
     share link, meaningless to show someone just visiting that link.
+
+    public_character_name (only ever passed alongside public_code, by
+    that same caller) swaps the page's own "Character Overview" <h2>
+    for that character's actual name instead -- a visitor who followed
+    someone's shared link is looking at THAT character, not themself,
+    so naming the page after them reads far more like the page it
+    actually is. escape()'d same as every other player-controlled
+    string this file ever drops straight into markup (see e.g. the
+    summary row's own icon alt text above).
 
     Character Overview: the summary row (.co-summary-row in
     character-overview.css) holding all eight icon+stat pairs (see
@@ -2243,6 +2252,12 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     # actual game data every time this page loads.
     public_profile_caret = "" if (preview or public_code) else ' <button type="button" class="co-public-caret-btn" id="publicProfileCaretBtn" aria-label="Public profile settings" title="Public profile settings"><span class="co-public-caret" id="publicProfileCaret">&#9662;</span></button>'
 
+    # A visitor's own view of someone else's shared link names the
+    # page after THAT character instead of the generic "Character
+    # Overview" every other mode (including preview -- the landing
+    # demo isn't anyone's real character) still uses.
+    page_heading = escape(public_character_name) if public_character_name else "Character Overview"
+
     # Deliberately NOT a full-width card like .co-summary-row below --
     # "PRIVATE"/"PUBLIC" segmented control (same look/markup
     # convention as Mindmaps' own .mm-segment-group, duplicated rather
@@ -2273,7 +2288,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     </div>"""
 
     body = f"""
-    <h2 class="page-title">Character Overview{public_profile_caret}</h2>
+    <h2 class="page-title">{page_heading}{public_profile_caret}</h2>
 
     {public_profile_card_section}
 
@@ -3188,9 +3203,11 @@ def render_public_character_overview(game_account: "GameAccount", viewer: Option
     owner, so there's nothing for that click to legitimately do here
     either."""
     code = game_account.public_code
-    extra_head, body, script = _character_overview_panel_markup(public_code=code)
-
     display_name = game_account.runescape_name or "This player"
+    extra_head, body, script = _character_overview_panel_markup(
+        public_code=code, public_character_name=display_name
+    )
+
     wrapper_script = f"""
     (function () {{
       var PUBLIC_CODE = {json.dumps(code)};
