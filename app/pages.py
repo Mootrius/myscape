@@ -2231,8 +2231,8 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     silently change what a DIFFERENT visited profile (or this player's
     own real page) opens on next time, all three sharing one browser's
     localStorage. The public-profile settings card, tucked behind a
-    share icon next to the page's own title (public_profile_card_section
-    and public_profile_share_btn below), is the one piece of this
+    settings-cog button next to the page's own title
+    (public_profile_settings_btn below), is the one piece of this
     markup that does NOT appear in public_code mode (nor in preview
     mode) -- it's a control for the account's own owner to manage
     their own share link, meaningless to show someone just visiting
@@ -2387,34 +2387,36 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     # (rather than hiding via CSS) is safe: the script's own guards
     # (`if (infoBtn && infoPopup) {...}`, `if (bgShuffleBtn) ...`)
     # already no-op cleanly when these elements don't exist, same
-    # pattern public_profile_caret/public_profile_card_section above
-    # rely on.
+    # pattern public_profile_settings_btn above relies on.
     mv_info_btn = "" if public_code else '<button class="model-viewer-btn" id="mvInfoBtn" type="button" title="About this viewer" aria-label="About this viewer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>'
     mv_shuffle_btn = "" if public_code else '<button class="model-viewer-btn" id="mvBgShuffleBtn" type="button" title="Shuffle background" aria-label="Shuffle background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg></button>'
     mv_info_popup = "" if public_code else '<div class="model-viewer-info-popup" id="modelViewerInfoPopup" hidden>Set your character model in the myscape plugin sidebar on RuneLite.</div>'
 
-    # The owner's own share-link control -- absent in both preview
+    # The owner's own settings control -- absent in both preview
     # (the landing demo) and public_code (a visitor's own view of
     # someone else's link) modes, since in either of those this
-    # player isn't looking at their own settings. #publicProfileShareBtn
+    # player isn't looking at their own settings. #publicProfileSettingsBtn
     # not existing at all is exactly what the script's own `if
-    # (publicProfileShareBtn) {...}` guard below checks for, same
+    # (publicProfileSettingsBtn) {...}` guard below checks for, same
     # "just don't wire it up" pattern Skills/Quests/etc. already use
-    # for their own absent-in-some-modes elements. A plain share icon
-    # next to the title (see .co-share-icon-btn's own comment in
-    # character-overview.css) rather than its own always-visible row --
-    # this is a settings control a player opens rarely, not something
-    # that deserves permanent space above the actual game data every
-    # time this page loads. Same Feather "upload" glyph (duplicated,
-    # not shared across stylesheets/functions, per this file's usual
-    # convention) as the Loot Tracker's own export-icon trigger uses --
-    # an export/tray-with-an-arrow-out-of-it icon rather than the
-    # share "nodes" glyph this used to be, per explicit instruction.
-    public_profile_share_btn = "" if (preview or public_code) else (
-        ' <button type="button" class="co-share-icon-btn" id="publicProfileShareBtn" aria-label="Public profile settings" title="Public profile settings">'
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
-        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
-        '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
+    # for their own absent-in-some-modes elements. A settings-cog
+    # button next to the title, visually identical to the Storages
+    # Viewer's own .pm-settings-btn (see .co-settings-btn's own
+    # comment in character-overview.css) per explicit instruction,
+    # rather than its own always-visible row -- this is a settings
+    # control a player opens rarely, not something that deserves
+    # permanent space above the actual game data every time this page
+    # loads. The private/public card it opens is nested inside this
+    # same button's own wrap span (appended onto this very variable
+    # just below, once page_heading is out of the way), so one
+    # variable now carries both the trigger and the floating popup it
+    # toggles.
+    public_profile_settings_btn = "" if (preview or public_code) else (
+        ' <span class="co-settings-wrap">'
+        '<button type="button" class="co-settings-btn" id="publicProfileSettingsBtn" aria-label="Public profile settings" title="Public profile settings">'
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M8.65 6.20 L9.54 2.82 L14.46 2.82 L15.35 6.20 L18.72 5.28 L21.18 9.54 L18.70 12.00 L21.18 14.46 L18.72 18.72 L15.35 17.80 L14.46 21.18 L9.54 21.18 L8.65 17.80 L5.28 18.72 L2.82 14.46 L5.30 12.00 L2.82 9.54 L5.28 5.28 Z"></path>'
+        '<circle cx="12" cy="12" r="3.1"></circle>'
         '</svg></button>'
     )
 
@@ -2424,38 +2426,34 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     # demo isn't anyone's real character) still uses.
     page_heading = escape(public_character_name) if public_character_name else "Character Overview"
 
-    # Deliberately NOT a full-width card like .co-summary-row below --
-    # "PRIVATE"/"PUBLIC" segmented control (same look/markup
-    # convention as Mindmaps' own .mm-segment-group, duplicated rather
-    # than shared across these two pages' own stylesheets, same as
-    # every other cross-page style overlap on this site), a readonly
-    # link field, and two buttons, all in one short row with no label
-    # or hint text above it -- the caret it's tucked behind already
-    # says what this is well enough.
-    # .public-profile-card-row is just a centering wrapper -- display:
-    # flex/justify-content: center, same pattern every other centered
-    # row on this page already uses -- with no margin/padding of its
-    # own, so when the actual card inside is hidden (display: none,
-    # see that rule's own comment in character-overview.css) the row
-    # collapses to zero height instead of still reserving the card's
-    # own margin: 6px 0 14px every time this page loads, same as
-    # before this wrapper existed.
-    public_profile_card_section = "" if (preview or public_code) else """
-    <div class="public-profile-card-row">
-      <div class="public-profile-card" id="publicProfileCard" hidden>
-        <div class="public-profile-seg-group">
-          <button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>
-          <button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>
-        </div>
-        <button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" title="Click to copy this link to your clipboard." disabled></button>
-        <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">Generate new link</button>
-      </div>
-    </div>"""
+    # Nested as a sibling of publicProfileSettingsBtn inside the same
+    # .co-settings-wrap span above, rather than its own full-width row
+    # -- this card now floats directly under that button (position:
+    # absolute, see .public-profile-card in character-overview.css)
+    # instead of sitting in-flow and pushing .co-summary-row below it
+    # down the page, per explicit instruction. "PRIVATE"/"PUBLIC"
+    # segmented control (same look/markup convention as Mindmaps' own
+    # .mm-segment-group, duplicated rather than shared across these
+    # two pages' own stylesheets, same as every other cross-page
+    # style overlap on this site), a readonly link field, and two
+    # buttons, all in one short row with no label or hint text above
+    # it -- the cog it's tucked behind already says what this is well
+    # enough.
+    if not (preview or public_code):
+        public_profile_settings_btn += (
+            '<div class="public-profile-card" id="publicProfileCard" hidden>'
+            '<div class="public-profile-seg-group">'
+            '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>'
+            '<button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>'
+            '</div>'
+            '<button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" title="Click to copy this link to your clipboard." disabled></button>'
+            '<button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">Generate new link</button>'
+            '</div>'
+            '</span>'
+        )
 
     body = f"""
-    <h2 class="page-title">{page_heading}{public_profile_share_btn}</h2>
-
-    {public_profile_card_section}
+    <h2 class="page-title">{page_heading}{public_profile_settings_btn}</h2>
 
     <div class="co-summary-row" id="coSummaryRow">
       {stat_tiles}
@@ -3197,27 +3195,42 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
 
       // ---- Public-profile settings card (#publicProfileCard) -------
       // Absent entirely in preview/public_code mode (see
-      // public_profile_card_section's own comment above) -- this
-      // guard is what makes that a harmless no-op here rather than a
-      // second code path that has to be kept in preview/public-aware,
-      // same convention Skills/Quests/Diaries/Combat Achievements
-      // already use for their own absent-in-some-modes elements.
-      var publicProfileShareBtn = document.getElementById('publicProfileShareBtn');
-      if (publicProfileShareBtn) {
+      // publicProfileSettingsBtn's own comment in render_character_
+      // overview) -- this guard is what makes that a harmless no-op
+      // here rather than a second code path that has to be kept in
+      // preview/public-aware, same convention Skills/Quests/Diaries/
+      // Combat Achievements already use for their own absent-in-some-
+      // modes elements.
+      var publicProfileSettingsBtn = document.getElementById('publicProfileSettingsBtn');
+      if (publicProfileSettingsBtn) {
         var publicProfileCard = document.getElementById('publicProfileCard');
         var publicProfileSegBtns = [document.getElementById('publicProfileSegPrivate'), document.getElementById('publicProfileSegPublic')];
         var publicProfileLinkBtn = document.getElementById('publicProfileLinkBtn');
         var publicProfileRegenerateBtn = document.getElementById('publicProfileRegenerateBtn');
 
-        // Collapsed by default -- clicking the share icon just shows/
-        // hides the card (no data refetch on open; the initial GET
-        // below already ran at load, same as every other section on
-        // this page loading its own data up front regardless of
-        // whether its card happens to be visible yet).
-        publicProfileShareBtn.addEventListener('click', function () {
-          var nowHidden = !publicProfileCard.hidden;
-          publicProfileCard.hidden = nowHidden;
-          publicProfileShareBtn.classList.toggle('open', !nowHidden);
+        // Collapsed by default -- clicking the cog just shows/hides
+        // the card as a floating popup anchored right under the
+        // button (.co-settings-wrap, character-overview.css), same
+        // outside-click-close convention as the Storages Viewer's own
+        // pmSettingsBtn/pmSettingsMenu (setSettingsMenuOpen, app/
+        // pages.py) -- mirrored here as setPublicProfileOpen, .active
+        // and all, rather than the .open class Loot Tracker/Purchase
+        // Goals' own export-icon triggers use, to match that same
+        // pmSettingsBtn pair exactly per explicit instruction. No
+        // data refetch on open either; the initial GET below already
+        // ran at load, same as every other section on this page
+        // loading its own data up front regardless of whether its
+        // card happens to be visible yet.
+        function setPublicProfileOpen(open) {
+          publicProfileCard.hidden = !open;
+          publicProfileSettingsBtn.classList.toggle('active', open);
+        }
+        publicProfileSettingsBtn.addEventListener('click', function () {
+          setPublicProfileOpen(publicProfileCard.hidden);
+        });
+        document.addEventListener('click', function (e) {
+          var wrap = document.querySelector('.co-settings-wrap');
+          if (wrap && !wrap.contains(e.target)) setPublicProfileOpen(false);
         });
 
         function applyPublicProfileState(data) {
@@ -4759,23 +4772,22 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
     # own click handler below and build_purchase_goal_share_snapshot in
     # app/purchase_goals.py for exactly what a link freezes.
     purchase_share_icon_btn = (
-        ' <button type="button" class="pg-share-icon-btn" id="pgShareIconBtn" aria-label="Export this setup" title="Export this setup">'
+        ' <span class="pg-share-wrap">'
+        '<button type="button" class="pg-share-icon-btn" id="pgShareIconBtn" aria-label="Export this setup" title="Export this setup">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
         '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
         '</svg></button>'
+        '<div class="pg-share-card" id="pgShareCard" hidden>'
+        '<button type="button" class="pg-share-generate-btn" id="pgShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
+        '<button type="button" class="pg-share-link-btn" id="pgShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
+        '<p class="pg-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>'
+        '</div>'
+        '</span>'
     )
 
     body = f"""
     <h2 class="page-title">Purchase Goals{purchase_share_icon_btn}</h2>
-
-    <div class="pg-share-card-row">
-      <div class="pg-share-card" id="pgShareCard" hidden>
-        <button type="button" class="pg-share-generate-btn" id="pgShareGenerateBtn">GENERATE SHAREABLE LINK</button>
-        <button type="button" class="pg-share-link-btn" id="pgShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>
-        <p class="pg-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>
-      </div>
-    </div>
 
     <div class="pg-header">
       <div class="tracker-icon-row" id="setupIconRow"></div>
@@ -6264,7 +6276,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         var genBtn = document.getElementById('pgShareGenerateBtn');
         var linkBtn = document.getElementById('pgShareLinkBtn');
         // Both null on the landing preview and the share page itself --
-        // neither one renders .pg-share-card-row at all (the landing
+        // neither one renders .pg-share-wrap at all (the landing
         // preview never had a share feature to begin with; a share
         // page visitor isn't this setup's owner, so there's nothing
         // for them to share -- see render_purchase_goals_share's own
@@ -6279,17 +6291,28 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         delete linkBtn.dataset.url;
       }
 
-      // Share icon next to the title -- toggles pgShareCard below it,
-      // same plain show/hide-no-outside-click-auto-close pattern as
-      // Loot Tracker's own lootShareIconBtn/lootShareCard. Null-
-      // guarded for the same reason resetGearSetupShareState above is.
+      // Share icon next to the title -- now a floating popup anchored
+      // directly under the button itself (.pg-share-wrap, purchase-
+      // goals.css) instead of a full-width row pushing the rest of
+      // the page down, closeable by re-clicking the trigger OR
+      // clicking anywhere else on the page, same outside-click-close
+      // convention as the Storages Viewer's own pmSettingsBtn/
+      // pmSettingsMenu (setSettingsMenuOpen, app/pages.py) -- mirrored
+      // here as setPgShareOpen. Null-guarded for the same reason
+      // resetGearSetupShareState above is.
       var pgShareIconBtn = document.getElementById('pgShareIconBtn');
       var pgShareCard = document.getElementById('pgShareCard');
       if (pgShareIconBtn) {
+        function setPgShareOpen(open) {
+          pgShareCard.hidden = !open;
+          pgShareIconBtn.classList.toggle('open', open);
+        }
         pgShareIconBtn.addEventListener('click', function () {
-          var nowHidden = !pgShareCard.hidden;
-          pgShareCard.hidden = nowHidden;
-          pgShareIconBtn.classList.toggle('open', !nowHidden);
+          setPgShareOpen(pgShareCard.hidden);
+        });
+        document.addEventListener('click', function (e) {
+          var wrap = document.querySelector('.pg-share-wrap');
+          if (wrap && !wrap.contains(e.target)) setPgShareOpen(false);
         });
       }
 
@@ -6450,37 +6473,37 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           </div>
         """
 
-    # Share icon next to the title (same pattern/markup shape as
-    # Character Overview's own .co-share-icon-btn -- see that button's
-    # comment in app/pages.py/character-overview.css), replacing the
-    # old "Share" text button that used to sit beside the range button
-    # in .loot-chart-range below. Toggles .lootShareCard open/closed;
-    # that card itself (not a dropdown anchored to this icon, a
-    # centered row under the title instead -- see .loot-share-card-row
-    # in loot-tracker.css) holds the actual GENERATE SHAREABLE LINK
-    # flow, same lazy-generate-on-click shape request as this page's
-    # own task asked for. Feather's "upload" glyph (an export/tray-
-    # with-an-arrow-out-of-it icon), not the share "nodes" glyph this
-    # used to be, per explicit instruction -- label/title text updated
-    # to match ("Export", not "Share").
+    # Export icon next to the title (same button-chrome/floating-popup
+    # pattern as Purchase Goals' own .pg-share-icon-btn -- see that
+    # button's comment in app/pages.py/purchase-goals.css), replacing
+    # the old "Share" text button that used to sit beside the range
+    # button in .loot-chart-range below. Toggles .lootShareCard open
+    # or closed as a popup floating directly under this button (see
+    # .loot-share-wrap in loot-tracker.css), closeable by re-clicking
+    # the trigger OR clicking anywhere else on the page; that card
+    # itself holds the actual GENERATE SHAREABLE LINK flow, same
+    # lazy-generate-on-click shape request as this page's own task
+    # asked for. Feather's "upload" glyph (an export/tray-with-an-
+    # arrow-out-of-it icon), not the share "nodes" glyph this used to
+    # be, per explicit instruction -- label/title text updated to
+    # match ("Export", not "Share").
     loot_share_icon_btn = (
-        ' <button type="button" class="loot-share-icon-btn" id="lootShareIconBtn" aria-label="Export this loot" title="Export this loot">'
+        ' <span class="loot-share-wrap">'
+        '<button type="button" class="loot-share-icon-btn" id="lootShareIconBtn" aria-label="Export this loot" title="Export this loot">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
         '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
         '</svg></button>'
+        '<div class="loot-share-card" id="lootShareCard" hidden>'
+        '<button type="button" class="loot-share-generate-btn" id="lootShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
+        '<button type="button" class="loot-share-link-btn" id="lootShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
+        '<p class="loot-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>'
+        '</div>'
+        '</span>'
     )
 
     body = f"""
     <h2 class="page-title">Loot Tracker{loot_share_icon_btn}</h2>
-
-    <div class="loot-share-card-row">
-      <div class="loot-share-card" id="lootShareCard" hidden>
-        <button type="button" class="loot-share-generate-btn" id="lootShareGenerateBtn">GENERATE SHAREABLE LINK</button>
-        <button type="button" class="loot-share-link-btn" id="lootShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>
-        <p class="loot-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>
-      </div>
-    </div>
 
     <div class="auth-error" id="lootError"></div>
     <p class="pg-empty" id="lootEmptyMsg">Loading&hellip;</p>
@@ -8176,27 +8199,36 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         }
       }
 
-      // Share icon next to the title -- toggles the lootShareCard
-      // below it, same plain show/hide-no-outside-click-auto-close
-      // pattern as Character Overview's own publicProfileShareBtn/
-      // publicProfileCard (no data to refetch on open either, since
-      // nothing here is generated until GENERATE SHAREABLE LINK is
-      // actually clicked -- see that button's own handler below).
-      // Null-guarded (unlike that Character Overview pair, which
-      // always has both elements present) because
-      // render_loot_tracker_share strips this icon's own <h2> out of
-      // the reused body string entirely before this script ever runs
-      // -- a visitor there isn't this share's owner, so there's
-      // nothing for them to share -- leaving lootShareIconBtn missing
-      // from the very start rather than removed afterward the way the
-      // landing preview's own copy of this same icon is.
+      // Share icon next to the title -- now a floating popup anchored
+      // directly under the button itself (.loot-share-wrap, loot-
+      // tracker.css) instead of a full-width row pushing the rest of
+      // the page down, closeable by re-clicking the trigger OR
+      // clicking anywhere else on the page, same outside-click-close
+      // convention as the Storages Viewer's own pmSettingsBtn/
+      // pmSettingsMenu (setSettingsMenuOpen, app/pages.py) -- mirrored
+      // here as setLootShareOpen (no data to refetch on open either,
+      // since nothing here is generated until GENERATE SHAREABLE LINK
+      // is actually clicked -- see that button's own handler below).
+      // Null-guarded because render_loot_tracker_share strips this
+      // icon's own <h2> out of the reused body string entirely before
+      // this script ever runs -- a visitor there isn't this share's
+      // owner, so there's nothing for them to share -- leaving
+      // lootShareIconBtn missing from the very start rather than
+      // removed afterward the way the landing preview's own copy of
+      // this same icon is.
       var lootShareIconBtn = document.getElementById('lootShareIconBtn');
       var lootShareCard = document.getElementById('lootShareCard');
       if (lootShareIconBtn) {
+        function setLootShareOpen(open) {
+          lootShareCard.hidden = !open;
+          lootShareIconBtn.classList.toggle('open', open);
+        }
         lootShareIconBtn.addEventListener('click', function () {
-          var nowHidden = !lootShareCard.hidden;
-          lootShareCard.hidden = nowHidden;
-          lootShareIconBtn.classList.toggle('open', !nowHidden);
+          setLootShareOpen(lootShareCard.hidden);
+        });
+        document.addEventListener('click', function (e) {
+          var wrap = document.querySelector('.loot-share-wrap');
+          if (wrap && !wrap.contains(e.target)) setLootShareOpen(false);
         });
       }
 
@@ -8223,8 +8255,8 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         var genBtn = document.getElementById('lootShareGenerateBtn');
         var linkBtn = document.getElementById('lootShareLinkBtn');
         // Both null on the share page itself and the landing preview
-        // -- .loot-share-card-row (holding both) is stripped from
-        // those entirely by their own wrapper scripts (see
+        // -- .loot-share-wrap (holding both) is stripped from those
+        // entirely by their own wrapper scripts (see
         // render_loot_tracker_share/render_landing_loot_preview in
         // this file), and this reused script runs unmodified on both.
         if (!genBtn || !linkBtn) return;
@@ -8611,16 +8643,16 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
         document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
       }}
 
-      // Same reasoning, for the share icon (next to the title) and
-      // the card it would open -- nothing real to share from an
-      // anonymous demo. Removed outright (not just hidden): nothing
-      // else in the reused script above ever looks either one up
-      // again the way it keeps re-querying lootRangeMenu, so there's
-      // no null-safety reason to leave them in the DOM.
-      var shareIconBtn = document.getElementById('lootShareIconBtn');
-      if (shareIconBtn) shareIconBtn.remove();
-      var shareCardRow = document.querySelector('.loot-share-card-row');
-      if (shareCardRow) shareCardRow.remove();
+      // Same reasoning, for the export icon (next to the title) and
+      // the popup it would open -- nothing real to share from an
+      // anonymous demo. Removed outright (not just hidden), wrap and
+      // all (the button and its popup are nested together inside
+      // .loot-share-wrap now, so one removal takes both): nothing
+      // else in the reused script above ever looks either up again
+      // the way it keeps re-querying lootRangeMenu, so there's no
+      // null-safety reason to leave them in the DOM.
+      var shareWrap = document.querySelector('.loot-share-wrap');
+      if (shareWrap) shareWrap.remove();
 
       // The bottom-edge feather itself (.landing-loot-preview::after)
       // is a plain, unconditional CSS rule now -- see loot-tracker.
@@ -8964,13 +8996,14 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
       }}
 
       // Same reasoning as render_landing_loot_preview's own identical
-      // strip: a viewer here isn't this share's owner, so there's
-      // nothing for them to share -- this view is itself already a
-      // share of someone else's range.
-      var shareIconBtn = document.getElementById('lootShareIconBtn');
-      if (shareIconBtn) shareIconBtn.remove();
-      var shareCardRow = document.querySelector('.loot-share-card-row');
-      if (shareCardRow) shareCardRow.remove();
+      // strip would give: a viewer here isn't this share's owner, so
+      // there's nothing for them to share -- this view is itself
+      // already a share of someone else's range. Unlike that landing
+      // preview, nothing actually needs removing here -- lootShareIconBtn/
+      // lootShareCard both live inside .loot-share-wrap, which lives
+      // inside the "Loot Tracker" <h2> this page's own
+      // render_loot_tracker_share strips outright before this reused
+      // script ever runs (see that function's own doc comment).
     }})();
     """
 
@@ -9421,11 +9454,11 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
       or depends on that markup being absent from the DOM, same
       reasoning render_landing_purchase_preview's own identical
       .pg-header override already gives.
-    - .pg-share-card-row (this setup's own GENERATE SHAREABLE LINK
-      card) is removed via the wrapper script, same as
-      render_loot_tracker_share's own lootShareIconBtn/loot-share-
-      card-row removal -- unlike .pg-header this sits OUTSIDE the
-      stripped <h2>, so partition alone doesn't touch it.
+    - .pg-share-wrap (the export icon this reused body's own <h2>
+      opens with, and the GENERATE SHAREABLE LINK card nested inside
+      it) needs no separate removal at all, unlike .pg-header just
+      above -- it lives INSIDE that stripped <h2>, so the partition
+      call above already takes it with it.
 
     game_account is the share's own owner, looked up by the caller
     (GET /s/{code} in app/main.py) from SharedContent.game_account_id,
@@ -9488,28 +9521,24 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     # comes back here signed in.
     if viewer is not None:
         import_icon_btn = (
-            ' <button type="button" class="pg-import-icon-btn" id="pgImportBtn" aria-label="Save to your account" title="Save to your account">'
+            ' <span class="pg-import-wrap">'
+            '<button type="button" class="pg-import-icon-btn" id="pgImportBtn" aria-label="Save to your account" title="Save to your account">'
             f'{import_icon_svg}</button>'
+            '<div class="pg-import-card" id="pgImportCard" hidden>'
+            '<button type="button" class="pg-import-save-btn" id="pgImportSaveBtn">SAVE TO MY MYSCAPE</button>'
+            '<p class="pg-import-popup-hint">Clicking the button above will save a copy<br>of this setup to your Purchase Goals.</p>'
+            '</div>'
+            '</span>'
         )
-        import_card_markup = """
-    <div class="pg-import-card-row">
-      <div class="pg-import-card" id="pgImportCard" hidden>
-        <button type="button" class="pg-import-save-btn" id="pgImportSaveBtn">SAVE TO MY MYSCAPE</button>
-        <p class="pg-import-popup-hint">Clicking the button above will save a copy<br>of this setup to your Purchase Goals.</p>
-      </div>
-    </div>
-    """
     else:
         import_icon_btn = (
             ' <a class="pg-import-icon-btn" href="/signup" aria-label="Sign up to save this" title="Sign up to save this">'
             f'{import_icon_svg}</a>'
         )
-        import_card_markup = ""
 
     banner_markup = f"""
     <p class="subtitle pg-share-label">{escape(setup_name)}</p>
     <h2 class="page-title">Shared by {escape(owner_name)}{import_icon_btn}</h2>
-    {import_card_markup}
     """
     body = banner_markup + body
     body = f'<div class="purchase-goal-share">{body}</div>'
@@ -9642,14 +9671,12 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
       // Same reasoning as render_loot_tracker_share's own identical
       // strip: a viewer here isn't this share's owner, so there's
       // nothing for them to share -- this view is itself already a
-      // share of someone else's setup. pgShareIconBtn is already gone
-      // (it lived inside the stripped <h2> above), left here only as
-      // a defensive no-op in case that ever changes; .pg-share-card-
-      // row sits OUTSIDE that heading, so it needs its own removal.
-      var shareIconBtn = document.getElementById('pgShareIconBtn');
-      if (shareIconBtn) shareIconBtn.remove();
-      var shareCardRow = document.querySelector('.pg-share-card-row');
-      if (shareCardRow) shareCardRow.remove();
+      // share of someone else's setup. pgShareIconBtn/pgShareCard are
+      // both already gone -- they live inside .pg-share-wrap, which
+      // lives inside the "Purchase Goals" <h2> this page's own
+      // render_purchase_goals_share strips outright before this reused
+      // script ever runs (see that function's own doc comment) -- so
+      // there's nothing left here to remove.
 
       // The download icon next to "Shared by <name>" above -- only
       // ever rendered as a real <button> (these listeners' own
@@ -9660,19 +9687,28 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
       // function's own doc comment above for why the two differ, and
       // why only the signed-in case ever renders pgImportCard at all.
       //
-      // Toggles pgImportCard open/closed -- same plain show/hide-no-
-      // outside-click-auto-close pattern as pgShareIconBtn/pgShareCard
-      // on the real Purchase Goals page above (_purchase_goals_panel_
-      // markup's own script, reused verbatim on this very page just
-      // above this block). Nothing is imported just from opening this
-      // card -- only pgImportSaveBtn's own click below does that.
+      // Toggles pgImportCard open (a floating popup anchored under
+      // the button itself, .pg-import-wrap in purchase-goals.css) or
+      // closed -- same outside-click-close convention as pgShareIconBtn/
+      // pgShareCard on the real Purchase Goals page above
+      // (_purchase_goals_panel_markup's own script, reused verbatim on
+      // this very page just above this block) and the Storages
+      // Viewer's own pmSettingsBtn/pmSettingsMenu. Nothing is imported
+      // just from opening this card -- only pgImportSaveBtn's own
+      // click below does that.
       var pgImportBtn = document.getElementById('pgImportBtn');
       var pgImportCard = document.getElementById('pgImportCard');
       if (pgImportBtn) {{
+        function setPgImportOpen(open) {{
+          pgImportCard.hidden = !open;
+          pgImportBtn.classList.toggle('open', open);
+        }}
         pgImportBtn.addEventListener('click', function () {{
-          var nowHidden = !pgImportCard.hidden;
-          pgImportCard.hidden = nowHidden;
-          pgImportBtn.classList.toggle('open', !nowHidden);
+          setPgImportOpen(pgImportCard.hidden);
+        }});
+        document.addEventListener('click', function (e) {{
+          var wrap = document.querySelector('.pg-import-wrap');
+          if (wrap && !wrap.contains(e.target)) setPgImportOpen(false);
         }});
       }}
 

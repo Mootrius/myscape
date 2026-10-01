@@ -761,91 +761,95 @@ button.primary#pgNameSave, .pg-setup-form-save {
   transform: scaleX(-1);
 }
 
-/* ---------- Share icon (next to "Purchase Goals" -- see
+/* ---------- Export icon (next to "Purchase Goals" -- see
    purchase_share_icon_btn in _purchase_goals_panel_markup,
-   app/pages.py) + the card it toggles open beneath the title. Same
-   inline-icon-next-to-a-heading pattern as Loot Tracker's own
-   .loot-share-icon-btn (duplicated here, not shared across these two
-   pages' own stylesheets, same "cross-page style overlap" convention
-   .loot-share-icon-btn's own comment in loot-tracker.css already
-   documents) -- matching visual values throughout, just this file's
-   own pg- prefix. ---------- */
+   app/pages.py) + the floating popup it toggles open right beneath
+   itself. Same button-chrome + anchored-popup pattern as Loot
+   Tracker's own .loot-share-icon-btn and the Purchase Goal share
+   page's own .pg-import-icon-btn (duplicated here, not shared across
+   these pages' own stylesheets, same "cross-page style overlap"
+   convention .loot-share-icon-btn's own comment in loot-tracker.css
+   already documents) -- matching visual values throughout, just this
+   file's own pg- prefix. Sized/bordered like .icon-menu-btn above
+   (the "Setup options" hamburger trigger) rather than a bare glyph,
+   per explicit instruction that these should read as actual buttons;
+   .pg-share-wrap is what .tracker-menu-wrap is to .icon-menu-btn/
+   .tracker-menu -- the position: relative anchor .pg-share-card
+   below is positioned absolute against. ---------- */
+.pg-share-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .pg-share-icon-btn {
+  width: 36px; height: 36px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: none;
-  border: none;
-  padding: 0 0 0 8px;
-  margin: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   cursor: pointer;
-  vertical-align: middle;
-  line-height: 1;
-  color: var(--text-faint);
-  transition: color 0.15s ease;
-  /* Same cap-height compensation .loot-share-icon-btn's own identical
-     rule documents -- all-caps title text has no descenders to visually
-     center against, so a plain vertical-align: middle lands a hair low.
-     -2.4px, matching that same rule's own revised value. */
-  transform: translateY(-2.4px);
+  color: var(--text-dim);
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
-.pg-share-icon-btn:hover { color: var(--text-dim); }
-.pg-share-icon-btn.open { color: var(--gold); }
+.pg-share-icon-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pg-share-icon-btn.open { border-color: var(--gold); color: var(--gold); }
 
 /* The download icon next to "Shared by <name>" on a Purchase Goal
    share page (render_purchase_goals_share's own import_icon_btn,
-   app/pages.py) -- same box/tray shape and cap-height-compensating
-   translateY as .pg-share-icon-btn above (it sits next to the exact
-   same kind of all-caps .page-title text, just a different heading).
-   Toggles .pg-import-card below open/closed, same .open-on-the-button
+   app/pages.py) -- same button-chrome/floating-popup shape as
+   .pg-share-icon-btn above (it sits next to the exact same kind of
+   all-caps .page-title text, just a different heading). Toggles
+   .pg-import-card below open/closed, same .open-on-the-button
    convention as .pg-share-icon-btn above -- this used to be a one-shot
    action button itself, but per explicit instruction it's now a
    toggle for a confirming popup instead (see .pg-import-card below),
    so it picked up the same .open state .pg-share-icon-btn already
    has. Rendered as either a real <button> (signed-in visitor) or a
-   plain <a> (signed-out, no popup, no .open ever toggled onto it)
-   depending on viewer at render time -- this rule targets the class
-   alone rather than a tag name, so both look identical regardless of
-   which element it ends up on. */
+   plain <a> (signed-out, no popup, no .open ever toggled onto it, and
+   no .pg-import-wrap around it either -- see import_icon_btn's own
+   comment in app/pages.py) depending on viewer at render time -- this
+   rule targets the class alone rather than a tag name, so both look
+   identical regardless of which element it ends up on. */
+.pg-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .pg-import-icon-btn {
+  width: 36px; height: 36px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: none;
-  border: none;
-  padding: 0 0 0 8px;
-  margin: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   cursor: pointer;
-  vertical-align: middle;
-  line-height: 1;
-  color: var(--text-faint);
-  transition: color 0.15s ease;
-  transform: translateY(-2.4px);
+  color: var(--text-dim);
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
-.pg-import-icon-btn:hover { color: var(--text-dim); }
-.pg-import-icon-btn.open { color: var(--gold); }
+.pg-import-icon-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pg-import-icon-btn.open { border-color: var(--gold); color: var(--gold); }
 
 /* The popup pgImportBtn above toggles open -- same shape/sizing as
-   .pg-share-card-row/.pg-share-card below (centered under the title,
-   zero height while hidden), holding one confirming SAVE TO MY
-   MYSCAPE button (see .pg-import-save-btn below) plus a one-line
-   explanation of what it does, per explicit instruction. Only ever
-   rendered at all when viewer was signed in at render time (see
-   render_purchase_goals_share's own import_card_markup, app/
-   pages.py) -- a signed-out visitor's icon is a plain link straight
-   to /signup instead, with no popup to open. */
-.pg-import-card-row { display: flex; justify-content: center; }
-
+   .pg-share-card below, floating directly under its own trigger
+   button (position: absolute against .pg-import-wrap above) rather
+   than a full-width row pushing the rest of the page down, holding
+   one confirming SAVE TO MY MYSCAPE button (see .pg-import-save-btn
+   below) plus a one-line explanation of what it does, per explicit
+   instruction. Only ever rendered at all when viewer was signed in at
+   render time (see render_purchase_goals_share's own import_card_
+   markup, app/pages.py) -- a signed-out visitor's icon is a plain
+   link straight to /signup instead, with no popup to open. Opaque
+   (--panel, not the --panel-translucent cards elsewhere on this page
+   use) -- same reasoning .tracker-menu's own comment above gives:
+   this floats directly over whatever's below it on the page, and at
+   82% opacity that showed through distractingly. 44px top offset
+   matches .tracker-menu's own gap below its 36px-tall trigger
+   (.icon-menu-btn) -- this button is the same height. */
 .pg-import-card {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
   width: 280px;
-  background: var(--panel-translucent);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 6px;
-  margin: 6px 0 14px;
 }
 /* Same [hidden] override as .pg-share-card[hidden] below -- author
    CSS setting `display` always outranks the browser's own
@@ -874,22 +878,27 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 .pg-import-popup-hint { margin: 0; font-size: 15px; color: var(--text-faint); text-align: center; }
 
-/* Centered under the title the same way .loot-share-card-row centers
-   Loot Tracker's own card -- zero height (and this whole row with it)
-   while .pg-share-card is hidden, rather than permanently reserving
-   its margin on every page load. */
-.pg-share-card-row { display: flex; justify-content: center; }
-
+/* Floats directly under its own trigger button (position: absolute
+   against .pg-share-wrap above) rather than a full-width row pushing
+   the rest of the page down -- closeable by re-clicking the trigger
+   OR clicking anywhere else on the page (see pgShareIconBtn's own
+   click handler and the outside-click listener beside it, app/
+   pages.py). Opaque (--panel, not the --panel-translucent cards
+   elsewhere on this page use) -- same reasoning .tracker-menu's own
+   comment above gives: this floats directly over whatever's below it
+   on the page, and at 82% opacity that showed through distractingly.
+   44px top offset matches .tracker-menu's own gap below its 36px-tall
+   trigger (.icon-menu-btn) -- this button is the same height. */
 .pg-share-card {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
   width: 280px;
-  background: var(--panel-translucent);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 6px;
-  margin: 6px 0 14px;
 }
 /* Author CSS setting `display` on this element always outranks the
    browser's own [hidden]{display:none} default stylesheet rule --

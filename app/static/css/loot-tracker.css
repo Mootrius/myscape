@@ -126,65 +126,61 @@
 }
 .loot-range-apply:hover { border-color: var(--gold); }
 
-/* ---------- Share icon (next to the "Loot Tracker" .page-title, see
-   render_loot_tracker in app/pages.py) + the card it toggles open
-   beneath the title -- same inline-icon-next-to-a-heading pattern as
-   Character Overview's own .co-share-icon-btn (duplicated here, not
-   shared across these two pages' own stylesheets, same as every
-   other cross-page style overlap on this site), just with its own
-   loot- prefix and its own SVG stroke-width (duplicated too, same
-   reasoning). ---------- */
+/* ---------- Export icon (next to the "Loot Tracker" .page-title, see
+   render_loot_tracker in app/pages.py) + the floating popup it
+   toggles open right beneath itself -- same button-chrome +
+   anchored-popup pattern as Purchase Goals' own .pg-share-icon-btn
+   (duplicated here, not shared across these pages' own stylesheets,
+   same as every other cross-page style overlap on this site), just
+   with its own loot- prefix and its own SVG stroke-width (duplicated
+   too, same reasoning). Sized/bordered like .icon-menu-btn
+   (purchase-goals.css) rather than a bare glyph, per explicit
+   instruction that these should read as actual buttons;
+   .loot-share-wrap is the position: relative anchor .loot-share-card
+   below is positioned absolute against. ---------- */
+.loot-share-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .loot-share-icon-btn {
+  width: 36px; height: 36px; box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: none;
-  border: none;
-  padding: 0 0 0 8px;
-  margin: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   cursor: pointer;
-  vertical-align: middle;
-  line-height: 1;
-  color: var(--text-faint);
-  transition: color 0.15s ease;
-  /* vertical-align: middle lines this button's box up with roughly
-     half-an-ex above the title text's baseline -- not quite the same
-     point as that all-caps text's own visual (glyph) center, which
-     sits a bit lower. transform (not a layout-affecting nudge like
-     margin/top) closes that gap so the icon reads as truly centered
-     on the title text next to it, same kind of cap-height
-     compensation .nav-side's own `top: 3px` already does elsewhere
-     on this site for the same "all-caps text has no descenders"
-     reason. -2.4px (not the -1.4px this started at, and the same
-     revised value Character Overview's own identical rule now uses)
-     per explicit follow-up feedback that the first pass still read a
-     touch low. */
-  transform: translateY(-2.4px);
+  color: var(--text-dim);
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
-.loot-share-icon-btn:hover { color: var(--text-dim); }
-.loot-share-icon-btn.open { color: var(--gold); }
+.loot-share-icon-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.loot-share-icon-btn.open { border-color: var(--gold); color: var(--gold); }
 
-/* Centered under the title the same way .public-profile-card-row
-   centers Character Overview's own card -- zero height (and this
-   whole row with it) while .loot-share-card is hidden, rather than
-   permanently reserving its margin on every page load. */
-.loot-share-card-row { display: flex; justify-content: center; }
-
-/* padding/gap match Character Overview's own .public-profile-card
-   exactly -- that card's small cushion around its (already bordered)
-   buttons, not this one's old, roomier 12px/8px, per explicit
-   instruction to bring the two popups' amount of inner cushion in
-   line with each other. */
+/* Floats directly under its own trigger button (position: absolute
+   against .loot-share-wrap above) rather than a full-width row
+   pushing the rest of the page down -- closeable by re-clicking the
+   trigger OR clicking anywhere else on the page (see
+   lootShareIconBtn's own click handler and the outside-click
+   listener beside it, app/pages.py). padding/gap match Character
+   Overview's own .public-profile-card exactly -- that card's small
+   cushion around its (already bordered) buttons, not this one's old,
+   roomier 12px/8px, per earlier explicit instruction to bring the
+   two popups' amount of inner cushion in line with each other.
+   Opaque (--panel, not the --panel-translucent cards elsewhere on
+   this page use) -- same reasoning .tracker-menu's own comment in
+   purchase-goals.css gives: this floats directly over whatever's
+   below it on the page, and at 82% opacity that showed through
+   distractingly. 44px top offset matches .tracker-menu's own gap
+   below its 36px-tall trigger (.icon-menu-btn) -- this button is the
+   same height. */
 .loot-share-card {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 6px;
   width: 280px;
-  background: var(--panel-translucent);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 6px;
-  margin: 6px 0 14px;
 }
 /* Author CSS setting `display` on this element always outranks the
    browser's own [hidden]{display:none} default stylesheet rule --

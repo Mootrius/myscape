@@ -1163,78 +1163,68 @@
 }
 
 
-/* ---------- Public profile card + its caret toggle. #publicProfileCard
-   is absent from the DOM entirely on both the landing preview and a
-   visitor's own view of someone else's link (see
-   public_profile_card_section's own comment in app/pages.py) --
+/* ---------- Public profile settings cog + the card it toggles open.
+   #publicProfileCard is absent from the DOM entirely on both the
+   landing preview and a visitor's own view of someone else's link
+   (see public_profile_settings_btn's own comment in app/pages.py) --
    these rules only ever apply on the real, authenticated page.
-   Tucked behind a disclosure caret next to the page's own title
-   (collapsed by default) and built deliberately small/inline rather
-   than a full-width card like .co-summary-row below -- this is a
-   settings control opened rarely, not game data that earns
-   permanent space above it on every load. ---------- */
+   Tucked behind a settings-cog button next to the page's own title
+   (collapsed by default, floating open rather than pushing
+   .co-summary-row below it down the page) and built deliberately
+   small/inline rather than a full-width card like .co-summary-row
+   below -- this is a settings control opened rarely, not game data
+   that earns permanent space above it on every load. ---------- */
 
-/* The share icon button sits inline inside <h2 class="page-title">,
-   right after the "Character Overview" text -- a plain icon button,
-   not styled like a real button (no border/background of its own) so
-   it reads as part of the heading rather than a separate control
-   next to it. Its own SVG (currentColor stroke) just inherits this
-   button's color, so toggling .open below is the only state needed --
-   no separate inner element the way the old disclosure-caret version
-   of this button needed one to rotate. */
-.co-share-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  padding: 0 0 0 8px;
-  margin: 0;
-  cursor: pointer;
-  vertical-align: middle;
-  line-height: 1;
-  color: var(--text-faint);
-  transition: color 0.15s ease;
-  /* vertical-align: middle lines this button's box up with roughly
-     half-an-ex above the title text's baseline -- not quite the same
-     point as that all-caps text's own visual (glyph) center, which
-     sits a bit lower. transform (not a layout-affecting nudge like
-     margin/top) closes that gap so the icon reads as truly centered
-     on the title text next to it, same kind of cap-height
-     compensation .nav-side's own `top: 3px` already does elsewhere
-     on this site for the same "all-caps text has no descenders"
-     reason. -2.4px (not the -1.4px this started at) per explicit
-     follow-up feedback that the first pass still read a touch low. */
-  transform: translateY(-2.4px);
+/* Settings-cog button sitting inline inside <h2 class="page-title">,
+   right after the "Character Overview" text -- visually identical to
+   the Storages Viewer's own .pm-settings-btn (possessions.css: same
+   32x32 box, same cog glyph, same colors/states), per explicit
+   instruction, rather than the export-style button Loot Tracker/
+   Purchase Goals' own triggers use -- this one opens a settings
+   panel (private/public + the share link), not an export flow.
+   .co-settings-wrap is what .pm-settings-wrap is to .pm-settings-btn/
+   .pm-settings-menu -- the position: relative anchor .public-profile-
+   card below is positioned absolute against. */
+.co-settings-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
+.co-settings-btn {
+  width: 32px; height: 32px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-dim); cursor: pointer;
 }
-.co-share-icon-btn:hover { color: var(--text-dim); }
-.co-share-icon-btn.open { color: var(--gold); }
+.co-settings-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+/* Same active treatment as .pm-settings-btn.active -- gold border and
+   icon while the panel is open (see setPublicProfileOpen in the
+   script, which keeps this in sync on every path that closes the
+   panel, not just the button's own click). */
+.co-settings-btn.active { border-color: var(--gold); color: var(--gold); }
 
-/* Centers .public-profile-card when it's open -- a plain flex row,
-   same justify-content: center every other centered row on this page
-   already uses, rather than text-align: center on some ancestor
-   (which would also affect sibling content far outside this card's
-   own concern). No margin/padding of its own on purpose: the actual
-   vertical spacing lives on .public-profile-card itself below, so
-   this row contributes zero height when that card is hidden instead
-   of permanently reserving space for it. */
-.public-profile-card-row { display: flex; justify-content: center; }
-
+/* Floats directly under its own trigger button (position: absolute
+   against .co-settings-wrap above), same as .pm-settings-menu
+   (possessions.css) -- 38px top offset matches that menu's own gap
+   below its identical 32px-tall trigger. Opaque (--panel, not the
+   --panel-translucent cards elsewhere on this page use) -- same
+   reasoning .tracker-menu's own comment in purchase-goals.css gives:
+   this floats directly over whatever's below it on the page, and at
+   82% opacity that showed through distractingly. Closeable by
+   re-clicking the trigger OR clicking anywhere else on the page (see
+   publicProfileSettingsBtn's own click handler and the outside-click
+   listener beside it, app/pages.py). */
 .public-profile-card {
+  position: absolute; top: 38px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--panel-translucent);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 6px;
-  margin: 6px 0 14px;
 }
 /* Author CSS setting `display` on this element always outranks the
    browser's own [hidden]{display:none} default stylesheet rule, no
    matter how low its specificity looks -- same gotcha, same fix, as
    .model-viewer-btn svg[hidden] above: without this, toggling the
-   `hidden` attribute (publicProfileShareBtn's own click handler)
+   `hidden` attribute (publicProfileSettingsBtn's own click handler)
    had no visible effect at all. */
 .public-profile-card[hidden] { display: none; }
 
