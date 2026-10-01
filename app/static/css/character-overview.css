@@ -1254,7 +1254,7 @@
   border-right: 1px solid var(--border);
   color: var(--text-dim);
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 15px;
   letter-spacing: 0.02em;
   padding: 0 10px;
   cursor: pointer;
@@ -1275,16 +1275,18 @@
    internally if it's ever too long, same as any other link-display
    input on the web. height: 25px matches the segmented control and
    the two buttons beside it, so all four sit flush in one row.
-   Selector is `input.` (type + class), not just `.` -- myscape.css's
-   own shared input[type="text"] rule (width: 100%, padding: 12px
-   14px, font-size: 16px) is a type + attribute selector, which beats
-   a class selector alone on specificity regardless of file/source
-   order; matching its own specificity here (same fix as
-   input.gt-recur-interval-input in goal-tracking.css) is what lets
-   THIS rule's width/padding/font-size actually win instead of
-   silently losing to that shared default -- without it the field
-   rendered full-width with 16px text, blowing the whole card out far
-   past its intended size. */
+   font-size: 15px matches the rest of the page's own base size
+   (body's own font-size in myscape.css), not the smaller ~11px this
+   card used at first. Selector is `input.` (type + class), not just
+   `.` -- myscape.css's own shared input[type="text"] rule (width:
+   100%, padding: 12px 14px, font-size: 16px) is a type + attribute
+   selector, which beats a class selector alone on specificity
+   regardless of file/source order; matching its own specificity here
+   (same fix as input.gt-recur-interval-input in goal-tracking.css)
+   is what lets THIS rule's width/padding/font-size actually win
+   instead of silently losing to that shared default -- without it
+   the field rendered full-width with 16px text, blowing the whole
+   card out far past its intended size. */
 input.public-profile-link-input {
   flex: 0 0 auto;
   width: 190px;
@@ -1294,15 +1296,19 @@ input.public-profile-link-input {
   border-radius: var(--radius);
   padding: 0 8px;
   color: var(--text);
-  font-size: 11px;
+  font-size: 15px;
 }
 /* Copy/New link -- same site-wide button convention as .loot-range-
-   btn (loot-tracker.css): 25px tall, uppercase, --panel-2/--border. */
+   btn (loot-tracker.css): 25px tall, uppercase, --panel-2/--border.
+   font-size: 15px matches the rest of this card and the rest of the
+   page's own base size, rather than .loot-range-btn's own smaller
+   11px -- a deliberate departure from that one property, kept
+   otherwise identical. */
 .public-profile-link-btn {
   flex: 0 0 auto;
   height: 25px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: 15px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--text-dim);
