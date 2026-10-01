@@ -408,6 +408,18 @@ class GameAccount(Base):
     # even after this one goes private again, so an old shared link
     # never silently starts pointing at a different person.
     public_code = Column(String, nullable=True, unique=True)
+    # public_code_regenerated_at: when public_code last actually
+    # changed value -- stamped both the first time it's ever assigned
+    # (going public for the first time) and by an explicit POST
+    # /api/players/me/public-profile/regenerate-code. What
+    # app.public_profile.regenerate_cooldown_remaining checks against
+    # to enforce "once per day": a regenerate request is rejected
+    # (429) if this is less than 24 hours old, so a player (or anyone
+    # who got hold of their session) can't rapid-fire invalidate the
+    # link out from under someone it was just shared with. Toggling
+    # is_public_profile on/off is NOT throttled by this at all -- only
+    # actually changing which code a link points to is.
+    public_code_regenerated_at = Column(DateTime(timezone=True), nullable=True)
 
     account = relationship("Account", back_populates="game_accounts")
 

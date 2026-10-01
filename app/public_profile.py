@@ -20,14 +20,24 @@ before accounting for the blocklist below trimming a tiny fraction of
 them.
 """
 import secrets
+from datetime import timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import GameAccount
+from app.models import GameAccount, _as_aware_utc, _utcnow
 
 CODE_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz"
 CODE_LENGTH = 5
+
+# How often POST .../regenerate-code can actually issue a new code --
+# per explicit instruction, so a compromised session (or an impatient
+# player) can't rapid-fire invalidate a link out from under whoever it
+# was just shared with. Checked against public_code_regenerated_at
+# (see that column's own comment in app/models.py), never against
+# is_public_profile -- toggling public/private itself stays
+# unthrottled.
+PUBLIC_CODE_REGENERATE_COOLDOWN = timedelta(hours=24)
 
 # How many fresh random candidates to try before giving up -- at this
 # code length/alphabet size, colliding with an existing code or the
@@ -96,6 +106,35 @@ def generate_public_code(db: Session) -> str:
         if not exists:
             return candidate
     raise RuntimeError("Could not generate a unique public profile code.")
+
+
+def regenerate_cooldown_remaining(game_account: GameAccount) -> Optional[timedelta]:
+    """None if a regenerate is allowed right now; otherwise how much
+    longer the caller has to wait. public_code_regenerated_at is
+    stamped both the very first time a code is ever assigned (going
+    public for the first time) and by an explicit regenerate, so this
+    always measures from whichever of those two happened most
+    recently -- a character that's never had a code at all (the
+    column is still null) is never throttled, same as the very first
+    regenerate after that initial assignment's own 24 hours have
+    passed."""
+    last = game_account.public_code_regenerated_at
+    if last is None:
+        return None
+    elapsed = _utcnow() - _as_aware_utc(last)
+    remaining = PUBLIC_CODE_REGENERATE_COOLDOWN - elapsed
+    return remaining if remaining > timedelta(0) else None
+
+
+def format_cooldown_remaining(remaining: timedelta) -> str:
+    """A human sentence fragment for the 429's own detail message --
+    rounded UP to the next whole hour (never "0 hours") so the message
+    never undersells how long is actually left."""
+    hours = int(remaining.total_seconds() // 3600)
+    if remaining.total_seconds() % 3600:
+        hours += 1
+    hours = max(hours, 1)
+    return f"{hours} hour{'s' if hours != 1 else ''}"
 
 
 def find_public_game_account(db: Session, raw_code: str) -> Optional[GameAccount]:

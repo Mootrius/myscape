@@ -115,7 +115,7 @@ from app.pages import (
     render_verify_email,
     render_verify_email_required,
 )
-from app.public_profile import find_public_game_account, generate_public_code
+from app.public_profile import find_public_game_account, format_cooldown_remaining, generate_public_code, regenerate_cooldown_remaining
 from app.possessions import (
     build_possession_views,
     build_possessions_summary,
@@ -1803,6 +1803,7 @@ def update_public_profile(
     game_account.is_public_profile = payload.is_public
     if payload.is_public and not game_account.public_code:
         game_account.public_code = generate_public_code(db)
+        game_account.public_code_regenerated_at = _utcnow()
     db.commit()
     return _public_profile_payload(game_account)
 
@@ -1816,8 +1817,22 @@ def regenerate_public_profile_code(
     before -- the only way to kill an already-shared link short of
     going private outright (going private and public again would just
     hand back the SAME code, per update_public_profile's own comment,
-    since it only generates a new one when there wasn't one yet)."""
+    since it only generates a new one when there wasn't one yet).
+    Throttled to once per day (see PUBLIC_CODE_REGENERATE_COOLDOWN's
+    own comment in app/public_profile.py) -- 429s, not a silent no-op,
+    so a caller actually finds out why nothing changed; the website's
+    own "New link" button just flashes briefly rather than surfacing
+    this detail message anywhere (see that button's own click handler
+    in app/pages.py), but a non-browser caller still gets a real
+    reason."""
+    remaining = regenerate_cooldown_remaining(game_account)
+    if remaining is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"You can generate a new link again in about {format_cooldown_remaining(remaining)}.",
+        )
     game_account.public_code = generate_public_code(db)
+    game_account.public_code_regenerated_at = _utcnow()
     db.commit()
     return _public_profile_payload(game_account)
 

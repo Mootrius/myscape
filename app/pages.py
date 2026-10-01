@@ -2073,11 +2073,12 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     so shuffling the background on one visited profile doesn't also
     silently change what a DIFFERENT visited profile (or this player's
     own real page) opens on next time, all three sharing one browser's
-    localStorage. The public-profile settings card just below
-    (public_profile_card_section) is the one piece of this markup that
-    does NOT appear in public_code mode (nor in preview mode) -- it's
-    a control for the account's own owner to manage their own share
-    link, meaningless to show someone just visiting that link.
+    localStorage. The public-profile settings card, tucked behind a
+    caret next to the page's own title (public_profile_card_section
+    and public_profile_caret below), is the one piece of this markup
+    that does NOT appear in public_code mode (nor in preview mode) --
+    it's a control for the account's own owner to manage their own
+    share link, meaningless to show someone just visiting that link.
 
     Character Overview: the summary row (.co-summary-row in
     character-overview.css) holding all eight icon+stat pairs (see
@@ -2210,30 +2211,39 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     # The owner's own share-link control -- absent in both preview
     # (the landing demo) and public_code (a visitor's own view of
     # someone else's link) modes, since in either of those this
-    # player isn't looking at their own settings. #publicProfileToggle
+    # player isn't looking at their own settings. #publicProfileCaret
     # not existing at all is exactly what the script's own `if
-    # (!toggle) return;` guard below checks for, same "just don't wire
+    # (!caret) return;` guard below checks for, same "just don't wire
     # it up" pattern Skills/Quests/etc. already use for their own
-    # absent-in-some-modes elements.
+    # absent-in-some-modes elements. A plain disclosure triangle next
+    # to the title (collapsed by default, see .co-public-caret's own
+    # comment in character-overview.css) rather than its own always-
+    # visible row -- this is a settings control a player opens
+    # rarely, not something that deserves permanent space above the
+    # actual game data every time this page loads.
+    public_profile_caret = "" if (preview or public_code) else ' <button type="button" class="co-public-caret-btn" id="publicProfileCaretBtn" aria-label="Public profile settings" title="Public profile settings"><span class="co-public-caret" id="publicProfileCaret">&#9662;</span></button>'
+
+    # Deliberately NOT a full-width card like .co-summary-row below --
+    # "PRIVATE"/"PUBLIC" segmented control (same look/markup
+    # convention as Mindmaps' own .mm-segment-group, duplicated rather
+    # than shared across these two pages' own stylesheets, same as
+    # every other cross-page style overlap on this site), a readonly
+    # link field, and two buttons, all in one short row with no label
+    # or hint text above it -- the caret it's tucked behind already
+    # says what this is well enough.
     public_profile_card_section = "" if (preview or public_code) else """
-    <div class="public-profile-card" id="publicProfileCard">
-      <div class="public-profile-row">
-        <span class="public-profile-label">Public profile</span>
-        <label class="public-profile-switch">
-          <input type="checkbox" id="publicProfileToggle" />
-          <span class="public-profile-switch-track"></span>
-        </label>
+    <div class="public-profile-card" id="publicProfileCard" hidden>
+      <div class="public-profile-seg-group">
+        <button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>
+        <button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>
       </div>
-      <p class="public-profile-hint" id="publicProfileHint">Share this Character Overview with a link -- anyone with it can view it, without signing in.</p>
-      <div class="public-profile-link-row" id="publicProfileLinkRow" hidden>
-        <input type="text" class="public-profile-link-input" id="publicProfileLinkInput" readonly />
-        <button class="public-profile-link-btn" id="publicProfileCopyBtn" type="button">Copy</button>
-        <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working">New link</button>
-      </div>
+      <input type="text" class="public-profile-link-input" id="publicProfileLinkInput" readonly />
+      <button class="public-profile-link-btn" id="publicProfileCopyBtn" type="button">Copy</button>
+      <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">New link</button>
     </div>"""
 
     body = f"""
-    <h2 class="page-title">Character Overview</h2>
+    <h2 class="page-title">Character Overview{public_profile_caret}</h2>
 
     {public_profile_card_section}
 
@@ -2979,68 +2989,83 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
       // second code path that has to be kept in preview/public-aware,
       // same convention Skills/Quests/Diaries/Combat Achievements
       // already use for their own absent-in-some-modes elements.
-      var publicProfileToggle = document.getElementById('publicProfileToggle');
-      if (publicProfileToggle) {
-        var publicProfileLinkRow = document.getElementById('publicProfileLinkRow');
+      var publicProfileCaretBtn = document.getElementById('publicProfileCaretBtn');
+      if (publicProfileCaretBtn) {
+        var publicProfileCaret = document.getElementById('publicProfileCaret');
+        var publicProfileCard = document.getElementById('publicProfileCard');
+        var publicProfileSegBtns = [document.getElementById('publicProfileSegPrivate'), document.getElementById('publicProfileSegPublic')];
         var publicProfileLinkInput = document.getElementById('publicProfileLinkInput');
         var publicProfileCopyBtn = document.getElementById('publicProfileCopyBtn');
         var publicProfileRegenerateBtn = document.getElementById('publicProfileRegenerateBtn');
 
+        // Collapsed by default -- clicking the caret just shows/hides
+        // the card (no data refetch on open; the initial GET below
+        // already ran at load, same as every other section on this
+        // page loading its own data up front regardless of whether
+        // its card happens to be visible yet).
+        publicProfileCaretBtn.addEventListener('click', function () {
+          var nowHidden = !publicProfileCard.hidden;
+          publicProfileCard.hidden = nowHidden;
+          publicProfileCaret.classList.toggle('open', !nowHidden);
+        });
+
         function applyPublicProfileState(data) {
           if (!data) return;
-          publicProfileToggle.checked = !!data.isPublic;
-          if (data.isPublic && data.url) {
-            publicProfileLinkRow.hidden = false;
-            publicProfileLinkInput.value = data.url;
-          } else {
-            publicProfileLinkRow.hidden = true;
-            publicProfileLinkInput.value = '';
-          }
+          var activeValue = data.isPublic ? 'public' : 'private';
+          publicProfileSegBtns.forEach(function (btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-segment-value') === activeValue);
+          });
+          publicProfileLinkInput.value = data.url || '';
         }
 
         fetch('/api/players/me/public-profile')
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(applyPublicProfileState)
-          .catch(function () { /* leave the toggle at its default (off) */ });
+          .catch(function () { /* leave the segmented control at its default (Private) */ });
 
-        publicProfileToggle.addEventListener('change', function () {
-          var wantPublic = publicProfileToggle.checked;
-          publicProfileToggle.disabled = true;
-          fetch('/api/players/me/public-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ is_public: wantPublic }),
-          })
-            .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-            .then(applyPublicProfileState)
-            .catch(function () { publicProfileToggle.checked = !wantPublic; })
-            .then(function () { publicProfileToggle.disabled = false; });
+        publicProfileSegBtns.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (btn.classList.contains('active')) return;
+            var wantPublic = btn.getAttribute('data-segment-value') === 'public';
+            publicProfileSegBtns.forEach(function (b) { b.disabled = true; });
+            fetch('/api/players/me/public-profile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ is_public: wantPublic }),
+            })
+              .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+              .then(applyPublicProfileState)
+              .catch(function () {})
+              .then(function () { publicProfileSegBtns.forEach(function (b) { b.disabled = false; }); });
+          });
         });
 
+        // Silent -- no "Copied!" label swap, just copies the current
+        // link to the clipboard, per explicit instruction.
         publicProfileCopyBtn.addEventListener('click', function () {
           if (!publicProfileLinkInput.value) return;
-          var resetLabel = function () {
-            setTimeout(function () { publicProfileCopyBtn.textContent = 'Copy'; }, 1500);
-          };
           if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(publicProfileLinkInput.value).then(function () {
-              publicProfileCopyBtn.textContent = 'Copied!';
-              resetLabel();
-            });
+            navigator.clipboard.writeText(publicProfileLinkInput.value);
           } else {
             publicProfileLinkInput.select();
             document.execCommand('copy');
-            publicProfileCopyBtn.textContent = 'Copied!';
-            resetLabel();
           }
         });
 
+        // Once-per-day server-side (see regenerate_public_profile_code
+        // in app/main.py) -- a 429 here just flashes the button red
+        // briefly, same "sync-failed" treatment the collection log's
+        // own hiscores-sync button already uses for its failure case,
+        // rather than surfacing the 429's own detail message anywhere.
         publicProfileRegenerateBtn.addEventListener('click', function () {
           publicProfileRegenerateBtn.disabled = true;
           fetch('/api/players/me/public-profile/regenerate-code', { method: 'POST' })
             .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
             .then(applyPublicProfileState)
-            .catch(function () {})
+            .catch(function () {
+              publicProfileRegenerateBtn.classList.add('action-failed');
+              setTimeout(function () { publicProfileRegenerateBtn.classList.remove('action-failed'); }, 2500);
+            })
             .then(function () { publicProfileRegenerateBtn.disabled = false; });
         });
       }

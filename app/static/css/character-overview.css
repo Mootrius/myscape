@@ -1163,120 +1163,127 @@
 }
 
 
-/* ---------- Public profile card (#publicProfileCard, only on the
-   real, authenticated page -- see public_profile_card_section's own
-   comment in app/pages.py for why it's absent from both the landing
-   preview and a visitor's own view of someone else's link). Sits
-   between the page title and the summary row, its own small card
-   rather than folded into either neighbor, since it's a settings
-   control, not game data -- same "own translucent panel box" look
-   .co-summary-row above already uses, just shorter. ---------- */
+/* ---------- Public profile card + its caret toggle. #publicProfileCard
+   is absent from the DOM entirely on both the landing preview and a
+   visitor's own view of someone else's link (see
+   public_profile_card_section's own comment in app/pages.py) --
+   these rules only ever apply on the real, authenticated page.
+   Tucked behind a disclosure caret next to the page's own title
+   (collapsed by default) and built deliberately small/inline rather
+   than a full-width card like .co-summary-row below -- this is a
+   settings control opened rarely, not game data that earns
+   permanent space above it on every load. ---------- */
+
+/* The caret button sits inline inside <h2 class="page-title">, right
+   after the "Character Overview" text -- a plain icon button, not
+   styled like a real button (no border/background of its own) so it
+   reads as part of the heading rather than a separate control next
+   to it. */
+.co-public-caret-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0 0 0 8px;
+  margin: 0;
+  cursor: pointer;
+  vertical-align: middle;
+  line-height: 1;
+}
+/* font-size matches .loot-range-caret's own 9px (loot-tracker.css) --
+   same "small, recessive caret" look as every other disclosure arrow
+   on the site. Rotated 180deg while the card is open (toggled via the
+   caret button's own click handler in app/pages.py) rather than a
+   separate up/down glyph swap. */
+.co-public-caret {
+  display: inline-block;
+  font-size: 13px;
+  color: var(--text-faint);
+  transition: transform 0.15s ease;
+}
+.co-public-caret-btn:hover .co-public-caret { color: var(--text-dim); }
+.co-public-caret.open { transform: rotate(180deg); }
+
 .public-profile-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 18px;
+  padding: 5px 6px;
+  margin: 6px 0 14px;
 }
-.public-profile-row {
+
+/* Same two-button segmented-control markup/behavior as Mindmaps' own
+   goal-field LVL/XP and tier toggles (.mm-segment-group/.mm-segment-
+   btn in mindmaps.css) -- duplicated here rather than shared across
+   that stylesheet boundary, same as every other style this page
+   already keeps to its own file. flex: 0 0 auto (not Mindmaps' own
+   full-width 100%) since this group sits beside the link field/
+   buttons in one row rather than stacked above a form of its own. */
+.public-profile-seg-group {
+  display: flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.public-profile-seg-btn {
+  height: 25px;
+  background: #100e0b;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  padding: 0 10px;
+  cursor: pointer;
+  text-align: center;
+  text-transform: uppercase;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
 }
-.public-profile-label {
-  font-weight: 600;
-  color: var(--text);
-}
+.public-profile-seg-btn:last-child { border-right: none; }
+.public-profile-seg-btn:hover { color: var(--text); }
+.public-profile-seg-btn.active { background: var(--panel-2); color: var(--gold); }
+.public-profile-seg-btn:disabled { cursor: default; opacity: 0.7; }
 
-/* A plain checkbox styled as a track+knob switch -- the checkbox
-   itself stays in the DOM (and functional, it's what the page's own
-   script reads/sets) but visually hidden, with the two sibling spans
-   below doing the actual drawing, same "real input, custom paint"
-   technique as every other non-native-looking control already needs
-   on the web. */
-.public-profile-switch {
-  position: relative;
-  display: inline-block;
-  width: 38px;
-  height: 22px;
-  flex: 0 0 auto;
-  cursor: pointer;
-}
-.public-profile-switch input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-  z-index: 1;
-}
-.public-profile-switch-track {
-  position: absolute;
-  inset: 0;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-.public-profile-switch-track::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  transition: transform 0.15s ease, background 0.15s ease;
-}
-.public-profile-switch input:checked ~ .public-profile-switch-track {
-  background: var(--gold-dim);
-  border-color: var(--gold);
-}
-.public-profile-switch input:checked ~ .public-profile-switch-track::after {
-  transform: translateX(16px);
-  background: var(--gold);
-}
-.public-profile-switch input:disabled ~ .public-profile-switch-track {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.public-profile-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-
-.public-profile-link-row {
-  display: flex;
-  gap: 8px;
-}
+/* 190px -- enough to show a full myscape.io/c/<code> link without
+   being anywhere near the width .co-summary-row's own full-width
+   stats row uses; a readonly field this size scrolls its own text
+   internally if it's ever too long, same as any other link-display
+   input on the web. height: 25px matches the segmented control and
+   the two buttons beside it, so all four sit flush in one row. */
 .public-profile-link-input {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 0 0 auto;
+  width: 190px;
+  height: 25px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 6px 10px;
+  padding: 0 8px;
   color: var(--text);
-  font-size: 13px;
+  font-size: 11px;
 }
+/* Copy/New link -- same site-wide button convention as .loot-range-
+   btn (loot-tracker.css): 25px tall, uppercase, --panel-2/--border. */
 .public-profile-link-btn {
   flex: 0 0 auto;
+  height: 25px;
+  padding: 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-dim);
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 6px 12px;
-  color: var(--text-dim);
-  font-size: 13px;
   cursor: pointer;
+  white-space: nowrap;
 }
 .public-profile-link-btn:hover {
   border-color: var(--gold-dim);
@@ -1286,3 +1293,9 @@
   cursor: default;
   opacity: 0.6;
 }
+/* "New link" hitting its once-a-day throttle (429 -- see
+   regenerate_public_profile_code in app/main.py) -- same brief red-
+   border flash as the collection log's own .clog-sync-btn.sync-failed
+   above, not a persistent state (removed again after 2.5s by that
+   button's own click handler). */
+.public-profile-link-btn.action-failed { border-color: var(--red); color: var(--red); }
