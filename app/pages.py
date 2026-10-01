@@ -3694,7 +3694,7 @@ def render_account(player: PlayerView) -> str:
               <thead>
                 <tr>
                   <th><button type="button" class="shared-link-sort-header" data-sort-key="character">Character<span class="shared-link-sort-arrow"></span></button></th>
-                  <th><button type="button" class="shared-link-sort-header" data-sort-key="app">App<span class="shared-link-sort-arrow"></span></button></th>
+                  <th><button type="button" class="shared-link-sort-header" data-sort-key="app">Type<span class="shared-link-sort-arrow"></span></button></th>
                   <th>Code</th>
                   <th><button type="button" class="shared-link-sort-header" data-sort-key="expiration">Expiration<span class="shared-link-sort-arrow"></span></button></th>
                   <th>Deletion</th>
@@ -4768,6 +4768,15 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
 
     body = f"""
     <h2 class="page-title">Purchase Goals{purchase_share_icon_btn}</h2>
+
+    <div class="pg-share-card-row">
+      <div class="pg-share-card" id="pgShareCard" hidden>
+        <button type="button" class="pg-share-generate-btn" id="pgShareGenerateBtn">GENERATE SHAREABLE LINK</button>
+        <button type="button" class="pg-share-link-btn" id="pgShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>
+        <p class="pg-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>
+      </div>
+    </div>
+
     <div class="pg-header">
       <div class="tracker-icon-row" id="setupIconRow"></div>
       <div class="tracker-menu-wrap">
@@ -4779,14 +4788,6 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
           <button class="tracker-menu-item" id="menuRenameSetup" type="button">Rename setup</button>
           <button class="tracker-menu-item danger" id="menuDeleteSetup" type="button">Delete setup</button>
         </div>
-      </div>
-    </div>
-
-    <div class="pg-share-card-row">
-      <div class="pg-share-card" id="pgShareCard" hidden>
-        <button type="button" class="pg-share-generate-btn" id="pgShareGenerateBtn">GENERATE SHAREABLE LINK</button>
-        <button type="button" class="pg-share-link-btn" id="pgShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>
-        <p class="pg-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>
       </div>
     </div>
 
@@ -9418,7 +9419,7 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     owner_name = (game_account.runescape_name if game_account else None) or "A player"
     setup_name = share.payload["gearSetup"]["name"]
     banner_markup = f"""
-    <p class="subtitle pg-share-label">{escape(setup_name)} Purchase Goals Setup</p>
+    <p class="subtitle pg-share-label">{escape(setup_name)}</p>
     <h2 class="page-title">Shared by {escape(owner_name)}</h2>
     """
     body = banner_markup + body

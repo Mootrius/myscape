@@ -922,5 +922,9 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 /* The setup-name line above "Shared by <name>" -- same small-line-
    above-the-title treatment as .loot-share-range in loot-tracker.css,
-   just this page's own name. */
-.pg-share-label { text-align: center; margin: 0 0 4px; }
+   just this page's own name, all-caps per explicit instruction (not
+   .subtitle's own natural case -- the Python string itself stays
+   natural case, same ".page-title text-transforms, the string
+   doesn't" convention every other all-caps label on this site
+   already follows). */
+.pg-share-label { text-align: center; margin: 0 0 4px; text-transform: uppercase; }
