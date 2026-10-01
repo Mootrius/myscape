@@ -2251,15 +2251,25 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     # link field, and two buttons, all in one short row with no label
     # or hint text above it -- the caret it's tucked behind already
     # says what this is well enough.
+    # .public-profile-card-row is just a centering wrapper -- display:
+    # flex/justify-content: center, same pattern every other centered
+    # row on this page already uses -- with no margin/padding of its
+    # own, so when the actual card inside is hidden (display: none,
+    # see that rule's own comment in character-overview.css) the row
+    # collapses to zero height instead of still reserving the card's
+    # own margin: 6px 0 14px every time this page loads, same as
+    # before this wrapper existed.
     public_profile_card_section = "" if (preview or public_code) else """
-    <div class="public-profile-card" id="publicProfileCard" hidden>
-      <div class="public-profile-seg-group">
-        <button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>
-        <button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>
+    <div class="public-profile-card-row">
+      <div class="public-profile-card" id="publicProfileCard" hidden>
+        <div class="public-profile-seg-group">
+          <button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>
+          <button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>
+        </div>
+        <input type="text" class="public-profile-link-input" id="publicProfileLinkInput" readonly />
+        <button class="public-profile-link-btn" id="publicProfileCopyBtn" type="button">Copy</button>
+        <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">New link</button>
       </div>
-      <input type="text" class="public-profile-link-input" id="publicProfileLinkInput" readonly />
-      <button class="public-profile-link-btn" id="publicProfileCopyBtn" type="button">Copy</button>
-      <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">New link</button>
     </div>"""
 
     body = f"""

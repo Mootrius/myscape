@@ -1205,6 +1205,16 @@
 .co-public-caret-btn:hover .co-public-caret { color: var(--text-dim); }
 .co-public-caret.open { transform: rotate(180deg); }
 
+/* Centers .public-profile-card when it's open -- a plain flex row,
+   same justify-content: center every other centered row on this page
+   already uses, rather than text-align: center on some ancestor
+   (which would also affect sibling content far outside this card's
+   own concern). No margin/padding of its own on purpose: the actual
+   vertical spacing lives on .public-profile-card itself below, so
+   this row contributes zero height when that card is hidden instead
+   of permanently reserving space for it. */
+.public-profile-card-row { display: flex; justify-content: center; }
+
 .public-profile-card {
   display: inline-flex;
   align-items: center;
