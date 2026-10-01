@@ -1312,7 +1312,13 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.public-profile-link-btn:hover {
+/* :not(:disabled) -- without it, publicProfileLinkBtn still picked
+   up this hover highlight while Private (disabled, see
+   applyPublicProfileState in app/pages.py) even though hovering it
+   does nothing in that state; same guard protects
+   publicProfileRegenerateBtn's own brief disabled-mid-request
+   window. */
+.public-profile-link-btn:hover:not(:disabled) {
   border-color: var(--gold-dim);
   color: var(--text);
 }
