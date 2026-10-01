@@ -9499,20 +9499,40 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
         '<polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>'
         '</svg>'
     )
+    # Signed in: the icon toggles a small popup open/closed, same
+    # pattern as pgShareIconBtn/pgShareCard on the real Purchase Goals
+    # page (_purchase_goals_panel_markup above) -- a plain one-click
+    # action was too easy to trigger by accident, per explicit
+    # instruction, so the actual import now happens from a confirming
+    # SAVE TO MY MYSCAPE button inside that popup instead (see the
+    # wrapper script below). Signed out: unchanged -- a plain <a>
+    # straight to /signup?from_share=1, no popup, no JS at all; there's
+    # nothing to confirm yet since nothing can be imported until this
+    # visitor comes back here signed in.
     if viewer is not None:
         import_icon_btn = (
             ' <button type="button" class="pg-import-icon-btn" id="pgImportBtn" aria-label="Save to your account" title="Save to your account">'
             f'{import_icon_svg}</button>'
         )
+        import_card_markup = """
+    <div class="pg-import-card-row">
+      <div class="pg-import-card" id="pgImportCard" hidden>
+        <button type="button" class="pg-import-save-btn" id="pgImportSaveBtn">SAVE TO MY MYSCAPE</button>
+        <p class="pg-import-popup-hint">Clicking the button above will save a copy of this setup to your Purchase Goals.</p>
+      </div>
+    </div>
+    """
     else:
         import_icon_btn = (
             ' <a class="pg-import-icon-btn" href="/signup?from_share=1" aria-label="Sign up to save this" title="Sign up to save this">'
             f'{import_icon_svg}</a>'
         )
+        import_card_markup = ""
 
     banner_markup = f"""
     <p class="subtitle pg-share-label">{escape(setup_name)}</p>
     <h2 class="page-title">Shared by {escape(owner_name)}{import_icon_btn}</h2>
+    {import_card_markup}
     """
     body = banner_markup + body
     body = f'<div class="purchase-goal-share">{body}</div>'
@@ -9655,45 +9675,76 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
       if (shareCardRow) shareCardRow.remove();
 
       // The download icon next to "Shared by <name>" above -- only
-      // ever rendered as a real <button> (this listener's own
-      // null-guard is just the same defensive convention every other
+      // ever rendered as a real <button> (these listeners' own
+      // null-guards are just the same defensive convention every other
       // reused-script lookup here already follows) when viewer was
       // signed in at render time; signed out, it's a plain <a
       // href="/signup?...">  with no JS behavior at all -- see this
-      // function's own doc comment above for why the two differ.
-      // Imports THIS share's own frozen setup into the signed-in
-      // visitor's own Purchase Goals list (POST /api/shares/{share.code}/import
-      // in app/main.py), then -- only once that succeeds -- navigates
-      // there so they land right on it, appended at the end of their
-      // own setup list. A failed import (expired link, or this
-      // specific race: the code was still valid when the page loaded
-      // but lapses before the click) leaves this page exactly as-is
-      // and flashes red for 2.5s the same way pgShareGenerateBtn's own
-      // .action-failed click handler already does elsewhere on this
-      // page, rather than silently going nowhere.
+      // function's own doc comment above for why the two differ, and
+      // why only the signed-in case ever renders pgImportCard at all.
       //
-      // IMPORTANT: this calls window.fetch explicitly, not the bare
-      // fetch(...) every other handler in this wrapper script uses --
-      // the plain identifier would resolve to THIS SAME IIFE's own
-      // local `var fetch = function (url, options) {{ ... }}` shim
-      // defined above (the one that answers '/api/gear-setups' and
-      // the two still-to-purchase PUTs for the reused panel script),
-      // which, for any OTHER path, just synchronously resolves
-      // {{ ok: false }} without ever touching the network -- exactly
-      // the "turns red, no request ever shows up in the Network tab"
-      // bug this fixes. That shim exists to feed the reused, unmodified
-      // panel script frozen data on a read-only share page; this click
-      // handler is new, real behavior layered on top from the outside,
-      // same as the rest of this wrapper script, so it needs the real
-      // fetch, not the shim built for the thing it's wrapping.
+      // Toggles pgImportCard open/closed -- same plain show/hide-no-
+      // outside-click-auto-close pattern as pgShareIconBtn/pgShareCard
+      // on the real Purchase Goals page above (_purchase_goals_panel_
+      // markup's own script, reused verbatim on this very page just
+      // above this block). Nothing is imported just from opening this
+      // card -- only pgImportSaveBtn's own click below does that.
       var pgImportBtn = document.getElementById('pgImportBtn');
+      var pgImportCard = document.getElementById('pgImportCard');
       if (pgImportBtn) {{
         pgImportBtn.addEventListener('click', function () {{
+          var nowHidden = !pgImportCard.hidden;
+          pgImportCard.hidden = nowHidden;
+          pgImportBtn.classList.toggle('open', !nowHidden);
+        }});
+      }}
+
+      // SAVE TO MY MYSCAPE -- imports THIS share's own frozen setup
+      // into the signed-in visitor's own Purchase Goals list (POST
+      // /api/shares/{share.code}/import in app/main.py), then -- only
+      // once that succeeds -- navigates there so they land right on
+      // it, appended at the end of their own setup list AND already
+      // selected (see below). A failed import (expired link, or this
+      // specific race: the code was still valid when the page loaded
+      // but lapses before the click) leaves this card open exactly
+      // as-is and flashes this button red for 2.5s the same way
+      // pgShareGenerateBtn's own .action-failed click handler already
+      // does elsewhere on this site, rather than silently going
+      // nowhere.
+      //
+      // IMPORTANT: this calls window.fetch/window.localStorage
+      // explicitly, not the bare fetch(...)/localStorage every other
+      // handler in this wrapper script uses -- the plain identifiers
+      // would resolve to THIS SAME IIFE's own local `var fetch = ...`
+      // shim (feeds the reused panel script's GET /api/gear-setups
+      // etc. with frozen data; anything else synchronously resolves
+      // {{ ok: false }} with no real request at all) and local `var
+      // localStorage = ...` shadow (so rendering this frozen share
+      // never clobbers a visitor's own real myscape:purchaseGoals:
+      // activeSetupId preference -- see this function's own doc
+      // comment, point 3) respectively. Both exist to keep the reused,
+      // unmodified panel script harmless on a read-only share page;
+      // this handler is new, real behavior layered on top from the
+      // outside, so it needs the real fetch (same bug/fix as the
+      // import icon's own original click handler used to be) AND the
+      // real localStorage -- writing the newly imported setup's id to
+      // the SHADOW here would set a key nothing outside this one page
+      // load ever reads, silently failing to select anything once the
+      // Purchase Goals page itself loads for real and reads the real
+      // key instead.
+      var pgImportSaveBtn = document.getElementById('pgImportSaveBtn');
+      if (pgImportSaveBtn) {{
+        pgImportSaveBtn.addEventListener('click', function () {{
           var btn = this;
           btn.disabled = true;
           window.fetch('/api/shares/{share.code}/import', {{ method: 'POST' }})
             .then(function (res) {{ return res.ok ? res.json() : Promise.reject(); }})
-            .then(function () {{
+            .then(function (data) {{
+              try {{
+                if (data && data.importedSetupId) {{
+                  window.localStorage.setItem('myscape:purchaseGoals:activeSetupId', data.importedSetupId);
+                }}
+              }} catch (e) {{ /* same best-effort posture setActiveSetupId's own try/catch takes above -- losing the auto-select is fine, the import itself already succeeded */ }}
               window.location.href = '/dashboard/purchase-goals';
             }})
             .catch(function () {{

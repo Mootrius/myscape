@@ -2063,13 +2063,30 @@ def import_shared_purchase_goal(
     resolution (undoing build_purchase_goal_share_snapshot's own
     pricing/resolution) that turns the frozen payload back into a
     normal, editable setup -- including why it lands at the END of
-    this player's own setup list with no special-casing needed here."""
+    this player's own setup list with no special-casing needed here.
+
+    The response is the normal GET /api/gear-setups shape (build_
+    purchase_goals_state) plus one extra top-level importedSetupId --
+    the new setup's own id, read back off the row import_gear_setup_
+    from_share_payload just created (that function sets it explicitly
+    rather than leaning on the column's default=uuid.uuid4, precisely
+    so it's already populated here without needing a post-commit
+    refresh). The share page's own SAVE TO MY MYSCAPE button (render_
+    purchase_goals_share, app/pages.py) stashes this into this
+    player's real myscape:purchaseGoals:activeSetupId localStorage key
+    before redirecting to their own Purchase Goals page -- the same
+    key loadState's own boot logic already prefers over "just open the
+    first setup" -- so the newly imported setup is what they land on,
+    selected and ready to view/edit, with no new client-side selection
+    plumbing needed on that page at all."""
     share = find_valid_share(db, code, content_type="purchase_goal")
     if share is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
-    import_gear_setup_from_share_payload(db, game_account, share.payload)
+    new_setup = import_gear_setup_from_share_payload(db, game_account, share.payload)
     db.commit()
-    return build_purchase_goals_state(db, game_account)
+    state = build_purchase_goals_state(db, game_account)
+    state["importedSetupId"] = str(new_setup.id)
+    return state
 
 
 @app.post("/api/players/me/hiscores/sync")

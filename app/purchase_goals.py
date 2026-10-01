@@ -34,6 +34,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+import uuid
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -1597,6 +1598,17 @@ def import_gear_setup_from_share_payload(db: Session, game_account: GameAccount,
         raw_icon = {"itemId": icon.get("itemId"), "itemName": icon.get("itemName")}
 
     setup = GearSetup(
+        # Explicit id, not just this column's own default=uuid.uuid4 --
+        # the caller (POST /api/shares/{code}/import in app/main.py)
+        # needs to read it back right after this call to tell the
+        # Purchase Goals page which setup to select once it redirects
+        # there, and a Python-side column default isn't actually
+        # applied until flush/commit, so relying on it here would mean
+        # setup.id reads back None until the caller commits. Setting it
+        # here up front sidesteps that entirely -- same convention
+        # create_loot_share/create_purchase_goal_share already use for
+        # SharedContent's own id, in app/main.py.
+        id=uuid.uuid4(),
         game_account_id=game_account.id,
         name=gear_setup.get("name") or "New Setup",
         icon=raw_icon,

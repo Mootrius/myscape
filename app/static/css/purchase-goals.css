@@ -796,13 +796,17 @@ button.primary#pgNameSave, .pg-setup-form-save {
    share page (render_purchase_goals_share's own import_icon_btn,
    app/pages.py) -- same box/tray shape and cap-height-compensating
    translateY as .pg-share-icon-btn above (it sits next to the exact
-   same kind of all-caps .page-title text, just a different heading),
-   just no .open state: this icon is a one-shot action (import, or
-   sign up), never a toggle, so there's nothing to show "currently
-   open" for. Rendered as either a real <button> (signed-in visitor)
-   or a plain <a> (signed-out) depending on viewer at render time --
-   this rule targets the class alone rather than a tag name, so both
-   look identical regardless of which element it ends up on. */
+   same kind of all-caps .page-title text, just a different heading).
+   Toggles .pg-import-card below open/closed, same .open-on-the-button
+   convention as .pg-share-icon-btn above -- this used to be a one-shot
+   action button itself, but per explicit instruction it's now a
+   toggle for a confirming popup instead (see .pg-import-card below),
+   so it picked up the same .open state .pg-share-icon-btn already
+   has. Rendered as either a real <button> (signed-in visitor) or a
+   plain <a> (signed-out, no popup, no .open ever toggled onto it)
+   depending on viewer at render time -- this rule targets the class
+   alone rather than a tag name, so both look identical regardless of
+   which element it ends up on. */
 .pg-import-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -819,13 +823,56 @@ button.primary#pgNameSave, .pg-setup-form-save {
   transform: translateY(-2.4px);
 }
 .pg-import-icon-btn:hover { color: var(--text-dim); }
+.pg-import-icon-btn.open { color: var(--gold); }
 
-/* A failed import attempt (expired link, or the code lapsing between
-   page load and click) -- same plain color-swap .pg-share-generate-btn's
-   own .action-failed class already uses for GENERATE SHAREABLE LINK
-   elsewhere on this page (see that rule further below in this file),
-   just color alone here since this icon has no border to swap. */
-.pg-import-icon-btn.action-failed { color: var(--red); }
+/* The popup pgImportBtn above toggles open -- same shape/sizing as
+   .pg-share-card-row/.pg-share-card below (centered under the title,
+   zero height while hidden), holding one confirming SAVE TO MY
+   MYSCAPE button (see .pg-import-save-btn below) plus a one-line
+   explanation of what it does, per explicit instruction. Only ever
+   rendered at all when viewer was signed in at render time (see
+   render_purchase_goals_share's own import_card_markup, app/
+   pages.py) -- a signed-out visitor's icon is a plain link straight
+   to /signup instead, with no popup to open. */
+.pg-import-card-row { display: flex; justify-content: center; }
+
+.pg-import-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 6px;
+  margin: 6px 0 14px;
+}
+/* Same [hidden] override as .pg-share-card[hidden] below -- author
+   CSS setting `display` always outranks the browser's own
+   [hidden]{display:none} default stylesheet rule. */
+.pg-import-card[hidden] { display: none; }
+
+/* Same sizing/coloring as .pg-share-generate-btn below -- the two
+   popups read as the same kind of UI even though one generates a
+   link and the other imports one. .action-failed here (expired link,
+   or the code lapsing between page load and click) is what used to
+   live on .pg-import-icon-btn itself back when that icon performed
+   the import directly; it moved here along with the actual import
+   action once the icon became a plain toggle (see this button's own
+   click handler in app/pages.py). */
+.pg-import-save-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.pg-import-save-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pg-import-save-btn:disabled { cursor: default; opacity: 0.6; }
+.pg-import-save-btn.action-failed { border-color: var(--red); color: var(--red); }
+
+.pg-import-popup-hint { margin: 0; font-size: 15px; color: var(--text-faint); text-align: center; }
 
 /* Centered under the title the same way .loot-share-card-row centers
    Loot Tracker's own card -- zero height (and this whole row with it)
