@@ -3620,7 +3620,12 @@ def render_account(player: PlayerView) -> str:
         </div>
 
         <div class="account-section">
-          <button class="secondary" type="button" id="emailToggleBtn">UPDATE EMAIL</button>
+          <div class="account-tab-row">
+            <button class="secondary" type="button" id="emailToggleBtn">UPDATE EMAIL</button>
+            <button class="secondary" type="button" id="passwordToggleBtn">UPDATE PASSWORD</button>
+            <button class="danger" type="button" id="deleteToggleBtn">DELETE ACCOUNT</button>
+          </div>
+
           <div class="account-collapse-body" id="emailBody" hidden>
             <div class="auth-error" id="emailError"></div>
             <div class="auth-success" id="emailSuccess"></div>
@@ -3636,10 +3641,7 @@ def render_account(player: PlayerView) -> str:
               <button class="primary" type="submit">UPDATE EMAIL</button>
             </form>
           </div>
-        </div>
 
-        <div class="account-section">
-          <button class="secondary" type="button" id="passwordToggleBtn">UPDATE PASSWORD</button>
           <div class="account-collapse-body" id="passwordBody" hidden>
             <div class="auth-error" id="passwordError"></div>
             <div class="auth-success" id="passwordSuccess"></div>
@@ -3659,10 +3661,7 @@ def render_account(player: PlayerView) -> str:
               <button class="primary" type="submit">UPDATE PASSWORD</button>
             </form>
           </div>
-        </div>
 
-        <div class="account-section account-section--danger">
-          <button class="danger" type="button" id="deleteToggleBtn">DELETE ACCOUNT</button>
           <div class="account-collapse-body" id="deleteBody" hidden>
             <p class="account-section-hint">This will PERMANENTLY delete your myscape account and all data attached to it. You can create a new account afterward, but you CANNOT undo this action.</p>
             <div class="auth-error" id="deleteError"></div>
@@ -3718,22 +3717,35 @@ def render_account(player: PlayerView) -> str:
         });
       });
 
-      // Update Email / Update Password / Delete Account -- each
-      // starts collapsed behind its own button.secondary/button.danger
-      // (see the matching markup above); clicking it just shows/hides
-      // the form beneath, same hidden-attribute toggle convention as
-      // publicProfileCard's own caret elsewhere on this site. Plain
-      // show/hide, not an accordion -- opening one doesn't close the
-      // others.
-      [
+      // Update Email / Update Password / Delete Account -- now one
+      // shared row of three buttons (see .account-tab-row in the
+      // matching markup above) with accordion behavior: at most one
+      // of the three .account-collapse-body sections below that row
+      // is visible at a time. Clicking a closed tab's button hides
+      // whichever body was open (if any) and shows this one's,
+      // marking this button .active; clicking the currently-open
+      // tab's own button again just closes it, leaving all three
+      // collapsed -- same hidden-attribute toggle convention as
+      // publicProfileCard's own caret elsewhere on this site, just
+      // applied to all three together instead of each independently.
+      const accountTabs = [
         ['emailToggleBtn', 'emailBody'],
         ['passwordToggleBtn', 'passwordBody'],
         ['deleteToggleBtn', 'deleteBody'],
-      ].forEach(([toggleId, bodyId]) => {
+      ];
+      accountTabs.forEach(([toggleId, bodyId]) => {
         const toggleBtn = document.getElementById(toggleId);
         const body = document.getElementById(bodyId);
         toggleBtn.addEventListener('click', () => {
-          body.hidden = !body.hidden;
+          const wasOpen = !body.hidden;
+          accountTabs.forEach(([otherToggleId, otherBodyId]) => {
+            document.getElementById(otherBodyId).hidden = true;
+            document.getElementById(otherToggleId).classList.remove('active');
+          });
+          if (!wasOpen) {
+            body.hidden = false;
+            toggleBtn.classList.add('active');
+          }
         });
       });
 

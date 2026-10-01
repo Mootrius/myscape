@@ -645,17 +645,51 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   color: var(--red);
 }
 
-/* Update Email / Update Password / Delete Account -- each shrunk to
-   just its own button.secondary (or button.danger for the delete-
-   account one, keeping its red "careful" cue even collapsed) until
-   clicked, revealing the actual form beneath (render_account,
-   app/pages.py). Same hidden-attribute toggle convention as the
-   Character Overview page's own publicProfileCard, just without that
-   one's rotating-caret indicator -- the button IS the whole header
-   here, nothing smaller sitting beside a separate title to click
-   instead. */
+/* Update Email / Update Password / Delete Account -- now one shared
+   row of three buttons (see .account-tab-row below) rather than each
+   stacked in its own .account-section, with only one of the three
+   .account-collapse-body sections below the row visible at a time
+   (accordion -- see the script in render_account, app/pages.py).
+   Same hidden-attribute toggle convention as the Character Overview
+   page's own publicProfileCard, just without that one's rotating-
+   caret indicator -- the button IS the whole header, nothing smaller
+   sitting beside a separate title to click instead. */
 .account-collapse-body {
   margin-top: 16px;
+}
+
+/* The three toggle buttons above those bodies, side by side instead
+   of each stacked full-width in its own .account-section. Overrides
+   button.secondary/button.danger's own width: 100% (higher
+   specificity here beats those regardless of source order) -- same
+   shape/weight otherwise, just sized to share one row and with a
+   smaller font/padding so "UPDATE PASSWORD" (the longest label)
+   still fits its third of the row without wrapping. */
+.account-tab-row {
+  display: flex;
+  gap: 8px;
+}
+
+.account-tab-row button.secondary,
+.account-tab-row button.danger {
+  width: auto;
+  flex: 1;
+  padding: 10px 6px;
+  font-size: 12.5px;
+}
+
+/* Marks whichever tab is currently expanded (toggled alongside the
+   hidden attribute on its .account-collapse-body in the script
+   below) -- same gold-on-hover/red-on-hover colors button.secondary/
+   button.danger already use, just held permanently instead of only
+   on :hover, so the open tab stays visually distinct while expanded. */
+.account-tab-row button.secondary.active {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
+
+.account-tab-row button.danger.active {
+  background: rgba(192, 90, 76, 0.12);
 }
 
 /* Linked Accounts list (render_account, app/pages.py -- step 7 of
@@ -742,7 +776,36 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 .shared-links-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 12px;
+}
+
+/* Explicit per-column widths (table-layout: fixed above makes these
+   the actual, permanent column widths -- content no longer has any
+   say in them at all) rather than letting auto layout size columns
+   off their own content, so a header's content width can freely
+   change (see .shared-link-sort-arrow below) without ever reflowing
+   any column. Roughly matches this table's old auto-layout
+   proportions. */
+.shared-links-table th:nth-child(1),
+.shared-links-table td:nth-child(1) { width: 21%; }
+.shared-links-table th:nth-child(2),
+.shared-links-table td:nth-child(2) { width: 18%; }
+.shared-links-table th:nth-child(3),
+.shared-links-table td:nth-child(3) { width: 22%; }
+.shared-links-table th:nth-child(4),
+.shared-links-table td:nth-child(4) { width: 21%; }
+.shared-links-table th:nth-child(5),
+.shared-links-table td:nth-child(5) { width: 18%; }
+
+/* Character/App are the only columns whose content length actually
+   varies (names/labels) -- now that their width is pinned above
+   instead of grown to fit, a long one needs to truncate gracefully
+   rather than overflow its fixed-width cell. */
+.shared-links-table td:nth-child(1),
+.shared-links-table td:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .shared-links-table th,
@@ -811,16 +874,20 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 }
 .shared-link-sort-header:hover { color: var(--text); }
 .shared-link-sort-header.active { color: var(--gold); }
-/* Fixed width (not min-width -- a floor alone would still let the
-   header grow when the real glyph is wider than it) rather than
-   sized by content, so this reserves the exact same space whether
-   it's empty (not the active sort column) or showing an arrow --
-   without this, a header's own natural width (and with it, every
-   other column's share of the table's fixed 100% width, since this
-   table uses auto layout) changed every time a column's sort state
-   turned on or off. 12px comfortably fits " \u2191"/" \u2193" at this
-   header's own 10.5px font. */
-.shared-link-sort-arrow { display: inline-block; width: 12px; }
+/* No reserved width here on purpose -- .shared-links-table's own
+   explicit per-column widths (table-layout: fixed, above) already
+   keep every column's width constant regardless of header content,
+   so this is free to be its natural (zero, when empty) width
+   instead. That's what gives the centering behavior the title text
+   wants: button.shared-link-sort-header is itself just centered as
+   an inline box inside its <th> (that th's own text-align: center),
+   so with no arrow present the title text alone sits dead-center,
+   and when sorting adds the " \u2191"/" \u2193" glyph (with its own
+   leading space baked into the textContent set in the script below)
+   the title+arrow pair grows together and re-centers as one unit --
+   no flex/nudge math needed, just plain inline centering with
+   nothing permanently reserved beside the title. */
+.shared-link-sort-arrow { display: inline-block; }
 
 /* Shared gray-trash-can -> red-on-hover -> red "confirm" label delete
    button -- used by both DEACTIVATE (Shared Links table) and DELETE
