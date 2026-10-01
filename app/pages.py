@@ -6269,6 +6269,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       <div class="loot-share-card" id="lootShareCard" hidden>
         <button type="button" class="loot-share-generate-btn" id="lootShareGenerateBtn">GENERATE SHAREABLE LINK</button>
         <button type="button" class="loot-share-link-btn" id="lootShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>
+        <p class="loot-share-popup-hint">Links are valid for 30 days. You can delete them sooner on your Accounts page.</p>
       </div>
     </div>
 

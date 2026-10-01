@@ -1268,7 +1268,12 @@
    btn:first-child:not(.active) in goal-tracking.css). */
 .public-profile-seg-btn {
   height: 25px;
-  background: #100e0b;
+  /* --panel-2 (lighter) by default, --panel (darker) once active --
+     same light-gray-unless-selected/darker-when-selected convention
+     as .gt-metric-btn (goal-tracking.css), not this control's own
+     original near-black #100e0b idle state, per explicit instruction
+     to match that control instead. */
+  background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--text-dim);
   font-family: inherit;
