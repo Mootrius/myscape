@@ -3608,7 +3608,7 @@ def render_account(player: PlayerView) -> str:
                 <tr>
                   <th><button type="button" class="shared-link-sort-header" data-sort-key="character">Character<span class="shared-link-sort-arrow"></span></button></th>
                   <th><button type="button" class="shared-link-sort-header" data-sort-key="app">App<span class="shared-link-sort-arrow"></span></button></th>
-                  <th><button type="button" class="shared-link-sort-header" data-sort-key="code">Code<span class="shared-link-sort-arrow"></span></button></th>
+                  <th>Code</th>
                   <th><button type="button" class="shared-link-sort-header" data-sort-key="expiration">Expiration<span class="shared-link-sort-arrow"></span></button></th>
                   <th>Deletion</th>
                 </tr>
@@ -4038,10 +4038,12 @@ def render_account(player: PlayerView) -> str:
         return new Date(iso).toISOString().slice(0, 10);
       }
 
+      // No 'code' case -- the Code column isn't sortable (see the
+      // markup above; it's plain text, not a .shared-link-sort-header
+      // button), sorting by a random-looking code isn't useful.
       function sharedLinkSortValue(link, key) {
         if (key === 'character') return (link.character_name || 'Unknown character').toLowerCase();
         if (key === 'app') return link.content_type_label.toLowerCase();
-        if (key === 'code') return link.code.toLowerCase();
         if (key === 'expiration') return new Date(link.expires_at).getTime();
         return '';
       }

@@ -376,6 +376,15 @@ header {
   padding-top: 14px;
 }
 
+/* 15% wider than the base .auth-card's own 420px (420 * 1.15 = 483)
+   -- scoped to this page alone, not .auth-card itself, since every
+   other page using that class is a pre-login auth screen (signup,
+   login, ...) with no own reason to widen. The extra room is for the
+   Shared Links table's own columns further down this same card. */
+.account-shell .auth-card {
+  max-width: 483px;
+}
+
 .auth-card {
   width: 100%;
   max-width: 420px;
