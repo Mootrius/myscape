@@ -1031,6 +1031,36 @@ def _is_always_attainable_item(name: Optional[str]) -> bool:
     )
 
 
+# Ava's devices are a DIFFERENT kind of special case from the
+# always-attainable items above -- these are genuinely tradeable
+# items with a real GE price (not cheap ones either), so there's no
+# reason to pretend every player already owns one. The ask here is
+# narrower: per explicit instruction, don't price them and don't let
+# them show up as a Still to Purchase/Next Purchase target -- treat
+# them exactly like one of _resolve_gear_slot_item's own plain-
+# untradeable-with-no-price items (the "nothing left to price it
+# against" branch) -- but still color the slot by REAL ownership
+# (green if the player's own pool actually has one, red otherwise),
+# never forced green the way runes/food/potions/ammunition are.
+# Applied in _mark_slot_affordability below, after _resolve_gear_
+# slot_item has already resolved "owned" normally from the real
+# pool -- this only overrides tradeable/unitPrice/cost/fullCost,
+# never owned.
+_NO_PRICE_ITEM_NAMES = frozenset({
+    "ava's attractor", "ava's accumulator", "ava's assembler",
+})
+
+
+def _is_no_price_item(name: Optional[str]) -> bool:
+    """True for one of Ava's devices -- see _NO_PRICE_ITEM_NAMES' own
+    comment above for why these are priced at 0 (and excluded from
+    Still to Purchase/Next Purchase) without also being forced to
+    read as owned the way runes/food/potions/ammunition are."""
+    if not name:
+        return False
+    return name.strip().lower() in _NO_PRICE_ITEM_NAMES
+
+
 def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[dict]:
     if resolved is None:
         return None
@@ -1046,6 +1076,18 @@ def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[d
     if _is_always_attainable_item(resolved.get("itemName")):
         resolved["owned"] = True
         resolved["cost"] = 0
+    # Ava's devices -- see _is_no_price_item's own comment above.
+    # owned is deliberately left untouched here (unlike the
+    # always-attainable override above): a real GE-tradeable item's
+    # ownership should still reflect the player's actual bank/
+    # inventory/equipment pool, only its price and purchasability are
+    # being zeroed out.
+    if _is_no_price_item(resolved.get("itemName")):
+        resolved["tradeable"] = False
+        resolved["unitPrice"] = None
+        resolved["priceSource"] = None
+        resolved["cost"] = 0
+        resolved["fullCost"] = 0
     # A plain-untradeable item can still carry a real unitPrice -- any
     # item the ported RuneLite table has a linked value for (see
     # derived_price_by_name) -- and that's just as much a real,
