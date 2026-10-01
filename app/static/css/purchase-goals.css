@@ -880,23 +880,25 @@ button.primary#pgNameSave, .pg-setup-form-save {
   justify-content: center;
 }
 
-/* The amber/red ownership border colors describe whether THIS
+/* The green/amber/red ownership border colors describe whether THIS
    VISITOR's own bank could cover an item -- meaningless (and per
    explicit instruction, unwanted) against a stranger's shared setup,
-   so those two fall back to the same neutral border every other
+   so all three fall back to the same neutral border every other
    .gear-slot uses by default. (.affordable can't actually occur here
    -- build_purchase_goal_share_snapshot always freezes coins at 0, so
    _mark_slot_affordability's own affordable check never passes -- this
    stays only as a defensive no-op in case that ever changes.)
 
-   .owned is deliberately left alone, still green: on this page
-   "owned" ONLY ever means "a rune/food/potion/ammunition item" now
-   (build_purchase_goal_share_snapshot resolves everything else
-   against EMPTY owned-items pools -- see its own docstring in
-   app/purchase_goals.py -- so nothing else can ever come back owned
-   here), and those are the exact items the real page's own green
-   border applies to as well per explicit instruction -- see
-   _is_always_attainable_item's own docstring. */
+   This DOES include .owned, even though on this page "owned" only
+   ever means "a rune/food/potion/ammunition item" now (build_
+   purchase_goal_share_snapshot resolves everything else against
+   EMPTY owned-items pools -- see its own docstring in app/
+   purchase_goals.py) -- per explicit instruction, the real page's
+   "always green" treatment for those items (see _is_always_
+   attainable_item's own docstring) is a LIVE-setup-only affordance
+   and doesn't carry over to a shared link: here they get no border
+   color at all, same neutral gray as everything else. */
+.purchase-goal-share .gear-slot.owned,
 .purchase-goal-share .gear-slot.not-owned,
 .purchase-goal-share .gear-slot.affordable {
   border-color: var(--border);

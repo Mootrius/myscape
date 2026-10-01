@@ -9374,20 +9374,21 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     progress bar -- exactly the frozen-looking treatment asked for,
     with no client-side special-casing of that widget at all.
 
-    The actual-setup gear slots also lose their amber/red ownership
-    border colors here (.purchase-goal-share .gear-slot.not-owned/
-    .affordable forced back to the same neutral .gear-slot border
-    everything else uses) -- those colors describe whether THIS
-    VISITOR's own bank could cover an item, which makes no sense to
-    show against a stranger's shared setup, per explicit instruction.
-    .gear-slot.owned's own green is deliberately left alone: since
+    The actual-setup gear slots also lose their green/amber/red
+    ownership border colors here (.purchase-goal-share .gear-slot.
+    owned/.not-owned/.affordable all forced back to the same neutral
+    .gear-slot border everything else uses) -- those colors describe
+    whether THIS VISITOR's own bank could cover an item, which makes
+    no sense to show against a stranger's shared setup, per explicit
+    instruction. This includes .gear-slot.owned's own green, even
+    though on this page "owned" can only ever mean one thing (since
     build_purchase_goal_share_snapshot resolves everything against
-    EMPTY owned-items pools (see its own docstring), "owned" can only
-    ever mean one thing on this page -- a rune/food/potion/ammunition
-    item (see _is_always_attainable_item in app/purchase_goals.py) --
-    and those should read as green here exactly as they do on the real
-    page, per explicit instruction. The hover-only "remove item" button
-    (the red x/circle
+    EMPTY owned-items pools -- see its own docstring) -- a rune/food/
+    potion/ammunition item (see _is_always_attainable_item in
+    app/purchase_goals.py). The real page's "always green" treatment
+    for those items is a LIVE-setup-only affordance, per explicit
+    instruction, and doesn't carry over to a shared link. The
+    hover-only "remove item" button (the red x/circle
     in a filled slot's corner) is hidden the same way
     (.purchase-goal-share .gear-slot.filled:hover .gear-slot-remove)
     -- a visitor can't delete anything here regardless (see

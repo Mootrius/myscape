@@ -1467,12 +1467,14 @@ def build_purchase_goal_share_snapshot(setup: GearSetup) -> dict:
     -- same value as totalFullCost minus their fullCost, rather than
     totalCost's own usual "net of what's already owned" meaning
     everywhere else this dict shape is built. The gear doll/inventory
-    grid's own amber/red (but not green) ownership border colors are
-    already neutralized back to gray by .purchase-goal-share's own
-    override in purchase-goals.css (nothing about this account's real
-    bank should be implied either way) -- green stays, since on this
-    page "owned" can now only ever mean "always-attainable item," and
-    those should read as green here exactly as on the real page.
+    grid's own green/amber/red ownership border colors are all
+    neutralized back to gray by .purchase-goal-share's own override in
+    purchase-goals.css (nothing about this account's real bank should
+    be implied either way) -- including green: even though "owned" can
+    now only ever mean "always-attainable item" on this page, the real
+    page's own green treatment for those items is a LIVE-setup-only
+    affordance per explicit instruction, so it doesn't carry over to a
+    shared link either.
 
     coins is also frozen at 0 here, never the account's real current
     GP -- per explicit instruction, the shared page's own summary box
