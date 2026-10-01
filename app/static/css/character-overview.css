@@ -1215,6 +1215,13 @@
   padding: 5px 6px;
   margin: 6px 0 14px;
 }
+/* Author CSS setting `display` on this element always outranks the
+   browser's own [hidden]{display:none} default stylesheet rule, no
+   matter how low its specificity looks -- same gotcha, same fix, as
+   .model-viewer-btn svg[hidden] above: without this, toggling the
+   `hidden` attribute (publicProfileCaretBtn's own click handler)
+   had no visible effect at all. */
+.public-profile-card[hidden] { display: none; }
 
 /* Same two-button segmented-control markup/behavior as Mindmaps' own
    goal-field LVL/XP and tier toggles (.mm-segment-group/.mm-segment-
@@ -1257,8 +1264,18 @@
    stats row uses; a readonly field this size scrolls its own text
    internally if it's ever too long, same as any other link-display
    input on the web. height: 25px matches the segmented control and
-   the two buttons beside it, so all four sit flush in one row. */
-.public-profile-link-input {
+   the two buttons beside it, so all four sit flush in one row.
+   Selector is `input.` (type + class), not just `.` -- myscape.css's
+   own shared input[type="text"] rule (width: 100%, padding: 12px
+   14px, font-size: 16px) is a type + attribute selector, which beats
+   a class selector alone on specificity regardless of file/source
+   order; matching its own specificity here (same fix as
+   input.gt-recur-interval-input in goal-tracking.css) is what lets
+   THIS rule's width/padding/font-size actually win instead of
+   silently losing to that shared default -- without it the field
+   rendered full-width with 16px text, blowing the whole card out far
+   past its intended size. */
+input.public-profile-link-input {
   flex: 0 0 auto;
   width: 190px;
   height: 25px;

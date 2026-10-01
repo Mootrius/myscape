@@ -2208,6 +2208,26 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
       </div>
     </div>"""
 
+    # The "i" info popup and shuffle-background buttons are owner-
+    # only on a public_code visitor's view specifically (NOT preview
+    # -- the landing demo's own shuffle/info are a nice bit of
+    # marketing, since a prospective player clicking them is exactly
+    # who "set your character model in the myscape plugin sidebar"
+    # is meant for). A real visitor looking at someone else's shared
+    # link has no plugin of their own to point at that instructions,
+    # and shuffling only ever changes this visitor's own local
+    # background pick anyway (see MODEL_VIEWER_BG_STORAGE_KEY's own
+    # per-public-code namespacing above) -- not a setting worth
+    # exposing on someone else's page. Omitting the markup entirely
+    # (rather than hiding via CSS) is safe: the script's own guards
+    # (`if (infoBtn && infoPopup) {...}`, `if (bgShuffleBtn) ...`)
+    # already no-op cleanly when these elements don't exist, same
+    # pattern public_profile_caret/public_profile_card_section above
+    # rely on.
+    mv_info_btn = "" if public_code else '<button class="model-viewer-btn" id="mvInfoBtn" type="button" title="About this viewer" aria-label="About this viewer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>'
+    mv_shuffle_btn = "" if public_code else '<button class="model-viewer-btn" id="mvBgShuffleBtn" type="button" title="Shuffle background" aria-label="Shuffle background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg></button>'
+    mv_info_popup = "" if public_code else '<div class="model-viewer-info-popup" id="modelViewerInfoPopup" hidden>Set your character model in the myscape plugin sidebar on RuneLite.</div>'
+
     # The owner's own share-link control -- absent in both preview
     # (the landing demo) and public_code (a visitor's own view of
     # someone else's link) modes, since in either of those this
@@ -2258,12 +2278,12 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
             <div class="model-viewer-bg" id="modelViewerBg"></div>
             <canvas id="modelViewerCanvas"></canvas>
             <div class="model-viewer-controls" id="modelViewerControls">
-              <button class="model-viewer-btn" id="mvInfoBtn" type="button" title="About this viewer" aria-label="About this viewer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
-              <button class="model-viewer-btn" id="mvBgShuffleBtn" type="button" title="Shuffle background" aria-label="Shuffle background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg></button>
+              {mv_info_btn}
+              {mv_shuffle_btn}
               <button class="model-viewer-btn" id="mvPlayPauseBtn" type="button" title="Pause rotation" aria-label="Pause rotation"><svg id="mvPlayIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" hidden><polygon points="6 3 20 12 6 21 6 3"></polygon></svg><svg id="mvPauseIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></button>
               <button class="model-viewer-btn" id="mvResetBtn" type="button" title="Reset view" aria-label="Reset view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg></button>
             </div>
-            <div class="model-viewer-info-popup" id="modelViewerInfoPopup" hidden>Set your character model in the myscape plugin sidebar on RuneLite.</div>
+            {mv_info_popup}
           </div>
           <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
         </div>
