@@ -1160,3 +1160,80 @@ def kc_counts_by_player(db: Session, game_account: GameAccount) -> Dict[Tuple[st
         key = (source_type, (source_name or "").strip().lower())
         counts.setdefault(key, []).append(occurred_at)
     return counts
+
+
+def build_loot_share_snapshot(db: Session, game_account: GameAccount, start: datetime, end: datetime) -> dict:
+    """Freezes everything render_loot_tracker_share's wrapper script
+    (app/pages.py) needs to show a read-only, fully drillable copy of
+    [start, end) at myscape.io/s/<code> -- built the moment a player
+    clicks "Share" on their own real Loot Tracker page (POST
+    /api/players/me/loot/share in app/main.py), stored verbatim on
+    SharedContent.payload (see that model's own docstring), and never
+    recomputed afterward -- a visitor loading the link back always
+    sees this exact moment, even if the owner keeps killing things (or
+    deletes their account) afterward.
+
+    Same three-key shape {"full", "buckets", "hideBreakdown"} as
+    app/data/landing_loot_demo.json (see scripts/gen_landing_loot_demo.py's
+    own module docstring), on purpose: render_loot_tracker_share's own
+    wrapper script is a close cousin of render_landing_loot_preview's,
+    reusing that exact fetch-shim/hide-simulate approach against a real
+    frozen share instead of a curated demo snapshot, so matching that
+    script's expected input shape here means it needs barely any
+    changes.
+
+    "full": build_loot_state's own result for the whole [start, end)
+    range -- exactly what a real (non-shared) GET /api/players/me/loot
+    would return for it.
+
+    "buckets": one MORE build_loot_state call per entry in full's own
+    "buckets" array, each scoped to that one bucket's own exact
+    [start, end) (same -1ms end-bound trim bucketUrl itself uses, so
+    this is byte-for-byte what a real bar click's own drill-down
+    request would have returned) -- index-aligned with full["buckets"],
+    not keyed by timestamp; the wrapper script matches a clicked bar
+    back to its own entry here by scanning full["buckets"] for the one
+    whose own "start" equals the bucket clicked, same linear scan
+    render_landing_loot_preview's shim already does against its own
+    demo data. Computed unconditionally for every bucket, including
+    empty ones, same as the landing demo's own generator -- simpler
+    than special-casing "nothing to drill into here", and keeps an
+    empty bucket's own drill-down behaving exactly like the real page's
+    does (a well-formed, empty result, not a dead click).
+
+    "hideBreakdown": one entry per bucket (index-aligned with "buckets"
+    above, generalizing the landing demo's own fixed "one entry per
+    hour" -- a real share's own bucket count/granularity varies with
+    the range's span, see _bucket_plan), each {npcName: {killCount,
+    items: {itemHideKey: value}}} -- derived straight from that same
+    bucket's own already-computed scoped build_loot_state result
+    (its windowNpcs for killCount, its npcItems for the per-item
+    values), not a second pass over raw LootEvent rows the way the
+    landing demo's generator (which never had a build_loot_state
+    result per bucket to begin with, just its own simulated events
+    list) had to do it. This is what lets a visitor's own hide/unhide
+    click on the shared page recompute the chart's bars and header
+    kc/gp totals locally, live, without ever reaching a real endpoint
+    -- see applyHiddenFlags in render_landing_loot_preview's wrapper
+    script, which render_loot_tracker_share's own copy reuses near
+    verbatim."""
+    full_state = build_loot_state(db, game_account, start, end)
+
+    bucket_states = []
+    hide_breakdown = []
+    for b in full_state["buckets"]:
+        b_start = datetime.fromisoformat(b["start"])
+        b_end = datetime.fromisoformat(b["end"]) - timedelta(milliseconds=1)
+        bucket_state = build_loot_state(db, game_account, b_start, b_end)
+        bucket_states.append(bucket_state)
+
+        entry = {}
+        for npc in bucket_state["windowNpcs"]:
+            items_for_npc = {}
+            for item in bucket_state["npcItems"].get(npc["sourceName"], []):
+                key = item_hide_key(item["itemId"], item["itemName"])
+                items_for_npc[key] = items_for_npc.get(key, 0) + item["value"]
+            entry[npc["sourceName"]] = {"killCount": npc["killCount"], "items": items_for_npc}
+        hide_breakdown.append(entry)
+
+    return {"full": full_state, "buckets": bucket_states, "hideBreakdown": hide_breakdown}

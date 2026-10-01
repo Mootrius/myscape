@@ -53,7 +53,13 @@
    old hardcoded "LAST 24H" text in the chart header's left slot. A
    plain dropdown menu, same open/close-on-outside-click pattern as
    Purchase Goals' own .tracker-menu-wrap/#setupMenu. ---------- */
-.loot-chart-range { position: relative; z-index: 2; }
+/* display:flex (was just position:relative -- a single button was
+   the only child) now that the Share button sits beside the range
+   button as a second child -- see .loot-share-wrap below. Neither
+   dropdown (this one's own .loot-range-menu, or .loot-share-popup)
+   is affected by that: position:absolute takes both out of flow
+   regardless of the parent's own display type. */
+.loot-chart-range { position: relative; z-index: 2; display: flex; align-items: center; gap: 6px; }
 /* height: 25px pins this to the same site-wide button height
    .loot-sort-tab below already renders at naturally (that's where the
    25px number itself comes from) -- explicit here rather than left to
@@ -125,6 +131,56 @@
   cursor: pointer;
 }
 .loot-range-apply:hover { border-color: var(--gold); }
+
+/* ---------- Share button + its link popup -- sits beside the range
+   button in .loot-chart-range (see that class's own comment above).
+   The button itself reuses .loot-range-btn wholesale (classList is
+   "loot-range-btn loot-share-btn") rather than redefining the same
+   25px-tall/uppercase/--panel-2 properties a third time -- same
+   reasoning character-overview.css's own .public-profile-link-btn
+   comment gives for mirroring that class. .loot-share-btn only ever
+   needs its own rule for the one state .loot-range-btn doesn't
+   already cover: the brief red "that didn't work" flash (same
+   pattern as .public-profile-link-btn.action-failed there, and
+   .clog-sync-btn.sync-failed elsewhere). ---------- */
+.loot-share-wrap { position: relative; }
+.loot-share-btn.action-failed { border-color: var(--red); color: var(--red); }
+.loot-share-btn:disabled { cursor: default; opacity: 0.6; }
+.loot-share-popup {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 3;
+  display: flex; flex-direction: column; gap: 6px;
+  width: 260px; padding: 10px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.loot-share-popup-label {
+  font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
+}
+.loot-share-link-row { display: flex; gap: 6px; }
+/* input. (type + class), not just . -- myscape.css's own shared
+   input[type="text"] rule beats a bare class selector on specificity
+   regardless of source order; same fix as input.public-profile-
+   link-input in character-overview.css, see that rule's own comment
+   for what happens without it. */
+input.loot-share-link-input {
+  flex: 1 1 auto; width: 0;
+  height: 25px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+.loot-share-link-btn {
+  flex: 0 0 auto;
+  height: 25px;
+  padding: 0 10px;
+  font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; white-space: nowrap;
+}
+.loot-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.loot-share-popup-hint { font-size: 10px; color: var(--text-faint); }
 
 /* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
    themselves (not on .loot-bar-plot -- padding there would be a no-op
@@ -711,6 +767,20 @@
    since nothing in this rule touches border-color/color any more. */
 .loot-range-btn--static { cursor: default; }
 .loot-range-btn--static .loot-range-caret { display: none; }
+
+/* The one-line "Shared by <name> -- <range>" byline on a Loot Tracker
+   share page (myscape.io/s/<code>, see render_loot_tracker_share in
+   app/pages.py), sitting right below the reused body's own unmodified
+   "Loot Tracker" .page-title heading -- centered under it the same
+   way, and pulled up close with a negative top margin (.page-title's
+   own bottom margin already pushes the chart card down, so this just
+   borrows a little of that gap rather than adding its own on top of
+   it) rather than spacing this out as its own separate block. Reuses
+   .subtitle's own muted color/size (myscape.css) wholesale -- this
+   rule only adds the centering/spacing .subtitle doesn't already have
+   on its own, same "augment a shared class with a page-specific
+   modifier" pattern .loot-range-btn--static above already follows. */
+.loot-share-banner { text-align: center; margin-top: -12px; margin-bottom: 20px; }
 
 /* ---------- Landing-preview-only hero row: character + tagline,
    replacing the reused page's own "Loot Tracker" heading -- see

@@ -18,7 +18,7 @@ from app.mindmaps import SKILL_NAMES
 from app.purchase_goals import item_icon_url
 
 if TYPE_CHECKING:
-    from app.models import Account, GameAccount
+    from app.models import Account, GameAccount, SharedContent
 
 
 @dataclass
@@ -5940,6 +5940,17 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
                 <button type="button" class="loot-range-apply" id="lootRangeApply">Apply</button>
               </div>
             </div>
+            <div class="loot-share-wrap" id="lootShareWrap">
+              <button type="button" class="loot-range-btn loot-share-btn" id="lootShareBtn">Share</button>
+              <div class="loot-share-popup" id="lootSharePopup" style="display:none;">
+                <p class="loot-share-popup-label">Link to this range</p>
+                <div class="loot-share-link-row">
+                  <input type="text" class="loot-share-link-input" id="lootShareLinkInput" readonly />
+                  <button type="button" class="loot-share-link-btn" id="lootShareCopyBtn">Copy</button>
+                </div>
+                <p class="loot-share-popup-hint">Expires in 30 days.</p>
+              </div>
+            </div>
           </div>
           <div class="loot-chart-title" id="lootChartTitle">ALL NPCs</div>
           <div class="loot-chart-stats">
@@ -7602,6 +7613,59 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         }
       }
 
+      // "Share" button -- creates a frozen, point-in-time snapshot of
+      // whatever range is currently selected (same state.rangeKey/
+      // customStart/customEnd lootUrl() above already reads) and shows
+      // the resulting myscape.io/s/<code> link in a small popup below
+      // the button. Each click creates a brand new link -- no cooldown
+      // like the public-profile card's own "New link" button has,
+      // since sharing multiple different sessions over time is normal
+      // usage here, not a mistake worth throttling against. See
+      // build_loot_share_snapshot in app/loot.py and SharedContent in
+      // app/models.py for what that link actually freezes.
+      function closeSharePopup() {
+        document.getElementById('lootSharePopup').style.display = 'none';
+      }
+
+      document.getElementById('lootShareBtn').addEventListener('click', function () {
+        var btn = this;
+        btn.disabled = true;
+        var body = { range: state.rangeKey };
+        if (state.rangeKey === 'custom' && state.customStart && state.customEnd) {
+          body.start = state.customStart;
+          body.end = state.customEnd;
+        }
+        fetch('/api/players/me/loot/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+          .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+          .then(function (data) {
+            document.getElementById('lootShareLinkInput').value = data.url;
+            document.getElementById('lootSharePopup').style.display = 'flex';
+          })
+          .catch(function () {
+            btn.classList.add('action-failed');
+            setTimeout(function () { btn.classList.remove('action-failed'); }, 2500);
+          })
+          .then(function () { btn.disabled = false; });
+      });
+      document.getElementById('lootShareCopyBtn').addEventListener('click', function () {
+        var input = document.getElementById('lootShareLinkInput');
+        if (!input.value) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(input.value);
+        } else {
+          input.select();
+          document.execCommand('copy');
+        }
+      });
+      document.addEventListener('click', function (e) {
+        var wrap = document.getElementById('lootShareWrap');
+        if (wrap && !wrap.contains(e.target)) closeSharePopup();
+      });
+
       loadState();
       setInterval(loadState, 10000);
     })();
@@ -7908,6 +7972,14 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
         document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
       }}
 
+      // Same reasoning, for the Share button -- nothing real to share
+      // from an anonymous demo. Removed outright (not just hidden):
+      // nothing else in the reused script above ever looks it up
+      // again the way it keeps re-querying lootRangeMenu, so there's
+      // no null-safety reason to leave it in the DOM.
+      var shareWrap = document.getElementById('lootShareWrap');
+      if (shareWrap) shareWrap.remove();
+
       // The bottom-edge feather itself (.landing-loot-preview::after)
       // is a plain, unconditional CSS rule now -- see loot-tracker.
       // css's own comment on that selector for why this preview no
@@ -7921,6 +7993,226 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
     }})();
     """
     return extra_head, body, wrapper_script
+
+
+def render_loot_tracker_share(share: "SharedContent", game_account: Optional["GameAccount"], viewer: Optional[PlayerView]) -> str:
+    """myscape.io/s/<code> for a Loot Tracker share (see POST
+    /api/players/me/loot/share in app/main.py and build_loot_share_
+    snapshot in app/loot.py for exactly what's frozen into
+    share.payload) -- a visitor's own read-only view of the one range
+    the owner picked at share time, nothing live, nothing outside it.
+
+    Reuses _loot_tracker_panel_markup's body/script completely
+    unmodified, wrapped the exact same way render_landing_loot_preview
+    above wraps it for the landing page's own demo -- same fetch shim
+    shape, same applyHiddenFlags/recomputeAggregates client-side hide/
+    unhide simulation (real-feeling, but local to this visitor's own
+    browser tab and gone on refresh -- there's no account behind a
+    random visitor to persist a hide against, and the owner's own real
+    HiddenLootEntry preferences are a separate, private thing this
+    view never touches or exposes either way), same range-button
+    neutering -- just sourced from share.payload (one real, frozen
+    range plus its own precomputed per-bucket drill-downs) instead of
+    the landing page's curated demo JSON. See that function's own doc
+    comment for the fuller breakdown of what this reuses; the only
+    naming difference below is ALL_BUCKET_INDICES/bucketIndices in
+    place of its ALL_HOUR_INDICES/hourIndices, since a real share's own
+    bucket granularity isn't always hourly the way the landing demo's
+    fixed 24-hour snapshot always is (see _bucket_plan in app/loot.py).
+
+    Deliberately NOT wired to live data the way the public Character
+    Overview page is (see render_public_character_overview above) --
+    a live, arbitrary-range-queryable loot endpoint behind a share
+    link would let any visitor page back through this account's ENTIRE
+    loot history, far past whatever one range the owner actually chose
+    to share. Freezing the payload at share time is what keeps this
+    link's own exposure bounded to exactly that choice.
+
+    The only other visible difference from the real page is a one-line
+    byline prepended above the reused body's own "Loot Tracker" <h2>
+    (left untouched, unlike the landing preview's version of this same
+    heading, which gets hidden via CSS instead -- this page is a real
+    data view, not marketing copy, so there's no reason to hide it)
+    naming who shared this and which exact range it covers -- game_
+    account is the share's own owner, looked up by the caller (GET
+    /s/{{code}} in app/main.py) from SharedContent.game_account_id,
+    which can in principle be None if that account's own row is ever
+    deleted after the fact (see that column's own comment in
+    app/models.py -- there's no cascade delete wired up for it yet);
+    falls back to "A player" the same way GameAccount.runescape_name
+    itself does everywhere else it's shown with no value synced yet."""
+    extra_head, body, script = _loot_tracker_panel_markup()
+
+    owner_name = (game_account.runescape_name if game_account else None) or "A player"
+    range_start = datetime.fromisoformat(share.payload["full"]["rangeStart"])
+    range_end = datetime.fromisoformat(share.payload["full"]["rangeEnd"])
+    range_label = (
+        f"{range_start.strftime('%b %-d, %Y, %-I:%M %p')} "
+        f"– {range_end.strftime('%b %-d, %Y, %-I:%M %p')} UTC"
+    )
+    banner_markup = f"""
+    <p class="subtitle loot-share-banner">Shared by {escape(owner_name)} &middot; {escape(range_label)}</p>
+    """
+    body = banner_markup + body
+
+    full_json = json.dumps(share.payload["full"])
+    bucket_states_json = json.dumps(share.payload["buckets"])
+    hide_breakdown_json = json.dumps(share.payload["hideBreakdown"])
+    wrapper_script = f"""
+    (function () {{
+      var SHARE_STATE = {full_json};
+      var SHARE_BUCKET_STATES = {bucket_states_json};
+      // One entry per top-level bucket (index-aligned with
+      // SHARE_STATE.buckets -- see build_loot_share_snapshot's own
+      // docstring in app/loot.py) -- {{npcName: {{killCount, items:
+      // {{itemHideKey: value}}}}}} for whichever NPCs contributed to
+      // that bucket.
+      var HIDE_BREAKDOWN = {hide_breakdown_json};
+      var ALL_BUCKET_INDICES = HIDE_BREAKDOWN.map(function (_, i) {{ return i; }});
+
+      // This visitor's own local hide/unhide state -- see this
+      // function's own doc comment for why it's ephemeral rather than
+      // persisted anywhere.
+      var hiddenNpcs = new Set();
+      var hiddenItemKeys = new Set();
+      function npcHideKey(name) {{ return (name || '').trim().toLowerCase(); }}
+      function itemHideKey(itemId, itemName) {{
+        return itemId != null ? ('id:' + itemId) : ('name:' + (itemName || '').trim().toLowerCase());
+      }}
+
+      // Recomputes exactly the parts of a GET response that a hide/
+      // unhide actually changes server-side -- see build_loot_state's
+      // own docstring in app/loot.py, and recomputeAggregates' own
+      // comment in render_landing_loot_preview above (identical logic,
+      // just over `bucketIndices` instead of that function's own
+      // `hourIndices`).
+      function recomputeAggregates(bucketIndices) {{
+        var buckets = [];
+        var npcBucketValues = {{}};
+        var npcTotalValue = {{}};
+        bucketIndices.forEach(function (bucketIdx, i) {{
+          var bucketData = HIDE_BREAKDOWN[bucketIdx] || {{}};
+          var bucketValue = 0, bucketKills = 0;
+          Object.keys(bucketData).forEach(function (npcName) {{
+            var entry = bucketData[npcName];
+            var visibleValue = 0;
+            Object.keys(entry.items).forEach(function (key) {{
+              if (!hiddenItemKeys.has(key)) visibleValue += entry.items[key];
+            }});
+            if (!npcBucketValues[npcName]) npcBucketValues[npcName] = bucketIndices.map(function () {{ return 0; }});
+            npcBucketValues[npcName][i] = visibleValue;
+            npcTotalValue[npcName] = (npcTotalValue[npcName] || 0) + visibleValue;
+            if (!hiddenNpcs.has(npcHideKey(npcName))) {{
+              bucketValue += visibleValue;
+              bucketKills += entry.killCount;
+            }}
+          }});
+          buckets.push({{ value: bucketValue, killCount: bucketKills }});
+        }});
+        var windowValue = buckets.reduce(function (s, b) {{ return s + b.value; }}, 0);
+        var windowKills = buckets.reduce(function (s, b) {{ return s + b.killCount; }}, 0);
+        return {{ buckets: buckets, npcBucketValues: npcBucketValues, npcTotalValue: npcTotalValue, windowValue: windowValue, windowKills: windowKills }};
+      }}
+
+      function applyHiddenFlags(payload, bucketIndices) {{
+        var out = JSON.parse(JSON.stringify(payload));
+        var agg = recomputeAggregates(bucketIndices);
+        out.buckets.forEach(function (b, i) {{ b.value = agg.buckets[i].value; b.killCount = agg.buckets[i].killCount; }});
+        out.windowValue = agg.windowValue;
+        out.windowKills = agg.windowKills;
+        (out.windowNpcs || []).forEach(function (n) {{
+          n.hidden = hiddenNpcs.has(npcHideKey(n.sourceName));
+          if (agg.npcTotalValue.hasOwnProperty(n.sourceName)) n.value = agg.npcTotalValue[n.sourceName];
+        }});
+        if (out.npcBucketValues) {{
+          Object.keys(out.npcBucketValues).forEach(function (name) {{
+            if (agg.npcBucketValues.hasOwnProperty(name)) out.npcBucketValues[name] = agg.npcBucketValues[name];
+          }});
+        }}
+        (out.windowItems || []).forEach(function (it) {{ it.hidden = hiddenItemKeys.has(itemHideKey(it.itemId, it.itemName)); }});
+        if (out.npcItems) {{
+          Object.keys(out.npcItems).forEach(function (name) {{
+            (out.npcItems[name] || []).forEach(function (it) {{ it.hidden = hiddenItemKeys.has(itemHideKey(it.itemId, it.itemName)); }});
+          }});
+        }}
+        return out;
+      }}
+
+      // Shadows the outer/global fetch for everything inside this one
+      // IIFE only -- see render_landing_loot_preview's own doc comment
+      // for why the reused script text below needing no changes at
+      // all relies on that.
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+        var params = new URLSearchParams(qIndex === -1 ? '' : url.slice(qIndex + 1));
+
+        if (path === '/api/players/me/loot' && method === 'GET') {{
+          var payload = SHARE_STATE;
+          var bucketIndices = ALL_BUCKET_INDICES;
+          if (params.get('range') === 'custom' && params.get('start')) {{
+            var startParam = params.get('start');
+            for (var i = 0; i < SHARE_STATE.buckets.length; i++) {{
+              if (SHARE_STATE.buckets[i].start === startParam) {{ payload = SHARE_BUCKET_STATES[i]; bucketIndices = [i]; break; }}
+            }}
+          }}
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(applyHiddenFlags(payload, bucketIndices)); }} }});
+        }}
+        if (path === '/api/players/me/loot/hidden-npcs') {{
+          var npcBody = opts.body ? JSON.parse(opts.body) : {{}};
+          var npcKey = npcHideKey(npcBody.name);
+          if (method === 'POST') hiddenNpcs.add(npcKey);
+          else if (method === 'DELETE') hiddenNpcs.delete(npcKey);
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{}}); }} }});
+        }}
+        if (path === '/api/players/me/loot/hidden-items') {{
+          var itemBody = opts.body ? JSON.parse(opts.body) : {{}};
+          var itemKey = itemHideKey(itemBody.item_id, itemBody.item_name);
+          if (method === 'POST') hiddenItemKeys.add(itemKey);
+          else if (method === 'DELETE') hiddenItemKeys.delete(itemKey);
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{}}); }} }});
+        }}
+        // Nothing else the reused script calls should ever land here,
+        // but a harmless no-op beats a hard failure if it someday does.
+        return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{}}); }} }});
+      }};
+
+      {script}
+
+      // Neutralizes the range/date selector -- this share's own
+      // payload only ever has the one range (and its own precomputed
+      // bucket drill-downs) to show, nothing else to switch to. See
+      // render_landing_loot_preview's own identical comment on this
+      // same cloneNode+replaceWith strip for why the dropdown itself
+      // is left alone rather than removed.
+      var rangeBtn = document.getElementById('lootRangeBtn');
+      if (rangeBtn) {{
+        rangeBtn.replaceWith(rangeBtn.cloneNode(true));
+        document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
+      }}
+
+      // Same reasoning as render_landing_loot_preview's own identical
+      // strip: a viewer here isn't this share's owner, so there's
+      // nothing for them to share -- this view is itself already a
+      // share of someone else's range.
+      var shareWrap = document.getElementById('lootShareWrap');
+      if (shareWrap) shareWrap.remove();
+    }})();
+    """
+
+    return _shell(
+        title=f"{owner_name}'s shared Loot Tracker — myscape",
+        player=viewer,
+        body=body,
+        extra_head=extra_head,
+        extra_script=wrapper_script,
+        meta_description=(
+            f"{owner_name} shared their Loot Tracker on myscape — "
+            f"{range_label}."
+        ),
+    )
 
 
 def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:

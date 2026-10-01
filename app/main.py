@@ -45,7 +45,7 @@ from app import hiscores as sync_hiscores_module
 from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
 from app.limiter import limiter
-from app.loot import build_loot_state, kc_counts_by_player, parse_loot_range_bound, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
+from app.loot import build_loot_share_snapshot, build_loot_state, kc_counts_by_player, parse_loot_range_bound, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
 from app.bosses import collection_log_page_kill_counts
 from app.collectionlog import get_collection_log_tabs, get_valid_item_ids
 from app.item_ids import find_item_ids
@@ -90,6 +90,7 @@ from app.models import (
     RunePouchItem,
     SeedBoxItem,
     SeedVaultItem,
+    SharedContent,
     TackleBoxItem,
     _utcnow,
 )
@@ -106,6 +107,7 @@ from app.pages import (
     render_landing,
     render_login,
     render_loot_tracker,
+    render_loot_tracker_share,
     render_mindmaps,
     render_not_found,
     render_possessions,
@@ -139,6 +141,7 @@ from app.purchase_goals import (
     search_items,
 )
 from app.recipes import expand_recipe_components
+from app.sharing import SHARE_DEFAULT_LIFETIME, find_valid_share, generate_share_code
 from app.routers import auth, linking
 from app.schemas import (
     AddMindMapNodeRequest,
@@ -193,6 +196,7 @@ from app.schemas import (
     LootingBagItemOut,
     LootingBagSyncRequest,
     LootingBagSyncResponse,
+    LootShareCreateRequest,
     LootSyncRequest,
     LootSyncResponse,
     MasterScrollBookOut,
@@ -1965,6 +1969,53 @@ def public_character_overview_page(
     return render_public_character_overview(game_account, viewer)
 
 
+@app.get("/s/{code}", response_class=HTMLResponse)
+@limiter.limit("30/minute")
+def shared_content_page(
+    code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    viewer: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
+):
+    """The generic landing spot for every myscape.io/s/<code> link --
+    looks the code up once (no content_type filter; this route itself
+    is what figures out which renderer a code's own content_type
+    needs), then dispatches to that content type's own render_*_share
+    function. Just "loot_tracker" (render_loot_tracker_share) for now;
+    a future content type adds a branch here, not a new route -- the
+    code namespace itself is already shared across every content type
+    (see SharedContent's own docstring in app/models.py), so one route
+    dispatching on the looked-up row's own content_type is simpler
+    than a separate /s/ path per app. A missing OR expired code both
+    404 into the same styled not-found page every other broken link on
+    the site gets (see _styled_not_found_handler above and find_valid_
+    share's own comment in app/sharing.py for why those two cases are
+    made to look identical) -- kept this simple for a first content
+    type; a friendlier "this link has expired" message is an easy
+    follow-up once there's reason to tell the two apart."""
+    share = find_valid_share(db, code)
+    if share is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
+    # The share's own owner -- looked up here (not inside pages.py,
+    # which stays DB-free) rather than via a relationship, same "query
+    # the child row's own FK directly, no ORM relationship needed"
+    # style every other per-account child table in this file already
+    # uses. Can come back None if that account's own row was ever
+    # deleted after sharing (no cascade delete wired up for this FK --
+    # see SharedContent's own comment in app/models.py); render_loot_
+    # tracker_share's own game_account parameter already handles that.
+    owner = db.query(GameAccount).filter(GameAccount.id == share.game_account_id).first()
+    if share.content_type == "loot_tracker":
+        return render_loot_tracker_share(share, owner, viewer)
+    # Shouldn't be reachable -- every row's content_type is set by one
+    # of this file's own create-share endpoints, all of which only
+    # ever write a value this if-chain already knows. Same "something's
+    # actually wrong, fail loudly rather than guess" posture as
+    # generate_share_code's own _MAX_ATTEMPTS exhaustion in
+    # app/sharing.py.
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
+
+
 @app.post("/api/players/me/hiscores/sync")
 def sync_hiscores(
     db: Session = Depends(get_db),
@@ -2083,6 +2134,55 @@ def read_loot(
             )
     range_start, range_end = resolve_range(range, start_dt, end_dt)
     return build_loot_state(db, game_account, range_start, range_end)
+
+
+@app.post("/api/players/me/loot/share")
+def create_loot_share(
+    payload: LootShareCreateRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Freezes [range/start/end -- same resolution as GET /api/players/
+    me/loot above, see that endpoint's own docstring] into a new
+    SharedContent row (see build_loot_share_snapshot in app/loot.py for
+    exactly what gets frozen) and returns a myscape.io/s/<code> link to
+    it. Session-authenticated like every other /api/players/me/*
+    website endpoint -- only the real, signed-in owner can ever decide
+    what of their own data gets a link, there's no plugin-side
+    equivalent of this one. Unthrottled (unlike POST /api/players/me/
+    public-profile/regenerate-code's own 24-hour cooldown) -- sharing a
+    few different sessions over time is completely normal usage here,
+    not something worth rate-limiting a signed-in player's own account
+    over; GET /s/{code} below is the one that's rate-limited, since
+    that's the first endpoint here actually reachable by someone who
+    isn't signed in at all."""
+    start_dt = None
+    end_dt = None
+    if payload.range == "custom":
+        try:
+            if payload.start:
+                start_dt = parse_loot_range_bound(payload.start, is_end=False)
+            if payload.end:
+                end_dt = parse_loot_range_bound(payload.end, is_end=True)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="start/end must be YYYY-MM-DD dates or ISO-8601 timestamps.",
+            )
+    range_start, range_end = resolve_range(payload.range, start_dt, end_dt)
+    snapshot = build_loot_share_snapshot(db, game_account, range_start, range_end)
+    code = generate_share_code(db)
+    share = SharedContent(
+        id=uuid.uuid4(),
+        game_account_id=game_account.id,
+        code=code,
+        content_type="loot_tracker",
+        payload=snapshot,
+        expires_at=_utcnow() + SHARE_DEFAULT_LIFETIME,
+    )
+    db.add(share)
+    db.commit()
+    return {"code": code, "url": f"{_SITE_URL}/s/{code}"}
 
 
 @app.post("/api/players/me/loot/hidden-npcs")

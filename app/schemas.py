@@ -1583,6 +1583,24 @@ class HideLootItemRequest(BaseModel):
         return self
 
 
+class LootShareCreateRequest(BaseModel):
+    """Body for POST /api/players/me/loot/share -- same range/start/end
+    shape GET /api/players/me/loot already takes as query params (see
+    read_loot in app/main.py), just as a POST body instead, since this
+    one actually creates something (a new SharedContent row) rather
+    than just reading. range/start/end are resolved the exact same way
+    read_loot's own are -- resolve_range/parse_loot_range_bound in
+    app/loot.py, including the same "custom missing either date falls
+    back to the 24-hour default" and "bad date string is a 400"
+    behavior -- so this schema itself stays this permissive (no
+    cross-field validation here) and leaves all of that to the
+    endpoint, matching read_loot's own division of labor exactly."""
+
+    range: Optional[str] = None
+    start: Optional[str] = None
+    end: Optional[str] = None
+
+
 class LootState(BaseModel):
     """Documents (not enforced) the payload GET /api/players/me/loot
     returns, scoped to the requested ?range= (or ?range=custom&start=
