@@ -1664,7 +1664,17 @@ _MODEL_VIEWER_HEAD = """
       .then(function (buffer) {
         if (buffer) initViewer(buffer);
       })
-      .catch(function () {
+      .catch(function (err) {
+        // Previously swallowed outright -- this is the only one of
+        // this viewer's three failure paths (this one, GLTFLoader's
+        // own onError below, and a render-loop throw further down)
+        // that used to leave NOTHING in the console at all, on top of
+        // leaving nothing on screen either -- logging the real reason
+        // (a network failure, a bad response, whatever Promise.reject()
+        // above was carrying) is what makes a report of "the model
+        // just isn't there" actually diagnosable after the fact
+        // instead of a dead end.
+        if (window.console) console.error("[model-viewer] failed to fetch the model:", err);
         showEmpty("Could not load your 3D model right now.");
       });
 
@@ -1677,6 +1687,32 @@ _MODEL_VIEWER_HEAD = """
       var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+
+      // A lost WebGL context (a GPU driver reset, too many WebGL
+      // contexts open across other tabs/extensions, a backgrounded tab
+      // reclaimed by the browser, etc.) used to leave this canvas
+      // permanently blank with no visible sign anything had gone
+      // wrong at all -- the canvas itself, and the background image/
+      // controls layered around it, all stay in the DOM and keep
+      // looking normal either way, so there was nothing here to ever
+      // tell a player "this broke" instead of "there's just no model."
+      // event.preventDefault() in the lost handler is what actually
+      // allows the browser to attempt automatic restoration afterward
+      // (without it, a lost context is permanent) -- three.js's own
+      // WebGLRenderer already re-uploads whatever geometry/textures/
+      // programs it needs to on the next render call once that
+      // happens, so nothing else needs to re-run by hand on restore,
+      // just logging it and letting the animate loop below resume.
+      var contextLost = false;
+      canvas.addEventListener("webglcontextlost", function (event) {
+        event.preventDefault();
+        contextLost = true;
+        if (window.console) console.warn("[model-viewer] WebGL context lost -- waiting to see if the browser restores it");
+      });
+      canvas.addEventListener("webglcontextrestored", function () {
+        contextLost = false;
+        if (window.console) console.warn("[model-viewer] WebGL context restored -- resuming rendering");
+      });
 
       var controls = new OrbitControls(camera, renderer.domElement);
       controls.target.set(0, 1, 0);
@@ -2094,7 +2130,11 @@ _MODEL_VIEWER_HEAD = """
           }
         },
         undefined,
-        function () {
+        function (err) {
+          // Same reasoning as the fetch-level catch above -- GLTFLoader
+          // does pass the real parse error here, it was just never
+          // looked at.
+          if (window.console) console.error("[model-viewer] GLTFLoader failed to parse the model:", err);
           showEmpty("Could not display your 3D model right now.");
         }
       );
@@ -2127,10 +2167,27 @@ _MODEL_VIEWER_HEAD = """
       }
       window.addEventListener("resize", onResize);
 
+      // animateFailed latches closed the first time a frame actually
+      // throws (as opposed to context loss, handled separately above
+      // via contextLost) -- rendering forever into the exact same
+      // throw every single frame isn't meaningfully different from
+      // this canvas just going blank and staying that way, except
+      // silently, with nothing for anyone to ever go look up. Logging
+      // once and then freezing on whatever the last successfully
+      // rendered frame was (rather than looping into the same error
+      // indefinitely) is the best this can do without knowing what
+      // actually threw.
+      var animateFailed = false;
       (function animate() {
         requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
+        if (contextLost || animateFailed) return;
+        try {
+          controls.update();
+          renderer.render(scene, camera);
+        } catch (err) {
+          animateFailed = true;
+          if (window.console) console.error("[model-viewer] render loop failed:", err);
+        }
       })();
     }
   })();
