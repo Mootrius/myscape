@@ -583,23 +583,10 @@ def sitemap_xml():
 
 
 @app.get("/signup", response_class=HTMLResponse)
-def signup_page(
-    from_share: Optional[str] = None,
-    player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
-):
-    """from_share is set only by a Purchase Goal share page's own
-    download icon (render_purchase_goals_share, app/pages.py) sending
-    a signed-out visitor here instead of importing directly -- see
-    that function's own docstring. Never looked up or validated
-    against anything here (an expired/bogus code would 404 on GET
-    /s/{code} long before a visitor ever reaches this page in the
-    first place) -- it exists purely to let render_signup show a
-    one-line "sign up to save this" notice; the actual import only
-    ever happens later, back on the share page itself, once this
-    visitor has an account to sign back into it with."""
+def signup_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if player:
         return RedirectResponse("/dashboard", status_code=302)
-    return render_signup(from_share=bool(from_share))
+    return render_signup()
 
 
 @app.get("/login", response_class=HTMLResponse)

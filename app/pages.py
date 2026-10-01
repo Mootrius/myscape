@@ -4325,32 +4325,11 @@ def render_account(player: PlayerView) -> str:
     return _shell(title="Account — myscape", player=player, body=body, extra_script=script)
 
 
-def render_signup(from_share: bool = False) -> str:
-    """from_share is set by signup_page (app/main.py) only when this
-    visitor arrived via a Purchase Goal share page's own download icon
-    (render_purchase_goals_share below) rather than this link going
-    somewhere they weren't already signed in -- see that function's
-    own docstring for why the click lands here instead of importing
-    directly. Shows one extra .auth-info banner above the form when
-    set; everything else about this page (and the signup flow itself)
-    is unchanged -- there's no code or redirect threaded through
-    signup/verification here, just a plain heads-up, so finishing the
-    actual import still means going back to that same share link
-    afterward (the browser's own back button lands there -- this
-    page's own redirect to it, in render_purchase_goals_share's
-    wrapper script, is a plain navigation, not a history replace)."""
-    share_notice = (
-        '<div class="auth-info show">Sign up to save this Purchase Goal to your own myscape '
-        "account \u2014 then use your browser's back button to return to the "
-        "shared link and finish importing it.</div>"
-        if from_share
-        else ""
-    )
-    body = f"""
+def render_signup() -> str:
+    body = """
     <div class="auth-shell">
       <div class="auth-card">
         <h2>SIGN UP</h2>
-        {share_notice}
         <div class="auth-error" id="formError"></div>
         <form id="signupForm">
           <div class="field">
@@ -9477,22 +9456,20 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     # than exporting one of your own out. Decided server-side, not in
     # the wrapper script below, per explicit instruction's own two
     # distinct behaviors:
-    # - Signed in (viewer is not None): a real <button> whose click
-    #   handler (see the wrapper script below) POSTs to /api/shares/
-    #   <code>/import, then -- only once that succeeds -- navigates to
-    #   this player's own Purchase Goals page, where the import now
-    #   shows up at the end of their setup list (see import_gear_
-    #   setup_from_share_payload's own docstring in
-    #   app/purchase_goals.py for why no special-casing is needed to
-    #   land it there).
-    # - Signed out: a plain <a> straight to /signup?from_share=1 --
-    #   no fetch, no JS at all -- per explicit instruction ("take them
-    #   to the sign up page, indicating that they should sign up to
-    #   save it"). from_share just shows one extra notice there (see
-    #   render_signup's own docstring); nothing is imported until this
-    #   same visitor comes back to this exact share link afterward
-    #   (the plain navigation below leaves it one "back" away) and
-    #   clicks this icon again, now signed in.
+    # - Signed in (viewer is not None): a real <button> that toggles a
+    #   popup open (see the wrapper script below) whose own SAVE TO MY
+    #   MYSCAPE button POSTs to /api/shares/<code>/import, then --
+    #   only once that succeeds -- navigates to this player's own
+    #   Purchase Goals page, where the import now shows up at the end
+    #   of their setup list, selected (see import_gear_setup_from_
+    #   share_payload's own docstring in app/purchase_goals.py for why
+    #   no special-casing is needed to land it there).
+    # - Signed out: a plain <a> straight to /signup -- no fetch, no JS
+    #   at all, per explicit instruction ("take them to the sign up
+    #   page"); nothing is imported until this same visitor comes back
+    #   to this exact share link afterward (the plain navigation below
+    #   leaves it one "back" away) and clicks this icon again, now
+    #   signed in.
     import_icon_svg = (
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
@@ -9506,9 +9483,9 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     # instruction, so the actual import now happens from a confirming
     # SAVE TO MY MYSCAPE button inside that popup instead (see the
     # wrapper script below). Signed out: unchanged -- a plain <a>
-    # straight to /signup?from_share=1, no popup, no JS at all; there's
-    # nothing to confirm yet since nothing can be imported until this
-    # visitor comes back here signed in.
+    # straight to /signup, no popup, no JS at all; there's nothing to
+    # confirm yet since nothing can be imported until this visitor
+    # comes back here signed in.
     if viewer is not None:
         import_icon_btn = (
             ' <button type="button" class="pg-import-icon-btn" id="pgImportBtn" aria-label="Save to your account" title="Save to your account">'
@@ -9524,7 +9501,7 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     """
     else:
         import_icon_btn = (
-            ' <a class="pg-import-icon-btn" href="/signup?from_share=1" aria-label="Sign up to save this" title="Sign up to save this">'
+            ' <a class="pg-import-icon-btn" href="/signup" aria-label="Sign up to save this" title="Sign up to save this">'
             f'{import_icon_svg}</a>'
         )
         import_card_markup = ""
