@@ -692,6 +692,25 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   background: rgba(192, 90, 76, 0.12);
 }
 
+/* + ADD ANOTHER CHARACTER (render_account, app/pages.py) -- same
+   compact sizing as .account-tab-row's own three buttons just above
+   (width: auto, same padding/font-size), rather than plain
+   button.secondary's own full-width/16px default, per explicit
+   instruction to bring this one in line with those. Unlike that row,
+   this button is the only thing in its own .account-section, so
+   shrinking it to auto width would otherwise leave it flush against
+   the card's left edge (a block-level element's default alignment)
+   -- display: block; margin: 0 auto centers it the same way a
+   width: 100% button already reads as "centered" by filling the
+   whole row. */
+#addGameAccountBtn {
+  display: block;
+  width: auto;
+  margin: 0 auto;
+  padding: 10px 6px;
+  font-size: 12.5px;
+}
+
 /* Linked Accounts list (render_account, app/pages.py -- step 7 of
    docs/multi-account-scoping.md). One .game-account-row per GameAccount
    under the signed-in Account. */
