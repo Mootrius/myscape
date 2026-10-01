@@ -242,8 +242,13 @@
    hidden/revealed alongside lootShareGenerateBtn/lootShareLinkBtn
    the way the card's own expiry hint briefly was before it got
    dropped entirely, per explicit instruction this one stays on
-   screen under whichever of those two buttons is currently showing. */
-.loot-share-popup-hint { font-size: 15px; color: var(--text-faint); text-align: center; }
+   screen under whichever of those two buttons is currently showing.
+   margin: 0 overrides the browser's own default <p> top/bottom
+   margins (~1em, i.e. ~15px at this text's own font-size) -- left in
+   place those stacked on top of .loot-share-card's own gap: 6px
+   between its children, making the whole card noticeably taller
+   than intended. */
+.loot-share-popup-hint { margin: 0; font-size: 15px; color: var(--text-faint); text-align: center; }
 
 /* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
    themselves (not on .loot-bar-plot -- padding there would be a no-op
