@@ -3696,7 +3696,7 @@ def render_account(player: PlayerView) -> str:
         <div class="account-section">
           <div class="auth-error" id="gameAccountsError"></div>
           <div class="game-accounts-list" id="gameAccountsList"></div>
-          <button class="secondary" id="addGameAccountBtn" type="button">+ ADD ANOTHER CHARACTER</button>
+          <button class="secondary" id="addGameAccountBtn" type="button">+ ADD CHARACTER</button>
         </div>
 
         <div class="account-section">
