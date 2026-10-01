@@ -850,6 +850,21 @@ button.trash-delete-btn--confirm {
 button.trash-delete-btn--confirm .trash-delete-icon { display: none; }
 button.trash-delete-btn--confirm .trash-delete-confirm { display: block; }
 
+/* Shared Links' own DEACTIVATE button specifically -- "SURE?" is
+   short, but button.trash-delete-btn--confirm's own wider padding
+   above (sized to hold DELETE CHARACTER's much longer "ARE YOU
+   SURE?" without wrapping) still widens the button enough on click
+   to shift the Deletion column, and with it the whole table (every
+   column auto-sizes to its own widest content). Pinning both states
+   to the same fixed width here keeps the icon <-> "SURE?" swap from
+   resizing anything -- same fix as the Code column's own button
+   gets from .shared-link-code-btn's fixed width above. */
+.shared-links-table .trash-delete-btn,
+.shared-links-table .trash-delete-btn--confirm {
+  width: 44px;
+  padding: 4px 0;
+}
+
 .shared-links-empty {
   color: var(--text-dim);
   font-size: 13px;
