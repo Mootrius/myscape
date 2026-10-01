@@ -2348,14 +2348,16 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     # character-overview.css) rather than its own always-visible row --
     # this is a settings control a player opens rarely, not something
     # that deserves permanent space above the actual game data every
-    # time this page loads. Same Feather "share-2" glyph (duplicated,
+    # time this page loads. Same Feather "upload" glyph (duplicated,
     # not shared across stylesheets/functions, per this file's usual
-    # convention) as the Loot Tracker's own share-icon trigger uses.
+    # convention) as the Loot Tracker's own export-icon trigger uses --
+    # an export/tray-with-an-arrow-out-of-it icon rather than the
+    # share "nodes" glyph this used to be, per explicit instruction.
     public_profile_share_btn = "" if (preview or public_code) else (
         ' <button type="button" class="co-share-icon-btn" id="publicProfileShareBtn" aria-label="Public profile settings" title="Public profile settings">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
-        '<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>'
-        '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
+        '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
         '</svg></button>'
     )
 
@@ -2388,7 +2390,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           <button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>
           <button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>
         </div>
-        <button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" title="Click to copy this link to your clipboard."></button>
+        <button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" title="Click to copy this link to your clipboard." disabled></button>
         <button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">Generate new link</button>
       </div>
     </div>"""
@@ -3169,6 +3171,13 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           });
           publicProfileLinkBtn.dataset.url = data.url || '';
           publicProfileLinkBtn.textContent = data.url || '';
+          // Nothing to copy a private page's link FOR -- dims the
+          // button and (being a real disabled attribute, not just a
+          // CSS look) stops its own click handler below from ever
+          // firing while Private is selected, same .public-profile-
+          // link-btn:disabled look Generate new link already uses
+          // mid-request.
+          publicProfileLinkBtn.disabled = !data.isPublic;
         }
 
         fetch('/api/players/me/public-profile')
@@ -6241,12 +6250,15 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
     # centered row under the title instead -- see .loot-share-card-row
     # in loot-tracker.css) holds the actual GENERATE SHAREABLE LINK
     # flow, same lazy-generate-on-click shape request as this page's
-    # own task asked for.
+    # own task asked for. Feather's "upload" glyph (an export/tray-
+    # with-an-arrow-out-of-it icon), not the share "nodes" glyph this
+    # used to be, per explicit instruction -- label/title text updated
+    # to match ("Export", not "Share").
     loot_share_icon_btn = (
-        ' <button type="button" class="loot-share-icon-btn" id="lootShareIconBtn" aria-label="Share this loot" title="Share this loot">'
+        ' <button type="button" class="loot-share-icon-btn" id="lootShareIconBtn" aria-label="Export this loot" title="Export this loot">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
-        '<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>'
-        '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
+        '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
         '</svg></button>'
     )
 
