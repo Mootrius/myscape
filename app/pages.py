@@ -9671,12 +9671,27 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
       // and flashes red for 2.5s the same way pgShareGenerateBtn's own
       // .action-failed click handler already does elsewhere on this
       // page, rather than silently going nowhere.
+      //
+      // IMPORTANT: this calls window.fetch explicitly, not the bare
+      // fetch(...) every other handler in this wrapper script uses --
+      // the plain identifier would resolve to THIS SAME IIFE's own
+      // local `var fetch = function (url, options) {{ ... }}` shim
+      // defined above (the one that answers '/api/gear-setups' and
+      // the two still-to-purchase PUTs for the reused panel script),
+      // which, for any OTHER path, just synchronously resolves
+      // {{ ok: false }} without ever touching the network -- exactly
+      // the "turns red, no request ever shows up in the Network tab"
+      // bug this fixes. That shim exists to feed the reused, unmodified
+      // panel script frozen data on a read-only share page; this click
+      // handler is new, real behavior layered on top from the outside,
+      // same as the rest of this wrapper script, so it needs the real
+      // fetch, not the shim built for the thing it's wrapping.
       var pgImportBtn = document.getElementById('pgImportBtn');
       if (pgImportBtn) {{
         pgImportBtn.addEventListener('click', function () {{
           var btn = this;
           btn.disabled = true;
-          fetch('/api/shares/{share.code}/import', {{ method: 'POST' }})
+          window.fetch('/api/shares/{share.code}/import', {{ method: 'POST' }})
             .then(function (res) {{ return res.ok ? res.json() : Promise.reject(); }})
             .then(function () {{
               window.location.href = '/dashboard/purchase-goals';
