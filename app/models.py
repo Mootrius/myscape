@@ -499,6 +499,7 @@ class GameAccount(Base):
     hidden_possession_storages = relationship("HiddenPossessionStorage", back_populates="game_account", cascade="all, delete-orphan")
     possession_views = relationship("PossessionView", back_populates="game_account", cascade="all, delete-orphan")
     goals = relationship("Goal", back_populates="game_account", cascade="all, delete-orphan")
+    shared_content = relationship("SharedContent", back_populates="game_account", cascade="all, delete-orphan")
 
 
 class LinkCode(Base):
@@ -1695,6 +1696,8 @@ class SharedContent(Base):
     payload = Column(JSONB, nullable=False)
     created_at = Column(DateTime(timezone=True), default=_utcnow)
     expires_at = Column(DateTime(timezone=True), nullable=False)
+
+    game_account = relationship("GameAccount", back_populates="shared_content")
 
     @property
     def is_valid(self) -> bool:
