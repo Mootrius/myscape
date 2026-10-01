@@ -928,7 +928,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .pg-import-save-btn:disabled { cursor: default; opacity: 0.6; }
 .pg-import-save-btn.action-failed { border-color: var(--red); color: var(--red); }
 
-.pg-import-popup-hint { margin: 0; font-size: 15px; color: var(--text-faint); text-align: center; }
+.pg-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
 /* Floats directly under its own trigger button (position: absolute
    against .pg-share-wrap above) rather than a full-width row pushing
@@ -1002,7 +1002,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 .pg-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 
-.pg-share-popup-hint { margin: 0; font-size: 15px; color: var(--text-faint); text-align: center; }
+.pg-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
 /* ---------- Share-viewing page (myscape.io/s/<code> for a Purchase
    Goals share -- see render_purchase_goals_share's own docstring in

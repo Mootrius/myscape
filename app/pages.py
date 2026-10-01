@@ -4781,7 +4781,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         '<div class="pg-share-card" id="pgShareCard" hidden>'
         '<button type="button" class="pg-share-generate-btn" id="pgShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
         '<button type="button" class="pg-share-link-btn" id="pgShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
-        '<p class="pg-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>'
+        '<p class="pg-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p>'
         '</div>'
         '</span>'
     )
@@ -6497,7 +6497,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         '<div class="loot-share-card" id="lootShareCard" hidden>'
         '<button type="button" class="loot-share-generate-btn" id="lootShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
         '<button type="button" class="loot-share-link-btn" id="lootShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
-        '<p class="loot-share-popup-hint">Links are valid for 30 days, but can be<br>deleted sooner on your Account page.</p>'
+        '<p class="loot-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p>'
         '</div>'
         '</span>'
     )
