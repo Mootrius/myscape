@@ -1198,7 +1198,7 @@ def build_purchase_goals_state(db: Session, game_account: GameAccount) -> dict:
     }
 
 
-def build_purchase_goal_share_snapshot(db: Session, game_account: GameAccount, setup: GearSetup) -> dict:
+def build_purchase_goal_share_snapshot(setup: GearSetup) -> dict:
     """Freezes ONE of game_account's own gear setups (already resolved
     and ownership-checked by the caller -- see _get_owned_gear_setup in
     app/main.py, the same helper every other per-setup mutation
@@ -1208,23 +1208,39 @@ def build_purchase_goal_share_snapshot(db: Session, game_account: GameAccount, s
     same "frozen, point-in-time, never live again" contract
     SharedContent itself documents, and the same shape Loot Tracker's
     own build_loot_share_snapshot already established for this table.
+    Only takes the already-ownership-checked setup row itself (no db/
+    game_account) -- see the empty pools below for why this no longer
+    needs either.
 
-    coins is deliberately frozen at 0 here, never the account's real
-    current GP -- per explicit instruction, the shared page's own
-    summary box never shows a current-GP figure at all, and its Next
-    Purchase widget (reusing _purchase_goals_panel_markup's own
-    updateOverlay untouched -- see render_purchase_goals_share's own
-    docstring) shows real GP progress toward the next item; freezing
-    coins at 0 is what makes that widget read as "0 / <cost> gp" with
-    an empty fill bar, for free, through that same unmodified code,
-    rather than needing a second, share-specific rendering path for
-    it. _still_to_purchase_summary itself is the only thing coins=0
-    actually changes here -- affordable vs. not-owned for the
-    doll/grid's own border color (see .purchase-goal-share's own
-    override in purchase-goals.css for why that distinction is hidden
-    anyway) and funded/progressPct on whatever still_to_purchase[0]
-    happens to be, both consistent with a page that never reveals this
-    account's actual GP.
+    Resolved against EMPTY owned-items pools -- not game_account's own
+    real ones build_gear_setups itself resolves against -- so every
+    item in _resolve_gear_slot_item comes back owned: False, cost ==
+    fullCost, regardless of what the sharer's own bank actually held
+    at share time. Per explicit instruction: a visitor isn't shown
+    this setup net of the sharer's own belongings, they're shown the
+    setup itself -- EVERY item in it, each at its full undiscounted
+    price. Concretely, that means: _still_to_purchase_summary's own
+    "pending = [... if not owned]" filter now keeps every item (it
+    excluded already-owned ones before), so Still to Purchase/Next
+    Purchase cover the whole setup, not just whatever was left to buy;
+    and totalCost (which .purchase-goal-share's own #pgCostAmount
+    reads) becomes the sum of every item's price -- same value as
+    totalFullCost now, rather than totalCost's own usual "net of what's
+    already owned" meaning everywhere else this dict shape is built.
+    The gear doll/inventory grid's own green/amber/red ownership
+    border colors are already neutralized back to gray by
+    .purchase-goal-share's own override in purchase-goals.css (nothing
+    about this account's real bank should be implied either way), so
+    owned always resolving to False here costs that page nothing --
+    it was already hidden there.
+
+    coins is also frozen at 0 here, never the account's real current
+    GP -- per explicit instruction, the shared page's own summary box
+    never shows a current-GP figure at all; freezing coins at 0 is
+    what makes the untouched Next Purchase widget read as
+    "0 / <cost> gp" with an empty fill bar, for free, through
+    _purchase_goals_panel_markup's own unmodified rendering code,
+    rather than needing a second, share-specific rendering path for it.
 
     still_to_purchase/next_purchase here are frozen in the setup's own
     CURRENT sort mode (whatever still_to_purchase_sort_mode was at
@@ -1241,8 +1257,7 @@ def build_purchase_goal_share_snapshot(db: Session, game_account: GameAccount, s
     back to with no order at all."""
     mapping, _ = get_mapping()
     prices, _ = get_latest_prices()
-    base_pool_by_id, base_pool_by_name = build_owned_pools(db, game_account)
-    resolved = _build_one_gear_setup(setup, mapping, prices, 0, base_pool_by_id, base_pool_by_name)
+    resolved = _build_one_gear_setup(setup, mapping, prices, 0, {}, {})
 
     return {
         "coins": 0,

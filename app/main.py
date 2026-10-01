@@ -2959,7 +2959,7 @@ def create_purchase_goal_share(
     body needed -- unlike Loot Tracker's own share endpoint, there's no
     range to pick, the setup_id in the path is the entire choice."""
     setup = _get_owned_gear_setup(db, game_account, setup_id)
-    snapshot = build_purchase_goal_share_snapshot(db, game_account, setup)
+    snapshot = build_purchase_goal_share_snapshot(setup)
     code = generate_share_code(db)
     share = SharedContent(
         id=uuid.uuid4(),

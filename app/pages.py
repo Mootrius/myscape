@@ -9346,21 +9346,28 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
        never apply to in the same way this same-origin /s/ path
        does).
 
-    coins is always 0 in share.payload (see build_purchase_goal_share_
-    snapshot's own docstring for why) -- the summary box's current-GP
-    number and progress bar are hidden outright via CSS instead
-    (.purchase-goal-share #pgCoinsAmount/.overlay-progress in
-    purchase-goals.css), per explicit instruction that a visitor never
-    sees a number implying this is the OWNER's own live GP; the coins
-    icon stays, now centered alongside the total cost and the setup's
-    own display icon (see .purchase-goal-share .overlay-card's own
-    justify-content:center override -- .overlay-target already renders
-    icon-then-amount thanks to its own row-reverse, so centering the
-    row needs no DOM reordering here). Leaving coins at 0 also, for
-    free, makes the untouched Next Purchase widget below read as
-    "0 / <cost> gp" with an empty progress bar -- exactly the frozen-
-    looking treatment asked for, with no client-side special-casing of
-    that widget at all.
+    coins is always 0 in share.payload, and resolved against EMPTY
+    owned-items pools rather than the sharer's own real ones (see
+    build_purchase_goal_share_snapshot's own docstring for why) -- so
+    every item in the setup comes back owned: False, cost == fullCost.
+    Two visible effects, both per explicit instruction: Still to
+    Purchase/Next Purchase below cover the WHOLE setup rather than
+    just what the sharer hadn't bought yet, and the summary box's own
+    total (#pgCostAmount) reads as the sum of every item's price, not
+    net of anything already owned. The current-GP number and progress
+    bar that would normally sit alongside that total are hidden
+    outright via CSS instead (.purchase-goal-share #pgCoinsAmount/
+    .overlay-progress in purchase-goals.css), per explicit instruction
+    that a visitor never sees a number implying this is the OWNER's
+    own live GP; the coins icon stays, now centered alongside the
+    total cost and the setup's own display icon (see .purchase-goal-
+    share .overlay-card's own justify-content:center override --
+    .overlay-target already renders icon-then-amount thanks to its own
+    row-reverse, so centering the row needs no DOM reordering here).
+    Leaving coins at 0 also, for free, makes the untouched Next
+    Purchase widget below read as "0 / <cost> gp" with an empty
+    progress bar -- exactly the frozen-looking treatment asked for,
+    with no client-side special-casing of that widget at all.
 
     The actual-setup gear slots also lose their green/amber/red owned-
     ownership border colors here (.purchase-goal-share .gear-slot.
@@ -9368,7 +9375,15 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     .gear-slot border everything else uses) -- those colors describe
     whether THIS VISITOR's own bank could cover an item, which makes
     no sense to show against a stranger's shared setup, per explicit
-    instruction.
+    instruction. The hover-only "remove item" button (the red x/circle
+    in a filled slot's corner) is hidden the same way
+    (.purchase-goal-share .gear-slot.filled:hover .gear-slot-remove)
+    -- a visitor can't delete anything here regardless (see
+    #pgGearFrame's own capturing-phase listener below), so there's no
+    reason to ever draw it, though .gear-slot.filled:hover's own
+    background-brightening highlight is deliberately left alone --
+    hovering a filled slot still visibly lights it up, just without
+    that affordance in the corner.
 
     The only other visible difference from the real page is its own
     title row and setup switcher, same "strip, don't just hide" and
@@ -9565,7 +9580,11 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
     """
 
     return _shell(
-        title=f"{owner_name}'s shared Purchase Goals setup — myscape",
+        # "Goal", not "Goals", and no "setup" suffix -- per explicit
+        # instruction, shorter than the analogous Loot Tracker title
+        # (which has no feature-name pluralization/suffix to drop in
+        # the first place).
+        title=f"{owner_name}'s shared Purchase Goal — myscape",
         player=viewer,
         body=body,
         extra_head=extra_head,

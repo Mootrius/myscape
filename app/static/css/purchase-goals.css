@@ -896,11 +896,22 @@ button.primary#pgNameSave, .pg-setup-form-save {
    listener) except a plain click on a filled slot, which still opens
    that item's wiki page -- same cursor treatment as
    .landing-purchase-preview's own identical override above, and same
-   reasoning: an EMPTY slot or the hover "x" remove button shouldn't
-   invite a click that's already being swallowed. */
-.purchase-goal-share .gear-slot:not(.filled),
-.purchase-goal-share .gear-slot-remove {
+   reasoning: an EMPTY slot shouldn't invite a click that's already
+   being swallowed. */
+.purchase-goal-share .gear-slot:not(.filled) {
   cursor: default;
+}
+
+/* The hover "remove item" button never appears here -- a visitor
+   can't delete anything from someone else's shared setup (the
+   capturing-phase listener above already blocks a click on it either
+   way, this just stops it from ever being drawn in the first place).
+   .gear-slot.filled:hover's own background-brightening highlight
+   (purchase-goals.css, above) is untouched -- hovering a filled slot
+   still visibly lights it up, per explicit instruction, just without
+   the red "x"/circle it would normally reveal in the corner. */
+.purchase-goal-share .gear-slot.filled:hover .gear-slot-remove {
+  display: none;
 }
 
 /* The setup-icon trigger is read-only here too (see
