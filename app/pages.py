@@ -8586,7 +8586,34 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
       function applyHiddenFlags(payload, bucketIndices) {{
         var out = JSON.parse(JSON.stringify(payload));
         var agg = recomputeAggregates(bucketIndices);
-        out.buckets.forEach(function (b, i) {{ b.value = agg.buckets[i].value; b.killCount = agg.buckets[i].killCount; }});
+        // Only rewrites out.buckets' own value/killCount when it's
+        // actually index-aligned with bucketIndices -- true for the
+        // whole-range fetch (both cover every top-level bucket, same
+        // length), but NOT for one bucket's own scoped drill-down
+        // fetch (payload = SHARE_BUCKET_STATES[i], bucketIndices =
+        // [i]): that payload's own "buckets" field means something
+        // else entirely there -- that one bucket's own internal
+        // sub-buckets (e.g. 24 hourly ones for a single day, see
+        // build_loot_share_snapshot's own docstring in app/loot.py),
+        // never the same length as the single-element bucketIndices
+        // used to fetch it. Nothing this page renders while a bucket
+        // is selected ever reads it anyway -- the chart stays on the
+        // outer bars, and its header comes straight off
+        // state.selectedBucket, not this response (see
+        // renderBarChart's own selectedBucket branch) -- so skipping
+        // the rewrite here just avoids running agg.buckets[i] out of
+        // bounds instead of recomputing numbers nothing shows. Left
+        // unskipped, every drill-down fetch past the first bucket
+        // threw (undefined.value) inside this very function call,
+        // silently caught by loadBucketData's own quiet catch, which
+        // is why the NPC/item panels never seemed to load for any
+        // shared range whose buckets weren't already hour-wide (a
+        // bucket-scoped fetch on the 24-hour default always has
+        // exactly one of its own sub-buckets too, so the lengths
+        // always happened to already match there).
+        if (out.buckets.length === agg.buckets.length) {{
+          out.buckets.forEach(function (b, i) {{ b.value = agg.buckets[i].value; b.killCount = agg.buckets[i].killCount; }});
+        }}
         out.windowValue = agg.windowValue;
         out.windowKills = agg.windowKills;
         (out.windowNpcs || []).forEach(function (n) {{
@@ -8660,6 +8687,27 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
       if (rangeBtn) {{
         rangeBtn.replaceWith(rangeBtn.cloneNode(true));
         document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
+      }}
+
+      // The clone above keeps whatever this button's own label said
+      // server-side -- the reused markup's own hardcoded "24 HOURS"
+      // (see _loot_tracker_panel_markup), which is only ever true by
+      // coincidence for a share. Overwrites it with this share's own
+      // actual range instead, in the same short "Mon D" form (no
+      // year, no time) the real page's own CUSTOM preset already
+      // shows in this exact spot -- see fmtDateShort/rangeButtonLabel
+      // above -- just converted to the viewer's own local calendar
+      // date (not UTC) the same way the banner above it is, so a
+      // range that crosses local midnight reads as the date a local
+      // viewer would actually call it. Collapses to one date rather
+      // than repeating it when the range doesn't cross a local day
+      // boundary, same convention as the banner's own same-day case.
+      var rangeBtnLabelEl = document.getElementById('lootRangeBtnLabel');
+      if (rangeBtnLabelEl) {{
+        var btnFmtDate = function (d) {{ return d.toLocaleDateString('en-US', {{ month: 'short', day: 'numeric' }}); }};
+        var btnStartStr = btnFmtDate(new Date("{range_start_iso}"));
+        var btnEndStr = btnFmtDate(new Date("{range_end_iso}"));
+        rangeBtnLabelEl.textContent = (btnStartStr === btnEndStr) ? btnStartStr : (btnStartStr + ' \u2013 ' + btnEndStr);
       }}
 
       // Same reasoning as render_landing_loot_preview's own identical
