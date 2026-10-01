@@ -283,6 +283,42 @@ def _get_landing_goal_tracking_demo_data() -> Optional[dict]:
             return None
     return _landing_goal_tracking_demo_data
 
+# Same idea a sixth time for the landing page's own Character Overview
+# preview (render_landing_character_overview_preview): one real,
+# one-time pull of the account's own actual summary/progress stats
+# (GET /api/character-overview/summary + GET /api/character-overview/
+# progress) and real collection log (GET /api/players/me/collection-
+# log), all three frozen together into one JSON file -- summary feeds
+# the preview's own co-summary-row, collectionLog feeds the clog card,
+# and progress is included purely so the reused script's own fetch
+# shim has something faithful to answer with even though this preview
+# never renders the three .co-quad-row cards (skills/quests/diaries/
+# combat achievements) that progress would otherwise feed -- see
+# _character_overview_panel_markup's own preview-mode comment for why
+# those three are left out. The 3D model itself is a separate static
+# asset (app/static/img/landing-character-overview-demo-model.glb, a
+# real one-time GET /api/character-overview/model pull, saved as its
+# own file rather than folded into this JSON since it's binary glTF,
+# not JSON) that the preview's own extra_head just points its model
+# viewer at directly -- no fetch shim needed for that one at all, see
+# _character_overview_panel_markup's own __MODEL_VIEWER_MODEL_URL_JSON__
+# substitution.
+_LANDING_CHARACTER_OVERVIEW_DEMO_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "landing_character_overview_demo.json"
+)
+_landing_character_overview_demo_data = None
+
+
+def _get_landing_character_overview_demo_data() -> Optional[dict]:
+    global _landing_character_overview_demo_data
+    if _landing_character_overview_demo_data is None:
+        try:
+            with open(_LANDING_CHARACTER_OVERVIEW_DEMO_PATH, "r") as f:
+                _landing_character_overview_demo_data = json.load(f)
+        except (OSError, ValueError):
+            return None
+    return _landing_character_overview_demo_data
+
 # Same cache-busting trick again, for the Mindmaps page's own stylesheet.
 _MINDMAPS_CSS_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "static", "css", "mindmaps.css"
@@ -701,6 +737,35 @@ def render_landing(player: Optional[PlayerView]) -> str:
           </div>
         </div>
     """
+    # Interactive live preview of the real Character Overview feature
+    # (see render_landing_character_overview_preview) -- the FIRST
+    # preview on the page now (ahead of Loot Tracker below), per
+    # explicit instruction. Same reuse-the-real-script pattern as every
+    # preview below it; see that function's own docstring for the
+    # fuller reasoning. Like Goal Tracking further down, there was no
+    # pre-existing pre-composited marketing anchor image for this
+    # feature to fall back to (it wasn't on the landing page at all
+    # before this preview existed), so a missing/corrupt snapshot falls
+    # back to this same preview's own character crop instead, same as
+    # that one does.
+    character_overview_preview = render_landing_character_overview_preview()
+    if character_overview_preview:
+        character_overview_preview_head, character_overview_preview_body, character_overview_preview_script = character_overview_preview
+        character_overview_anchor_section = f"""
+      <section class="landing-anchor landing-anchor--character-overview-preview">
+        <div class="landing-character-overview-preview">
+          {character_overview_preview_body}
+        </div>
+      </section>"""
+    else:
+        character_overview_preview_head, character_overview_preview_script = "", ""
+        character_overview_anchor_section = """
+      <section class="landing-anchor">
+        <picture>
+          <source srcset="/static/img/landing-character-overview-preview-char.webp" type="image/webp">
+          <img src="/static/img/landing-character-overview-preview-char.png" alt="Character overviews that you can share with your friends.">
+        </picture>
+      </section>"""
     # Interactive live preview of the real Loot Tracker feature (see
     # render_landing_loot_preview) in place of that panel's own
     # pre-composited marketing image below -- a visitor can actually
@@ -873,10 +938,11 @@ def render_landing(player: Optional[PlayerView]) -> str:
           <span class="landing-scroll-cue-arrow"></span>
         </p>
       </section>
+      {character_overview_anchor_section}
       {loot_anchor_section}
       {purchase_anchor_section}
-      {mindmap_anchor_section}
       {storages_anchor_section}
+      {mindmap_anchor_section}
       {goal_tracking_anchor_section}
     </div>
     """
@@ -1001,10 +1067,11 @@ def render_landing(player: Optional[PlayerView]) -> str:
     # an empty string, and a no-op, for either one that was None above
     # (the static-image fallback needs no script of its own).
     script += (
-        loot_preview_script
+        character_overview_preview_script
+        + loot_preview_script
         + purchase_preview_script
-        + mindmap_preview_script
         + storages_preview_script
+        + mindmap_preview_script
         + goal_tracking_preview_script
     )
     # body_class="landing" scopes the scroll-snap CSS (see
@@ -1016,10 +1083,11 @@ def render_landing(player: Optional[PlayerView]) -> str:
         body=body,
         extra_script=script,
         extra_head=(
-            loot_preview_head
+            character_overview_preview_head
+            + loot_preview_head
             + purchase_preview_head
-            + mindmap_preview_head
             + storages_preview_head
+            + mindmap_preview_head
             + goal_tracking_preview_head
         ),
         body_class="landing",
@@ -1350,17 +1418,27 @@ _MODEL_VIEWER_HEAD = """
     // Remembers the player's chosen background across sessions/
     // reloads, per explicit instruction -- localStorage rather than
     // anything server-side since this is a pure per-browser display
-    // preference, nothing GameAccount needs to know about.
-    var MODEL_VIEWER_BG_STORAGE_KEY = "myscape.modelViewerBgIndex";
+    // preference, nothing GameAccount needs to know about. null here
+    // (see __MODEL_VIEWER_BG_STORAGE_KEY_JSON__'s own substitution in
+    // _character_overview_panel_markup) turns this persistence off
+    // entirely rather than just pointing it at a different key --
+    // the landing page's own Character Overview preview uses that to
+    // always start on the castle courtyard default (index 0) on every
+    // visit/refresh, per explicit instruction, rather than remembering
+    // a shuffle from a previous visitor's own session the way the
+    // real, authenticated page still does.
+    var MODEL_VIEWER_BG_STORAGE_KEY = __MODEL_VIEWER_BG_STORAGE_KEY_JSON__;
     var bgIndex = 0;
-    try {
-      var storedBgIndex = parseInt(localStorage.getItem(MODEL_VIEWER_BG_STORAGE_KEY), 10);
-      if (!isNaN(storedBgIndex) && storedBgIndex >= 0 && storedBgIndex < MODEL_VIEWER_BACKGROUNDS.length) {
-        bgIndex = storedBgIndex;
+    if (MODEL_VIEWER_BG_STORAGE_KEY) {
+      try {
+        var storedBgIndex = parseInt(localStorage.getItem(MODEL_VIEWER_BG_STORAGE_KEY), 10);
+        if (!isNaN(storedBgIndex) && storedBgIndex >= 0 && storedBgIndex < MODEL_VIEWER_BACKGROUNDS.length) {
+          bgIndex = storedBgIndex;
+        }
+      } catch (e) {
+        // localStorage can throw (private browsing, disabled storage) --
+        // falling back to the index-0 default is fine either way.
       }
-    } catch (e) {
-      // localStorage can throw (private browsing, disabled storage) --
-      // falling back to the index-0 default is fine either way.
     }
 
     function applyBackground() {
@@ -1386,9 +1464,11 @@ _MODEL_VIEWER_HEAD = """
       }
       bgIndex = next;
       applyBackground();
-      try {
-        localStorage.setItem(MODEL_VIEWER_BG_STORAGE_KEY, String(bgIndex));
-      } catch (e) {}
+      if (MODEL_VIEWER_BG_STORAGE_KEY) {
+        try {
+          localStorage.setItem(MODEL_VIEWER_BG_STORAGE_KEY, String(bgIndex));
+        } catch (e) {}
+      }
     }
     if (bgShuffleBtn) bgShuffleBtn.addEventListener("click", shuffleBackground);
 
@@ -1456,7 +1536,16 @@ _MODEL_VIEWER_HEAD = """
     // .glb bytes MyscapeClient#syncCharacterModel uploaded, straight
     // out of GameAccount.character_model_glb -- 404 until the player
     // has used the plugin's "Export 3D model" button at least once.
-    fetch("/api/character-overview/model")
+    // __MODEL_VIEWER_MODEL_URL_JSON__ substitutes a different, plain
+    // unauthenticated /static/ URL instead for the landing page's own
+    // Character Overview preview (see _character_overview_panel_markup),
+    // pointing straight at that preview's own real, frozen demo model
+    // (app/static/img/landing-character-overview-demo-model.glb) rather
+    // than this session-authenticated endpoint -- no fetch shim needed
+    // for this one at all, unlike every other piece of account data
+    // this preview shows.
+    var MODEL_VIEWER_MODEL_URL = __MODEL_VIEWER_MODEL_URL_JSON__;
+    fetch(MODEL_VIEWER_MODEL_URL)
       .then(function (r) {
         if (r.status === 404) {
           // No captured model yet -- rather than the empty
@@ -1949,8 +2038,30 @@ _MODEL_VIEWER_HEAD = """
 """
 
 
-def render_character_overview(player: PlayerView) -> str:
-    """Character Overview: the summary row (.co-summary-row in
+def _character_overview_panel_markup(preview: bool = False) -> Tuple[str, str, str]:
+    """Character Overview's real body/script, split out into its own
+    reusable function so the landing page's own interactive preview
+    (render_landing_character_overview_preview) can reuse it verbatim --
+    same split render_* already uses for every other previewed page
+    (_loot_tracker_panel_markup, _purchase_goals_panel_markup,
+    _goal_tracking_panel_markup, etc.). render_character_overview below
+    is now just this function plus a _shell(...) call.
+
+    preview=True (only ever passed by that landing preview) trims this
+    down to just three of Character Overview's six sections -- the
+    summary row, the 3D model viewer, and the collection log -- leaving
+    out Skills/Quests/Achievement Diaries/Combat Achievements entirely
+    (see quad_row_section below), and swaps two of extra_head's own
+    _MODEL_VIEWER_HEAD substitutions (the background-persistence
+    storage key and the model-fetch URL -- see that constant's own
+    comment) so the viewer always opens on the castle courtyard default
+    and always shows this preview's own frozen demo model rather than
+    remembering a shuffle across visits or hitting the real,
+    session-authenticated endpoint. Everything else (summary stats,
+    collection log tabs/pages/items, the whole 3D viewer) is the exact
+    same markup/script a real, logged-in player gets.
+
+    Character Overview: the summary row (.co-summary-row in
     character-overview.css) holding all eight icon+stat pairs (see
     _SUMMARY_STATS above) at the same positions/spacing a per-stat box
     would have had, just without each one's own individual background/
@@ -2046,6 +2157,44 @@ def render_character_overview(player: PlayerView) -> str:
         for key in _SKILL_GRID_ORDER
     )
 
+    # Skills/Quests/Achievement Diaries/Combat Achievements (.co-quad-row
+    # and its own four cards) are left out of the landing page's own
+    # Character Overview preview entirely, per explicit instruction --
+    # just the summary row, the 3D model viewer, and the collection log
+    # show there. Built as one whole optional block (rather than, say,
+    # four smaller preview-gated pieces) since all four cards are one
+    # self-contained unit that's either shown or not -- there's no
+    # partial state between them. The reused script below still fetches
+    # GET /api/character-overview/progress and calls renderQuests/
+    # renderDiaries/renderCombatAchievements completely unconditionally
+    # either way (preview or not) -- each of those three already starts
+    # with its own `if (!listEl ...) return;` guard (listEl being one of
+    # #questsList/#diariesList/#caList, all absent here), so this being
+    # skipped client-side rather than the fetch itself being skipped is
+    # a silent, harmless no-op in preview mode, not a second preview-only
+    # code path to keep in sync with this one.
+    quad_row_section = "" if preview else f"""
+    <div class="co-quad-row" id="coQuadRow">
+      <div class="skills-card" id="skillsCard">
+        <div class="skills-grid">
+          {skill_cells}
+        </div>
+      </div>
+
+      <div class="quests-card" id="questsCard">
+        <div class="quests-empty" id="questsEmpty">No quest data yet &mdash; open your quest list in-game with the myscape RuneLite plugin running, then refresh this page.</div>
+        <div class="quests-list" id="questsList"></div>
+      </div>
+
+      <div class="diaries-card" id="diariesCard">
+        <div class="diaries-list" id="diariesList"></div>
+      </div>
+
+      <div class="ca-card" id="caCard">
+        <div class="ca-list" id="caList"></div>
+      </div>
+    </div>"""
+
     body = f"""
     <h2 class="page-title">Character Overview</h2>
 
@@ -2088,27 +2237,7 @@ def render_character_overview(player: PlayerView) -> str:
         </div>
       </div>
     </div>
-
-    <div class="co-quad-row" id="coQuadRow">
-      <div class="skills-card" id="skillsCard">
-        <div class="skills-grid">
-          {skill_cells}
-        </div>
-      </div>
-
-      <div class="quests-card" id="questsCard">
-        <div class="quests-empty" id="questsEmpty">No quest data yet &mdash; open your quest list in-game with the myscape RuneLite plugin running, then refresh this page.</div>
-        <div class="quests-list" id="questsList"></div>
-      </div>
-
-      <div class="diaries-card" id="diariesCard">
-        <div class="diaries-list" id="diariesList"></div>
-      </div>
-
-      <div class="ca-card" id="caCard">
-        <div class="ca-list" id="caList"></div>
-      </div>
-    </div>
+    {quad_row_section}
     """
 
     script = """
@@ -2810,8 +2939,29 @@ def render_character_overview(player: PlayerView) -> str:
         f'<link rel="stylesheet" href="/static/css/character-overview.css?v={_CHARACTER_OVERVIEW_CSS_VERSION}" />'
         + _MODEL_VIEWER_HEAD.replace(
             "__MODEL_VIEWER_BACKGROUNDS_JSON__", json.dumps(_MODEL_VIEWER_BACKGROUNDS)
+        ).replace(
+            "__MODEL_VIEWER_BG_STORAGE_KEY_JSON__",
+            json.dumps(None if preview else "myscape.modelViewerBgIndex"),
+        ).replace(
+            "__MODEL_VIEWER_MODEL_URL_JSON__",
+            json.dumps(
+                "/static/img/landing-character-overview-demo-model.glb"
+                if preview
+                else "/api/character-overview/model"
+            ),
         )
     )
+    return extra_head, body, script
+
+
+def render_character_overview(player: PlayerView) -> str:
+    """The real, authenticated Character Overview page -- just
+    _character_overview_panel_markup's own default (preview=False)
+    output, wrapped in the page shell. See that function's own
+    docstring for everything about what this page actually shows; the
+    landing page's own preview of it is render_landing_character_overview_preview
+    below, which calls the same function with preview=True instead."""
+    extra_head, body, script = _character_overview_panel_markup()
     return _shell(
         title="Character Overview — myscape",
         player=player,
@@ -2819,6 +2969,159 @@ def render_character_overview(player: PlayerView) -> str:
         extra_head=extra_head,
         extra_script=script,
     )
+
+
+def render_landing_character_overview_preview() -> Optional[Tuple[str, str, str]]:
+    """The landing page's own interactive Character Overview preview --
+    same reuse-the-real-script pattern as the other five (reuses
+    _character_overview_panel_markup's own preview=True output
+    completely unmodified, layering demo-only behavior on top from the
+    outside in a wrapper script), backed by one real, curated snapshot:
+    app/data/landing_character_overview_demo.json is a one-time pull of
+    the account's own real summary stats, progress breakdown, and
+    collection log (see _get_landing_character_overview_demo_data's own
+    comment for exactly which three endpoints that came from), plus a
+    real exported 3D model saved as its own static .glb asset. Returns
+    (extra_head, body, script) for render_landing to splice into its
+    own markup, same as the other five, or None if the snapshot isn't
+    there to read. Unlike the other five, this is the FIRST preview on
+    the page now (placed right after the intro panel, ahead of Loot
+    Tracker), per explicit instruction.
+
+    preview=True on the reused call already strips Skills/Quests/
+    Achievement Diaries/Combat Achievements out of the markup entirely
+    (see that function's own docstring) -- just the summary row, the
+    3D model viewer, and the collection log show here. Both genuinely
+    work exactly like the real page: the model viewer's own rotate/
+    pan/zoom, play-pause, reset, and background-shuffle controls are
+    all real (shuffling still works here -- it just never persists
+    across visits/refreshes, always reopening on the castle courtyard
+    default, see that function's own __MODEL_VIEWER_BG_STORAGE_KEY_JSON__
+    substitution), and the collection log's own tab/page/item drill-
+    down is real too. The one piece of real, authenticated behavior
+    deliberately NOT offered is the collection log's own "refresh kill/
+    completion counts from the hiscores" button (#clogSyncBtn) -- left
+    fully visible and hoverable (see the cloneNode+replaceWith strip
+    below, the same "hoverable but not clickable" treatment Loot
+    Tracker's own range button already gets) but inert, since a click
+    would otherwise re-sync this demo's own numbers against a visitor's
+    own (nonexistent, for a logged-out visitor, or simply not this
+    account's) hiscores rather than the account this snapshot was
+    actually captured from.
+
+    1. A `fetch` shim, scoped to just this wrapper, answering GET
+       /api/character-overview/summary, GET /api/character-overview/
+       progress (unused by the trimmed-down markup, but still answered
+       faithfully -- see _character_overview_panel_markup's own
+       comment for why), and GET /api/players/me/collection-log out of
+       the static snapshot. The hiscores-sync POST is answered too
+       (a graceful failure), even though #clogSyncBtn's own click
+       listener never survives to fire it in practice -- same "a
+       complete, faithful stand-in for every request the reused script
+       could ever issue is worth more than trimming a path that's
+       unreachable today" discipline as the other previews' own shims.
+       The 3D model itself never goes through this shim at all -- see
+       _character_overview_panel_markup's own __MODEL_VIEWER_MODEL_URL_JSON__
+       substitution, which points the reused head script's own fetch
+       straight at a plain static asset instead.
+    2. setInterval-free already -- unlike every other previewed page,
+       Character Overview's own reused script only ever fetches each
+       of its endpoints once, on load, so there's no polling interval
+       to leave running or neutralize here.
+    """
+    demo = _get_landing_character_overview_demo_data()
+    if demo is None:
+        return None
+    extra_head, body, script = _character_overview_panel_markup(preview=True)
+
+    # Landing-preview-only hero row -- tagline's own wrap FIRST, 
+    # character SECOND (so he lands on the RIGHT, with the tagline
+    # text on the left), per this preview's own explicit request --
+    # same flex row/bottom-align treatment every other preview's own
+    # hero row already uses (see .loot-preview-hero's own comment in
+    # loot-tracker.css for the fuller reasoning this mirrors). The
+    # reused body's own "Character Overview" <h2> is hidden via CSS
+    # (.landing-character-overview-preview .page-title), same as
+    # every other preview.
+    hero_markup = """
+    <div class="co-preview-hero">
+      <div class="co-preview-tagline-wrap">
+        <p class="co-preview-tagline">
+          <span class="co-preview-tagline-gold">CHARACTER OVERVIEWS</span> <span class="co-preview-tagline-white">that you can share with your friends.</span>
+        </p>
+      </div>
+      <picture class="co-preview-char">
+        <source srcset="/static/img/landing-character-overview-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-character-overview-preview-char.png" alt="" />
+      </picture>
+    </div>
+    """
+    body = hero_markup + body
+
+    summary_json = json.dumps(demo.get("summary") or {})
+    progress_json = json.dumps(demo.get("progress") or {})
+    collection_log_json = json.dumps(demo.get("collectionLog") or {})
+    wrapper_script = f"""
+    (function () {{
+      // The captured snapshot itself -- see
+      // _get_landing_character_overview_demo_data's own comment for
+      // exactly where each of these three came from. Plain, static
+      // data (unlike e.g. Goal Tracking's own DEMO_GOALS), since
+      // nothing in this trimmed-down preview ever mutates any of it.
+      var DEMO_SUMMARY = {summary_json};
+      var DEMO_PROGRESS = {progress_json};
+      var DEMO_COLLECTION_LOG = {collection_log_json};
+
+      // ---- fetch shim -----------------------------------------------------
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        function ok(data) {{ return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(data); }} }}); }}
+        function fail() {{ return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{}}); }} }}); }}
+
+        if (url === '/api/character-overview/summary' && method === 'GET') {{
+          return ok(DEMO_SUMMARY);
+        }}
+        if (url === '/api/character-overview/progress' && method === 'GET') {{
+          return ok(DEMO_PROGRESS);
+        }}
+        if (url === '/api/players/me/collection-log' && method === 'GET') {{
+          return ok(DEMO_COLLECTION_LOG);
+        }}
+        // The hiscores-sync POST #clogSyncBtn's own click listener
+        // would otherwise fire -- unreachable in practice (see the
+        // cloneNode+replaceWith strip below), but answered the same
+        // graceful way regardless, same discipline as every other
+        // shim here.
+        if (url === '/api/players/me/hiscores/sync' && method === 'POST') {{
+          return fail();
+        }}
+        // Nothing else the reused script calls should ever land here,
+        // but a harmless failure beats a hard one if it someday does.
+        return fail();
+      }};
+
+      {script}
+
+      // Neutralizes the collection log's own "refresh kill/completion
+      // counts from the hiscores" button -- runs after the reused
+      // script above has already finished its own synchronous DOM
+      // wiring (including this button's click listener), so stripping
+      // it means replacing the node outright: cloneNode(true) copies
+      // its markup but none of the listeners attached to the original
+      // -- same technique, and same reasoning, as Loot Tracker's own
+      // range button (see render_landing_loot_preview's own wrapper
+      // script). The button is left otherwise untouched -- no static
+      // class, no pointer-events override -- so it still lights up
+      // and shows its title tooltip on hover exactly like the real,
+      // clickable button, simply doing nothing when actually clicked.
+      var clogSyncBtn = document.getElementById('clogSyncBtn');
+      if (clogSyncBtn) {{
+        clogSyncBtn.replaceWith(clogSyncBtn.cloneNode(true));
+      }}
+    }})();
+    """
+    return extra_head, body, wrapper_script
 
 
 def render_account(player: PlayerView) -> str:
@@ -6968,15 +7271,15 @@ def render_landing_loot_preview() -> Optional[Tuple[str, str, str]]:
     # ways.
     hero_markup = """
     <div class="loot-preview-hero">
+      <picture class="loot-preview-char loot-preview-char--flipped">
+        <source srcset="/static/img/landing-loot-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-loot-preview-char.png" alt="" />
+      </picture>
       <div class="loot-preview-tagline-wrap">
         <p class="loot-preview-tagline">
           <span class="loot-preview-tagline-gold">LOOT TRACKING</span> <span class="loot-preview-tagline-white">like you've never experienced it before.</span>
         </p>
       </div>
-      <picture class="loot-preview-char">
-        <source srcset="/static/img/landing-loot-preview-char.webp" type="image/webp">
-        <img src="/static/img/landing-loot-preview-char.png" alt="" />
-      </picture>
     </div>
     """
     body = hero_markup + body
@@ -7273,15 +7576,15 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
     # in purchase-goals.css), same as Loot Tracker's.
     hero_markup = """
     <div class="purchase-preview-hero">
-      <picture class="purchase-preview-char">
-        <source srcset="/static/img/landing-purchase-preview-char.webp" type="image/webp">
-        <img src="/static/img/landing-purchase-preview-char.png" alt="" />
-      </picture>
       <div class="purchase-preview-tagline-wrap">
         <p class="purchase-preview-tagline">
           <span class="purchase-preview-tagline-gold">PURCHASE GOALS</span> <span class="purchase-preview-tagline-white">to prepare for your next big spending spree.</span>
         </p>
       </div>
+      <picture class="purchase-preview-char purchase-preview-char--flipped">
+        <source srcset="/static/img/landing-purchase-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-purchase-preview-char.png" alt="" />
+      </picture>
     </div>
     """
     body = hero_markup + body
@@ -15669,15 +15972,15 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
     # four.
     hero_markup = """
     <div class="gt-preview-hero">
+      <picture class="gt-preview-char gt-preview-char--flipped">
+        <source srcset="/static/img/landing-goal-tracking-preview-char.webp" type="image/webp">
+        <img src="/static/img/landing-goal-tracking-preview-char.png" alt="" />
+      </picture>
       <div class="gt-preview-tagline-wrap">
         <p class="gt-preview-tagline">
           <span class="gt-preview-tagline-gold">GOAL TRACKING</span> <span class="gt-preview-tagline-white">for those days when you need some dopamine.</span>
         </p>
       </div>
-      <picture class="gt-preview-char">
-        <source srcset="/static/img/landing-goal-tracking-preview-char.webp" type="image/webp">
-        <img src="/static/img/landing-goal-tracking-preview-char.png" alt="" />
-      </picture>
     </div>
     """
     body = hero_markup + body

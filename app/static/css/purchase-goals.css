@@ -751,3 +751,12 @@ button.primary#pgNameSave, .pg-setup-form-save {
   width: auto;
   max-width: none;
 }
+/* Mirrors the character horizontally -- same technique and reasoning
+   as .loot-preview-char--flipped in loot-tracker.css, just facing the
+   opposite way: this preview moved from character-left/text-right to
+   text-left/character-right, so the flip here is what makes him face
+   back toward the tagline beside him instead of off the panel's own
+   right edge. */
+.landing-purchase-preview .purchase-preview-char--flipped img {
+  transform: scaleX(-1);
+}

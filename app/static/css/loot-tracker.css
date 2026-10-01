@@ -813,3 +813,15 @@
   width: auto;
   max-width: none;
 }
+/* Mirrors the character horizontally -- this preview moved from
+   text-left/character-right to character-left/text-right (per
+   explicit instruction), and the source image itself still faces the
+   same way it always did, so a plain scaleX(-1) on just this preview's
+   own flipped variant is what makes him face back toward the tagline
+   text beside him instead of facing off the edge of the panel. Scoped
+   to the img itself (not the .loot-preview-char picture element it
+   sits in) so this doesn't also mirror the layout/positioning rules
+   above, just the pixels. */
+.landing-loot-preview .loot-preview-char--flipped img {
+  transform: scaleX(-1);
+}

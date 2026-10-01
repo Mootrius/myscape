@@ -1087,3 +1087,11 @@ input[type="text"].invalid { border-color: var(--red); }
   width: auto;
   max-width: none;
 }
+/* Mirrors the character horizontally -- same technique and reasoning
+   as .loot-preview-char--flipped in loot-tracker.css: this preview
+   moved from text-left/character-right to character-left/text-right,
+   so the flip is what makes him face back toward the tagline beside
+   him instead of off the panel's own left edge. */
+.landing-goal-tracking-preview .gt-preview-char--flipped img {
+  transform: scaleX(-1);
+}

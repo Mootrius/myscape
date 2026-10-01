@@ -1041,3 +1041,98 @@
   height: 100%;
   background: var(--gold-dim);
 }
+
+/* ---------- Landing page preview (render_landing_character_overview_
+   preview in app/pages.py) -- the real page's own body/script reused
+   completely unmodified (minus Skills/Quests/Achievement Diaries/
+   Combat Achievements, left out before this ever reaches the browser
+   -- see _character_overview_panel_markup's own preview-mode comment)
+   inside one scroll-snap panel on the landing page. These rules are
+   the only preview-specific additions character-overview.css needed;
+   everything else above (summary row, model viewer, collection log)
+   is shared, unscoped CSS the real, authenticated page uses too. ---------- */
+
+/* Same fixed-height/clipped/feathered treatment every other landing
+   preview's own container already uses -- see .landing-loot-preview's
+   own comment in loot-tracker.css for the fuller reasoning this
+   mirrors line for line. 900px max-width matches this page's own
+   natural ~880px content width (290px model viewer + 572px collection
+   log + 18px gap, see .co-left-col/.clog-card's own comments above)
+   almost exactly, same as every other preview's own 900px cap. */
+.landing-character-overview-preview {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  height: calc(100vh - 80px);
+  height: calc(100svh - 80px);
+  overflow: hidden;
+  position: relative;
+}
+.landing-character-overview-preview::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 15%;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+}
+
+/* The reused body's own heading -- hidden rather than stripped from
+   the markup itself, so _character_overview_panel_markup stays
+   untouched; the tagline below takes over as this preview's own
+   "title". Same technique as every other preview's own .page-title
+   override. */
+.landing-character-overview-preview .page-title { display: none; }
+
+/* ---------- Landing-preview-only hero row: tagline + character,
+   replacing the reused page's own "Character Overview" heading -- see
+   render_landing_character_overview_preview's own hero_markup comment.
+   Plain flex row, bottom-aligned, same as every other preview's own
+   hero row (.loot-preview-hero in loot-tracker.css, etc.) -- tagline's
+   wrap FIRST, character SECOND, so he lands on the right with the
+   text on the left, per this preview's own explicit request. ---------- */
+.co-preview-hero {
+  display: flex;
+  align-items: flex-end;
+}
+.co-preview-tagline-wrap {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.co-preview-tagline {
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  text-align: center;
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.co-preview-tagline-gold { color: var(--gold); }
+.co-preview-tagline-white { color: var(--text); }
+
+/* Same fixed-HEIGHT-flex-item treatment every other preview's own
+   character crop uses (.loot-preview-char/.purchase-preview-char/
+   etc.) -- 157px matches them exactly, so this preview's own
+   character reads as the same size as the other five. See
+   .loot-preview-char's own comment in loot-tracker.css for the fuller
+   reasoning. */
+.co-preview-char {
+  flex: 0 0 auto;
+  height: 157px;
+  line-height: 0;
+}
+.landing-character-overview-preview .co-preview-char img {
+  display: block;
+  height: 100%;
+  max-height: none;
+  width: auto;
+  max-width: none;
+}
