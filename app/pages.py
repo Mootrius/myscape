@@ -469,10 +469,11 @@ _SITE_URL = "https://myscape.io"
 # shared link should say, so the other pages -- login, signup, the
 # dashboard tools -- just inherit it rather than needing their own).
 _DEFAULT_META_DESCRIPTION = (
-    "myscape is a free companion site for Old School RuneScape -- track loot from "
-    "every NPC you kill, plan Grand Exchange purchases against your real bank, map "
-    "out your goals, and see everything you own across every storage, all synced "
-    "straight from RuneLite."
+    "myscape is a free RuneLite plugin and companion site for Old School "
+    "RuneScape. Share your accolades with friends, track loot from every NPC "
+    "you kill, plan Grand Exchange purchases with real-time prices, make "
+    "mindmaps to plan your grinds, and set goals with auto-detecting "
+    "completion functionality."
 )
 
 
