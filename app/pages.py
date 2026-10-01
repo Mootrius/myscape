@@ -8281,34 +8281,49 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       // page, which used to be the only way back to this button once
       // a link existed for the old range. See build_loot_share_snapshot
       // in app/loot.py and SharedContent in app/models.py for what
-      // that link actually freezes.
-      document.getElementById('lootShareGenerateBtn').addEventListener('click', function () {
-        var btn = this;
-        btn.disabled = true;
-        var body = { range: state.rangeKey };
-        if (state.rangeKey === 'custom' && state.customStart && state.customEnd) {
-          body.start = state.customStart;
-          body.end = state.customEnd;
-        }
-        fetch('/api/players/me/loot/share', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        })
-          .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
-          .then(function (data) {
-            var linkBtn = document.getElementById('lootShareLinkBtn');
-            linkBtn.dataset.url = data.url;
-            linkBtn.textContent = data.url;
-            btn.hidden = true;
-            linkBtn.hidden = false;
+      // that link actually freezes. Null-guarded for the exact same
+      // reason lootShareIconBtn above is -- render_loot_tracker_share
+      // and render_landing_loot_preview both strip this button out
+      // along with the rest of .loot-share-wrap before this reused
+      // script ever runs (see resetLootShareState's own comment just
+      // above, which already documents this element being null on
+      // both of those pages). Calling .addEventListener on this
+      // element unguarded threw (Cannot read properties of null)
+      // before this fix -- a synchronous error that halted the whole
+      // IIFE right here, which meant the loadState()/setInterval
+      // calls at the very end of this script never ran at all, so
+      // both of those pages got stuck showing "Loading..." forever
+      // instead of ever reaching their own actual content.
+      var lootShareGenerateBtn = document.getElementById('lootShareGenerateBtn');
+      if (lootShareGenerateBtn) {
+        lootShareGenerateBtn.addEventListener('click', function () {
+          var btn = this;
+          btn.disabled = true;
+          var body = { range: state.rangeKey };
+          if (state.rangeKey === 'custom' && state.customStart && state.customEnd) {
+            body.start = state.customStart;
+            body.end = state.customEnd;
+          }
+          fetch('/api/players/me/loot/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
           })
-          .catch(function () {
-            btn.classList.add('action-failed');
-            setTimeout(function () { btn.classList.remove('action-failed'); }, 2500);
-          })
-          .then(function () { btn.disabled = false; });
-      });
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+            .then(function (data) {
+              var linkBtn = document.getElementById('lootShareLinkBtn');
+              linkBtn.dataset.url = data.url;
+              linkBtn.textContent = data.url;
+              btn.hidden = true;
+              linkBtn.hidden = false;
+            })
+            .catch(function () {
+              btn.classList.add('action-failed');
+              setTimeout(function () { btn.classList.remove('action-failed'); }, 2500);
+            })
+            .then(function () { btn.disabled = false; });
+        });
+      }
 
       // lootShareLinkBtn itself IS the link, once generated above --
       // clicking it copies its own URL (held in data-url, since its
@@ -8317,25 +8332,31 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       // same silent-copy-with-brief-confirmation pattern as the
       // Account page's own Shared Links table code buttons
       // (.shared-link-code-btn's click handler, app/pages.py).
-      document.getElementById('lootShareLinkBtn').addEventListener('click', function () {
-        var btn = this;
-        var url = btn.dataset.url;
-        if (!url) return;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(url);
-        } else {
-          var temp = document.createElement('textarea');
-          temp.value = url;
-          temp.style.position = 'fixed';
-          temp.style.opacity = '0';
-          document.body.appendChild(temp);
-          temp.select();
-          document.execCommand('copy');
-          document.body.removeChild(temp);
-        }
-        btn.textContent = 'COPIED';
-        setTimeout(function () { btn.textContent = url; }, 1200);
-      });
+      // Null-guarded for the same reason lootShareGenerateBtn above
+      // now is -- same missing-element-on-share/-preview-pages bug,
+      // same fix.
+      var lootShareLinkBtn = document.getElementById('lootShareLinkBtn');
+      if (lootShareLinkBtn) {
+        lootShareLinkBtn.addEventListener('click', function () {
+          var btn = this;
+          var url = btn.dataset.url;
+          if (!url) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url);
+          } else {
+            var temp = document.createElement('textarea');
+            temp.value = url;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+          }
+          btn.textContent = 'COPIED';
+          setTimeout(function () { btn.textContent = url; }, 1200);
+        });
+      }
 
       loadState();
       setInterval(loadState, 10000);
