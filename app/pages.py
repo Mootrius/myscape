@@ -464,10 +464,14 @@ _SITE_URL = "https://myscape.io"
 
 # The site-wide fallback for <meta name="description">/og:description/
 # twitter:description -- every _shell() call gets this unless a page
-# passes its own via meta_description (nothing currently does; the
-# landing page's own pitch already covers what a search result or a
-# shared link should say, so the other pages -- login, signup, the
-# dashboard tools -- just inherit it rather than needing their own).
+# passes its own via meta_description. The landing page's own pitch
+# already covers what a search result or a shared link to IT should
+# say, so every page here except one -- login, signup, the dashboard
+# tools -- just inherits it rather than needing its own. The one
+# exception is render_public_character_overview below: a link to
+# someone's own public profile is shared on its own (Discord, etc.),
+# so it needs a description naming THAT player and what their page
+# actually shows, not this generic site-wide pitch.
 _DEFAULT_META_DESCRIPTION = (
     "myscape is a free RuneLite plugin and companion site for Old School "
     "RuneScape. Share your accolades with friends, track loot from every NPC "
@@ -3385,9 +3389,9 @@ def render_public_character_overview(game_account: "GameAccount", viewer: Option
         extra_head=extra_head,
         extra_script=wrapper_script,
         meta_description=(
-            f"{display_name}'s Character Overview on myscape -- stats, "
-            "collection log, quests, and more, synced straight from "
-            "RuneLite."
+            f"{display_name}'s public myscape page — complete with their "
+            "collection log data, skill levels, quest completions, "
+            "achievement diary tiers, and combat task tiers."
         ),
     )
 
