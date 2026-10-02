@@ -16654,7 +16654,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
     skill_names_json = json.dumps(sorted(SKILL_NAMES))
 
     body = """
-    <h2 class="page-title">Goal Tracking</h2>
+    <h2 class="page-title">Goal Tracking <span class="gt-share-wrap"><button type="button" class="gt-share-icon-btn" id="gtShareIconBtn" aria-label="Export this goal list" title="Export this goal list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></button><div class="gt-share-card" id="gtShareCard" hidden><button type="button" class="gt-share-generate-btn" id="gtShareGenerateBtn">GENERATE SHAREABLE LINK</button><button type="button" class="gt-share-link-btn" id="gtShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button><p class="gt-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p></div></span></h2>
     <div class="auth-error" id="gtError"></div>
 
     <div class="gt-wizard" id="gtWizard">
@@ -18692,6 +18692,93 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         });
       }
 
+      // Export icon next to the title -- same bare-icon/floating-
+      // popup pattern (and same outside-click-close convention) as
+      // the other four pages' own share-icon toggles. No data to
+      // refetch on open either, since nothing here is generated until
+      // GENERATE SHAREABLE LINK is actually clicked below. Null-
+      // guarded because render_goal_tracking_share strips this icon's
+      // own <h2> out of the reused body string entirely before this
+      // script ever runs -- a visitor there isn't this share's owner,
+      // so there's nothing for them to export a SECOND time -- same
+      // reasoning (and same null-guard shape) as every other reused-
+      // panel share icon on this site.
+      var gtShareIconBtn = document.getElementById('gtShareIconBtn');
+      var gtShareCard = document.getElementById('gtShareCard');
+      if (gtShareIconBtn) {
+        function setGtShareOpen(open) {
+          gtShareCard.hidden = !open;
+          gtShareIconBtn.classList.toggle('open', open);
+        }
+        gtShareIconBtn.addEventListener('click', function () {
+          setGtShareOpen(gtShareCard.hidden);
+        });
+        document.addEventListener('click', function (e) {
+          var wrap = document.querySelector('.gt-share-wrap');
+          if (wrap && !wrap.contains(e.target)) setGtShareOpen(false);
+        });
+      }
+
+      // GENERATE SHAREABLE LINK -- freezes this account's own ENTIRE
+      // goal list into a new SharedContent row (POST /api/goals/share,
+      // app/main.py) -- no id to pick, unlike Mindmaps' own
+      // mmShareGenerateBtn, since there's only ever one goal list per
+      // account. Nothing is generated just from opening the card --
+      // only this click does that -- and once it succeeds this button
+      // is replaced by gtShareLinkBtn showing the actual link.
+      // Null-guarded for the same reason gtShareIconBtn above is, and
+      // the same bug it avoids -- see mmShareGenerateBtn's own
+      // identical comment elsewhere in this file for the fuller
+      // writeup of what an unguarded listener here would do to
+      // loadGoals() at the very bottom of this same IIFE.
+      var gtShareGenerateBtn = document.getElementById('gtShareGenerateBtn');
+      if (gtShareGenerateBtn) {
+        gtShareGenerateBtn.addEventListener('click', function () {
+          var btn = this;
+          btn.disabled = true;
+          fetch('/api/goals/share', { method: 'POST' })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+            .then(function (data) {
+              var linkBtn = document.getElementById('gtShareLinkBtn');
+              linkBtn.dataset.url = data.url;
+              linkBtn.textContent = data.url;
+              btn.hidden = true;
+              linkBtn.hidden = false;
+            })
+            .catch(function () {
+              btn.classList.add('action-failed');
+              setTimeout(function () { btn.classList.remove('action-failed'); }, 2500);
+            })
+            .then(function () { btn.disabled = false; });
+        });
+      }
+
+      // gtShareLinkBtn itself IS the link, once generated above --
+      // same click-to-copy-then-flash-"COPIED" pattern as every other
+      // share-link button on this site.
+      var gtShareLinkBtn = document.getElementById('gtShareLinkBtn');
+      if (gtShareLinkBtn) {
+        gtShareLinkBtn.addEventListener('click', function () {
+          var btn = this;
+          var url = btn.dataset.url;
+          if (!url) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url);
+          } else {
+            var temp = document.createElement('textarea');
+            temp.value = url;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+          }
+          btn.textContent = 'COPIED';
+          setTimeout(function () { btn.textContent = url; }, 1200);
+        });
+      }
+
       // ---- Load + poll (same 5s cadence as PG.pollTimer/loadSummary,
       // render_purchase_goals/render_possessions) -- one endpoint
       // serves both the initial paint and every refresh after it. -----
@@ -18957,6 +19044,19 @@ def render_landing_goal_tracking_preview() -> Optional[Tuple[str, str, str]]:
         if (e.target.closest('.gt-goal-delete')) e.stopPropagation();
       }}, true);
 
+      // The share icon -- #gtShareIconBtn (and its own floating card)
+      // -- same removal as every other preview's own share-icon strip
+      // (.mm-share-wrap/.pm-share-wrap/.pg-share-wrap): a passerby
+      // playing with this demo isn't signed in, has no real account's
+      // goal list behind it to actually freeze, so there's nothing
+      // for GENERATE SHAREABLE LINK to meaningfully do here -- same
+      // reasoning this preview's own #gtWizard hide already gives,
+      // just removed outright rather than hidden via CSS since
+      // (unlike the wizard) nothing downstream depends on this
+      // markup's own layout space being preserved.
+      var shareWrap = document.querySelector('.gt-share-wrap');
+      if (shareWrap) shareWrap.remove();
+
       // Same fixed-height container + always-on bottom-edge feather as
       // the other four previews -- see .landing-goal-tracking-preview
       // in goal-tracking.css, and render_landing_loot_preview's own
@@ -19017,4 +19117,290 @@ def render_goal_tracking(player: PlayerView) -> str:
         body=body,
         extra_script=script,
         extra_head=extra_head,
+    )
+
+
+def render_goal_tracking_share(share: "SharedContent", game_account: Optional["GameAccount"], viewer: Optional[PlayerView]) -> str:
+    """myscape.io/s/<code> for a Goal Tracking share (see POST /api/
+    goals/share in app/main.py and build_goal_tracking_share_snapshot
+    there for exactly what's frozen into share.payload) -- a visitor's
+    own read-only view of the sharer's ENTIRE goal list as of share
+    time, same "frozen, point-in-time, never live again" contract
+    render_loot_tracker_share/render_purchase_goals_share/render_
+    storages_share/render_mindmap_share above already establish for
+    their own tables. Unlike those last two, there's no single
+    mindmap/setup to pick -- a Goal Tracking share always freezes the
+    whole list, so this page shows it whole too.
+
+    Reuses _goal_tracking_panel_markup's body/script completely
+    unmodified, wrapped the same way those four functions already wrap
+    their own reused panels: a local fetch shim answering GET /api/
+    goals, PUT /api/goals/sort-mode, and PUT /api/goals/reorder against
+    a small in-memory copy of this share's own frozen goal list (see
+    the wrapper script's own comment below for why those three --
+    unlike everything else -- are actually implemented for real rather
+    than just failing closed: this mirrors render_landing_goal_
+    tracking_preview's own DEMO_GOALS shim almost exactly, just seeded
+    from this share's own frozen snapshot instead of a curated demo
+    one). No localStorage shadowing needed -- same as the live page and
+    its own landing preview, this script never reads or writes it.
+
+    Three surfaces this reused panel normally offers are adjusted here,
+    per explicit instruction plus the same judgment calls render_
+    landing_goal_tracking_preview's own docstring already makes for
+    this exact page (see each one's own comment below for the fuller
+    reasoning, mirrored rather than re-derived):
+
+    - The add-goal wizard (#gtWizard) is hidden outright via CSS
+      (.goal-tracking-share .gt-wizard in goal-tracking.css), per
+      explicit instruction ("won't have the button to add new goals")
+      -- same hide-not-strip treatment as every other reused-panel
+      surface this site hides on a share page, nothing downstream
+      reads or depends on that markup being absent.
+    - Each row's own delete button (.gt-goal-delete) is left fully
+      visible and hoverable but made inert via the exact same
+      capture-phase click interceptor render_landing_goal_tracking_
+      preview already uses for its own identical reasoning: these are
+      the SHARER's own goals, not something a visitor reading a
+      snapshot of them should be able to remove, even just cosmetically
+      against this page's own in-memory copy.
+    - Sort tabs (#gtSortTabs) and custom-mode drag-reorder are left
+      genuinely working, against that same in-memory copy -- per
+      explicit instruction this page needs no special carve-out for
+      them (nothing asked for them to be removed), and the other
+      three reused-panel share pages already establish that a passive,
+      non-destructive VIEW control (Storages Viewer's own search field
+      is the precedent: "the search field will function as normal")
+      stays live on a share page even when nothing explicitly asked
+      for that -- sorting or re-arranging how this one frozen snapshot
+      is DISPLAYED changes nothing about the underlying data, sharer's
+      or visitor's.
+
+    The only other visible difference from the real page is its own
+    title row, entirely replacing the reused body's own "Goal
+    Tracking" <h2> (and the export icon button inside it) -- stripped
+    out via body.partition, same technique (and same reasoning: a
+    visitor here isn't this share's owner, nothing for them to export
+    a SECOND time) as every other render_*_share's own identical
+    strip. banner_markup replaces it with this share's own two-line
+    heading: "GOAL TRACKING SNAPSHOT: YYYY-MM-DD" (share.created_at,
+    UTC, per explicit instruction -- a plain date, not a time, and
+    with no "(LOCAL)" qualifier this instruction asked for the way
+    render_storages_share's own SNAPSHOT AS OF line was, so this is
+    rendered once, server-side, rather than that one's viewer-
+    timezone-converting client-side span) on a small .subtitle-styled
+    line first, then "Shared by <name>" taking over .page-title's own
+    size/color/weight/uppercase/centering wholesale alongside a
+    download/import icon of its own -- same signed-in-vs-signed-out
+    split, same confirming-popup-before-the-actual-import shape, as
+    every other render_*_share's own import_icon_btn (see render_
+    mindmap_share's own doc comment for the fuller reasoning this
+    mirrors almost exactly): signed in, a button that opens a small
+    SAVE TO MY MYSCAPE popup; signed out, a plain <a> straight to
+    /signup, no popup, no JS at all.
+
+    game_account is the share's own owner, looked up by the caller
+    (GET /s/{code} in app/main.py) from SharedContent.game_account_id,
+    which can in principle be None if that account's own row is ever
+    deleted after the fact; falls back to "A player" the same way
+    every other render_*_share's own owner_name does."""
+    extra_head, body, script = _goal_tracking_panel_markup()
+    # Strips the reused body's own "Goal Tracking" <h2 class="page-
+    # title"> (and the export icon button inside it -- see
+    # gt_share_icon_btn in _goal_tracking_panel_markup) outright -- see
+    # this function's own doc comment above for why. The reused body
+    # always opens with exactly one such heading, so splitting on the
+    # first "</h2>" and keeping only what follows it is all stripping
+    # it out takes -- same technique every other render_*_share
+    # already uses for its own analogous heading.
+    _, _, body = body.partition("</h2>")
+
+    owner_name = (game_account.runescape_name if game_account else None) or "A player"
+    snapshot_date = share.created_at.strftime("%Y-%m-%d")
+
+    import_icon_svg = (
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
+        '<polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>'
+        '</svg>'
+    )
+    if viewer is not None:
+        import_icon_btn = (
+            ' <span class="gt-import-wrap">'
+            '<button type="button" class="gt-import-icon-btn" id="gtImportBtn" aria-label="Save to your account" title="Save to your account">'
+            f'{import_icon_svg}</button>'
+            '<div class="gt-import-card" id="gtImportCard" hidden>'
+            '<button type="button" class="gt-import-save-btn" id="gtImportSaveBtn">SAVE TO MY MYSCAPE</button>'
+            '<p class="gt-import-popup-hint">CLICKING THE BUTTON ABOVE WILL SAVE ALL OF<br>THESE GOALS TO YOUR GOAL TRACKING APP.</p>'
+            '</div>'
+            '</span>'
+        )
+    else:
+        import_icon_btn = (
+            ' <a class="gt-import-icon-btn" href="/signup" aria-label="Sign up to save this" title="Sign up to save this">'
+            f'{import_icon_svg}</a>'
+        )
+
+    banner_markup = f"""
+    <p class="subtitle gt-share-label">GOAL TRACKING SNAPSHOT: {snapshot_date}</p>
+    <h2 class="page-title">Shared by {escape(owner_name)}{import_icon_btn}</h2>
+    """
+    body = banner_markup + body
+    body = f'<div class="goal-tracking-share">{body}</div>'
+
+    payload_json = json.dumps(share.payload)
+    wrapper_script = f"""
+    (function () {{
+      var PAYLOAD = {payload_json};
+
+      // The frozen snapshot's own goals, held here as a plain,
+      // directly-mutated in-memory array -- not re-fetched or re-
+      // derived from PAYLOAD again after this -- so a sort-tab change
+      // or a custom-mode drag survives the real page's own 5-second
+      // poll (loadGoals re-fetches and replaces GT.goals wholesale on
+      // every tick) instead of silently reverting a few seconds later.
+      // Exactly the same shape render_landing_goal_tracking_preview's
+      // own DEMO_GOALS/DEMO_SORT_MODE already use, just seeded from
+      // this share's own real snapshot instead of a curated demo one
+      // -- see this function's own doc comment for why those three
+      // endpoints (unlike every mutation on every other share page on
+      // this site) are implemented for real here rather than just
+      // failing closed.
+      var currentGoals = PAYLOAD.goals || [];
+      var currentSortMode = PAYLOAD.sortMode || 'alphabetical';
+
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+        function ok(data) {{ return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve(data); }} }}); }}
+        function fail(detail) {{ return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{ detail: detail }}); }} }}); }}
+
+        if (path === '/api/goals' && method === 'GET') {{
+          return ok({{ goals: currentGoals, sort_mode: currentSortMode }});
+        }}
+        if (path === '/api/goals/sort-mode' && method === 'PUT') {{
+          var modeBody = {{}};
+          try {{ modeBody = opts.body ? JSON.parse(opts.body) : {{}}; }} catch (e) {{ modeBody = {{}}; }}
+          if (modeBody.sort_mode) currentSortMode = modeBody.sort_mode;
+          return ok({{ goals: currentGoals, sort_mode: currentSortMode }});
+        }}
+        if (path === '/api/goals/reorder' && method === 'PUT') {{
+          var reorderBody = {{}};
+          try {{ reorderBody = opts.body ? JSON.parse(opts.body) : {{}}; }} catch (e) {{ reorderBody = {{}}; }}
+          var order = reorderBody.order || [];
+          var byId = {{}};
+          currentGoals.forEach(function (g) {{ byId[g.id] = g; }});
+          order.forEach(function (id, index) {{
+            if (byId[id]) byId[id].sort_order = index;
+          }});
+          currentSortMode = 'custom';
+          return ok({{ goals: currentGoals, sort_mode: currentSortMode }});
+        }}
+        if (path.indexOf('/api/goals/') === 0 && method === 'DELETE') {{
+          // Unreachable in practice -- the capture-phase interceptor
+          // further down stops a click on .gt-goal-delete from ever
+          // reaching the reused script's own delegated listener, so
+          // this is never actually called. Implemented anyway rather
+          // than pulled out, same "a complete, faithful stand-in for
+          // every request the reused script could ever issue is worth
+          // more than trimming a path CSS/JS happens to make
+          // unreachable today" reasoning render_landing_goal_tracking_
+          // preview's own docstring already gives for its identical
+          // choice.
+          var delId = decodeURIComponent(path.slice('/api/goals/'.length));
+          currentGoals = currentGoals.filter(function (g) {{ return g.id !== delId; }});
+          return ok({{}});
+        }}
+
+        // The add-goal wizard's own Save (POST /api/goals, already
+        // unreachable with #gtWizard hidden) and anything else this
+        // script doesn't otherwise call. Graceful failure, never the
+        // real network.
+        return fail('Not available on a shared link.');
+      }};
+
+      {script}
+
+      // Neutralizes each row's own delete button -- same technique,
+      // same reasoning, as render_landing_goal_tracking_preview's own
+      // identical interceptor (see that function's own doc comment
+      // for the fuller writeup of exactly how/why this works): a
+      // CAPTURING-phase listener on the same #gtGoalList element the
+      // reused script's own bubble-phase delegated listener is
+      // attached to, so stopPropagation here halts the whole dispatch
+      // before that listener ever runs -- never arming the "Are you
+      // sure?" confirm state, never calling deleteGoal. Scoped to just
+      // .gt-goal-delete so a click anywhere else on the row --
+      // selecting it, starting a custom-mode drag -- passes through
+      // completely untouched.
+      document.getElementById('gtGoalList').addEventListener('click', function (e) {{
+        if (e.target.closest('.gt-goal-delete')) e.stopPropagation();
+      }}, true);
+
+      // The download icon above -- only ever rendered as a real
+      // <button> when viewer was signed in at render time; signed
+      // out, it's a plain <a href="/signup"> with no JS behavior at
+      // all -- see this function's own doc comment for why. Toggles
+      // gtImportCard open/closed, same outside-click-close convention
+      // as gtShareIconBtn/gtShareCard elsewhere on this site.
+      var gtImportBtn = document.getElementById('gtImportBtn');
+      var gtImportCard = document.getElementById('gtImportCard');
+      if (gtImportBtn) {{
+        function setGtImportOpen(open) {{
+          gtImportCard.hidden = !open;
+          gtImportBtn.classList.toggle('open', open);
+        }}
+        gtImportBtn.addEventListener('click', function () {{
+          setGtImportOpen(gtImportCard.hidden);
+        }});
+        document.addEventListener('click', function (e) {{
+          var wrap = document.querySelector('.gt-import-wrap');
+          if (wrap && !wrap.contains(e.target)) setGtImportOpen(false);
+        }});
+      }}
+
+      // SAVE TO MY MYSCAPE -- imports THIS share's own frozen goal
+      // list into the signed-in visitor's own Goal Tracking list (POST
+      // /api/goals/shares/{share.code}/import in app/main.py), then --
+      // only once that succeeds -- navigates there. No localStorage
+      // write needed first (unlike Mindmaps' own mmImportSaveBtn) --
+      // Goal Tracking has no "active item" selection concept, every
+      // imported goal just lands in the list exactly like any other.
+      // Uses window.fetch explicitly, not the bare fetch(...) every
+      // other handler in this wrapper script uses -- the plain
+      // identifier would resolve to THIS SAME IIFE's own local shim
+      // above (harmless by design against the reused panel script,
+      // see this function's own doc comment), which would mean this
+      // handler's own fetch call never actually reaches the real
+      // server at all -- same bug/fix every other render_*_share's
+      // own identical save-button handler already documents.
+      var gtImportSaveBtn = document.getElementById('gtImportSaveBtn');
+      if (gtImportSaveBtn) {{
+        gtImportSaveBtn.addEventListener('click', function () {{
+          var btn = this;
+          btn.disabled = true;
+          window.fetch('/api/goals/shares/{share.code}/import', {{ method: 'POST' }})
+            .then(function (res) {{ return res.ok ? res.json() : Promise.reject(); }})
+            .then(function () {{
+              window.location.href = '/dashboard/goal-tracking';
+            }})
+            .catch(function () {{
+              btn.disabled = false;
+              btn.classList.add('action-failed');
+              setTimeout(function () {{ btn.classList.remove('action-failed'); }}, 2500);
+            }});
+        }});
+      }}
+    }})();
+    """
+
+    return _shell(
+        title=f"{owner_name}'s shared goal list — myscape",
+        player=viewer,
+        body=body,
+        extra_head=extra_head,
+        extra_script=wrapper_script,
+        meta_description=f"{owner_name} shared a goal list on myscape.",
     )

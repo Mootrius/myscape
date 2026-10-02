@@ -38,12 +38,15 @@ That's also why this only offers the ~70 real OSRS-hiscores bosses
 type the way Mindmaps' own kc goal allows -- boss_kill_counts only
 ever has an entry for those.
 """
+import uuid
 from datetime import timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
+from sqlalchemy.orm import Session
 
 from app.bosses import HISCORE_BOSSES
 from app.item_ids import find_item_ids
-from app.models import _utcnow
+from app.models import Goal, _utcnow
 from app.mindmaps import (
     MAX_SKILL_LEVEL,
     MAX_SKILL_XP,
@@ -57,6 +60,9 @@ from app.mindmaps import (
     _xp_for_level,
 )
 from app.purchase_goals import build_owned_pools
+
+if TYPE_CHECKING:
+    from app.models import GameAccount
 
 GOAL_TYPES = ("kc", "skill", "item")
 SKILL_METRICS = ("level", "xp")
@@ -500,3 +506,94 @@ def target_display(goal) -> str:
     if goal.goal_type == "skill" and goal.metric == "xp":
         return f"{goal.target_value:,} xp"
     return f"{goal.target_value:,}"
+
+
+
+def import_goals_from_share_payload(db: Session, game_account: "GameAccount", payload: dict) -> List[Goal]:
+    """The reverse of build_goal_tracking_share_snapshot (app/main.py):
+    takes a Goal Tracking share's own frozen payload (SharedContent.
+    payload -- see POST /api/goals/shares/{code}/import in app/main.py,
+    the SAVE TO MY MYSCAPE button's own endpoint on render_goal_
+    tracking_share, app/pages.py) and creates a brand new, completely
+    normal, editable Goal row for EVERY goal in payload["goals"] --
+    "importing" someone else's whole shared goal list into your own,
+    same "add every one of these to your list" shape the instruction
+    this was built from asks for, mirroring import_mindmap_from_share_
+    payload/import_gear_setup_from_share_payload's own single-item
+    version of this same reverse-resolution for their own apps.
+
+    payload["goals"] entries are already-computed GoalOut.model_dump()
+    dicts (see build_goal_tracking_share_snapshot's own docstring) --
+    current_value/progress_pct/target_display/item_icon are all
+    derived, never stored on a real Goal row, so only the plain
+    definition fields (goal_type/target_name/metric/target_value/
+    item_id/is_recurring/recur_interval/recur_unit) are actually read
+    back out here; everything else is the SHARER's own frozen reading
+    at share time and plays no part in the importer's new goal.
+
+    baseline_value is the one field needing special handling rather
+    than a blanket "drop everything but the definition" rule: current_
+    value (Goal.baseline_value's own docstring in app/models.py) keys
+    off "does this goal have a baseline" to decide whether to read a
+    lifetime total or a since-baseline delta, so losing that bit
+    entirely would silently turn a one-time GAIN-mode goal back into a
+    REACH-mode one on import. The frozen NUMBER itself is meaningless
+    here regardless (it's the sharer's own lifetime kc/xp/item reading,
+    not this importer's), so only whether it was present at all is
+    read -- a fresh baseline is then captured against THIS account's
+    own live absolute_value(), exactly the same call create_goal
+    itself makes for a brand new GAIN-mode or recurring goal (see its
+    own docstring in app/main.py), rather than copying a number that
+    belongs to someone else's account. A recurring goal always gets
+    this same fresh-baseline treatment regardless of what baseline_
+    value says (is_recurring alone is enough to know it needs one),
+    with its own first period starting right now -- there's no
+    "custom start" concept to carry over from a share the way create_
+    goal's own wizard-driven recur_start_at offers, so "now" is this
+    function's only real choice, the same default create_goal itself
+    falls back to without one.
+
+    context (goal-progress inputs: boss_kill_counts/skills/owned-item
+    pools) is built once up front, same "once per request, not once
+    per goal" reasoning build_progress_context's own docstring already
+    gives, now amortized across however many goals this one import is
+    creating rather than just one.
+
+    Caller commits (same convention import_mindmap_from_share_payload/
+    import_gear_setup_from_share_payload's own callers already
+    follow)."""
+    context = build_progress_context(db, game_account)
+    new_goals: List[Goal] = []
+    for entry in payload.get("goals") or []:
+        goal = Goal(
+            # Explicit id, not just this column's own default=uuid.uuid4
+            # -- same reasoning import_mindmap_from_share_payload's own
+            # identical choice gives for MindMap.id: a Python-side
+            # column default isn't applied until flush/commit, and
+            # nothing here needs to read these ids back before that
+            # happens regardless, but staying consistent with every
+            # other import_*_from_share_payload in this codebase is
+            # simpler than re-deriving whether this one actually needs
+            # it.
+            id=uuid.uuid4(),
+            game_account_id=game_account.id,
+            goal_type=entry["goal_type"],
+            target_name=entry["target_name"],
+            metric=entry.get("metric"),
+            target_value=entry["target_value"],
+            item_id=entry.get("item_id"),
+            is_recurring=bool(entry.get("is_recurring")),
+            recur_interval=entry.get("recur_interval"),
+            recur_unit=entry.get("recur_unit"),
+        )
+        if goal.is_recurring:
+            goal.recur_period_start = _utcnow()
+            goal.baseline_value = absolute_value(goal, context)
+        elif entry.get("baseline_value") is not None:
+            # A one-time GAIN-mode goal in the sharer's own list (see
+            # this function's own docstring on why the frozen NUMBER
+            # itself is never read here, just its presence).
+            goal.baseline_value = absolute_value(goal, context)
+        db.add(goal)
+        new_goals.append(goal)
+    return new_goals

@@ -1095,3 +1095,129 @@ input[type="text"].invalid { border-color: var(--red); }
 .landing-goal-tracking-preview .gt-preview-char--flipped img {
   transform: scaleX(-1);
 }
+
+
+/* ---------- Share icon (the export button next to "Goal Tracking" on
+   the real page) -- same bare-icon/floating-popup recipe as the other
+   four pages' own .loot-share-wrap/.pg-share-wrap/.pm-share-wrap/
+   .mm-share-wrap, duplicated here with this page's own gt- prefix per
+   this project's per-page-CSS convention. 32px top/centered-via-
+   transform are both carried over verbatim from that same already-
+   empirically-measured fix (see .loot-share-wrap/.loot-share-card's
+   own comments in loot-tracker.css for the fuller reasoning) -- this
+   page's own h2.page-title shares that identical 22px/1.5 font-size,
+   so nothing here needs its own re-measurement. ---------- */
+.gt-share-wrap {
+  position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
+}
+.gt-share-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
+}
+.gt-share-icon-btn:hover { color: var(--text-dim); }
+.gt-share-icon-btn.open { color: var(--gold); }
+.gt-share-card {
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+/* Author CSS setting `display` on this element always outranks the
+   browser's own [hidden]{display:none} default stylesheet rule --
+   same gotcha/fix as .loot-share-card[hidden] in loot-tracker.css. */
+.gt-share-card[hidden] { display: none; }
+.gt-share-generate-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.gt-share-generate-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.gt-share-generate-btn:disabled { cursor: default; opacity: 0.6; }
+.gt-share-generate-btn.action-failed { border-color: var(--red); color: var(--red); }
+.gt-share-link-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gt-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.gt-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
+
+/* ---------- Save-to-your-account icon (render_goal_tracking_share's
+   own import_icon_btn, app/pages.py) -- same recipe as every other
+   page's own .*-import-wrap/.*-import-card, duplicated with this
+   page's own gt- prefix. ---------- */
+.gt-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
+.gt-import-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 0; margin: 0;
+  cursor: pointer; line-height: 1;
+  color: var(--text-faint); transition: color 0.15s ease;
+}
+.gt-import-icon-btn:hover { color: var(--text-dim); }
+.gt-import-icon-btn.open { color: var(--gold); }
+.gt-import-card {
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex; flex-direction: column; gap: 6px; width: 280px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 5px 6px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.gt-import-card[hidden] { display: none; }
+.gt-import-save-btn {
+  height: 28px; padding: 0 10px;
+  font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.gt-import-save-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.gt-import-save-btn:disabled { cursor: default; opacity: 0.6; }
+.gt-import-save-btn.action-failed { border-color: var(--red); color: var(--red); }
+.gt-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
+
+/* ---------- Share-viewing page (myscape.io/s/<code> for a Goal
+   Tracking share -- see render_goal_tracking_share's own docstring in
+   app/pages.py for the full breakdown of what's reused vs. overridden
+   here). .goal-tracking-share wraps that whole page's body. ---------- */
+
+/* The "GOAL TRACKING SNAPSHOT: YYYY-MM-DD" line above "Shared by
+   <name>" -- same small-line-above-the-title treatment as .loot-
+   share-range/.pg-share-label/.pm-share-asof/.mm-share-label, just
+   this page's own snapshot-date string. Already rendered in caps by
+   the Python string itself (app/pages.py), per explicit instruction
+   -- no text-transform needed here the way .pg-share-label's own
+   forced-uppercase treatment needs one for a title that ISN'T already
+   typed in caps. */
+.gt-share-label { text-align: center; margin: 0 0 4px; }
+
+/* Same "hide rather than strip from the markup itself" discipline as
+   every other reused-panel surface this site hides on a share page --
+   per explicit instruction this share page has no add-goal button
+   (or the wizard it expands into), and hiding (not stripping) is
+   simplest here since nothing downstream reads or depends on that
+   markup being absent. Same selector render_landing_goal_tracking_
+   preview's own #gtWizard hide above already uses, just scoped to
+   .goal-tracking-share instead of .landing-goal-tracking-preview. */
+.goal-tracking-share .gt-wizard { display: none; }

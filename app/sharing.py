@@ -52,6 +52,7 @@ SHARE_CONTENT_TYPE_LABELS = {
     "purchase_goal": "Purchase",
     "possessions": "Storages",
     "mindmap": "Mindmap",
+    "goal_tracking": "Goals",
 }
 
 

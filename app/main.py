@@ -106,6 +106,7 @@ from app.pages import (
     render_dashboard,
     render_forgot_password,
     render_goal_tracking,
+    render_goal_tracking_share,
     render_landing,
     render_login,
     render_loot_tracker,
@@ -2023,6 +2024,8 @@ def shared_content_page(
         return render_storages_share(share, owner, viewer)
     if share.content_type == "mindmap":
         return render_mindmap_share(share, owner, viewer)
+    if share.content_type == "goal_tracking":
+        return render_goal_tracking_share(share, owner, viewer)
     # Shouldn't be reachable -- every row's content_type is set by one
     # of this file's own create-share endpoints, all of which only
     # ever write a value this if-chain already knows. Same "something's
@@ -3616,3 +3619,134 @@ def delete_goal(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found.")
     db.delete(goal)
     db.commit()
+
+
+
+def build_goal_tracking_share_snapshot(db: Session, game_account: GameAccount) -> dict:
+    """Freezes EVERY one of game_account's own goals (not just one --
+    unlike a single mindmap or gear setup, Goal Tracking's own page is
+    always the whole flat list, so that's what a share of it freezes
+    too) into the payload POST /api/goals/share below writes into a
+    new SharedContent row, for render_goal_tracking_share (app/
+    pages.py) to read back later -- same "frozen, point-in-time, never
+    live again" contract every other build_*_share_snapshot in this
+    file/app.mindmaps/app.purchase_goals already establishes for its
+    own table.
+
+    Reuses _goal_out verbatim (ordered the same created_at-ascending
+    way list_goals itself returns them) rather than re-deriving a
+    second, share-specific goal shape -- every number it computes
+    (current_value/progress_pct/target_display/item_icon) is exactly
+    what a visitor should see AS OF this moment, the same reasoning
+    build_purchase_goal_share_snapshot's own _build_one_gear_setup
+    reuse already follows for a gear setup's priced slots. model_dump
+    (mode="json") is what turns each GoalOut's own typed fields (a
+    real uuid.UUID for id, real datetimes for created_at/recur_period_
+    start) into the plain str/ISO-string shapes a JSONB column -- and
+    this payload's own eventual re-import, see goals_module.import_
+    goals_from_share_payload -- can actually round-trip; every other
+    build_*_share_snapshot in this codebase reaches for a plain dict
+    from the start instead only because none of THEM already had a
+    Pydantic model this exact shape sitting right there to dump.
+
+    sortMode rides along so render_goal_tracking_share's own reused
+    script can open on the sharer's own last-picked #gtSortTabs choice
+    -- same reasoning GoalsResponse.sort_mode rides along on the live
+    GET /api/goals response for.
+
+    Doesn't roll a recurring goal's period forward first the way
+    list_goals does (goals_module.maybe_roll_recurring_period) -- a
+    share is frozen at whatever moment it's generated, stale period
+    boundaries included, same as every other number here; the next
+    real GET /api/goals from the ACTUAL owner's own account (not this
+    share) is what keeps their own live page's periods current, same
+    as always."""
+    goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
+    context = goals_module.build_progress_context(db, game_account)
+    return {
+        "goals": [_goal_out(goal, context).model_dump(mode="json") for goal in goals],
+        "sortMode": game_account.goal_sort_mode,
+    }
+
+
+@app.post("/api/goals/share")
+def create_goal_tracking_share(
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Freezes this account's own ENTIRE goal list into a new
+    SharedContent row and returns a myscape.io/s/<code> link to it --
+    same session-authenticated, unthrottled, no-request-body shape as
+    POST /api/mindmaps/{mindmap_id}/share above (see its own
+    docstring for the fuller reasoning, identical here) -- just
+    scoped to this whole account rather than one mindmap_id path
+    param, since Goal Tracking's own share button (see
+    _goal_tracking_panel_markup's gt_share_icon_btn in app/pages.py)
+    has nothing else to pick: there's exactly one goal list per
+    account, the same one the export icon always sits next to."""
+    snapshot = build_goal_tracking_share_snapshot(db, game_account)
+    code = generate_share_code(db)
+    share = SharedContent(
+        id=uuid.uuid4(),
+        game_account_id=game_account.id,
+        code=code,
+        content_type="goal_tracking",
+        payload=snapshot,
+        expires_at=_utcnow() + SHARE_DEFAULT_LIFETIME,
+    )
+    db.add(share)
+    db.commit()
+    return {"code": code, "url": f"{_SITE_URL}/s/{code}"}
+
+
+@app.post("/api/goals/shares/{code}/import")
+def import_shared_goals(
+    code: str,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """The SAVE TO MY MYSCAPE button on a Goal Tracking share page
+    (render_goal_tracking_share, app/pages.py) -- the counterpart to
+    POST /api/goals/share above, in the other direction: someone
+    ELSE's myscape.io/s/<code> goal list in, as a batch of brand new
+    Goal rows of this signed-in player's own, appended to whatever
+    goals they already have (see goals_module.import_goals_from_
+    share_payload's own docstring for exactly how each one is
+    rebuilt, including why a GAIN-mode or recurring goal gets a fresh
+    baseline against THIS account's own live progress rather than the
+    sharer's own frozen one). A separate route from POST /api/shares/
+    {code}/import and POST /api/mindmaps/shares/{code}/import above,
+    same reasoning either of their own docstrings already gives for
+    keeping each app's import endpoint beside its own share endpoint
+    rather than growing one shared endpoint another way. Session-
+    authenticated -- a signed-out visitor's click never reaches this
+    at all, since render_goal_tracking_share's own script sends it
+    straight to /signup instead, same posture as those two endpoints'
+    own identical gate.
+
+    content_type="goal_tracking" on the find_valid_share call below
+    means an invalid, expired, or other-content-type code all 404
+    exactly alike, same "a wrong code can't be told apart from a dead
+    one" posture every other share-consuming endpoint here already
+    takes.
+
+    Unlike the Mindmap import's own response, there's no single new
+    row's id to report back and no client-side selection state to set
+    afterward (render_goal_tracking_share's own script just redirects
+    straight to /dashboard/goal-tracking on success, no localStorage
+    write needed -- Goal Tracking has no "active item" concept the way
+    Mindmaps' own activeMindmapId does), so this just returns the
+    normal GET /api/goals shape for the now-larger list, same
+    "respond with the refreshed live state" convention create_goal
+    itself already follows for a single new goal."""
+    share = find_valid_share(db, code, content_type="goal_tracking")
+    if share is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
+    goals_module.import_goals_from_share_payload(db, game_account, share.payload)
+    db.commit()
+    goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
+    context = goals_module.build_progress_context(db, game_account)
+    return GoalsResponse(
+        goals=[_goal_out(goal, context) for goal in goals],
+        sort_mode=game_account.goal_sort_mode,
+    )
