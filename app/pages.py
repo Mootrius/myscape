@@ -2528,7 +2528,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
             '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>'
             '<button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>'
             '</div>'
-            '<button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" data-tooltip="Click to copy" disabled></button>'
+            '<button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" disabled></button>'
             '<button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" data-tooltip="Generating a new link will render your old link\nobsolete. You can do this once every 24 hours.">Generate new link</button>'
             '</div>'
             '</span>'
@@ -3351,6 +3351,17 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           // link-btn:disabled look Generate new link already uses
           // mid-request.
           publicProfileLinkBtn.disabled = !data.isPublic;
+          // Same reasoning for the hover tooltip (data-tooltip, see
+          // .myscape-tooltip in myscape.css and its driving script in
+          // _shell's shared_script) -- "Click to copy" while Private
+          // would describe an action the disabled button can't
+          // actually do, so the attribute itself comes off rather
+          // than just styling around it.
+          if (data.isPublic) {
+            publicProfileLinkBtn.setAttribute('data-tooltip', 'Click to copy');
+          } else {
+            publicProfileLinkBtn.removeAttribute('data-tooltip');
+          }
         }
 
         fetch('/api/players/me/public-profile')
