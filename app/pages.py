@@ -1534,8 +1534,6 @@ _MODEL_VIEWER_HEAD = """
     if (!wrap || !canvas) return;
 
     var bgEl = document.getElementById("modelViewerBg");
-    var infoBtn = document.getElementById("mvInfoBtn");
-    var infoPopup = document.getElementById("modelViewerInfoPopup");
     var bgShuffleBtn = document.getElementById("mvBgShuffleBtn");
     var playPauseBtn = document.getElementById("mvPlayPauseBtn");
     var playIcon = document.getElementById("mvPlayIcon");
@@ -1675,30 +1673,6 @@ _MODEL_VIEWER_HEAD = """
       applyModelViewerBackgroundFromServer(window.__myscapePendingModelViewerBg);
     }
 
-    // Small popup with the fixed copy below -- toggled by its own
-    // button, dismissed by a click anywhere else on the page. The two
-    // stopPropagation calls keep a click on the button itself or
-    // inside the popup from also hitting that same document-level
-    // listener and closing it again in the same event.
-    function setInfoPopupOpen(open) {
-      infoPopup.hidden = !open;
-      // Keeps the info button visually "pressed" (same gold as its
-      // own :hover) for as long as the popup it opened is showing,
-      // rather than only while the pointer happens to still be over
-      // it.
-      infoBtn.classList.toggle("is-active", open);
-    }
-    if (infoBtn && infoPopup) {
-      infoBtn.addEventListener("click", function (e) {
-        e.stopPropagation();
-        setInfoPopupOpen(infoPopup.hidden);
-      });
-      infoPopup.addEventListener("click", function (e) { e.stopPropagation(); });
-      document.addEventListener("click", function () {
-        setInfoPopupOpen(false);
-      });
-    }
-
     // Keeps the play/pause button's two SVGs (see the markup in
     // render_character_overview) and title/aria-label in sync with a
     // plain boolean -- called both from the button's own click
@@ -1722,8 +1696,9 @@ _MODEL_VIEWER_HEAD = """
       setHidden(playIcon, !paused);
       setHidden(pauseIcon, paused);
       if (playPauseBtn) {
-        playPauseBtn.title = paused ? "Play rotation" : "Pause rotation";
-        playPauseBtn.setAttribute("aria-label", playPauseBtn.title);
+        var label = paused ? "Play rotation" : "Pause rotation";
+        playPauseBtn.setAttribute("data-tooltip", label);
+        playPauseBtn.setAttribute("aria-label", label);
       }
     }
 
@@ -2478,24 +2453,26 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
       </div>
     </div>"""
 
-    # The "i" info popup and shuffle-background buttons are owner-
-    # only on a public_code visitor's view specifically (NOT preview
-    # -- the landing demo's own shuffle/info are a nice bit of
-    # marketing, since a prospective player clicking them is exactly
-    # who "set your character model in the myscape plugin sidebar"
-    # is meant for). A real visitor looking at someone else's shared
-    # link has no plugin of their own to point at that instructions,
-    # and shuffling only ever changes this visitor's own local
-    # background pick anyway (see MODEL_VIEWER_BG_STORAGE_KEY's own
-    # per-public-code namespacing above) -- not a setting worth
+    # The "i" hover-tooltip and shuffle-background buttons are
+    # owner-only on a public_code visitor's view specifically (NOT
+    # preview -- the landing demo's own shuffle/info are a nice bit of
+    # marketing, since a prospective player hovering/clicking them is
+    # exactly who "set your character model in the myscape plugin
+    # sidebar" is meant for). A real visitor looking at someone else's
+    # shared link has no plugin of their own to point at that
+    # instructions, and shuffling only ever changes this visitor's own
+    # local background pick anyway (see MODEL_VIEWER_BG_STORAGE_KEY's
+    # own per-public-code namespacing above) -- not a setting worth
     # exposing on someone else's page. Omitting the markup entirely
-    # (rather than hiding via CSS) is safe: the script's own guards
-    # (`if (infoBtn && infoPopup) {...}`, `if (bgShuffleBtn) ...`)
-    # already no-op cleanly when these elements don't exist, same
-    # pattern public_profile_settings_btn above relies on.
-    mv_info_btn = "" if public_code else '<button class="model-viewer-btn" id="mvInfoBtn" type="button" title="About this viewer" aria-label="About this viewer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>'
-    mv_shuffle_btn = "" if public_code else '<button class="model-viewer-btn" id="mvBgShuffleBtn" type="button" title="Shuffle background" aria-label="Shuffle background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg></button>'
-    mv_info_popup = "" if public_code else '<div class="model-viewer-info-popup" id="modelViewerInfoPopup" hidden>Set your character model in the myscape plugin sidebar on RuneLite.</div>'
+    # (rather than hiding via CSS) is safe: the script's own guard
+    # (`if (bgShuffleBtn) ...`) already no-ops cleanly when that
+    # element doesn't exist, same pattern public_profile_settings_btn
+    # above relies on -- the "i" button needs no such guard at all any
+    # more, since its data-tooltip is read by the shared, site-wide
+    # hover listener (_shell's own shared_script) rather than anything
+    # this module queries by id.
+    mv_info_btn = "" if public_code else '<button class="model-viewer-btn" id="mvInfoBtn" type="button" data-tooltip="Set your character model in the myscape plugin sidebar on RuneLite." aria-label="Set your character model in the myscape plugin sidebar on RuneLite."><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="11"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>'
+    mv_shuffle_btn = "" if public_code else '<button class="model-viewer-btn" id="mvBgShuffleBtn" type="button" data-tooltip="Shuffle background" aria-label="Shuffle background"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg></button>'
 
     # The owner's own settings control -- absent in both preview
     # (the landing demo) and public_code (a visitor's own view of
@@ -2573,10 +2550,9 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
             <div class="model-viewer-controls" id="modelViewerControls">
               {mv_info_btn}
               {mv_shuffle_btn}
-              <button class="model-viewer-btn" id="mvPlayPauseBtn" type="button" title="Pause rotation" aria-label="Pause rotation"><svg id="mvPlayIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" hidden><polygon points="6 3 20 12 6 21 6 3"></polygon></svg><svg id="mvPauseIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></button>
-              <button class="model-viewer-btn" id="mvResetBtn" type="button" title="Reset view" aria-label="Reset view"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg></button>
+              <button class="model-viewer-btn" id="mvPlayPauseBtn" type="button" data-tooltip="Pause rotation" aria-label="Pause rotation"><svg id="mvPlayIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" hidden><polygon points="6 3 20 12 6 21 6 3"></polygon></svg><svg id="mvPauseIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></button>
+              <button class="model-viewer-btn" id="mvResetBtn" type="button" data-tooltip="Reset rotation" aria-label="Reset rotation"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg></button>
             </div>
-            {mv_info_popup}
           </div>
           <div class="model-viewer-empty" id="modelViewerEmpty">No 3D model captured yet &mdash; use the &ldquo;Export 3D model&rdquo; button in the myscape RuneLite plugin&rsquo;s sidebar, then refresh this page.</div>
         </div>

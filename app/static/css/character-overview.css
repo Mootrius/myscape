@@ -396,7 +396,7 @@
   color: #fff;
   cursor: pointer;
 }
-.model-viewer-btn:hover, .model-viewer-btn.is-active { border-color: var(--gold); color: var(--gold); }
+.model-viewer-btn:hover { border-color: var(--gold); color: var(--gold); }
 .model-viewer-btn svg { display: block; }
 /* The rule above sets `display` on every icon inside a button,
    including the play/pause pair's two stacked SVGs -- author CSS
@@ -408,27 +408,6 @@
    selector) is what lets it win back that case correctly. */
 .model-viewer-btn svg[hidden] { display: none; }
 
-/* Info popup -- fixed copy is set once in the markup itself
-   (render_character_overview), not the script. Shown/hidden by
-   mvInfoBtn's own click handler in the module script, which toggles
-   the [hidden] attribute -- that alone is enough to pull it out of
-   the flow, no display:none needed here. Anchored to the row's own
-   left/right edges and sits just above .model-viewer-controls so it
-   never overlaps the buttons that opened it. */
-.model-viewer-info-popup {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 42px;
-  z-index: 3;
-  padding: 8px 10px;
-  background: rgba(20, 18, 16, 0.92);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text-dim);
-  font-size: 15px;
-  line-height: 1.4;
-}
 
 /* Shown instead of the canvas wrap above (see showEmpty in the module
    script) when the account has never used the plugin's "Export 3D
