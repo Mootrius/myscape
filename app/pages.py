@@ -2413,12 +2413,14 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     oldschool.runescape.wiki/w/<Capitalized skill name>, opened in a
     new tab -- same target=_blank/rel=noopener convention as every
     other outbound wiki link on this site, e.g. wikiItemUrl's own
-    callers). Its title attribute (set on the whole cell, not just its
-    icon, so hovering anywhere on it triggers the tooltip -- and so the
-    link's own native hover target covers the whole cell too) starts
-    out as just the capitalized skill name and gets XP appended once
-    the skills fetch resolves (setSkillTooltip in the script below) --
-    e.g. "Attack" becomes "Attack — 13,034,431 xp".
+    callers). Its data-tooltip (set on the whole cell, not just its
+    icon, so hovering anywhere on it triggers the site-styled hover
+    tooltip -- see .myscape-tooltip in myscape.css and its own driving
+    script in _shell's shared_script -- and so the link's own native
+    hover target covers the whole cell too) starts out as just the
+    capitalized skill name and gets XP appended once the skills fetch
+    resolves (setSkillTooltip in the script below) -- e.g. "Attack"
+    becomes "Attack · 13,034,431 xp".
 
     Beside .co-left-col, inside the page's own two-column row
     (.co-main-row), the collection log card (.clog-card) -- replacing
@@ -2437,7 +2439,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     )
 
     skill_cells = "\n      ".join(
-        f"""<a class="skill-cell" id="skill-cell-{key}" title="{key.capitalize()}" href="https://oldschool.runescape.wiki/w/{key.capitalize()}" target="_blank" rel="noopener">
+        f"""<a class="skill-cell" id="skill-cell-{key}" data-tooltip="{key.capitalize()}" href="https://oldschool.runescape.wiki/w/{key.capitalize()}" target="_blank" rel="noopener">
         <img class="skill-cell-icon" src="/static/skill-icons/{key}.png" alt="{key.capitalize()}" />
         <span class="skill-cell-level" id="skill-{key}">&mdash;</span>
       </a>"""
@@ -2585,7 +2587,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         <div class="clog-body" id="clogBody">
           <div class="clog-toolbar">
             <div class="clog-tabs" id="clogTabs"></div>
-            <button class="clog-sync-btn" id="clogSyncBtn" type="button" title="Refresh kill/completion counts from the OSRS hiscores"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>
+            <button class="clog-sync-btn" id="clogSyncBtn" type="button" data-tooltip="Refresh kill counts from official hiscores"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>
           </div>
           <div class="clog-panes">
             <div class="clog-pages" id="clogPages"></div>
@@ -2680,15 +2682,17 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         var el = document.getElementById('skill-' + key);
         if (el) el.textContent = String(levelForXp(xp));
       }
-      // The skill name + XP tooltip lives on the whole cell (title=
-      // capitalized key initially, see skill_cells in app/pages.py) so
-      // hovering anywhere on it -- not just the small icon -- shows it;
-      // this just extends that same title with XP once it's synced.
+      // The skill name + XP tooltip lives on the whole cell (data-
+      // tooltip = capitalized key initially, see skill_cells in
+      // app/pages.py) so hovering anywhere on it -- not just the small
+      // icon -- shows it; this just extends that same data-tooltip
+      // with XP once it's synced, same middle-dot join as every other
+      // site-styled tooltip here.
       function setSkillTooltip(key, xp) {
         var el = document.getElementById('skill-cell-' + key);
         if (!el) return;
         var name = key.charAt(0).toUpperCase() + key.slice(1);
-        el.title = xp != null ? name + ' — ' + formatInt(xp) + ' xp' : name;
+        el.setAttribute('data-tooltip', xp != null ? name + ' · ' + formatInt(xp) + ' xp' : name);
       }
 
       fetch('/api/character-overview/summary')
