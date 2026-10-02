@@ -2518,7 +2518,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     # toggles.
     public_profile_settings_btn = "" if (preview or public_code) else (
         ' <span class="co-settings-wrap">'
-        '<button type="button" class="co-settings-btn" id="publicProfileSettingsBtn" aria-label="Public profile settings" title="Public profile settings">'
+        '<button type="button" class="co-settings-btn" id="publicProfileSettingsBtn" aria-label="Public profile settings" data-tooltip="Public profile settings">'
         '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M8.65 6.20 L9.54 2.82 L14.46 2.82 L15.35 6.20 L18.72 5.28 L21.18 9.54 L18.70 12.00 L21.18 14.46 L18.72 18.72 L15.35 17.80 L14.46 21.18 L9.54 21.18 L8.65 17.80 L5.28 18.72 L2.82 14.46 L5.30 12.00 L2.82 9.54 L5.28 5.28 Z"></path>'
         '<circle cx="12" cy="12" r="3.1"></circle>'
@@ -2876,6 +2876,16 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         if (emptyEl) emptyEl.hidden = html.length > 0;
       }
 
+      // Same convention as questWikiUrl just above -- replace spaces
+      // with underscores before encodeURIComponent (so a literal "&",
+      // e.g. "Kourend & Kebos", comes out %26 either way) -- confirmed
+      // against the wiki's own "<Area> Diary" page titles (Ardougne
+      // Diary, Kourend & Kebos Diary, etc.), not guessed/reconstructed.
+      function diaryWikiUrl(area) {
+        var label = DIARY_AREA_LABELS[area] || titleCase(area);
+        return 'https://oldschool.runescape.wiki/w/' + encodeURIComponent(label.replace(/ /g, '_')) + '_Diary';
+      }
+
       function renderDiaries(diaries) {
         var listEl = document.getElementById('diariesList');
         if (!listEl || !Array.isArray(diaries)) return;
@@ -2898,7 +2908,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
             ? (DIARY_AREA_TIER_ICON[area] || [])[highestCompletedIndex]
             : DIARY_AREA_NOT_STARTED_ICON;
           var label = DIARY_AREA_LABELS[area] || titleCase(area);
-          html += '<div class="diary-row">'
+          html += '<a class="diary-row" href="' + diaryWikiUrl(area) + '" target="_blank" rel="noopener">'
             + '<div class="diary-row-header">'
             + '<img class="diary-row-icon" src="' + icon + '" alt="" />'
             + '<span class="diary-row-label">' + escapeHtml(label) + '</span>'
@@ -2910,7 +2920,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
                 return '<div class="diary-tier-seg' + (state === 'completed' ? ' diary-tier-seg--completed' : '') + '"></div>';
               }).join('')
             + '</div>'
-            + '</div>';
+            + '</a>';
         });
         listEl.innerHTML = html;
       }

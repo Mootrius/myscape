@@ -902,6 +902,15 @@
    current tier, see /api/character-overview/progress's own docstring
    in app/main.py for why.
 
+   Each row is itself a link to that area's wiki diary page now (<a>,
+   not <div> -- see renderDiaries/diaryWikiUrl in app/pages.py), same
+   "declare :hover explicitly too" fix .skill-cell/.quest-row already
+   use above: a:hover (element + pseudo-class, myscape.css) outweighs
+   a single class like plain .diary-row, so .diary-row:hover below
+   repeats color/text-decoration too rather than just adding the
+   background -- without that, a:hover's own underline+gold would win
+   back the instant a row is hovered.
+
    .diaries-list (the actual #diariesList wrapper in app/pages.py,
    holding all 12 .diary-row below) gets the same fixed height + own
    scrollbar as .quests-list above, same reasoning: keeps .diaries-card
@@ -916,12 +925,19 @@
   padding-right: 6px;
 }
 .diary-row {
+  display: block;
+  color: inherit;
+  text-decoration: none;
   padding: 4px;
   margin: 0 -4px 2px -4px;
   border-radius: var(--radius);
 }
 .diary-row:last-child { margin-bottom: 0; }
-.diary-row:hover { background: var(--panel-2); }
+.diary-row:hover {
+  background: var(--panel-2);
+  color: inherit;
+  text-decoration: none;
+}
 .diary-row-header {
   display: flex;
   align-items: center;
