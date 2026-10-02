@@ -587,6 +587,117 @@ def _shell(
         }
       }, 3000);
     }
+
+    // Custom hover tooltip, site-wide -- see .myscape-tooltip's own
+    // comment in myscape.css for the full picture (the matching styled
+    // popup, and why this is one shared/reused element). Any element
+    // with data-tooltip set (plain text) gets one on hover instead of
+    // a native browser title tooltip; data-tooltip-sub adds an
+    // optional second, dimmer line. SHOW_DELAY is deliberately short
+    // -- not the browser's own ~1s+ native delay this is replacing --
+    // but still enough that sweeping the mouse across a dense grid of
+    // targets (the Collection Log's own item grid, the first place
+    // this is used) doesn't flash a tooltip on every tile passed over
+    // along the way. Hiding is immediate, no delay, same as a native
+    // tooltip's own feel.
+    (function () {
+      const SHOW_DELAY = 150;
+      let tooltipEl = null;
+      let showTimer = null;
+      let currentTarget = null;
+
+      function ensureTooltipEl() {
+        if (!tooltipEl) {
+          tooltipEl = document.createElement('div');
+          tooltipEl.className = 'myscape-tooltip';
+          document.body.appendChild(tooltipEl);
+        }
+        return tooltipEl;
+      }
+
+      // Centered above the target by default, like a classic item
+      // tooltip -- flips below if there's not enough room above (the
+      // grid's own top row, or a page scrolled all the way up), and
+      // clamps horizontally so it never runs off either edge of the
+      // viewport. Reads the tooltip's own getBoundingClientRect AFTER
+      // its text is already set (see showTooltip below) -- opacity: 0
+      // still lays out and measures correctly, unlike display: none,
+      // which is exactly why the CSS fades via opacity/transform
+      // instead.
+      function positionTooltip(target, el) {
+        const rect = target.getBoundingClientRect();
+        const tipRect = el.getBoundingClientRect();
+        const gap = 8;
+        let left = rect.left + rect.width / 2 - tipRect.width / 2;
+        let top = rect.top - tipRect.height - gap;
+        if (top < 4) top = rect.bottom + gap;
+        const maxLeft = window.innerWidth - tipRect.width - 4;
+        if (left < 4) left = 4;
+        else if (left > maxLeft) left = Math.max(4, maxLeft);
+        el.style.left = left + 'px';
+        el.style.top = top + 'px';
+      }
+
+      function showTooltip(target) {
+        // The pointer may have already moved off this target (and
+        // onto/off another) before SHOW_DELAY elapsed -- only still-
+        // current hovers actually show.
+        if (currentTarget !== target) return;
+        const text = target.getAttribute('data-tooltip');
+        if (!text) return;
+        const sub = target.getAttribute('data-tooltip-sub');
+        const el = ensureTooltipEl();
+        el.classList.remove('show');
+        el.textContent = text;
+        if (sub) {
+          const subEl = document.createElement('div');
+          subEl.className = 'myscape-tooltip-sub';
+          subEl.textContent = sub;
+          el.appendChild(subEl);
+        }
+        positionTooltip(target, el);
+        // Forces the browser to commit the (still-hidden) state above
+        // to a frame before the 'show' class below starts the actual
+        // fade-in transition -- without this, setting both in the same
+        // tick can coalesce into the element just appearing already-
+        // visible, no fade.
+        void el.offsetWidth;
+        el.classList.add('show');
+      }
+
+      function hideTooltip() {
+        clearTimeout(showTimer);
+        currentTarget = null;
+        if (tooltipEl) tooltipEl.classList.remove('show');
+      }
+
+      document.addEventListener('mouseover', (e) => {
+        const target = e.target.closest ? e.target.closest('[data-tooltip]') : null;
+        if (!target || target === currentTarget) return;
+        currentTarget = target;
+        clearTimeout(showTimer);
+        showTimer = setTimeout(() => showTooltip(target), SHOW_DELAY);
+      });
+
+      document.addEventListener('mouseout', (e) => {
+        const target = e.target.closest ? e.target.closest('[data-tooltip]') : null;
+        // Moving onto (or back from) the target's own child elements
+        // isn't actually leaving it -- relatedTarget is where the
+        // pointer is headed.
+        if (!target || target !== currentTarget) return;
+        if (e.relatedTarget && target.contains(e.relatedTarget)) return;
+        hideTooltip();
+      });
+
+      // A tooltip anchored to something that just scrolled or resized
+      // out from under it would otherwise keep pointing at empty space
+      // until the next hover -- just hide it; true for the capturing
+      // scroll listener (any scrollable ancestor, not just the window)
+      // the same way .suggestions' own overscroll-behavior containment
+      // elsewhere on this site has to account for nested scroll areas.
+      window.addEventListener('scroll', hideTooltip, true);
+      window.addEventListener('resize', hideTooltip);
+    })();
     """
     return f"""<!doctype html>
 <html lang="en">
@@ -2995,7 +3106,13 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           tile.href = clogItemWikiUrl(item.name);
           tile.target = '_blank';
           tile.rel = 'noopener';
-          tile.title = qty != null ? item.name + ' \u2014 ' + formatInt(qty) : item.name;
+          // Site-styled hover tooltip (see .myscape-tooltip in
+          // myscape.css and its own driving script in _shell's shared_
+          // script) instead of the native title -- same name/qty split
+          // across two lines the old single-line title packed behind
+          // an em dash, just restyled.
+          tile.setAttribute('data-tooltip', item.name);
+          if (qty != null) tile.setAttribute('data-tooltip-sub', formatInt(qty));
           var img = document.createElement('img');
           img.className = 'clog-item-icon';
           img.src = clogIconUrl(item.id);

@@ -1621,3 +1621,57 @@ body.landing .footer-inner {
   border: 1px solid var(--border);
 }
 .landing-cta-btn--secondary:hover { border-color: var(--gold-dim); color: var(--gold); text-decoration: none; }
+
+
+/* Custom hover tooltip, shared across the whole site -- replaces the
+   native browser/OS title tooltip (slow to appear, and styled by the
+   browser/OS rather than this site) with one that matches the same
+   floating-panel look every other popup here already uses (.loot-
+   share-card in loot-tracker.css, .suggestions in purchase-goals.css,
+   etc. -- var(--panel) background, var(--border) 1px border, var(--
+   radius) corners, a soft drop shadow). One shared element, created
+   once and repositioned/reused for every tooltip on the page rather
+   than built fresh per hover -- see the IIFE at the end of _shell's
+   own shared_script (app/pages.py) that drives it. Any element opts
+   in by setting data-tooltip (plain text, the main line) instead of
+   title, with an optional data-tooltip-sub for a second, dimmer line
+   (a quantity, count, etc.) -- see the Collection Log's own .clog-item
+   tiles (app/pages.py) for the first use.
+
+   position: fixed (not absolute) since it's positioned straight off
+   getBoundingClientRect's own viewport-relative coordinates -- no
+   containing-block offset to account for, and it stays correctly
+   placed under a scroll without that script needing to listen for one
+   (scroll just hides it instead, see the script). pointer-events: none
+   throughout -- it should never be able to steal the hover/click it's
+   only here to annotate. */
+.myscape-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+  max-width: 240px;
+  /* Opacity/transform, not display -- the show/hide script needs this
+     element laid out (with real dimensions to measure) the instant its
+     text is set, before it's actually visible, to position it against
+     its target without a visible flash-then-jump. */
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.08s ease, transform 0.08s ease;
+}
+.myscape-tooltip.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.myscape-tooltip-sub {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
