@@ -190,7 +190,13 @@ CHAT_NAME_TO_DISPLAY_NAME = {
 # collection_log_page_kill_counts shows each entry individually
 # ("1,234 · 56"), not summed, so a page like "Callisto and Artio"
 # reads as two real numbers rather than one combined total that hides
-# which twin the player has actually killed more of. Confirmed against
+# which twin the player has actually killed more of. "The Gauntlet"
+# below is the same shape for a different reason -- it's not a twin-
+# boss pair, but this app's own collection log schema (see
+# app/data/collection_log_schema.json) has only the one "The Gauntlet"
+# page, no separate page for the Corrupted variant, so its normal and
+# corrupted kill counts both belong next to that single page rather
+# than one of them having nowhere to show up at all. Confirmed against
 # a real collection log page list, not guessed -- content this app
 # hasn't verified a hiscores mapping for yet (Moons of Peril, at time
 # of writing) is deliberately left out of both this table and
@@ -198,6 +204,7 @@ CHAT_NAME_TO_DISPLAY_NAME = {
 # showing a wrong number next to it.
 COLLECTION_LOG_PAGE_NAME_OVERRIDES: Dict[str, List[str]] = {
     "Callisto and Artio": ["Callisto", "Artio"],
+    "The Gauntlet": ["The Gauntlet", "The Corrupted Gauntlet"],
     "Dagannoth Kings": ["Dagannoth Prime", "Dagannoth Rex", "Dagannoth Supreme"],
     "Venenatis and Spindel": ["Venenatis", "Spindel"],
     "Vet'ion and Calvar'ion": ["Vet'ion", "Calvar'ion"],
