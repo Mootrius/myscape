@@ -5866,7 +5866,12 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             method: 'PUT', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ order: order }),
           });
-          if (data) { PG.stateVersion++; PG.data = data; render(); }
+          // Unlike setStillToPurchaseSort above, this CUSTOM order is
+          // itself frozen into a share snapshot verbatim (customOrder
+          // in build_purchase_goal_share_snapshot) -- see
+          // resetGearSetupShareState's own comment for why that's the
+          // difference.
+          if (data) { PG.stateVersion++; PG.data = data; resetGearSetupShareState(); render(); }
         }
 
         document.querySelectorAll('#pgSummaryList .gear-summary-row').forEach(function (el) {
@@ -5940,7 +5945,9 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
           const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/icon', {
             method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icon: null }),
           });
-          if (data) { PG.stateVersion++; PG.data = data; PG.iconPicker = false; render(); }
+          // Changed the active setup's own icon -- see
+          // resetGearSetupShareState's own comment above.
+          if (data) { PG.stateVersion++; PG.data = data; PG.iconPicker = false; resetGearSetupShareState(); render(); }
         });
         document.getElementById('iconCancelBtn').addEventListener('click', function () { PG.iconPicker = false; renderIconPicker(); });
       }
@@ -5960,7 +5967,8 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             const data = await apiCall('/api/gear-setups/' + encodeURIComponent(PG.activeSetupId) + '/icon', {
               method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icon: icon }),
             });
-            if (data) { PG.stateVersion++; PG.data = data; PG.iconPicker = false; render(); }
+            // Same as iconClearBtn's own handler above.
+            if (data) { PG.stateVersion++; PG.data = data; PG.iconPicker = false; resetGearSetupShareState(); render(); }
           });
         });
       }
@@ -6101,6 +6109,9 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         if (data) {
           PG.picker = null;
           PG.multiSelect = [];
+          // Equipped (or re-equipped) one or more slots on the active
+          // setup -- see resetGearSetupShareState's own comment above.
+          resetGearSetupShareState();
           render();
         }
       }
@@ -6114,7 +6125,9 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slot_type: slotType, slot: slot, item: null }),
         });
-        if (data) { PG.stateVersion++; PG.data = data; render(); }
+        // Cleared a slot on the active setup -- same as saveSlot's own
+        // equip path above.
+        if (data) { PG.stateVersion++; PG.data = data; resetGearSetupShareState(); render(); }
       }
 
       // Drag-and-drop: moves whatever's in (fromSlotType, fromSlot) into
@@ -6133,7 +6146,9 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             to_slot_type: toSlotType, to_slot: toSlot,
           }),
         });
-        if (data) { PG.stateVersion++; PG.data = data; PG.picker = null; render(); }
+        // Moved an item between slots on the active setup -- same as
+        // saveSlot/removeSlotItem above.
+        if (data) { PG.stateVersion++; PG.data = data; PG.picker = null; resetGearSetupShareState(); render(); }
       }
 
       async function runSearch(query, callback) {
@@ -6256,7 +6271,10 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
           data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id), {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
           });
-          if (data) { PG.stateVersion++; PG.data = data; render(); }
+          // Renamed the active setup -- its name is part of what a
+          // share link freezes too, same as resetGearSetupShareState's
+          // own comment above.
+          if (data) { PG.stateVersion++; PG.data = data; resetGearSetupShareState(); render(); }
         }
       });
 
@@ -6265,13 +6283,22 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
       // Puts the share card back to its own starting state -- the
       // GENERATE SHAREABLE LINK button showing, any already-generated
       // link cleared out and hidden -- called from setActiveSetupId
-      // above any time the ACTIVE setup actually changes, same
-      // "an old link silently describing something that's no longer
-      // on screen" problem Loot Tracker's own resetLootShareState
-      // (app/pages.py) exists to fix, and the same fix shape: putting
-      // the button back doesn't touch any link already generated for
-      // the setup still showing right now, only ever fires on an
-      // actual switch.
+      // above any time the ACTIVE setup actually changes, AND from
+      // every edit of whichever setup is currently active (icon,
+      // slot/slot-move, still-to-purchase custom order, rename -- see
+      // each call site's own comment below for why that particular
+      // mutation counts), same "an old link silently describing
+      // something that's no longer on screen" problem Loot Tracker's
+      // own resetLootShareState (app/pages.py) exists to fix, and the
+      // same fix shape: putting the button back doesn't touch any
+      // link already generated for the setup still showing right
+      // now, only ever fires once something about it has actually
+      // changed. Deliberately NOT called from setStillToPurchaseSort
+      // just above -- build_purchase_goal_share_snapshot's own
+      // docstring (app/purchase_goals.py) notes the share page always
+      // re-derives every sort mode except CUSTOM from a frozen
+      // starting list, so switching sort mode alone never changes
+      // what an already-generated link would show.
       function resetGearSetupShareState() {
         var genBtn = document.getElementById('pgShareGenerateBtn');
         var linkBtn = document.getElementById('pgShareLinkBtn');
@@ -10986,6 +11013,15 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         try { return localStorage.getItem(ACTIVE_MINDMAP_STORAGE_KEY); } catch (e) { return null; }
       }
       function setActiveMindmapId(id) {
+        // A link already generated (see mmShareGenerateBtn's own click
+        // handler further down) describes whatever mindmap was active
+        // at the moment it was made -- switching to a DIFFERENT one
+        // here would silently leave that old link showing as if it
+        // were for the mindmap now on screen. Resetting on every call
+        // (not just a "real" switch) is harmless, same reasoning
+        // Purchase Goals' own setActiveSetupId documents for its own
+        // identical call.
+        resetMindmapShareState();
         MM.activeMindmapId = id;
         // A different mindmap's node-tree snapshots don't mean
         // anything against this one -- every switch (including the
@@ -13749,7 +13785,9 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id), {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }),
           });
-          if (data) { MM.data = data; render(); }
+          // Renamed the active mindmap -- see resetMindmapShareState's
+          // own comment below.
+          if (data) { MM.data = data; resetMindmapShareState(); render(); }
         }
       });
 
@@ -13884,6 +13922,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           MM.undoStack.pop();
           MM.redoStack.push(preUndoNodes);
           MM.selectedNodeId = null;
+          resetMindmapShareState();
         }
         render();
       }
@@ -13901,6 +13940,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           MM.redoStack.pop();
           MM.undoStack.push(preRedoNodes);
           MM.selectedNodeId = null;
+          resetMindmapShareState();
         }
         render();
       }
@@ -13919,7 +13959,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         );
         if (!data) return;
         MM.data = data;
-        if (isStillActiveMindmap(mmId)) recordUndoableEdit(preNodes);
+        if (isStillActiveMindmap(mmId)) { recordUndoableEdit(preNodes); resetMindmapShareState(); }
         render();
       }
 
@@ -13990,7 +14030,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         showGoalSaveError(null);
         showError(null);
         MM.data = data;
-        if (isStillActiveMindmap(mmId)) recordUndoableEdit(preNodes);
+        if (isStillActiveMindmap(mmId)) { recordUndoableEdit(preNodes); resetMindmapShareState(); }
         if (closePopover) {
           MM.selectedNodeId = null;
           MM.multiSelectIds = new Set();
@@ -14027,7 +14067,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         );
         if (!data) return;
         MM.data = data;
-        if (isStillActiveMindmap(mmId)) recordUndoableEdit(preNodes);
+        if (isStillActiveMindmap(mmId)) { recordUndoableEdit(preNodes); resetMindmapShareState(); }
         if (closePopover) {
           MM.selectedNodeId = null;
           MM.multiSelectIds = new Set();
@@ -14075,6 +14115,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         MM.data = data;
         if (isStillActiveMindmap(mmId)) {
           recordUndoableEdit(preNodes);
+          resetMindmapShareState();
           // selectNode both selects and (since it's a different id
           // than whatever was selected before) queues a focus for the
           // next render -- a brand new node is always gray, so that
@@ -14109,6 +14150,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         if (isStillActiveMindmap(mmId)) {
           recordUndoableEdit(preNodes);
           MM.selectedNodeId = null;
+          resetMindmapShareState();
         }
         render();
       }
@@ -14148,6 +14190,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         // isStillActiveMindmap's comment.
         if (isStillActiveMindmap(mmId)) {
           recordUndoableEdit(preNodes);
+          resetMindmapShareState();
           selectNode(data.newNodeId || null);
         } else {
           render();
@@ -14185,6 +14228,40 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           var wrap = document.querySelector('.mm-share-wrap');
           if (wrap && !wrap.contains(e.target)) setMmShareOpen(false);
         });
+      }
+
+      // Puts the share card back to its own starting state -- the
+      // GENERATE SHAREABLE LINK button showing, any already-generated
+      // link cleared out and hidden -- called from setActiveMindmapId
+      // above any time the ACTIVE mindmap actually changes, AND from
+      // every edit of whichever mindmap is currently active (rename,
+      // undo/redo, node add/delete/recolor/rename/goal, shared-child
+      // add -- see each call site's own comment for why that
+      // particular mutation counts): build_mindmap_share_snapshot
+      // (app/mindmaps.py) freezes serialize_mindmap verbatim, which is
+      // the WHOLE mindmap, not just whichever piece a given edit
+      // touches, so there's no edit here that's safe to leave out.
+      // Same "an old link silently describing something that's no
+      // longer on screen" problem Loot Tracker/Storages Viewer's own
+      // reset functions (app/pages.py) exist to fix, and the same fix
+      // shape: putting the button back doesn't touch any link already
+      // generated for the mindmap still showing right now, only ever
+      // fires once something about it has actually changed.
+      function resetMindmapShareState() {
+        var genBtn = document.getElementById('mmShareGenerateBtn');
+        var linkBtn = document.getElementById('mmShareLinkBtn');
+        // Both null on the share page itself -- render_mindmap_share
+        // strips .mm-share-wrap out entirely before this reused script
+        // ever runs (see mmShareIconBtn's own null-guard above), and a
+        // visitor there isn't this share's owner, so there's nothing
+        // for them to export a second time.
+        if (!genBtn || !linkBtn) return;
+        genBtn.hidden = false;
+        genBtn.disabled = false;
+        genBtn.classList.remove('action-failed');
+        linkBtn.hidden = true;
+        linkBtn.textContent = '';
+        delete linkBtn.dataset.url;
       }
 
       // GENERATE SHAREABLE LINK -- freezes whichever mindmap is
@@ -14920,6 +14997,15 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         activeViewId: null,
       };
 
+      // What loadSummary's own GENERATE-SHAREABLE-LINK invalidation
+      // check (below) last saw this player's possessions look like --
+      // see possessionsSnapshotSignature/loadSummary for how it's
+      // built and compared. Starts null so the very first poll on
+      // page load never counts as a "change" (nothing to compare
+      // against yet, and resetPossessionsShareState is a no-op before
+      // anything's been generated anyway).
+      var lastPossessionsSignature = null;
+
       function showError(msg) {
         var el = document.getElementById('pmError');
         if (!msg) { el.classList.remove('show'); el.textContent = ''; return; }
@@ -15343,6 +15429,45 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         });
       }
 
+      // Puts the share card back to its own starting state -- the
+      // GENERATE SHAREABLE LINK button showing, any already-generated
+      // link cleared out and hidden -- called any time something an
+      // already-generated link would be describing has actually
+      // changed: the possessions themselves (loadSummary's own
+      // signature-diff above), which raw storages are hidden (the
+      // settings-menu checkboxes below), or which location-filter
+      // GROUPS are currently shown (the .pm-filter-btn handler below)
+      // -- every one of those is either sent in the GENERATE SHAREABLE
+      // LINK request body or read fresh off this account at that same
+      // moment (see pmShareGenerateBtn's own comment just below for
+      // exactly which is which). Same "an old link silently describing
+      // something that's no longer on screen" problem Loot Tracker's
+      // own resetLootShareState (app/pages.py) exists to fix, and the
+      // same fix shape: putting the button back doesn't touch any link
+      // already generated for what's showing right now, only ever
+      // fires once something has actually changed. Deliberately NOT
+      // called from search/sort/per-column filters or pin/unpin --
+      // none of those are part of what GENERATE SHAREABLE LINK itself
+      // freezes (see build_possessions_share_snapshot's own
+      // docstring), so an old link stays exactly as valid through any
+      // of those as it was the moment it was made.
+      function resetPossessionsShareState() {
+        var genBtn = document.getElementById('pmShareGenerateBtn');
+        var linkBtn = document.getElementById('pmShareLinkBtn');
+        // Both null on the share page itself -- render_storages_share
+        // strips .pm-share-wrap out entirely before this reused script
+        // ever runs (see pmShareIconBtn's own null-guard above), and a
+        // visitor there isn't this share's owner, so there's nothing
+        // for them to export a second time.
+        if (!genBtn || !linkBtn) return;
+        genBtn.hidden = false;
+        genBtn.disabled = false;
+        genBtn.classList.remove('action-failed');
+        linkBtn.hidden = true;
+        linkBtn.textContent = '';
+        delete linkBtn.dataset.url;
+      }
+
       // GENERATE SHAREABLE LINK -- creates a frozen, point-in-time
       // snapshot of everything this player currently owns (see
       // build_possessions_share_snapshot in app/possessions.py),
@@ -15434,6 +15559,11 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
           var next = !allActive;
           keys.forEach(function (k) { state.locations[k] = next; });
           btn.classList.toggle('active', next);
+          // Which location-filter GROUPS are active travels straight
+          // into the GENERATE SHAREABLE LINK request body (see
+          // pmShareGenerateBtn's own activeLocations below) -- see
+          // resetPossessionsShareState's own comment above.
+          resetPossessionsShareState();
           renderTable();
         });
       });
@@ -15506,6 +15636,11 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
           var data = await apiCall('/api/possessions/hidden-storages/' + key, { method: enable ? 'DELETE' : 'POST' });
           if (!data) { cb.checked = !enable; return; }
           applyHiddenStorageKeys(data.hiddenStorageKeys);
+          // Same reasoning as the location filter buttons' own
+          // resetPossessionsShareState call above -- hidden storages
+          // are read fresh off this account at GENERATE SHAREABLE LINK
+          // time too.
+          resetPossessionsShareState();
           renderTable();
         });
       });
@@ -15861,9 +15996,38 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         });
       }
 
+      // Keyed by itemId (sorted, so a reordered-but-unchanged response
+      // never reads as a change) alongside each item's own raw
+      // per-storage breakdown -- byLocation -- since that's the actual
+      // underlying data build_possessions_share_snapshot freezes
+      // (app/possessions.py), not just whatever happens to be visible
+      // under the CURRENT location filter/search/sort.
+      function possessionsSnapshotSignature(items) {
+        return JSON.stringify(
+          (items || [])
+            .map(function (it) { return [it.itemId, it.byLocation]; })
+            .sort(function (a, b) { return a[0] - b[0]; })
+        );
+      }
+
       async function loadSummary() {
         var data = await apiCall('/api/possessions/summary');
         if (!data) return;
+        // A share link freezes "everything this player currently
+        // owns" (build_possessions_share_snapshot, app/possessions.py)
+        // read fresh off the account at the moment GENERATE SHAREABLE
+        // LINK is clicked -- so once a later poll here actually sees
+        // different possessions (new loot, a bank withdrawal, an item
+        // moved between storages, etc.), an already-generated link is
+        // now describing a snapshot that no longer matches what's
+        // really there. See resetPossessionsShareState's own comment
+        // below for the matching invalidation on the location-filter/
+        // hidden-storages side of this same share.
+        var signature = possessionsSnapshotSignature(data.items);
+        if (lastPossessionsSignature !== null && signature !== lastPossessionsSignature) {
+          resetPossessionsShareState();
+        }
+        lastPossessionsSignature = signature;
         state.items = data.items || [];
         applyHiddenStorageKeys(data.hiddenStorageKeys);
         renderTable();
@@ -18096,6 +18260,9 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         });
         if (!data) return;
         GT.goals.push(data);
+        // A new goal is now part of the list -- see
+        // resetGoalTrackingShareState's own comment above.
+        resetGoalTrackingShareState();
         renderGoalList();
         closeWizard();
       }
@@ -18570,6 +18737,8 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         var data = await apiCall('/api/goals/' + encodeURIComponent(goalId), { method: 'DELETE' });
         if (data === null) return;
         GT.goals = GT.goals.filter(function (g) { return g.id !== goalId; });
+        // Same reasoning as the add-goal path above.
+        resetGoalTrackingShareState();
         renderGoalList();
       }
 
@@ -18736,6 +18905,39 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
           var wrap = document.querySelector('.gt-share-wrap');
           if (wrap && !wrap.contains(e.target)) setGtShareOpen(false);
         });
+      }
+
+      // Puts the share card back to its own starting state -- the
+      // GENERATE SHAREABLE LINK button showing, any already-generated
+      // link cleared out and hidden -- called any time a goal is added
+      // to or deleted from this account's own ENTIRE goal list (see
+      // addGoal/deleteGoal's own calls below), which is exactly what
+      // gtShareGenerateBtn just below freezes whole. Deliberately NOT
+      // called from any other goal edit (progress, target, recurrence,
+      // etc.) -- per explicit instruction, only the list's own
+      // membership (a goal added or removed) invalidates an existing
+      // link here, not what's inside any one goal still on it. Same
+      // "an old link silently describing something that's no longer on
+      // screen" problem Loot Tracker/Storages Viewer/Mindmaps' own
+      // reset functions (app/pages.py) exist to fix, and the same fix
+      // shape: putting the button back doesn't touch any link already
+      // generated for the list as it stands right now, only ever fires
+      // once the list itself has actually changed.
+      function resetGoalTrackingShareState() {
+        var genBtn = document.getElementById('gtShareGenerateBtn');
+        var linkBtn = document.getElementById('gtShareLinkBtn');
+        // Both null on the share page itself -- render_goal_tracking_share
+        // strips .gt-share-wrap out entirely before this reused script
+        // ever runs (see gtShareIconBtn's own null-guard above), and a
+        // visitor there isn't this share's owner, so there's nothing
+        // for them to export a second time.
+        if (!genBtn || !linkBtn) return;
+        genBtn.hidden = false;
+        genBtn.disabled = false;
+        genBtn.classList.remove('action-failed');
+        linkBtn.hidden = true;
+        linkBtn.textContent = '';
+        delete linkBtn.dataset.url;
       }
 
       // GENERATE SHAREABLE LINK -- freezes this account's own ENTIRE
