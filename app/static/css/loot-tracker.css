@@ -555,7 +555,11 @@
    own name already lands on the right picture), same "reads a bit
    large at this box's shared 56px" story as Crawling Hand/implings
    above, per explicit instruction. */
-.loot-npc-box-icon-spider {
+.loot-npc-box-icon-spider,
+/* Death spawn -- same story as Spider just above (a real NPC kill, no
+   _NPC_DISPLAY_OVERRIDES entry needed, bare wiki guess off its own
+   name already lands on the right picture), per explicit instruction. */
+.loot-npc-box-icon-death-spawn {
   transform: scale(0.7);
 }
 .loot-npc-box-kc {
