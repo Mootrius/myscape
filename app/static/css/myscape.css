@@ -1657,6 +1657,12 @@ body.landing .footer-inner {
   line-height: 1.35;
   color: var(--text);
   max-width: 240px;
+  /* pre-line: a literal \n in the tooltip text (used to force a
+     deliberate, length-balanced line break instead of leaving the
+     wrap point to the browser) renders as a real line break, while
+     ordinary runs of whitespace still collapse and still wrap
+     normally at max-width. */
+  white-space: pre-line;
   /* Opacity/transform, not display -- the show/hide script needs this
      element laid out (with real dimensions to measure) the instant its
      text is set, before it's actually visible, to position it against
