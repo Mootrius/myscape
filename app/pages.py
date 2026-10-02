@@ -10541,6 +10541,17 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
         document.getElementById('mmSwitchBtn').style.cursor = 'default';
       }}
 
+      // Same reasoning as render_landing_loot_preview/render_landing_
+      // storages_preview's own identical removal -- nothing real to
+      // share from an anonymous demo. Removed outright (not just
+      // hidden), wrap and all (the export icon and its popup are
+      // nested together inside .mm-share-wrap, so one removal takes
+      // both): nothing else in the reused script above ever looks
+      // either back up afterward, so there's no null-safety reason to
+      // leave them in the DOM.
+      var shareWrap = document.querySelector('.mm-share-wrap');
+      if (shareWrap) shareWrap.remove();
+
       // Same fixed-height container + always-on bottom-edge feather as
       // the other previews -- see .landing-mindmap-preview in
       // mindmaps.css, and render_landing_loot_preview's own wrapper
@@ -10626,6 +10637,40 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       </div>
     </div>
     """
+    # Export icon next to the title -- same bare-icon/floating-popup
+    # pattern as Loot Tracker/Storages Viewer's own loot-share-wrap/
+    # pm-share-wrap (duplicated here with its own mm- prefix, same
+    # "duplicated, not shared across pages' own stylesheets"
+    # convention every other cross-page style overlap on this site
+    # already follows). Toggles .mmShareCard open/closed as a popup
+    # floating directly under this button; that card holds the actual
+    # GENERATE SHAREABLE LINK flow for whichever mindmap is currently
+    # active (MM.activeMindmapId) -- see mmShareGenerateBtn's own
+    # click handler below and build_mindmap_share_snapshot in
+    # app/mindmaps.py for exactly what a link freezes. Inserted via a
+    # plain string replace rather than an f-string interpolation --
+    # body above is a plain triple-quoted string (not f"""), same as
+    # script below it, both already full of their own literal { }
+    # (CSS-adjacent markup/JS), so this avoids having to escape every
+    # one of those just to interpolate one small piece of markup.
+    mm_share_icon_btn = (
+        ' <span class="mm-share-wrap">'
+        '<button type="button" class="mm-share-icon-btn" id="mmShareIconBtn" aria-label="Export this mindmap" title="Export this mindmap">'
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
+        '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
+        '</svg></button>'
+        '<div class="mm-share-card" id="mmShareCard" hidden>'
+        '<button type="button" class="mm-share-generate-btn" id="mmShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
+        '<button type="button" class="mm-share-link-btn" id="mmShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
+        '<p class="mm-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p>'
+        '</div>'
+        '</span>'
+    )
+    body = body.replace(
+        '<h2 class="page-title">Mindmaps</h2>',
+        f'<h2 class="page-title">Mindmaps{mm_share_icon_btn}</h2>',
+    )
     script = """
     (function () {
       // Matches mindmaps.css's .mm-node width/height exactly -- the
@@ -14090,6 +14135,103 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         }
       }
 
+      // ---- Share (export a frozen myscape.io/s/<code> link) -----------------
+
+      // Export icon next to the title -- floating popup anchored
+      // directly under the button itself (.mm-share-wrap,
+      // mindmaps.css), closeable by re-clicking the trigger OR
+      // clicking anywhere else on the page, same outside-click-close
+      // convention as Loot Tracker/Storages Viewer/Purchase Goals' own
+      // identical share-icon toggles. No data to refetch on open
+      // either, since nothing here is generated until GENERATE
+      // SHAREABLE LINK is actually clicked (see that button's own
+      // handler below). Null-guarded because render_mindmap_share
+      // strips this icon's own <h2> out of the reused body string
+      // entirely before this script ever runs -- a visitor there
+      // isn't this share's owner, so there's nothing for them to
+      // export a SECOND time -- leaving mmShareIconBtn missing from
+      // the very start, same reasoning (and same null-guard shape) as
+      // every other reused-panel share icon on this site.
+      var mmShareIconBtn = document.getElementById('mmShareIconBtn');
+      var mmShareCard = document.getElementById('mmShareCard');
+      if (mmShareIconBtn) {
+        function setMmShareOpen(open) {
+          mmShareCard.hidden = !open;
+          mmShareIconBtn.classList.toggle('open', open);
+        }
+        mmShareIconBtn.addEventListener('click', function () {
+          setMmShareOpen(mmShareCard.hidden);
+        });
+        document.addEventListener('click', function (e) {
+          var wrap = document.querySelector('.mm-share-wrap');
+          if (wrap && !wrap.contains(e.target)) setMmShareOpen(false);
+        });
+      }
+
+      // GENERATE SHAREABLE LINK -- freezes whichever mindmap is
+      // CURRENTLY active (MM.activeMindmapId) into a new SharedContent
+      // row. Nothing is generated just from opening the card -- only
+      // this click does that -- and once it succeeds this button is
+      // replaced by mmShareLinkBtn showing the actual link. Null-
+      // guarded for the same reason mmShareIconBtn above is --
+      // render_mindmap_share strips .mm-share-wrap out along with the
+      // rest of this icon's <h2> before this reused script ever runs
+      // (see lootShareGenerateBtn's own identical null guard and
+      // comment elsewhere in this file for the exact bug this guard
+      // avoids: an unguarded addEventListener here throws
+      // synchronously and halts this whole IIFE before loadState() at
+      // the very bottom ever runs, which is what once got Loot
+      // Tracker's own share pages stuck on "Loading..." forever,
+      // before that fix).
+      var mmShareGenerateBtn = document.getElementById('mmShareGenerateBtn');
+      if (mmShareGenerateBtn) {
+        mmShareGenerateBtn.addEventListener('click', function () {
+          var btn = this;
+          if (!MM.activeMindmapId) return;
+          btn.disabled = true;
+          fetch('/api/mindmaps/' + encodeURIComponent(MM.activeMindmapId) + '/share', { method: 'POST' })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+            .then(function (data) {
+              var linkBtn = document.getElementById('mmShareLinkBtn');
+              linkBtn.dataset.url = data.url;
+              linkBtn.textContent = data.url;
+              btn.hidden = true;
+              linkBtn.hidden = false;
+            })
+            .catch(function () {
+              btn.classList.add('action-failed');
+              setTimeout(function () { btn.classList.remove('action-failed'); }, 2500);
+            })
+            .then(function () { btn.disabled = false; });
+        });
+      }
+
+      // mmShareLinkBtn itself IS the link, once generated above --
+      // same click-to-copy-then-flash-"COPIED" pattern as every other
+      // share-link button on this site.
+      var mmShareLinkBtn = document.getElementById('mmShareLinkBtn');
+      if (mmShareLinkBtn) {
+        mmShareLinkBtn.addEventListener('click', function () {
+          var btn = this;
+          var url = btn.dataset.url;
+          if (!url) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url);
+          } else {
+            var temp = document.createElement('textarea');
+            temp.value = url;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+          }
+          btn.textContent = 'COPIED';
+          setTimeout(function () { btn.textContent = url; }, 1200);
+        });
+      }
+
       // ---- Boot -----------------------------------------------------------
 
       async function loadState() {
@@ -14127,6 +14269,295 @@ def render_mindmaps(player: PlayerView) -> str:
         body=body,
         extra_script=script,
         extra_head=extra_head,
+    )
+
+
+def render_mindmap_share(share: "SharedContent", game_account: Optional["GameAccount"], viewer: Optional[PlayerView]) -> str:
+    """myscape.io/s/<code> for a Mindmap share (see POST /api/mindmaps/
+    {mindmap_id}/share in app/main.py and build_mindmap_share_snapshot
+    in app/mindmaps.py for exactly what's frozen into share.payload)
+    -- a visitor's own read-only view of the one mindmap the owner
+    picked at share time, nothing live, nothing outside it, same
+    "frozen, point-in-time, never live again" contract render_loot_
+    tracker_share/render_purchase_goals_share/render_storages_share
+    above already establish for their own tables.
+
+    Reuses _mindmaps_panel_markup's body/script completely unmodified,
+    wrapped the same way those three functions already wrap their own
+    reused panels: a local fetch shim answering GET /api/mindmaps out
+    of PAYLOAD (everything else gets a graceful ok:false failure
+    instead, never a crash -- see the fetch shim's own comment below
+    for why that posture, not Loot Tracker's own harmless-{} -success
+    catch-all, is what's actually safe here), plus the same same-
+    origin localStorage shadow Purchase Goals' own share page already
+    uses (point 3 of render_purchase_goals_share's own docstring) --
+    this reused script persists two preferences under real per-origin
+    localStorage keys (myscape:mindmaps:editMode, myscape:mindmaps:
+    activeMindmapId), and /s/<code> shares an origin with the real,
+    authenticated Mindmaps page, so without shadowing them a visitor
+    who'd previously left Edit Mode on for their OWN real mindmaps
+    would find this share silently inheriting that -- and, worse,
+    every toggle made HERE would overwrite THEIR real stored
+    preference out from under them.
+
+    Four surfaces this reused panel normally offers are hidden here
+    instead, per explicit instruction -- a visitor gets a plain,
+    read-only view of this one tree, nothing to switch, undo, or edit:
+
+    - The mindmap switcher (.mm-header, holding #mmSwitchBtn/#mmMenu)
+      -- wouldn't make sense here regardless (switch to what? there's
+      only ever the one mindmap in PAYLOAD), so it's hidden outright
+      via CSS (.mindmap-share .mm-header in mindmaps.css) rather than
+      stripped from the DOM or neutered the way the landing preview's
+      own identical trigger is (see render_landing_mindmap_preview's
+      own switchBtn comment) -- simplest here since nothing downstream
+      reads or depends on that markup being absent, same reasoning
+      Purchase Goals' own .pg-header gets for its hide-not-strip
+      treatment on its own share page.
+    - Undo/Redo (#mmUndoBtn/#mmRedoBtn) and the Edit Mode toggle
+      (#mmEditModeBtn) -- also hidden via CSS, for the same reason.
+      Hiding (not removing) them is what actually makes this safe:
+      MM.undoStack/MM.redoStack/the toggle's own disabled-state update
+      all still run against these elements on every render exactly as
+      they do on the real page, completely unaware anything's
+      different -- a DOM strip here would need every one of those
+      (there are several) re-audited for a missing null guard, the
+      exact bug class that once got Loot Tracker's own share pages
+      stuck on "Loading..." forever (see lootShareGenerateBtn's own
+      comment elsewhere in this file). Edit Mode itself never actually
+      turns on here regardless of the hidden button even existing in
+      the DOM -- see the localStorage shadow above for why MM.editMode
+      always starts false on this page -- and with Edit Mode off, "a
+      node isn't clickable at all outside Edit Mode" (MM.editMode's
+      own comment in _mindmaps_panel_markup's script) already makes
+      every node read-only for free, no extra locking needed for
+      anything structural (add/delete/recolor/reparent/rename, or any
+      goal-criteria field).
+    - The one thing that's still clickable outside Edit Mode on the
+      real page -- a GRAY node's manual "Mark complete" checkbox (see
+      that same comment) -- is locked down separately, via pointer-
+      events: none (.mindmap-share .mm-node-checkbox in mindmaps.css,
+      same established idiom this file's own #mmNodesLayer:not(.mm-
+      view-mode) .mm-node-note-toggle rule already uses for an
+      analogous "inert right now" case), as defense in depth alongside
+      the fetch shim's own graceful ok:false catch-all above -- either
+      one alone would already stop this from silently mutating
+      anything, the two together mean neither has to be airtight on
+      its own.
+
+    The only other visible difference from the real page is its own
+    title row, entirely replacing the reused body's own "Mindmaps"
+    <h2> (and the export icon button inside it) -- stripped out of the
+    reused body string outright, same technique (and same reasoning:
+    a visitor here isn't this share's owner, so there's nothing for
+    them to export a SECOND time) as every other render_*_share's own
+    identical strip of its analogous heading. banner_markup replaces
+    it with the mindmap's own name on a small .subtitle-styled line
+    first (per explicit instruction: "just the mindmap title from the
+    original sharer"), then "Shared by <name>" taking over .page-
+    title's own size/color/weight/uppercase/centering wholesale
+    alongside a download/import icon of its own -- same signed-in-vs-
+    signed-out split, same confirming-popup-before-the-actual-import
+    shape, as Purchase Goals' own import_icon_btn on render_purchase_
+    goals_share (see that function's own doc comment for the fuller
+    reasoning this mirrors almost exactly): signed in, a button that
+    opens a small SAVE TO MY MYSCAPE popup; signed out, a plain <a>
+    straight to /signup, no popup, no JS at all, since nothing can be
+    imported until this visitor comes back here signed in.
+
+    game_account is the share's own owner, looked up by the caller
+    (GET /s/{code} in app/main.py) from SharedContent.game_account_id,
+    which can in principle be None if that account's own row is ever
+    deleted after the fact (see that column's own comment in
+    app/models.py); falls back to "A player" the same way every other
+    render_*_share's own owner_name does."""
+    extra_head, body, script = _mindmaps_panel_markup()
+    # Strips the reused body's own "Mindmaps" <h2 class="page-title">
+    # (and the export icon button inside it -- see mm_share_icon_btn
+    # in _mindmaps_panel_markup) outright -- see this function's own
+    # doc comment above for why. The reused body always opens with
+    # exactly one such heading, so splitting on the first "</h2>" and
+    # keeping only what follows it is all stripping it out takes --
+    # same technique every other render_*_share already uses for its
+    # own analogous heading.
+    _, _, body = body.partition("</h2>")
+
+    owner_name = (game_account.runescape_name if game_account else None) or "A player"
+    mindmap_name = share.payload["mindmap"]["name"]
+
+    # The download icon next to "Shared by <name>" -- same tray-shaped
+    # icon mirrored into a download icon as Purchase Goals' own
+    # import_icon_btn (render_purchase_goals_share, this file) --
+    # see that function's own doc comment for the signed-in/signed-
+    # out split this copies verbatim, just with this page's own mm-
+    # prefix.
+    import_icon_svg = (
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
+        '<polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>'
+        '</svg>'
+    )
+    if viewer is not None:
+        import_icon_btn = (
+            ' <span class="mm-import-wrap">'
+            '<button type="button" class="mm-import-icon-btn" id="mmImportBtn" aria-label="Save to your account" title="Save to your account">'
+            f'{import_icon_svg}</button>'
+            '<div class="mm-import-card" id="mmImportCard" hidden>'
+            '<button type="button" class="mm-import-save-btn" id="mmImportSaveBtn">SAVE TO MY MYSCAPE</button>'
+            '<p class="mm-import-popup-hint">Clicking the button above will save a copy<br>of this mindmap to your Mindmaps app.</p>'
+            '</div>'
+            '</span>'
+        )
+    else:
+        import_icon_btn = (
+            ' <a class="mm-import-icon-btn" href="/signup" aria-label="Sign up to save this" title="Sign up to save this">'
+            f'{import_icon_svg}</a>'
+        )
+
+    banner_markup = f"""
+    <p class="subtitle mm-share-label">{escape(mindmap_name)}</p>
+    <h2 class="page-title">Shared by {escape(owner_name)}{import_icon_btn}</h2>
+    """
+    body = banner_markup + body
+    body = f'<div class="mindmap-share">{body}</div>'
+
+    payload_json = json.dumps(share.payload)
+    wrapper_script = f"""
+    (function () {{
+      var PAYLOAD = {payload_json};
+
+      // Same-origin localStorage shadow -- see this function's own
+      // doc comment for the fuller reasoning, and render_purchase_
+      // goals_share/render_landing_mindmap_preview's own identical
+      // shadow.
+      var localStorage = (function () {{
+        var store = {{}};
+        return {{
+          getItem: function (k) {{ return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; }},
+          setItem: function (k, v) {{ store[k] = String(v); }},
+          removeItem: function (k) {{ delete store[k]; }},
+        }};
+      }})();
+
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+
+        if (path === '/api/mindmaps' && method === 'GET') {{
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{ mindmaps: [PAYLOAD.mindmap] }}); }} }});
+        }}
+        // Every node-mutation endpoint (add/update/delete/goal-save/
+        // shared-child) and every mindmap-level one (create/rename/
+        // delete) gets a graceful failure here instead of ever
+        // reaching the real API with a visitor's own session cookie --
+        // see this function's own doc comment above for why ok:false
+        // (not Loot Tracker's own harmless-{{}}-success shape) is the
+        // only safe catch-all on this particular page: MM.data =
+        // (whatever this returns) runs unconditionally on a successful
+        // response throughout the reused script (saveNodeGoal and
+        // friends), and {{}} is missing the 'mindmaps' array every one
+        // of those reads straight back off it next -- a crash, not a
+        // no-op. Nothing reachable on this page should ever actually
+        // hit this in practice (nodes aren't clickable outside Edit
+        // Mode, which never turns on here -- see this function's own
+        // doc comment -- and the one exception, a gray node's manual-
+        // complete checkbox, is separately locked via pointer-events:
+        // none in mindmaps.css), but this is what makes that a belt-
+        // and-suspenders guarantee rather than a hope.
+        return Promise.resolve({{ ok: false, json: function () {{ return Promise.resolve({{ detail: 'Not available on a shared link.' }}); }} }});
+      }};
+
+      {script}
+
+      // See this function's own doc comment above -- the switcher,
+      // Undo, Redo, and Edit Mode are all still in the DOM (hidden via
+      // CSS only, .mindmap-share's own rules in mindmaps.css), so
+      // nothing here needs to strip or neuter any of them.
+
+      // The download icon above -- only ever rendered as a real
+      // <button> (this null-guard is just the same defensive
+      // convention every other reused-script lookup here already
+      // follows) when viewer was signed in at render time; signed
+      // out, it's a plain <a href="/signup"> with no JS behavior at
+      // all -- see this function's own doc comment for why. Toggles
+      // mmImportCard open/closed, same outside-click-close convention
+      // as mmShareIconBtn/mmShareCard above. Nothing is imported just
+      // from opening this card -- only mmImportSaveBtn's own click
+      // below does that.
+      var mmImportBtn = document.getElementById('mmImportBtn');
+      var mmImportCard = document.getElementById('mmImportCard');
+      if (mmImportBtn) {{
+        function setMmImportOpen(open) {{
+          mmImportCard.hidden = !open;
+          mmImportBtn.classList.toggle('open', open);
+        }}
+        mmImportBtn.addEventListener('click', function () {{
+          setMmImportOpen(mmImportCard.hidden);
+        }});
+        document.addEventListener('click', function (e) {{
+          var wrap = document.querySelector('.mm-import-wrap');
+          if (wrap && !wrap.contains(e.target)) setMmImportOpen(false);
+        }});
+      }}
+
+      // SAVE TO MY MYSCAPE -- imports THIS share's own frozen mindmap
+      // into the signed-in visitor's own Mindmaps list (POST /api/
+      // mindmaps/shares/{share.code}/import in app/main.py), then --
+      // only once that succeeds -- navigates there so they land right
+      // on it, appended at the end of their own mindmap list AND
+      // already selected (see below). A failed import (expired link,
+      // or this specific race: the code was still valid when the page
+      // loaded but lapses before the click) leaves this card open
+      // exactly as-is and flashes this button red for 2.5s, same
+      // pattern as mmShareGenerateBtn's own .action-failed handling
+      // above.
+      //
+      // IMPORTANT: this calls window.fetch/window.localStorage
+      // explicitly, not the bare fetch(...)/localStorage every other
+      // handler in this wrapper script uses -- the plain identifiers
+      // would resolve to THIS SAME IIFE's own local shim/shadow above
+      // (harmless by design against the reused panel script, see this
+      // function's own doc comment), which would mean this handler's
+      // own fetch call never actually reaches the real server at all,
+      // and writing the newly imported mindmap's id to the SHADOWED
+      // localStorage would set a key nothing outside this one page
+      // load ever reads -- same bug/fix Purchase Goals' own
+      // pgImportSaveBtn handler already documents for its identical
+      // choice.
+      var mmImportSaveBtn = document.getElementById('mmImportSaveBtn');
+      if (mmImportSaveBtn) {{
+        mmImportSaveBtn.addEventListener('click', function () {{
+          var btn = this;
+          btn.disabled = true;
+          window.fetch('/api/mindmaps/shares/{share.code}/import', {{ method: 'POST' }})
+            .then(function (res) {{ return res.ok ? res.json() : Promise.reject(); }})
+            .then(function (data) {{
+              try {{
+                if (data && data.importedMindmapId) {{
+                  window.localStorage.setItem('myscape:mindmaps:activeMindmapId', data.importedMindmapId);
+                }}
+              }} catch (e) {{ /* same best-effort posture setActiveMindmapId's own try/catch takes above -- losing the auto-select is fine, the import itself already succeeded */ }}
+              window.location.href = '/dashboard/mindmaps';
+            }})
+            .catch(function () {{
+              btn.disabled = false;
+              btn.classList.add('action-failed');
+              setTimeout(function () {{ btn.classList.remove('action-failed'); }}, 2500);
+            }});
+        }});
+      }}
+    }})();
+    """
+
+    return _shell(
+        title=f"{owner_name}'s shared mindmap — myscape",
+        player=viewer,
+        body=body,
+        extra_head=extra_head,
+        extra_script=wrapper_script,
+        meta_description=f"{owner_name} shared a mindmap on myscape.",
     )
 
 

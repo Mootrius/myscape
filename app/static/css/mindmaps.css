@@ -1223,3 +1223,161 @@ button.primary#mmCreateFirstBtn {
   width: auto;
   max-width: none;
 }
+
+
+/* ---------- Share icon (the export button next to "Mindmaps" on the
+   real page) -- same bare-icon/floating-popup recipe as Loot Tracker/
+   Purchase Goals/Storages Viewer's own .loot-share-wrap/.pg-share-wrap/
+   .pm-share-wrap, duplicated here with this page's own mm- prefix per
+   this project's per-page-CSS convention. 32px top/centered-via-
+   transform are both carried over verbatim from that same already-
+   empirically-measured fix (see .loot-share-wrap/.loot-share-card's
+   own comments in loot-tracker.css for the fuller reasoning) -- this
+   page's own h2.page-title shares that identical 22px/1.5 font-size,
+   so nothing here needs its own re-measurement. ---------- */
+.mm-share-wrap {
+  position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
+}
+.mm-share-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
+}
+.mm-share-icon-btn:hover { color: var(--text-dim); }
+.mm-share-icon-btn.open { color: var(--gold); }
+.mm-share-card {
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+/* Author CSS setting `display` on this element always outranks the
+   browser's own [hidden]{display:none} default stylesheet rule --
+   same gotcha/fix as .loot-share-card[hidden] in loot-tracker.css. */
+.mm-share-card[hidden] { display: none; }
+.mm-share-generate-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.mm-share-generate-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.mm-share-generate-btn:disabled { cursor: default; opacity: 0.6; }
+.mm-share-generate-btn.action-failed { border-color: var(--red); color: var(--red); }
+.mm-share-link-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mm-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.mm-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
+
+/* ---------- Save-to-your-account icon (render_mindmap_share's own
+   import_icon_btn, app/pages.py) -- same recipe as Purchase Goals'
+   own .pg-import-wrap/.pg-import-card (purchase-goals.css), duplicated
+   with this page's own mm- prefix. ---------- */
+.mm-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
+.mm-import-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 0; margin: 0;
+  cursor: pointer; line-height: 1;
+  color: var(--text-faint); transition: color 0.15s ease;
+}
+.mm-import-icon-btn:hover { color: var(--text-dim); }
+.mm-import-icon-btn.open { color: var(--gold); }
+.mm-import-card {
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex; flex-direction: column; gap: 6px; width: 280px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 5px 6px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.mm-import-card[hidden] { display: none; }
+.mm-import-save-btn {
+  height: 28px; padding: 0 10px;
+  font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.mm-import-save-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.mm-import-save-btn:disabled { cursor: default; opacity: 0.6; }
+.mm-import-save-btn.action-failed { border-color: var(--red); color: var(--red); }
+.mm-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
+
+/* ---------- Share-viewing page (myscape.io/s/<code> for a Mindmap
+   share -- see render_mindmap_share's own docstring in app/pages.py
+   for the full breakdown of what's reused vs. overridden here).
+   .mindmap-share wraps that whole page's body. ---------- */
+
+/* The title-line-above-"Shared by <name>" -- same small-line-above-
+   the-title treatment as .loot-share-range/.pg-share-label/
+   .pm-share-asof, just this page's own mindmap name, kept in its own
+   natural case (not forced uppercase the way .pg-share-label's own
+   setup name is, per that rule's own comment on why -- a mindmap's
+   name isn't a site-authored label, it's whatever the owner actually
+   typed, same reasoning the reused panel's own node-name fields never
+   force a case on it either). */
+.mm-share-label { text-align: center; margin: 0 0 4px; }
+
+/* Same "hide rather than strip from the markup itself" discipline as
+   .purchase-goal-share .pg-header (purchase-goals.css) -- this share
+   page has no mindmap switcher, per explicit instruction ("wouldn't
+   make sense" -- switch to what? PAYLOAD only ever holds the one
+   mindmap this share was generated from), and hiding (not stripping)
+   is simplest here since nothing downstream reads or depends on that
+   markup being absent -- see render_mindmap_share's own docstring for
+   the fuller reasoning this mirrors. */
+.mindmap-share .mm-header { display: none; }
+
+/* Undo/Redo and the Edit Mode toggle, hidden the same way and for the
+   same reason -- per explicit instruction this share page has none of
+   the three. Zoom in/out/fit and fullscreen (the other four buttons
+   in this same .mm-zoom-controls cluster) are deliberately left
+   alone -- nothing asked for those to disappear, and nothing about
+   them risks mutating anything (see render_mindmap_share's own
+   docstring on why hiding, not stripping, these controls is safe).
+   The two .mm-zoom-divider seams (see mindmaps.css' own rule above)
+   sit one on each side of the zoom/fullscreen group -- first-of-type
+   is the one between Undo/Redo and Zoom In, last-of-type the one
+   between Edit Mode and Zoom In's own group boundary from the other
+   side -- so hiding both leaves the remaining four zoom/fullscreen
+   buttons with no now-orphaned seam on either edge. */
+.mindmap-share #mmUndoBtn,
+.mindmap-share #mmRedoBtn,
+.mindmap-share #mmEditModeBtn { display: none; }
+.mindmap-share .mm-zoom-controls .mm-zoom-divider:first-of-type,
+.mindmap-share .mm-zoom-controls .mm-zoom-divider:last-of-type { display: none; }
+
+/* The one thing still clickable outside Edit Mode on the real page --
+   a GRAY node's manual "Mark complete" checkbox (see its own
+   data-role="manual-toggle" and the click-delegation comment next to
+   it in _mindmaps_panel_markup's script) -- is locked down here via
+   pointer-events: none, same established idiom as this file's own
+   #mmNodesLayer:not(.mm-view-mode) .mm-node-note-toggle rule above for
+   an analogous "inert right now" case. Edit Mode itself never actually
+   turns on on this page regardless (see render_mindmap_share's own
+   docstring on the localStorage shadow that guarantees that), so
+   every other node interaction is already unreachable for free -- this
+   is the one exception that needs its own explicit lock. */
+.mindmap-share .mm-node-checkbox[data-role="manual-toggle"] { pointer-events: none; }

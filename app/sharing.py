@@ -51,6 +51,7 @@ SHARE_CONTENT_TYPE_LABELS = {
     "loot_tracker": "Loot",
     "purchase_goal": "Purchase",
     "possessions": "Storages",
+    "mindmap": "Mindmap",
 }
 
 

@@ -1008,6 +1008,91 @@ def serialize_mindmap(mindmap: MindMap, context: Optional[Dict] = None) -> Dict:
     }
 
 
+def build_mindmap_share_snapshot(mindmap: MindMap, context: Dict) -> dict:
+    """Freezes ONE of game_account's own mindmaps (already resolved
+    and ownership-checked by the caller -- see _get_owned_mindmap in
+    app/main.py, the same helper every other per-mindmap mutation
+    endpoint already uses) into the payload POST /api/mindmaps/<id>/
+    share (app/main.py) writes into a new SharedContent row, for
+    render_mindmap_share (app/pages.py) to read back later -- same
+    "frozen, point-in-time, never live again" contract SharedContent
+    itself documents, and the same shape Loot Tracker/Purchase Goals'
+    own build_*_share_snapshot functions already establish for their
+    own tables.
+
+    Unlike those two, there's no resolve/freeze step of its own to do
+    here at all -- a mindmap's own node data (text/color/order/
+    parentId/goal criteria) is already just plain data the player
+    themselves fully controls, nothing to re-derive against an empty
+    pool the way a gear setup's own priced items are (see
+    render_landing_mindmap_preview's own docstring in app/pages.py for
+    the fuller version of this same reasoning) -- so this is just
+    serialize_mindmap itself, verbatim, with each node's own
+    `completed` flag baked in at whatever it happened to evaluate to
+    against context at share time (the one piece of a node that IS
+    entangled with live account state -- see evaluate_completion
+    above) and frozen from then on, exactly like every other field
+    here."""
+    return {"mindmap": serialize_mindmap(mindmap, context)}
+
+
+def import_mindmap_from_share_payload(db: Session, game_account: GameAccount, payload: dict) -> MindMap:
+    """The reverse of build_mindmap_share_snapshot above: takes a
+    Mindmap share's own frozen payload (SharedContent.payload -- see
+    POST /api/mindmaps/shares/{code}/import in app/main.py, the SAVE
+    TO MY MYSCAPE button's own endpoint on render_mindmap_share's
+    share page, app/pages.py) and creates a brand new, completely
+    normal, editable MindMap row for game_account out of it --
+    "importing" someone else's shared mindmap into your own Mindmaps
+    list.
+
+    payload['mindmap']['nodes'] are serialize_mindmap's own already-
+    serialized node dicts, each carrying one extra `completed` key
+    (see that function's own docstring) that MindMap.nodes itself
+    never stores -- evaluate_completion recomputes it fresh against
+    THIS account's own synced progress on every future read, the same
+    as for every other mindmap this account has, so it's stripped
+    back out here before this new row is ever written, the same role
+    _raw_slot_item_from_resolved plays for an imported gear setup's
+    own computed-only fields in app/purchase_goals.py.
+
+    The new mindmap's name is the sharer's own mindmap name, verbatim
+    -- per explicit instruction (mirroring import_gear_setup_from_
+    share_payload's own identical choice in app/purchase_goals.py),
+    no "Copy of" prefix. Node ids are carried over unchanged -- nothing
+    else in the database ever references a node id across mindmaps (no
+    child table, no foreign key), only within its own mindmap's nodes
+    list, where this import already preserves every id/parentId
+    pairing exactly as the sharer had it, so there's no collision risk
+    in reusing them here.
+
+    Caller commits (same convention _get_owned_mindmap's own mutation
+    endpoints already follow throughout app/main.py)."""
+    mindmap_payload = payload["mindmap"]
+    nodes = [
+        {k: v for k, v in node.items() if k != "completed"}
+        for node in (mindmap_payload.get("nodes") or [])
+    ]
+    mindmap = MindMap(
+        # Explicit id, not just this column's own default=uuid.uuid4 --
+        # the caller (POST /api/mindmaps/shares/{code}/import in
+        # app/main.py) needs to read it back right after this call to
+        # tell the Mindmaps page which mindmap to select once it
+        # redirects there, and a Python-side column default isn't
+        # actually applied until flush/commit, so relying on it here
+        # would mean mindmap.id reads back None until the caller
+        # commits. Setting it here up front sidesteps that entirely --
+        # same convention import_gear_setup_from_share_payload already
+        # uses for its own new GearSetup's id, in app/purchase_goals.py.
+        id=uuid.uuid4(),
+        game_account_id=game_account.id,
+        name=mindmap_payload.get("name") or "New Mindmap",
+        nodes=nodes,
+    )
+    db.add(mindmap)
+    return mindmap
+
+
 def build_mindmaps_state(db: Session, game_account: GameAccount, context: Optional[Dict] = None) -> Dict:
     """The combined state the Mindmaps page loads once (see
     render_mindmaps in app/pages.py) -- every one of the player's

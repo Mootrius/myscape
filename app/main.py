@@ -61,8 +61,10 @@ from app.mindmaps import (
     _normalize_lookup_name,
     add_node,
     add_shared_child,
+    build_mindmap_share_snapshot,
     build_mindmaps_state,
     delete_node,
+    import_mindmap_from_share_payload,
     new_root_node,
     replace_nodes,
     set_node_goal,
@@ -109,6 +111,7 @@ from app.pages import (
     render_loot_tracker,
     render_loot_tracker_share,
     render_mindmaps,
+    render_mindmap_share,
     render_not_found,
     render_possessions,
     render_public_character_overview,
@@ -2018,6 +2021,8 @@ def shared_content_page(
         return render_purchase_goals_share(share, owner, viewer)
     if share.content_type == "possessions":
         return render_storages_share(share, owner, viewer)
+    if share.content_type == "mindmap":
+        return render_mindmap_share(share, owner, viewer)
     # Shouldn't be reachable -- every row's content_type is set by one
     # of this file's own create-share endpoints, all of which only
     # ever write a value this if-chain already knows. Same "something's
@@ -3292,6 +3297,90 @@ def delete_mindmap_node(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     db.commit()
     return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
+
+
+@app.post("/api/mindmaps/{mindmap_id}/share")
+def create_mindmap_share(
+    mindmap_id: str,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Freezes one mindmap into a new SharedContent row (see
+    build_mindmap_share_snapshot in app/mindmaps.py for exactly what
+    gets frozen) and returns a myscape.io/s/<code> link to it -- same
+    session-authenticated, unthrottled shape as POST /api/players/me/
+    loot/share and POST /api/gear-setups/{setup_id}/share above (see
+    either's own docstring for the fuller reasoning, identical here)."""
+    mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
+    snapshot = build_mindmap_share_snapshot(mindmap, _build_goal_context(db, game_account))
+    code = generate_share_code(db)
+    share = SharedContent(
+        id=uuid.uuid4(),
+        game_account_id=game_account.id,
+        code=code,
+        content_type="mindmap",
+        payload=snapshot,
+        expires_at=_utcnow() + SHARE_DEFAULT_LIFETIME,
+    )
+    db.add(share)
+    db.commit()
+    return {"code": code, "url": f"{_SITE_URL}/s/{code}"}
+
+
+@app.post("/api/mindmaps/shares/{code}/import")
+def import_shared_mindmap(
+    code: str,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """The SAVE TO MY MYSCAPE button on a Mindmap share page (render_
+    mindmap_share, app/pages.py) -- the counterpart to POST /api/
+    mindmaps/{mindmap_id}/share above, in the other direction: someone
+    ELSE's myscape.io/s/<code> link in, as a brand new MindMap of this
+    signed-in player's own, rather than one of this player's own
+    mindmaps out. A separate route from POST /api/shares/{code}/import
+    above (not a third content_type branch bolted onto it) -- that one
+    is Purchase Goals' own, and its own docstring already notes other
+    content types "have no import feature to begin with"; giving
+    Mindmaps its own path under /api/mindmaps/ instead keeps each
+    app's import endpoint beside its own share endpoint, same as every
+    other per-app route here, rather than growing one shared endpoint
+    a third, fourth, fifth way. Session-authenticated -- a signed-out
+    visitor's click never reaches this at all, since render_mindmap_
+    share's own script sends it straight to /signup instead (see that
+    function's own docstring), same posture as POST /api/shares/
+    {code}/import's own identical gate.
+
+    content_type="mindmap" on the find_valid_share call below means an
+    invalid, expired, or other-content-type code all 404 exactly
+    alike -- same "a wrong code can't be told apart from a dead one"
+    posture GET /s/{code} above already takes. See import_mindmap_
+    from_share_payload in app/mindmaps.py for the actual reverse-
+    resolution.
+
+    The response is the normal GET /api/mindmaps shape (build_
+    mindmaps_state) plus one extra top-level importedMindmapId -- the
+    new mindmap's own id, read back off the row import_mindmap_from_
+    share_payload just created (that function sets it explicitly
+    rather than leaning on the column's default=uuid.uuid4, precisely
+    so it's already populated here without needing a post-commit
+    refresh). The share page's own SAVE TO MY MYSCAPE button (render_
+    mindmap_share, app/pages.py) stashes this into this player's real
+    myscape:mindmaps:activeMindmapId localStorage key before
+    redirecting to their own Mindmaps page -- the same key that page's
+    own boot logic already prefers over "just open the first mindmap"
+    (see loadState in _mindmaps_panel_markup, app/pages.py) -- so the
+    newly imported mindmap is what they land on, selected and ready to
+    view/edit, with no new client-side selection plumbing needed on
+    that page at all."""
+    share = find_valid_share(db, code, content_type="mindmap")
+    if share is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
+    new_mindmap = import_mindmap_from_share_payload(db, game_account, share.payload)
+    db.commit()
+    state = build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
+    state["importedMindmapId"] = str(new_mindmap.id)
+    return state
 
 
 def _goal_out(goal: Goal, context: dict) -> GoalOut:
