@@ -529,6 +529,15 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "martial salvage": (None, "Martial salvage detail.png"),
     "fremennik salvage": (None, "Fremennik salvage detail.png"),
     "opulent salvage": (None, "Opulent salvage detail.png"),
+    # Dossier -- Yama's own reward container (opening one hands out a
+    # contract, a chasm teleport scroll, or a Rite of Vile Transference
+    # -- see the wiki's own "Dossier" page), shown as its own loot
+    # source tile in this panel the same way Intricate pouch/Seed pack/
+    # Bird nest already are above: the bare wiki guess off "Dossier"
+    # doesn't land on this item's own bigger "detail" render, so it's
+    # hand-picked here instead, per explicit instruction (confirmed
+    # against the wiki's own File:Dossier detail.png).
+    "dossier": (None, "Dossier detail.png"),
 }
 
 

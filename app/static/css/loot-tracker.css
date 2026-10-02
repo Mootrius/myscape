@@ -559,7 +559,14 @@
 /* Death spawn -- same story as Spider just above (a real NPC kill, no
    _NPC_DISPLAY_OVERRIDES entry needed, bare wiki guess off its own
    name already lands on the right picture), per explicit instruction. */
-.loot-npc-box-icon-death-spawn {
+.loot-npc-box-icon-death-spawn,
+/* Dossier -- Yama's own reward container (see isDossier in the script
+   below, and _NPC_DISPLAY_OVERRIDES in app/loot.py): unlike Death
+   spawn/Spider above, this one DOES need an explicit wiki filename
+   override (the bare guess doesn't land on its own detail render),
+   but the same 70%-oversized-at-this-box's-shared-56px story applies
+   once it does, per explicit instruction. */
+.loot-npc-box-icon-dossier {
   transform: scale(0.7);
 }
 .loot-npc-box-kc {
