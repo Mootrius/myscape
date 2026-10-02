@@ -363,21 +363,29 @@
    bar has no pixels here to hover in the first place, so there's
    nothing further to do for that case. */
 .loot-bar-outline, .loot-bar-fill { cursor: pointer; }
-/* Hovering a bar (title="..." above is its native tooltip) fades the
-   fill down a bit as nice, cheap visual confirmation of which one the
-   pointer is actually over -- keyed off .loot-bar-col:hover rather
-   than .loot-bar-fill:hover itself so the fill still fades from
-   hovering anywhere in the outline's own taller box, not just the
-   (possibly shorter) filled-in part of it. :not(.selected) so this
-   can't fight the selected bar's own persistent dim just below over
-   which one the cascade actually applies -- both match at equal
-   specificity otherwise, which is exactly the kind of ordering trap
-   this file's own .pm-filter-clear-btn/.pm-view-cancel-btn fix (see
-   possessions.css) ran into. Clicking a bar re-scopes the NPC/item
-   panels and the chart's own title/header to just that bucket's own
-   window -- see the loot-bar-col click handler in render_loot_tracker's
-   script (app/pages.py). */
-.loot-bar-col:hover:not(.selected) .loot-bar-fill { opacity: 0.7; }
+/* Hovering a bar fades the fill down a bit as nice, cheap visual
+   confirmation of which one the pointer is actually over -- scoped to
+   actually hovering the outline or fill itself (never the empty
+   column space that can sit above a short bar, up to the plot's full
+   height -- see .loot-bar-col's own height: 100% above) via the
+   sibling/self selectors below, rather than .loot-bar-col:hover
+   (which used to cover that whole column, outline-height and all).
+   The :hover is on .loot-bar-outline rather than .loot-bar-fill for
+   the first selector since the outline is the taller of the two when
+   an NPC is selected (see fillValue above) -- its own box still
+   covers the rest of "the bar" above a shorter fill, so that part
+   fades too, matched via ~ since fill is its later sibling in the
+   markup. :not(.selected) on both so this can't fight the selected
+   bar's own persistent dim just below over which one the cascade
+   actually applies -- both match at equal specificity otherwise,
+   which is exactly the kind of ordering trap this file's own
+   .pm-filter-clear-btn/.pm-view-cancel-btn fix (see possessions.css)
+   ran into. Clicking a bar re-scopes the NPC/item panels and the
+   chart's own title/header to just that bucket's own window -- see
+   the loot-bar-col click handler in render_loot_tracker's script
+   (app/pages.py). */
+.loot-bar-col:not(.selected) .loot-bar-outline:hover ~ .loot-bar-fill,
+.loot-bar-col:not(.selected) .loot-bar-fill:hover { opacity: 0.7; }
 /* The persistent marker for whichever bar's contents are currently
    being shown below -- dims the fill rather than brightening it, so
    attention stays on the NPC/item panels doing the actual showing
@@ -686,6 +694,15 @@
 }
 .loot-sort-tab:hover { border-color: var(--gold-dim); color: var(--text); }
 .loot-sort-tab.active { border-color: var(--gold); color: var(--gold); }
+/* RuneScapePlain11 (myscape.css's own site-wide pixel font) has no
+   ↓/↑ glyphs of its own, so the browser silently falls back to
+   a system font just for this one character -- its own, taller line
+   box sits the glyph visibly low against the plain-pixel-font label
+   beside it despite both being flex-centered the same way (each is
+   centered within its own line box, not against the other's). A small
+   upward nudge, measured against the real rendered glyph rather than
+   guessed, pulls it back in line with the label's own center. */
+.loot-sort-arrow { position: relative; top: -1px; }
 
 /* The "show hidden" eye toggle -- same box model/colors as
    .loot-sort-tab beside it (so the row reads as one consistent set of

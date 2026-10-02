@@ -6638,7 +6638,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       <div class="loot-chart-card">
         <div class="loot-chart-header">
           <div class="loot-chart-range" id="lootChartRange">
-            <button type="button" class="loot-range-btn" id="lootRangeBtn">
+            <button type="button" class="loot-range-btn" id="lootRangeBtn" data-tooltip="Change date range">
               <span id="lootRangeBtnLabel">24 HOURS</span> <span class="loot-range-caret">&darr;</span>
             </button>
             <div class="loot-range-menu" id="lootRangeMenu" style="display:none;">
