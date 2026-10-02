@@ -50,6 +50,7 @@ _MAX_ATTEMPTS = 500
 SHARE_CONTENT_TYPE_LABELS = {
     "loot_tracker": "Loot",
     "purchase_goal": "Purchase",
+    "possessions": "Storages",
 }
 
 

@@ -561,6 +561,13 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   margin-bottom: 14px; position: relative;
 }
 .possessions-share #pmViewsRow { display: none; }
+
+/* "SNAPSHOT AS OF: <date> <time> (LOCAL)" line above "Shared by
+   <name>" (see render_storages_share's own banner_markup, app/
+   pages.py) -- same small-spacing-on-top-of-.subtitle tweak as Loot
+   Tracker's own .loot-share-range in loot-tracker.css. */
+.pm-share-asof { text-align: center; margin: 0 0 4px; }
+
 /* Same FLIP-preview/live-DOM-order/full-replacement drag-and-drop
    shape as Purchase Goals' own .tracker-icon-btn row (see
    wireSetupIconDrag in app/pages.py, reused here as wireViewChipDrag)

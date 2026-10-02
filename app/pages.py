@@ -16037,10 +16037,17 @@ def render_storages_share(share: "SharedContent", game_account: Optional["GameAc
     reasoning: a visitor here isn't this share's owner, so there's
     nothing for them to export a SECOND time) as render_loot_tracker_
     share/render_purchase_goals_share's own identical strip of their
-    own analogous headings. banner_markup replaces it with "Shared by
-    <name>" taking over .page-title's own size/color/weight/
-    uppercase/centering wholesale, so this page still reads as having
-    exactly one clear, title-sized heading.
+    own analogous headings. banner_markup replaces it with a small
+    "SNAPSHOT AS OF: <date> <time> (LOCAL)" line (this row's own
+    created_at, converted into the visitor's own local timezone by a
+    small inline script of its own, same technique -- and same
+    server-rendered-UTC fallback reasoning -- as render_loot_tracker_
+    share's own range line just above its identical "Shared by
+    <name>" heading) above "Shared by <name>" itself, which takes
+    over .page-title's own size/color/weight/uppercase/centering
+    wholesale, so this page still reads as having exactly one clear,
+    title-sized heading, with the snapshot's own timestamp on its own
+    small line right above it.
 
     game_account is the share's own owner, looked up by the caller
     (GET /s/{code} in app/main.py) from SharedContent.game_account_id,
@@ -16061,7 +16068,45 @@ def render_storages_share(share: "SharedContent", game_account: Optional["GameAc
     _, _, body = body.partition("</h2>")
 
     owner_name = (game_account.runescape_name if game_account else None) or "A player"
-    banner_markup = f'<h2 class="page-title">Shared by {escape(owner_name)}</h2>'
+
+    # "SNAPSHOT AS OF" line above the "Shared by <name>" heading --
+    # per explicit instruction, this needs a real timestamp (unlike
+    # Loot Tracker's own range line, this isn't frozen data covering a
+    # SPAN, just one single point in time: the moment GENERATE
+    # SHAREABLE LINK was clicked, i.e. this row's own created_at).
+    # Same fallback-then-overwrite-with-the-local-timezone-version
+    # shape as that range line's own rangeStart/rangeEnd conversion --
+    # the fallback here is kept in a written-out UTC form (not
+    # YYYY-MM-DD) specifically so it never gets mistaken for the real,
+    # local-time line if it's ever actually what a visitor sees (JS
+    # disabled, say) -- same convention render_loot_tracker_share's
+    # own range_label_fallback already establishes for its analogous
+    # line.
+    created_at_iso = share.created_at.isoformat()
+    asof_fallback = f"SNAPSHOT AS OF: {share.created_at.strftime('%b %-d, %Y, %-I:%M %p')} UTC"
+    banner_markup = f"""
+    <p class="subtitle pm-share-asof"><span id="pmShareAsOfLine">{escape(asof_fallback)}</span></p>
+    <h2 class="page-title">Shared by {escape(owner_name)}</h2>
+    <script>
+    (function () {{
+      // Zero-padded 'YYYY-MM-DD' for a plain JS Date, in local time --
+      // same hand-built convention render_loot_tracker_share's own
+      // inline range-formatting script uses (duplicated, not called
+      // into -- see that function's own doc comment for why), since
+      // toLocaleDateString has no built-in ISO-basic output format.
+      function fmtIsoDateLocal(d) {{
+        var month = String(d.getMonth() + 1);
+        if (month.length < 2) month = '0' + month;
+        var day = String(d.getDate());
+        if (day.length < 2) day = '0' + day;
+        return d.getFullYear() + '-' + month + '-' + day;
+      }}
+      var d = new Date("{created_at_iso}");
+      var timeStr = d.toLocaleTimeString('en-US', {{ hour: 'numeric', minute: '2-digit' }});
+      document.getElementById('pmShareAsOfLine').textContent = 'SNAPSHOT AS OF: ' + fmtIsoDateLocal(d) + ' ' + timeStr + ' (LOCAL)';
+    }})();
+    </script>
+    """
     body = banner_markup + body
     body = f'<div class="possessions-share">{body}</div>'
 
