@@ -593,7 +593,9 @@ def _shell(
     // popup, and why this is one shared/reused element). Any element
     // with data-tooltip set (plain text) gets one on hover instead of
     // a native browser title tooltip; data-tooltip-sub adds an
-    // optional second, dimmer line. SHOW_DELAY is deliberately short
+    // optional dimmer suffix (a quantity, count, etc.), joined onto
+    // that same line with a middle dot rather than a line of its own.
+    // SHOW_DELAY is deliberately short
     // -- not the browser's own ~1s+ native delay this is replacing --
     // but still enough that sweeping the mouse across a dense grid of
     // targets (the Collection Log's own item grid, the first place
@@ -650,7 +652,11 @@ def _shell(
         el.classList.remove('show');
         el.textContent = text;
         if (sub) {
-          const subEl = document.createElement('div');
+          // A middle dot, not a line break -- see .myscape-tooltip-sub's
+          // own comment in myscape.css for why this reads as one line,
+          // dimmer color only, rather than a second line underneath.
+          el.appendChild(document.createTextNode(' \u00b7 '));
+          const subEl = document.createElement('span');
           subEl.className = 'myscape-tooltip-sub';
           subEl.textContent = sub;
           el.appendChild(subEl);
@@ -3108,9 +3114,10 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           tile.rel = 'noopener';
           // Site-styled hover tooltip (see .myscape-tooltip in
           // myscape.css and its own driving script in _shell's shared_
-          // script) instead of the native title -- same name/qty split
-          // across two lines the old single-line title packed behind
-          // an em dash, just restyled.
+          // script) instead of the native title -- same name/qty the
+          // old single-line title packed behind an em dash, just
+          // restyled (a middle dot now, via data-tooltip-sub, instead
+          // of the em dash).
           tile.setAttribute('data-tooltip', item.name);
           if (qty != null) tile.setAttribute('data-tooltip-sub', formatInt(qty));
           var img = document.createElement('img');
