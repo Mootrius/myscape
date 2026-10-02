@@ -2635,14 +2635,13 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         if (icon) {
           icon.src = info[0];
           icon.alt = info[1];
-          // Site-styled tooltip (see .myscape-tooltip in myscape.css)
-          // instead of the native title -- this is the one tile whose
-          // tooltip text isn't fixed at render time (see this
-          // function's own comment above), so it's set here instead
-          // of as a static data-tooltip attribute in the markup, same
-          // as every other field this function already swaps in once
-          // the real account type is known.
-          icon.setAttribute('data-tooltip', info[1]);
+          // data-tooltip is deliberately NOT swapped here, unlike src/
+          // alt above -- the hover tooltip always reads the fixed
+          // "Account type" label set in the static markup (stat_tiles,
+          // app/pages.py) regardless of which real type this resolves
+          // to; the account type's actual value is what the icon
+          // itself (and the .co-stat-value text below it, via setStat
+          // just below) already conveys.
         }
         setStat('accountType', info[1]);
       }
