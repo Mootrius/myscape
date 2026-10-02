@@ -6571,7 +6571,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         '<circle cx="12" cy="12" r="3"></circle></svg>'
     )
 
-    def _sort_tabs(tabs_id: str, count_label: str, hide_toggle_id: str, hide_label: str) -> str:
+    def _sort_tabs(tabs_id: str, count_label: str, count_tooltip: str, hide_toggle_id: str, hide_label: str) -> str:
         # One button per metric now (GP, count_label, A-Z, TIME) instead
         # of a separate high/low (or Z-to-A/A-to-Z) pair each -- clicking
         # the already-active metric's own button flips its direction in
@@ -6593,7 +6593,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         return f"""
           <div class="loot-sort-tabs" id="{tabs_id}">
             <button type="button" class="loot-sort-tab" data-sort-metric="gp" data-tooltip="Sort by GP value">GP<span class="loot-sort-arrow"></span></button>
-            <button type="button" class="loot-sort-tab" data-sort-metric="count" data-tooltip="Sort by {count_label} amount">{count_label}<span class="loot-sort-arrow"></span></button>
+            <button type="button" class="loot-sort-tab" data-sort-metric="count" data-tooltip="{count_tooltip}">{count_label}<span class="loot-sort-arrow"></span></button>
             <button type="button" class="loot-sort-tab" data-sort-metric="alpha" data-tooltip="Sort alphabetically">A-Z<span class="loot-sort-arrow"></span></button>
             <button type="button" class="loot-sort-tab" data-sort-metric="time" data-tooltip="Sort by time">TIME<span class="loot-sort-arrow"></span></button>
             <button type="button" class="loot-hide-toggle" id="{hide_toggle_id}" data-tooltip="Show hidden {hide_label}">{_EYE_GLYPH_SVG}</button>
@@ -6679,7 +6679,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
               <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search for an NPC" autocomplete="off" />
               <button type="button" class="loot-search-clear" id="lootNpcSearchClear" style="display:none;">Clear</button>
             </div>
-            {_sort_tabs("lootNpcSortTabs", "KC", "lootNpcHideToggle", "NPCs")}
+            {_sort_tabs("lootNpcSortTabs", "KC", "Sort by kill count", "lootNpcHideToggle", "NPCs")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
             No NPCs killed in this range.
@@ -6692,7 +6692,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
               <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search for an item" autocomplete="off" />
               <button type="button" class="loot-search-clear" id="lootItemSearchClear" style="display:none;">Clear</button>
             </div>
-            {_sort_tabs("lootItemSortTabs", "Qty", "lootItemHideToggle", "items")}
+            {_sort_tabs("lootItemSortTabs", "Qty", "Sort by quantity", "lootItemHideToggle", "items")}
           </div>
           <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
             No items dropped in this range.
@@ -7243,9 +7243,8 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           // force the "ALL NPCs" fallback into "ALL NPCS", capitalizing
           // the "s" it's deliberately meant to keep lowercase. With 2+
           // selected, each name gets the same uppercasing and the whole
-          // row joins them with the same small-dot separator (·)
-          // already used in this file's own tooltips (see titleFor
-          // below) -- in selection order, so the title reads in the
+          // row joins them with the same small-dot separator (·) --
+          // in selection order, so the title reads in the
           // order NPCs were added to the group rather than re-sorting.
           titleText = 'ALL NPCs';
           if (selectedNpcs.length === 1) {
@@ -7335,12 +7334,6 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         function outlineHideBottomBorder(b, i) {
           return selectedNpcs.length > 0 && fillPct(b, i) <= 0;
         }
-        function titleFor(b, i) {
-          if (selectedNpcs.length) {
-            return selectedNpcs.join(' \\u00b7 ') + ': ' + fmtGp(fillValue(b, i)) + ' gp \\u00b7 total ' + fmtGp(b.value) + ' gp';
-          }
-          return fmtGp(b.value) + ' gp' + (b.killCount ? ' \\u00b7 ' + b.killCount.toLocaleString('en-US') + ' kc' : '');
-        }
 
         // Whether column index i is the one state.selectedBucket
         // points at -- matched by index rather than by the bucket's
@@ -7357,7 +7350,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         var existingCols = barsEl.children;
         if (existingCols.length !== buckets.length) {
           barsEl.innerHTML = buckets.map(function (b, i) {
-            return '<div class="loot-bar-col' + (isSelectedCol(i) ? ' selected' : '') + '" data-bucket-index="' + i + '" title="' + titleFor(b, i) + '">' +
+            return '<div class="loot-bar-col' + (isSelectedCol(i) ? ' selected' : '') + '" data-bucket-index="' + i + '">' +
               '<div class="loot-bar-outline' + (outlineActive(b) ? ' active' : '') + (outlineHideBottomBorder(b, i) ? ' no-bottom-border' : '') + '" style="height:' + outlinePct(b) + '%;"></div>' +
               '<div class="loot-bar-fill' + (fillPct(b, i) > 0 ? ' has-value' : '') + '" style="height:' + fillPct(b, i) + '%;"></div>' +
             '</div>';
@@ -7365,7 +7358,6 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         } else {
           buckets.forEach(function (b, i) {
             var col = existingCols[i];
-            col.title = titleFor(b, i);
             col.setAttribute('data-bucket-index', i);
             col.classList.toggle('selected', isSelectedCol(i));
             var outline = col.querySelector('.loot-bar-outline');
@@ -7619,7 +7611,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             var multiSelected = isSelected && state.selectedNpcs.length > 1;
             var hidden = npcEffectiveHidden(n);
             var explicitHidden = !!n.hidden;
-            var eyeTooltip = (explicitHidden ? 'Show ' : 'Hide ') + n.sourceName;
+            var eyeTooltip = (explicitHidden ? 'Show ' : 'Hide ') + 'NPC';
             // A <button> can't validly nest inside another <button> --
             // see .loot-npc-box-wrap in loot-tracker.css -- so the eye
             // toggle is a DOM sibling of the box, not a child of it,
@@ -7745,7 +7737,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           sorted.map(function (it) { return it.itemId != null ? it.itemId : it.itemName; }).join('|');
         if (key !== lastItemKey) {
           var html = sorted.map(function (it) {
-            var eyeTooltip = (it.hidden ? 'Show ' : 'Hide ') + it.itemName;
+            var eyeTooltip = (it.hidden ? 'Show ' : 'Hide ') + 'item';
             // Same sibling-wrap reasoning as renderNpcRow's box above --
             // an <a> can't validly contain a <button> either.
             return '<div class="loot-item-box-wrap' + (it.hidden ? ' hidden-entry' : '') + '">' +
