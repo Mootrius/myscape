@@ -6571,46 +6571,32 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         '<circle cx="12" cy="12" r="3"></circle></svg>'
     )
 
-    def _sort_tabs(tabs_id: str, count_label: str, hide_toggle_id: str) -> str:
-        # count_label names whichever secondary number that panel's own
-        # boxes show beside gp -- "KC" for the NPC panel, "Qty" for the
-        # item panel -- so its two new count-based tabs read naturally on
-        # each side (data-sort stays the same generic "count-high"/
-        # "count-low" either way; see sortEntries in the script below for
-        # which field that actually sorts by per panel). Labeled as the
-        # metric name plus an arrow -- up for ascending (low-to-high, or
-        # A-to-Z), down for descending (high-to-low, or Z-to-A), the
-        # same up-means-ascending/down-means-descending convention
+    def _sort_tabs(tabs_id: str, count_label: str, hide_toggle_id: str, hide_label: str) -> str:
+        # One button per metric now (GP, count_label, A-Z, TIME) instead
+        # of a separate high/low (or Z-to-A/A-to-Z) pair each -- clicking
+        # the already-active metric's own button flips its direction in
+        # place, clicking a different metric switches to it at that
+        # metric's own default direction (SORT_METRIC_DEFAULT_DIR in the
+        # script below), same single-button-toggles-direction convention
         # Storages Viewer's own sortable column headers use (see
-        # the sortDir-driven arrow.textContent in the script further
-        # down) and that spreadsheets/sortable tables use everywhere --
-        # same shorthand Purchase Goals' own sort buttons use now too,
-        # see STILL_TO_PURCHASE_SORT_MODES) rather than spelling out
-        # "High to Low"/"Low to High" -- with this many tabs sharing one
-        # row, the full text wrapped each button onto two lines, which
-        # was both harder to scan and taller than intended. The old
-        # single "Alphabetical"/"Alpha" button is likewise now two --
-        # both labeled "A-Z" (matching the plain "GP"/count_label
-        # pattern beside them -- one label, two arrow-only variants)
-        # rather than one button saying "A" and the other "Z" -- "A-Z ↓"
-        # (data-sort "alpha-desc", Z-to-A, descending) and "A-Z ↑"
-        # (data-sort "alpha", A-to-Z, ascending) -- so each direction
-        # gets its own one-click tab instead of a single button that
-        # only ever sorted one way, matching the GP/count pairs beside
-        # it (see sortEntries below for the alpha-desc branch). That's
-        # an 8th button alongside the eye toggle now -- see
-        # .loot-sort-tab/.loot-hide-toggle in loot-tracker.css for the
-        # padding/font-size trim the row took to fit it.
+        # updateSortHeaders/SORT_DEFAULT_DIR there) -- down arrow for
+        # descending, up for ascending, drawn only on whichever button is
+        # currently active via its own .loot-sort-arrow child span
+        # (mirroring .pm-sort-arrow there too, see updateSortTabs below),
+        # empty on every other button, per explicit instruction. "Recent"
+        # is "TIME" now and sortable both ways (time-asc/time-desc)
+        # rather than the one fixed newest-first order it used to be --
+        # see sortEntries' own "time" branch below. data-sort-metric is
+        # the bare metric name ("gp"/"count"/"alpha"/"time"); the script
+        # combines it with a direction ("-asc"/"-desc") via splitSort to
+        # get the same sort-mode strings sortEntries reads.
         return f"""
           <div class="loot-sort-tabs" id="{tabs_id}">
-            <button type="button" class="loot-sort-tab" data-sort="high" title="GP, high to low">GP &darr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="low" title="GP, low to high">GP &uarr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="count-high" title="{count_label}, high to low">{count_label} &darr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="count-low" title="{count_label}, low to high">{count_label} &uarr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="alpha-desc" title="Z to A">A-Z &darr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="alpha" title="A to Z">A-Z &uarr;</button>
-            <button type="button" class="loot-sort-tab" data-sort="recent">Recent</button>
-            <button type="button" class="loot-hide-toggle" id="{hide_toggle_id}" title="Show hidden">{_EYE_GLYPH_SVG}</button>
+            <button type="button" class="loot-sort-tab" data-sort-metric="gp" data-tooltip="Sort by GP value">GP<span class="loot-sort-arrow"></span></button>
+            <button type="button" class="loot-sort-tab" data-sort-metric="count" data-tooltip="Sort by {count_label} amount">{count_label}<span class="loot-sort-arrow"></span></button>
+            <button type="button" class="loot-sort-tab" data-sort-metric="alpha" data-tooltip="Sort alphabetically">A-Z<span class="loot-sort-arrow"></span></button>
+            <button type="button" class="loot-sort-tab" data-sort-metric="time" data-tooltip="Sort by time">TIME<span class="loot-sort-arrow"></span></button>
+            <button type="button" class="loot-hide-toggle" id="{hide_toggle_id}" data-tooltip="Show hidden {hide_label}">{_EYE_GLYPH_SVG}</button>
           </div>
         """
 
@@ -6630,14 +6616,14 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
     # match ("Export", not "Share").
     loot_share_icon_btn = (
         ' <span class="loot-share-wrap">'
-        '<button type="button" class="loot-share-icon-btn" id="lootShareIconBtn" aria-label="Export this loot" title="Export this loot">'
+        '<button type="button" class="loot-share-icon-btn" id="lootShareIconBtn" aria-label="Share the currently displayed loot data" data-tooltip="Share the currently displayed loot data">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
         '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
         '</svg></button>'
         '<div class="loot-share-card" id="lootShareCard" hidden>'
         '<button type="button" class="loot-share-generate-btn" id="lootShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
-        '<button type="button" class="loot-share-link-btn" id="lootShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
+        '<button type="button" class="loot-share-link-btn" id="lootShareLinkBtn" data-tooltip="Click to copy" hidden></button>'
         '<p class="loot-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p>'
         '</div>'
         '</span>'
@@ -6693,7 +6679,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
               <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search for an NPC" autocomplete="off" />
               <button type="button" class="loot-search-clear" id="lootNpcSearchClear" style="display:none;">Clear</button>
             </div>
-            {_sort_tabs("lootNpcSortTabs", "KC", "lootNpcHideToggle")}
+            {_sort_tabs("lootNpcSortTabs", "KC", "lootNpcHideToggle", "NPCs")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
             No NPCs killed in this range.
@@ -6706,7 +6692,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
               <input type="text" class="loot-search" id="lootItemSearch" placeholder="Search for an item" autocomplete="off" />
               <button type="button" class="loot-search-clear" id="lootItemSearchClear" style="display:none;">Clear</button>
             </div>
-            {_sort_tabs("lootItemSortTabs", "Qty", "lootItemHideToggle")}
+            {_sort_tabs("lootItemSortTabs", "Qty", "lootItemHideToggle", "items")}
           </div>
           <p class="loot-column-empty" id="lootItemEmpty" style="display:none;">
             No items dropped in this range.
@@ -6726,7 +6712,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         // to a single entry (or empties it, clicking the one already-
         // selected NPC); shift-click toggles one name in/out without
         // touching the rest -- see the NPC row's click handler below.
-        selectedNpcs: [], npcSort: 'high', npcSearch: '', itemSort: 'high', itemSearch: '',
+        selectedNpcs: [], npcSort: 'gp-desc', npcSearch: '', itemSort: 'gp-desc', itemSearch: '',
         rangeKey: '24h', customStart: null, customEnd: null,
         // The clicked bar's own {start, end, value, killCount, index}
         // (all captured straight off that bucket at click time), or
@@ -6823,44 +6809,74 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         });
       }
 
-      // Shared by both panels' sort tabs. 'high'/'low' sort by valueKey
-      // (gp), 'count-high'/'count-low' sort by countKey (killCount for
-      // NPCs, quantity for items -- each panel's own secondary number,
-      // see _sort_tabs' count_label in app/pages.py for the matching tab
-      // labels), 'alpha'/'alpha-desc' by nameKey (A-to-Z / Z-to-A --
-      // the two "A-Z" tabs, up/down arrow respectively), 'recent' by
-      // recentKey (an ISO timestamp -- lastKillAt for NPCs,
-      // lastDroppedAt for items) newest first.
+      // Splits a "<metric>-<dir>" sort string (gp-desc, count-asc, ...) into
+      // its two parts -- shared by sortEntries, updateSortTabs, and both
+      // sort-tab click handlers below so none of them duplicates the
+      // same indexOf/slice. A bare metric with no "-dir" suffix at all
+      // defaults to 'desc' (shouldn't happen in practice -- every sort
+      // string this page ever sets has one -- but keeps this honest
+      // about what it returns rather than handing back undefined).
+      function splitSort(sortStr) {
+        var sep = sortStr.indexOf('-');
+        return sep === -1
+          ? { metric: sortStr, dir: 'desc' }
+          : { metric: sortStr.slice(0, sep), dir: sortStr.slice(sep + 1) };
+      }
+
+      // Each metric's own first-click direction -- gp/count/time start
+      // descending (highest/most-recent first, matching this panel's
+      // old defaults), alpha starts ascending (A-to-Z), same
+      // metric -> default-direction lookup shape as Storages Viewer's
+      // own SORT_DEFAULT_DIR. Read by both sort-tab click handlers below
+      // when switching to a metric that wasn't already active;
+      // switching when it's already active flips the current direction
+      // instead of consulting this.
+      var SORT_METRIC_DEFAULT_DIR = { gp: 'desc', count: 'desc', alpha: 'asc', time: 'desc' };
+
+      // Shared by both panels' sort tabs. sortMode is "<metric>-<dir>"
+      // (see splitSort above) -- gp sorts by valueKey, count by
+      // countKey (killCount for NPCs, quantity for items -- each
+      // panel's own secondary number, see _sort_tabs' count_label in
+      // app/pages.py for the matching tab label), alpha by nameKey,
+      // time by recentKey (an ISO timestamp -- lastKillAt for NPCs,
+      // lastDroppedAt for items). desc is high-to-low/Z-to-A/newest-
+      // first, asc the reverse, for every metric.
       // Never mutates the list it's given -- callers still hold the
       // original (unsorted, unfiltered) array from lastData.
       function sortEntries(list, sortMode, nameKey, valueKey, recentKey, countKey) {
         var out = list.slice();
-        if (sortMode === 'low') {
-          out.sort(function (a, b) { return (a[valueKey] || 0) - (b[valueKey] || 0); });
-        } else if (sortMode === 'count-high') {
-          out.sort(function (a, b) { return (b[countKey] || 0) - (a[countKey] || 0); });
-        } else if (sortMode === 'count-low') {
-          out.sort(function (a, b) { return (a[countKey] || 0) - (b[countKey] || 0); });
-        } else if (sortMode === 'alpha') {
-          out.sort(function (a, b) { return (a[nameKey] || '').localeCompare(b[nameKey] || ''); });
-        } else if (sortMode === 'alpha-desc') {
-          out.sort(function (a, b) { return (b[nameKey] || '').localeCompare(a[nameKey] || ''); });
-        } else if (sortMode === 'recent') {
-          out.sort(function (a, b) { return new Date(b[recentKey] || 0) - new Date(a[recentKey] || 0); });
+        var sort = splitSort(sortMode);
+        if (sort.metric === 'count') {
+          out.sort(function (a, b) { return sort.dir === 'asc' ? (a[countKey] || 0) - (b[countKey] || 0) : (b[countKey] || 0) - (a[countKey] || 0); });
+        } else if (sort.metric === 'alpha') {
+          out.sort(function (a, b) { return sort.dir === 'asc' ? (a[nameKey] || '').localeCompare(b[nameKey] || '') : (b[nameKey] || '').localeCompare(a[nameKey] || ''); });
+        } else if (sort.metric === 'time') {
+          out.sort(function (a, b) { var diff = new Date(b[recentKey] || 0) - new Date(a[recentKey] || 0); return sort.dir === 'asc' ? -diff : diff; });
         } else {
-          out.sort(function (a, b) { return (b[valueKey] || 0) - (a[valueKey] || 0); });
+          out.sort(function (a, b) { return sort.dir === 'asc' ? (a[valueKey] || 0) - (b[valueKey] || 0) : (b[valueKey] || 0) - (a[valueKey] || 0); });
         }
         return out;
       }
 
-      // Toggles which sort-tab button looks active within one of the
-      // two .loot-sort-tabs containers -- shared by both panels since
-      // they're identical markup (see _sort_tabs in render_loot_tracker).
+      // Toggles which sort-tab button looks active (and draws its own
+      // arrow) within one of the two .loot-sort-tabs containers --
+      // shared by both panels since they're identical markup (see
+      // _sort_tabs in render_loot_tracker). activeSort is the same
+      // "<metric>-<dir>" string sortEntries reads (see splitSort); only
+      // the button whose data-sort-metric matches gets an arrow, same
+      // up-ascending/down-descending convention (and the same leading-
+      // space-before-the-glyph formatting) as Storages Viewer's own
+      // updateSortHeaders.
       function updateSortTabs(containerId, activeSort) {
         var container = document.getElementById(containerId);
+        var active = splitSort(activeSort);
         var btns = container.querySelectorAll('.loot-sort-tab');
         for (var i = 0; i < btns.length; i++) {
-          btns[i].classList.toggle('active', btns[i].getAttribute('data-sort') === activeSort);
+          var btn = btns[i];
+          var isActive = btn.getAttribute('data-sort-metric') === active.metric;
+          btn.classList.toggle('active', isActive);
+          var arrow = btn.querySelector('.loot-sort-arrow');
+          if (arrow) arrow.textContent = isActive ? (active.dir === 'asc' ? ' \\u2191' : ' \\u2193') : '';
         }
       }
 
@@ -7454,11 +7470,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         }
         emptyEl.style.display = 'none';
 
-        function npcTitle(n) {
-          return n.sourceName + ' \\u2014 ' + fmtGp(n.value) + ' gp \\u00b7 ' + n.killCount + ' kc';
-        }
-
-        // A tiered clue casket's own sourceName is always exactly
+                // A tiered clue casket's own sourceName is always exactly
         // "Reward casket (<tier>)" (see build_loot_state in
         // app/loot.py, npc_like_name) -- never a real NPC's name, so
         // this can't false-positive on an actual monster. Used below
@@ -7607,7 +7619,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             var multiSelected = isSelected && state.selectedNpcs.length > 1;
             var hidden = npcEffectiveHidden(n);
             var explicitHidden = !!n.hidden;
-            var eyeTitle = (explicitHidden ? 'Unhide ' : 'Hide ') + n.sourceName;
+            var eyeTooltip = (explicitHidden ? 'Show ' : 'Hide ') + n.sourceName;
             // A <button> can't validly nest inside another <button> --
             // see .loot-npc-box-wrap in loot-tracker.css -- so the eye
             // toggle is a DOM sibling of the box, not a child of it,
@@ -7618,13 +7630,13 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             // Storages Viewer's own pin button.
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
-                escapeHtml(n.sourceName) + '" title="' + escapeHtml(npcTitle(n)) + '">' +
+                escapeHtml(n.sourceName) + '" data-tooltip="' + escapeHtml(n.sourceName) + '">' +
                 iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '') + (isSpider(n) ? ' loot-npc-box-icon-spider' : '') + (isDeathSpawn(n) ? ' loot-npc-box-icon-death-spawn' : '') + (isDossier(n) ? ' loot-npc-box-icon-dossier' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +
               '<button type="button" class="loot-eye-btn" data-hide-name="' + escapeHtml(n.sourceName) +
-                '" data-hidden="' + (explicitHidden ? '1' : '0') + '" title="' + escapeHtml(eyeTitle) + '">' +
+                '" data-hidden="' + (explicitHidden ? '1' : '0') + '" data-tooltip="' + escapeHtml(eyeTooltip) + '">' +
                 (hidden ? EYE_OFF_GLYPH : EYE_GLYPH) +
               '</button>' +
             '</div>';
@@ -7659,7 +7671,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           var isSelected = state.selectedNpcs.indexOf(n.sourceName) !== -1;
           box.classList.toggle('active', isSelected && state.selectedNpcs.length === 1);
           box.classList.toggle('multi-selected', isSelected && state.selectedNpcs.length > 1);
-          box.title = npcTitle(n);
+          box.setAttribute('data-tooltip', n.sourceName);
           var kcEl = box.querySelector('.loot-npc-box-kc');
           if (kcEl) kcEl.textContent = n.killCount + ' kc';
           var valEl = box.querySelector('.loot-npc-box-value');
@@ -7725,16 +7737,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         }
         emptyEl.style.display = 'none';
 
-        function itemTitle(it) {
-          // No space between the × and the quantity that follows it
-          // (unlike the — on either side of it) -- reads as a single
-          // "x123"-style unit, the same way the box's own always-visible
-          // .loot-item-box-qty badge just below already renders its
-          // × + fmtGpCompact(it.quantity) with nothing between them.
-          return it.itemName + ' \\u00d7' + fmtGp(it.quantity) + ' \\u2014 ' + fmtGp(it.value) + ' gp';
-        }
-
-        // Same hiddenFlags addition, same reason, as renderNpcRow's key
+                // Same hiddenFlags addition, same reason, as renderNpcRow's key
         // above.
         var hiddenFlags = sorted.map(function (it) { return it.hidden ? '1' : '0'; }).join('');
         var key = state.selectedNpcs.join('\\u0002') + '\\u0001' + state.itemSearch + '\\u0001' + state.itemSort + '\\u0001' +
@@ -7742,18 +7745,18 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           sorted.map(function (it) { return it.itemId != null ? it.itemId : it.itemName; }).join('|');
         if (key !== lastItemKey) {
           var html = sorted.map(function (it) {
-            var eyeTitle = (it.hidden ? 'Unhide ' : 'Hide ') + it.itemName;
+            var eyeTooltip = (it.hidden ? 'Show ' : 'Hide ') + it.itemName;
             // Same sibling-wrap reasoning as renderNpcRow's box above --
             // an <a> can't validly contain a <button> either.
             return '<div class="loot-item-box-wrap' + (it.hidden ? ' hidden-entry' : '') + '">' +
-              '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" title="' + escapeHtml(itemTitle(it)) + '">' +
+              '<a class="loot-item-box" href="' + wikiItemUrl(it.itemName) + '" target="_blank" rel="noopener" data-tooltip="' + escapeHtml(it.itemName) + '">' +
                 iconImg(it.icon, it.itemName, 'loot-item-box-icon') +
                 '<div class="loot-item-box-qty">' + '\\u00d7' + fmtGpCompact(it.quantity) + '</div>' +
                 '<div class="loot-item-box-value">' + fmtGpCompact(it.value) + ' gp</div>' +
               '</a>' +
               '<button type="button" class="loot-eye-btn" data-hide-item-id="' + (it.itemId != null ? it.itemId : '') +
                 '" data-hide-name="' + escapeHtml(it.itemName) + '" data-hidden="' + (it.hidden ? '1' : '0') +
-                '" title="' + escapeHtml(eyeTitle) + '">' +
+                '" data-tooltip="' + escapeHtml(eyeTooltip) + '">' +
                 (it.hidden ? EYE_OFF_GLYPH : EYE_GLYPH) +
               '</button>' +
             '</div>';
@@ -7781,7 +7784,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           var wrap = wraps[i];
           if (!wrap) return;
           var box = wrap.querySelector('.loot-item-box');
-          box.title = itemTitle(it);
+          box.setAttribute('data-tooltip', it.itemName);
           var qtyEl = box.querySelector('.loot-item-box-qty');
           if (qtyEl) qtyEl.textContent = '\\u00d7' + fmtGpCompact(it.quantity);
           var valEl = box.querySelector('.loot-item-box-value');
@@ -7988,12 +7991,16 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         if (toggleBtn) {
           state.npcShowHidden = !state.npcShowHidden;
           toggleBtn.classList.toggle('active', state.npcShowHidden);
+          toggleBtn.setAttribute('data-tooltip', (state.npcShowHidden ? 'Hide hidden' : 'Show hidden') + ' NPCs');
           if (lastData) renderNpcRow(currentNpcs());
           return;
         }
         var btn = e.target.closest('.loot-sort-tab');
         if (!btn || !lastData) return;
-        state.npcSort = btn.getAttribute('data-sort');
+        var metric = btn.getAttribute('data-sort-metric');
+        var current = splitSort(state.npcSort);
+        var dir = metric === current.metric ? (current.dir === 'asc' ? 'desc' : 'asc') : (SORT_METRIC_DEFAULT_DIR[metric] || 'desc');
+        state.npcSort = metric + '-' + dir;
         updateSortTabs('lootNpcSortTabs', state.npcSort);
         renderNpcRow(currentNpcs());
       });
@@ -8030,12 +8037,16 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         if (toggleBtn) {
           state.itemShowHidden = !state.itemShowHidden;
           toggleBtn.classList.toggle('active', state.itemShowHidden);
+          toggleBtn.setAttribute('data-tooltip', (state.itemShowHidden ? 'Hide hidden' : 'Show hidden') + ' items');
           renderItemList(currentItems());
           return;
         }
         var btn = e.target.closest('.loot-sort-tab');
         if (!btn) return;
-        state.itemSort = btn.getAttribute('data-sort');
+        var metric = btn.getAttribute('data-sort-metric');
+        var current = splitSort(state.itemSort);
+        var dir = metric === current.metric ? (current.dir === 'asc' ? 'desc' : 'asc') : (SORT_METRIC_DEFAULT_DIR[metric] || 'desc');
+        state.itemSort = metric + '-' + dir;
         updateSortTabs('lootItemSortTabs', state.itemSort);
         renderItemList(currentItems());
       });

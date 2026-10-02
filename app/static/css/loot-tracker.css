@@ -619,10 +619,12 @@
 
 /* Search box on its own full-width row, sort tabs on a second row below
    -- used to share one row (see the old flex-wrap version this
-   replaced), but seven sort tabs (GP/count/alpha/recent, each a
-   high-to-low or A-to-Z/Z-to-A pair -- see _sort_tabs in app/pages.py)
-   no longer fit beside the search box without cramping both, so each
-   control now gets the panel's full width on its own line instead. */
+   replaced), but the sort tabs (one button per metric -- GP/count_label/
+   A-Z/TIME, each toggling its own ascending/descending direction in
+   place rather than a separate high/low pair -- see _sort_tabs in
+   app/pages.py) no longer fit beside the search box without cramping
+   both, so each control now gets the panel's full width on its own
+   line instead. */
 .loot-panel-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .loot-search { width: 100%; height: 34px; padding: 0 10px; font-size: 13px; }
 /* Wraps the search box so its own CLEAR text button (below) can be
@@ -652,14 +654,16 @@
    above) that's no longer needed, and this is shorter, matching how
    the Purchase Goals page's own sort row looks.
 
-   All seven sort tabs (gp/count/alpha, each a high-to-low or
-   A-to-Z/Z-to-A pair, plus recent -- see _sort_tabs in app/pages.py)
-   plus the "show hidden" eye toggle (.loot-hide-toggle below) fit on
-   one line now that they're all a short "label + arrow" (e.g. "GP ↓",
-   "A-Z ↑") instead of spelled-out "High to Low"/"Low to High" or a lone
-   "Alphabetical" button -- that trim made room for the eye toggle as
-   an 8th button without wrapping, alongside shaving each tab's own
-   padding/font-size down a notch from what fewer, wordier tabs
+   The four sort tabs (one button per metric -- GP/count_label/A-Z/TIME,
+   see _sort_tabs in app/pages.py -- each toggling between ascending and
+   descending in place via its own .loot-sort-arrow child span rather
+   than a separate high/low or A-Z/Z-A pair of buttons, see
+   updateSortTabs in the script below) plus the "show hidden" eye toggle
+   (.loot-hide-toggle below) fit on one line as short label-only buttons
+   (e.g. "GP", "A-Z") with the active one's own arrow drawn alongside its
+   label -- five buttons total now, trimmed down from the old seven-
+   sort-tabs-plus-eye-toggle layout, alongside shaving each tab's own
+   padding/font-size down a notch from what more, wordier tabs
    needed. */
 .loot-sort-tabs { display: flex; gap: 5px; }
 /* 25px is THE site-wide button height -- every other button and
@@ -685,9 +689,9 @@
 
 /* The "show hidden" eye toggle -- same box model/colors as
    .loot-sort-tab beside it (so the row reads as one consistent set of
-   eight buttons, not seven-plus-an-outlier), just icon-only and a
+   five buttons, not four-plus-an-outlier), just icon-only and a
    fixed width instead of flex: 1, so it doesn't steal space from the
-   seven text tabs proportionally. .active (toggled on -- every hidden NPC/
+   four text tabs proportionally. .active (toggled on -- every hidden NPC/
    item in this panel now shown, dimmed -- see the script below) reuses
    .loot-sort-tab.active's own gold treatment, the same "currently on"
    language Edit Mode's own button uses elsewhere on the site (see
