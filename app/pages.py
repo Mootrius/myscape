@@ -1442,9 +1442,9 @@ _SUMMARY_STATS = (
     ("accountType", _ACCOUNT_TYPE_INFO["MAIN"][0], "Account type"),
     ("combatLevel", _ICON_SUMMARY_COMBAT_LEVEL, "Combat level"),
     ("totalLevel", _ICON_SUMMARY_TOTAL_LEVEL, "Total level"),
-    ("totalXp", _ICON_SUMMARY_TOTAL_XP, "Total XP"),
+    ("totalXp", _ICON_SUMMARY_TOTAL_XP, "Total experience"),
     ("quests", _ICON_SUMMARY_QUESTS, "Quests completed"),
-    ("achievements", _ICON_SUMMARY_ACHIEVEMENTS, "Achievement diaries completed"),
+    ("achievements", _ICON_SUMMARY_ACHIEVEMENTS, "Achievements completed"),
     ("combatTasks", _ICON_SUMMARY_COMBAT_TASKS, "Combat tasks completed"),
     ("collections", _ICON_SUMMARY_COLLECTIONS, "Collections logged"),
 )
