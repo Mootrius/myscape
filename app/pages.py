@@ -2528,8 +2528,8 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
             '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>'
             '<button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>'
             '</div>'
-            '<button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" title="Click to copy this link to your clipboard." disabled></button>'
-            '<button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" title="Generate a new link -- the old one stops working (once per day)">Generate new link</button>'
+            '<button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" data-tooltip="Click to copy" disabled></button>'
+            '<button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" data-tooltip="Generating a new link will render your old link\nobsolete. You can do this once every 24 hours.">Generate new link</button>'
             '</div>'
             '</span>'
         )
