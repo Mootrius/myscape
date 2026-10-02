@@ -926,6 +926,26 @@ class SyncStatusOut(BaseModel):
     storages: Dict[str, Optional[datetime]]
 
 
+class PossessionShareCreateRequest(BaseModel):
+    """Body for POST /api/possessions/share -- the one piece of
+    Storages Viewer's frozen snapshot that isn't already sitting in a
+    persisted table at share time: which location filter GROUPS the
+    sharer currently had toggled on (state.locations client-side, see
+    _possessions_panel_markup's own script in app/pages.py) -- purely
+    transient and resets to all-on on every real page load, unlike
+    enabledStorages (HiddenPossessionStorage, already persisted and
+    read straight off the account by build_possessions_share_snapshot
+    without needing it here). locations is the raw per-storage key
+    list (POSSESSION_STORAGE_KEYS above, not the group labels
+    _POSSESSION_LOCATION_GROUPS shows on screen) -- whatever keys
+    state.locations currently has flagged on, verbatim; an unknown key
+    is simply dropped by build_possessions_share_snapshot rather than
+    erroring, same permissive posture LootShareCreateRequest above
+    takes with its own range/start/end."""
+
+    locations: List[str] = []
+
+
 class PossessionTrackerIn(BaseModel):
     kind: str  # "min" or "max"
     item_id: int

@@ -14323,8 +14323,43 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>'
     )
 
+    # Export icon next to the title -- same bare-icon/floating-popup
+    # pattern as Loot Tracker's own loot-share-wrap (see that button's
+    # own comment just above loot_share_icon_btn in this file, and in
+    # loot-tracker.css -- duplicated here with its own pm- prefix,
+    # same "duplicated, not shared across pages' own stylesheets"
+    # convention every other cross-page style overlap on this site
+    # already follows). Toggles .pmShareCard open/closed as a popup
+    # floating directly under this button, closeable by re-clicking
+    # the trigger OR clicking anywhere else on the page (see
+    # pmShareIconBtn's own click handler further down in the script,
+    # right next to pmSettingsBtn's identical outside-click
+    # convention); that card holds the actual GENERATE SHAREABLE LINK
+    # flow, which POSTs the player's own CURRENTLY active location-
+    # filter selection (state.locations) to /api/possessions/share
+    # (see pmShareGenerateBtn's own handler below) -- everything else
+    # this share freezes (items, pins, hidden storages) is already
+    # real, persisted data read straight off the account server-side,
+    # so nothing else needs to travel in this request body (see
+    # build_possessions_share_snapshot's own docstring in
+    # app/possessions.py).
+    pm_share_icon_btn = (
+        ' <span class="pm-share-wrap">'
+        '<button type="button" class="pm-share-icon-btn" id="pmShareIconBtn" aria-label="Export this view" title="Export this view">'
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
+        '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
+        '</svg></button>'
+        '<div class="pm-share-card" id="pmShareCard" hidden>'
+        '<button type="button" class="pm-share-generate-btn" id="pmShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
+        '<button type="button" class="pm-share-link-btn" id="pmShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
+        '<p class="pm-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p>'
+        '</div>'
+        '</span>'
+    )
+
     body = f"""
-    <h2 class="page-title">Storages Viewer</h2>
+    <h2 class="page-title">Storages Viewer{pm_share_icon_btn}</h2>
     <div class="auth-error" id="pmError"></div>
 
     <section class="pm-section">
@@ -14825,6 +14860,113 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         document.addEventListener('click', function () { closeAllFilterPopovers(); });
       }
       wireFilterIcons();
+
+      // Export icon next to the title -- floating popup anchored
+      // directly under the button itself (.pm-share-wrap,
+      // possessions.css), closeable by re-clicking the trigger OR
+      // clicking anywhere else on the page, same outside-click-close
+      // convention as pmSettingsBtn/pmSettingsMenu just below (and as
+      // Loot Tracker's own identical lootShareIconBtn/lootShareCard
+      // toggle, app/pages.py) -- mirrored here as setPmShareOpen. No
+      // data to refetch on open either, since nothing here is
+      // generated until GENERATE SHAREABLE LINK is actually clicked
+      // (see that button's own handler below). Null-guarded because
+      // render_storages_share strips this icon's own <h2> out of the
+      // reused body string entirely before this script ever runs --
+      // a visitor there isn't this share's owner, so there's nothing
+      // for them to export a SECOND time -- leaving pmShareIconBtn
+      // missing from the very start, same reasoning (and same
+      // null-guard shape) as lootShareIconBtn's own guard.
+      var pmShareIconBtn = document.getElementById('pmShareIconBtn');
+      var pmShareCard = document.getElementById('pmShareCard');
+      if (pmShareIconBtn) {
+        function setPmShareOpen(open) {
+          pmShareCard.hidden = !open;
+          pmShareIconBtn.classList.toggle('open', open);
+        }
+        pmShareIconBtn.addEventListener('click', function () {
+          setPmShareOpen(pmShareCard.hidden);
+        });
+        document.addEventListener('click', function (e) {
+          var wrap = document.querySelector('.pm-share-wrap');
+          if (wrap && !wrap.contains(e.target)) setPmShareOpen(false);
+        });
+      }
+
+      // GENERATE SHAREABLE LINK -- creates a frozen, point-in-time
+      // snapshot of everything this player currently owns (see
+      // build_possessions_share_snapshot in app/possessions.py),
+      // along with which location-filter GROUPS are currently active
+      // (state.locations) -- the one piece of this page's own state
+      // that isn't already sitting in a persisted table the server
+      // can read back on its own; pins and hidden storages need no
+      // such request-body round trip, both are already real,
+      // persisted settings the server reads straight off this
+      // account. Null-guarded for the same reason pmShareIconBtn
+      // above is -- render_storages_share strips .pm-share-wrap out
+      // along with the rest of this icon's <h2> before this reused
+      // script ever runs (see lootShareGenerateBtn's own identical
+      // null guard and comment in this file for the exact bug this
+      // guard avoids: an unguarded addEventListener here throws
+      // synchronously and halts this whole IIFE before
+      // loadSummary()/loadViews() at the very bottom ever run -- the
+      // same bug that once got Loot Tracker's own share pages stuck
+      // on "Loading..." forever, before that fix).
+      var pmShareGenerateBtn = document.getElementById('pmShareGenerateBtn');
+      if (pmShareGenerateBtn) {
+        pmShareGenerateBtn.addEventListener('click', function () {
+          var btn = this;
+          btn.disabled = true;
+          var activeLocations = Object.keys(state.locations).filter(function (k) { return state.locations[k]; });
+          fetch('/api/possessions/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ locations: activeLocations }),
+          })
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(); })
+            .then(function (data) {
+              var linkBtn = document.getElementById('pmShareLinkBtn');
+              linkBtn.dataset.url = data.url;
+              linkBtn.textContent = data.url;
+              btn.hidden = true;
+              linkBtn.hidden = false;
+            })
+            .catch(function () {
+              btn.classList.add('action-failed');
+              setTimeout(function () { btn.classList.remove('action-failed'); }, 2500);
+            })
+            .then(function () { btn.disabled = false; });
+        });
+      }
+
+      // pmShareLinkBtn itself IS the link, once generated above --
+      // clicking it copies its own URL (held in data-url, since its
+      // own textContent swaps to "COPIED" and back below) to the
+      // clipboard and flashes "COPIED" for a moment, same pattern as
+      // Loot Tracker's own lootShareLinkBtn. Null-guarded for the
+      // same reason pmShareGenerateBtn above is.
+      var pmShareLinkBtn = document.getElementById('pmShareLinkBtn');
+      if (pmShareLinkBtn) {
+        pmShareLinkBtn.addEventListener('click', function () {
+          var btn = this;
+          var url = btn.dataset.url;
+          if (!url) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url);
+          } else {
+            var temp = document.createElement('textarea');
+            temp.value = url;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+          }
+          btn.textContent = 'COPIED';
+          setTimeout(function () { btn.textContent = url; }, 1200);
+        });
+      }
 
       // ---- Locations (multi-select groups, all on by default) ----------
       // Each button covers a GROUP of raw storage keys (data-locations is
@@ -15754,6 +15896,16 @@ def render_landing_storages_preview() -> Optional[Tuple[str, str, str]]:
 
       {script}
 
+      // Same reasoning as render_landing_loot_preview's own identical
+      // removal -- nothing real to share from an anonymous demo.
+      // Removed outright (not just hidden), wrap and all (the export
+      // icon and its popup are nested together inside .pm-share-wrap,
+      // so one removal takes both): nothing else in the reused script
+      // above ever looks either back up afterward, so there's no
+      // null-safety reason to leave them in the DOM.
+      var shareWrap = document.querySelector('.pm-share-wrap');
+      if (shareWrap) shareWrap.remove();
+
       // Same fixed-height container + always-on bottom-edge feather as
       // the other three previews -- see .landing-storages-preview in
       // possessions.css, and render_landing_loot_preview's own wrapper
@@ -15778,6 +15930,219 @@ def render_possessions(player: PlayerView) -> str:
         body=body,
         extra_script=script,
         extra_head=extra_head,
+    )
+
+
+def render_storages_share(share: "SharedContent", game_account: Optional["GameAccount"], viewer: Optional[PlayerView]) -> str:
+    """myscape.io/s/<code> for a Storages Viewer share (see POST
+    /api/possessions/share in app/main.py and build_possessions_share_
+    snapshot in app/possessions.py for exactly what's frozen into
+    share.payload) -- a visitor's own read-only view of exactly what
+    the owner had on screen at share time: everything they currently
+    owned (priced, broken down, and marked pinned exactly as build_
+    possessions_summary already has it), which raw storages were
+    hidden (HiddenPossessionStorage, a real persisted setting), and
+    which location-filter GROUPS were active (activeLocations, the
+    one piece of this snapshot that ISN'T sitting in a persisted table
+    anywhere -- see that function's own docstring). Nothing live,
+    nothing outside it, same "frozen, point-in-time, never live
+    again" contract render_loot_tracker_share/render_purchase_goals_
+    share above already establish for their own tables.
+
+    Reuses _possessions_panel_markup's body/script completely
+    unmodified, wrapped the same way those two functions already wrap
+    their own reused panels: a local fetch shim answering GET
+    /api/possessions/summary and GET /api/possessions/views out of
+    PAYLOAD instead of the real endpoints (see the wrapper script
+    below), plus two narrow defensive branches for the pin/hidden-
+    storage POST/DELETE endpoints that should never actually fire
+    here at all (see the capturing-phase click listener a few lines
+    below those two -- same technique Purchase Goals' own #pgGearFrame
+    listener in render_purchase_goals_share already uses to make an
+    entire reused control surface read-only) -- echoing back the
+    exact values already frozen into PAYLOAD rather than an empty
+    {}, since setPinned/applyHiddenStorageKeys in the reused script
+    both RECONCILE every item/checkbox from whatever a response like
+    that actually says, not just flip the one the visitor clicked; an
+    empty response there would read as "nothing is pinned"/"nothing
+    is hidden" and silently un-pin or re-enable everything the instant
+    either path ever fired, so these two branches exist purely as a
+    second line of defense behind the click listener, not because
+    either one is expected to ever actually run.
+
+    Three surfaces this reused panel normally lets a player change are
+    read-only here instead, per explicit instruction -- a visitor can
+    SEE exactly what the owner chose, never change it:
+
+    - The location filter buttons (.pm-filter-btn) -- these start
+      ALL-ON by default in the reused script, same as a real page
+      load, since state.locations is never persisted or fetched from
+      anywhere (see that field's own docstring in app/possessions.py);
+      simulating a real click on whichever button groups should
+      actually start OFF, per PAYLOAD.activeLocations, runs that exact
+      same toggle handler -- flipping state.locations, the button's
+      own "active" class, and triggering a re-render -- before the
+      capturing-phase listener below starts blocking every FURTHER
+      click; this is the only point where a "click" on one of these
+      buttons is still allowed to do anything.
+    - The settings-cog's per-storage checkboxes (.pm-settings-item) --
+      these already start checked/unchecked correctly on their own,
+      no simulated clicks needed, since applyHiddenStorageKeys
+      (called from loadSummary, which this page's own fetch shim
+      answers out of PAYLOAD.hiddenStorageKeys) is exactly the real,
+      persisted reconciliation path every normal page load already
+      goes through.
+    - The pin buttons (.pm-pin-btn) -- same story as the checkboxes:
+      item.pinned already arrives correctly pinned/unpinned on every
+      item straight out of PAYLOAD.items (see build_possessions_
+      summary's own docstring in app/possessions.py), no extra work
+      needed to show it right.
+
+    All three are locked against further clicks the same way -- one
+    delegated, capturing-phase listener on document (added only AFTER
+    the activeLocations simulation above, so it doesn't block that)
+    that stops a click on any of them dead before the reused script's
+    own bubble-phase handlers ever see it, same technique (and same
+    "stops this before it can fire, not just visually") as
+    #pgGearFrame's own mousedown/dragstart/click listener in
+    render_purchase_goals_share. The settings-cog TRIGGER button
+    itself (#pmSettingsBtn, opens/closes the menu, no network call
+    either way) is deliberately left clickable -- per explicit
+    instruction a visitor can still SEE what's selected inside, just
+    never change it.
+
+    #pmViewsRow (the saved-filter-preset chips underneath the search/
+    location/settings row) is hidden outright via CSS instead (see
+    .possessions-share #pmViewsRow in possessions.css), not stripped
+    from the DOM -- loadViews()/renderViewsRow() in the reused script
+    run UNCONDITIONALLY at the very bottom of it regardless of this
+    page, and both call document.getElementById('pmViewsRow') without
+    a null guard, so stripping that element outright would throw the
+    exact same synchronous "Cannot read properties of null" error,
+    for the exact same reason, lootShareGenerateBtn/lootShareLinkBtn
+    did before that bug's own fix -- hiding it via CSS instead leaves
+    it there for that call to harmlessly write into, same reasoning
+    .pg-header's own hide-not-strip treatment in render_purchase_
+    goals_share already gives for the setup-icon row/hamburger menu.
+    Hiding it (rather than, say, just not fetching it) also naturally
+    collapses its own margin-bottom: 14px, which is what actually
+    shifts the table up to fill the dead space the "view" component
+    would otherwise leave -- per explicit instruction, no extra
+    spacing rule needed on top of that.
+
+    The only other visible difference from the real page is its own
+    title row, entirely replacing the reused body's own "Storages
+    Viewer" <h2> (and the export icon button inside it) -- stripped
+    out of the reused body string outright, same technique (and same
+    reasoning: a visitor here isn't this share's owner, so there's
+    nothing for them to export a SECOND time) as render_loot_tracker_
+    share/render_purchase_goals_share's own identical strip of their
+    own analogous headings. banner_markup replaces it with "Shared by
+    <name>" taking over .page-title's own size/color/weight/
+    uppercase/centering wholesale, so this page still reads as having
+    exactly one clear, title-sized heading.
+
+    game_account is the share's own owner, looked up by the caller
+    (GET /s/{code} in app/main.py) from SharedContent.game_account_id,
+    which can in principle be None if that account's own row is ever
+    deleted after the fact (see that column's own comment in
+    app/models.py); falls back to "A player" the same way
+    render_loot_tracker_share's own owner_name does."""
+    extra_head, body, script = _possessions_panel_markup()
+    # Strips the reused body's own "Storages Viewer" <h2 class="page-
+    # title"> (and the export icon button inside it -- see
+    # pm_share_icon_btn in _possessions_panel_markup) outright -- see
+    # this function's own doc comment above for why. The reused body
+    # always opens with exactly one such heading, so splitting on the
+    # first "</h2>" and keeping only what follows it is all stripping
+    # it out takes -- same technique render_loot_tracker_share/
+    # render_purchase_goals_share already use for their own analogous
+    # headings.
+    _, _, body = body.partition("</h2>")
+
+    owner_name = (game_account.runescape_name if game_account else None) or "A player"
+    banner_markup = f'<h2 class="page-title">Shared by {escape(owner_name)}</h2>'
+    body = banner_markup + body
+    body = f'<div class="possessions-share">{body}</div>'
+
+    payload_json = json.dumps(share.payload)
+    wrapper_script = f"""
+    (function () {{
+      var PAYLOAD = {payload_json};
+
+      var fetch = function (url, options) {{
+        var opts = options || {{}};
+        var method = (opts.method || 'GET').toUpperCase();
+        var qIndex = url.indexOf('?');
+        var path = qIndex === -1 ? url : url.slice(0, qIndex);
+
+        if (path === '/api/possessions/summary' && method === 'GET') {{
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{
+            items: PAYLOAD.items,
+            mappingError: PAYLOAD.mappingError,
+            priceError: PAYLOAD.priceError,
+            hiddenStorageKeys: PAYLOAD.hiddenStorageKeys,
+          }}); }} }});
+        }}
+        if (path === '/api/possessions/views' && method === 'GET') {{
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{ views: [] }}); }} }});
+        }}
+        // Pin/unpin and the hidden-storage checkboxes are both
+        // blocked from ever firing in the first place (see the
+        // capturing-phase click listener below) -- these two
+        // branches exist purely as a second line of defense, echoing
+        // back the exact values already frozen into PAYLOAD rather
+        // than an empty {{}} that setPinned/applyHiddenStorageKeys
+        // would otherwise misread as "nothing is pinned"/"nothing is
+        // hidden" and reconcile every row to match (see this
+        // function's own doc comment above for the fuller reasoning).
+        if (path.indexOf('/api/possessions/pins/') === 0) {{
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{
+            pinnedItemIds: PAYLOAD.items.filter(function (i) {{ return i.pinned; }}).map(function (i) {{ return i.itemId; }}),
+          }}); }} }});
+        }}
+        if (path.indexOf('/api/possessions/hidden-storages/') === 0) {{
+          return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{ hiddenStorageKeys: PAYLOAD.hiddenStorageKeys }}); }} }});
+        }}
+        // Nothing else the reused script calls should ever land
+        // here, but a harmless no-op beats a hard failure if it
+        // someday does -- same fallback shape every other share/
+        // preview page's own fetch shim already ends on.
+        return Promise.resolve({{ ok: true, json: function () {{ return Promise.resolve({{}}); }} }});
+      }};
+
+      {script}
+
+      // See this function's own doc comment above for the fuller
+      // reasoning on all of what follows: this simulates the
+      // sharer's own frozen location-filter selection (nothing else
+      // reconstructs it -- state.locations is never persisted or
+      // fetched), THEN permanently blocks any further click on a
+      // location button, a settings-menu checkbox, or a pin button,
+      // in that order, so the simulation above is the only "click"
+      // any of them ever actually act on.
+      var activeLocations = PAYLOAD.activeLocations || [];
+      document.querySelectorAll('.pm-filter-btn').forEach(function (btn) {{
+        var keys = btn.getAttribute('data-locations').split(',');
+        var shouldBeActive = keys.every(function (k) {{ return activeLocations.indexOf(k) !== -1; }});
+        if (!shouldBeActive) btn.click();
+      }});
+
+      document.addEventListener('click', function (e) {{
+        if (e.target.closest('.pm-filter-btn') || e.target.closest('.pm-pin-btn') || e.target.closest('.pm-settings-item')) {{
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }}
+      }}, true);
+    }})();
+    """
+    return _shell(
+        title=f"{owner_name}'s shared Storages Viewer — myscape",
+        player=viewer,
+        body=body,
+        extra_head=extra_head,
+        extra_script=wrapper_script,
+        meta_description=f"{owner_name} shared their Storages Viewer on myscape.",
     )
 
 

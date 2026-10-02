@@ -11,6 +11,81 @@
   padding: 18px 20px; margin-bottom: 22px;
 }
 
+/* ---- Export icon next to the title + the floating popup it toggles
+   open right beneath itself (see pm_share_icon_btn in app/pages.py,
+   and pmShareIconBtn/pmShareCard's own toggle in the script just
+   below it) -- duplicated from Loot Tracker's own identical
+   .loot-share-* rules in loot-tracker.css, with this page's own pm-
+   prefix, same "duplicated, not shared across pages' own
+   stylesheets" convention this file's own header comment already
+   states. top: 32px (not a smaller "icon height + gap" guess) and no
+   `transform` on .pm-share-wrap are both carried over verbatim from
+   that already-empirically-measured fix (see .loot-share-wrap/
+   .loot-share-card's own comments in loot-tracker.css for the full
+   reasoning: a transform creates a new stacking context that walls
+   this card's own z-index off from competing fairly against later
+   DOM content, and .pm-share-wrap inherits .page-title's own 22px/
+   1.5 font-size exactly the same way .loot-share-wrap does, so the
+   same 32px clears the same invisible font "strut" here too) --
+   nothing page-specific to re-measure. ---------------------------- */
+.pm-share-wrap {
+  position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
+}
+.pm-share-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s ease;
+}
+.pm-share-icon-btn:hover { color: var(--text-dim); }
+.pm-share-icon-btn.open { color: var(--gold); }
+.pm-share-card {
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+/* Author CSS setting `display` on this element always outranks the
+   browser's own [hidden]{display:none} default stylesheet rule --
+   same gotcha/fix as .loot-share-card[hidden] in loot-tracker.css. */
+.pm-share-card[hidden] { display: none; }
+.pm-share-generate-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.pm-share-generate-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pm-share-generate-btn:disabled { cursor: default; opacity: 0.6; }
+.pm-share-generate-btn.action-failed { border-color: var(--red); color: var(--red); }
+.pm-share-link-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pm-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.pm-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
+
 /* ---- Controls row: search, then the location filters, side by side
    at the same height -- sorting now lives on the table's own column
    headers instead (see .pm-sort-header further down). A vertical rule
@@ -485,6 +560,7 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   margin-bottom: 14px; position: relative;
 }
+.possessions-share #pmViewsRow { display: none; }
 /* Same FLIP-preview/live-DOM-order/full-replacement drag-and-drop
    shape as Purchase Goals' own .tracker-icon-btn row (see
    wireSetupIconDrag in app/pages.py, reused here as wireViewChipDrag)

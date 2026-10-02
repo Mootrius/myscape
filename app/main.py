@@ -116,12 +116,14 @@ from app.pages import (
     render_purchase_goals_share,
     render_reset_password,
     render_signup,
+    render_storages_share,
     render_verify_email,
     render_verify_email_required,
 )
 from app.public_profile import find_public_game_account, format_cooldown_remaining, generate_public_code, regenerate_cooldown_remaining
 from app.possessions import (
     build_possession_views,
+    build_possessions_share_snapshot,
     build_possessions_summary,
     build_trackers_state,
     hidden_storage_keys,
@@ -215,6 +217,7 @@ from app.schemas import (
     PohSyncRequest,
     PohSyncResponse,
     POSSESSION_STORAGE_KEYS,
+    PossessionShareCreateRequest,
     PossessionTrackerIn,
     PossessionTrackerUpdate,
     PossessionViewSaveRequest,
@@ -2013,6 +2016,8 @@ def shared_content_page(
         return render_loot_tracker_share(share, owner, viewer)
     if share.content_type == "purchase_goal":
         return render_purchase_goals_share(share, owner, viewer)
+    if share.content_type == "possessions":
+        return render_storages_share(share, owner, viewer)
     # Shouldn't be reachable -- every row's content_type is set by one
     # of this file's own create-share endpoints, all of which only
     # ever write a value this if-chain already knows. Same "something's
@@ -2562,6 +2567,37 @@ def unhide_possession_storage(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown storage.")
     set_storage_hidden(db, game_account, storage_key, False)
     return {"hiddenStorageKeys": sorted(hidden_storage_keys(db, game_account))}
+
+
+@app.post("/api/possessions/share")
+def create_possessions_share(
+    payload: PossessionShareCreateRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """Freezes Storages Viewer's section 3 into a new SharedContent
+    row (see build_possessions_share_snapshot in app/possessions.py
+    for exactly what gets frozen) and returns a myscape.io/s/<code>
+    link to it -- same session-authenticated, unthrottled shape as
+    POST /api/players/me/loot/share above (see that endpoint's own
+    docstring for the fuller reasoning, identical here: only the real,
+    signed-in owner can ever decide what of their own data gets a
+    link, and GET /s/{code} below is the one that's rate-limited,
+    since that's the first endpoint here actually reachable by
+    someone who isn't signed in at all)."""
+    snapshot = build_possessions_share_snapshot(db, game_account, payload.locations)
+    code = generate_share_code(db)
+    share = SharedContent(
+        id=uuid.uuid4(),
+        game_account_id=game_account.id,
+        code=code,
+        content_type="possessions",
+        payload=snapshot,
+        expires_at=_utcnow() + SHARE_DEFAULT_LIFETIME,
+    )
+    db.add(share)
+    db.commit()
+    return {"code": code, "url": f"{_SITE_URL}/s/{code}"}
 
 
 @app.get("/api/possessions/views")

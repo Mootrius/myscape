@@ -51,6 +51,7 @@ from app.models import (
     TackleBoxItem,
 )
 from app.purchase_goals import COINS_ITEM_ID, derived_price_for, get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
+from app.schemas import POSSESSION_STORAGE_KEYS
 
 # Storage key (matches schemas.POSSESSION_STORAGE_KEYS and
 # GameAccount.storage_synced_at's own keys) -> the model table it's read
@@ -549,6 +550,33 @@ def build_possessions_summary(db: Session, game_account: GameAccount) -> dict:
         "priceError": price_error,
         "hiddenStorageKeys": sorted(hidden_storage_keys(db, game_account)),
     }
+
+
+def build_possessions_share_snapshot(db: Session, game_account: GameAccount, active_locations: List[str]) -> dict:
+    """Freezes Storages Viewer's section 3 into a myscape.io/s/<code>
+    snapshot (see POST /api/possessions/share in app/main.py and
+    render_storages_share in app/pages.py for the rest of this
+    feature) -- items/mappingError/priceError/hiddenStorageKeys come
+    straight from build_possessions_summary above, verbatim: pinned is
+    already a per-item flag on each of its own items there, and
+    hiddenStorageKeys is already a real per-player persisted setting
+    (HiddenPossessionStorage), so both freeze for free with nothing
+    extra to do for either one here.
+
+    activeLocations is the one piece of this page's state that ISN'T
+    sitting in a persisted table anywhere -- the location filter
+    buttons next to the search field (state.locations client-side,
+    see _possessions_panel_markup's own script in app/pages.py) are
+    purely transient and reset to all-on on every real page load, so
+    whatever the sharer had toggled at the moment they clicked
+    GENERATE SHAREABLE LINK has to be carried over explicitly instead,
+    straight from PossessionShareCreateRequest.locations (see POST
+    /api/possessions/share) -- a plain pass-through, filtered against
+    POSSESSION_STORAGE_KEYS so a stray/unknown key can't end up baked
+    into a share link forever."""
+    summary = build_possessions_summary(db, game_account)
+    summary["activeLocations"] = [key for key in active_locations if key in POSSESSION_STORAGE_KEYS]
+    return summary
 
 
 def next_sort_order(db: Session, game_account: GameAccount, kind: str) -> float:
