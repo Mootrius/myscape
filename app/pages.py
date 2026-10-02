@@ -5770,6 +5770,40 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         }
       }
 
+      // Closes the slot picker (and drops whatever selection opened
+      // it -- a single empty slot, or a shift-click multi-select
+      // group, see openSlotPicker) the moment the player clicks
+      // anywhere that isn't the search box or a gear/inventory slot --
+      // same outside-click-close convention as the hamburger menu
+      // (.tracker-menu-wrap) and the share popup (.pg-share-wrap)
+      // below, just scoped to .pg-doll-wrap instead, which wraps BOTH
+      // the gear doll/inventory grid (#pgGearFrame) and the picker
+      // itself (#pgSlotPicker) -- so a click on a *different* slot
+      // still switches the picker to it exactly as before (that's
+      // wireSlotClicks' own job, untouched here), and only a click
+      // truly outside both closes it.
+      //
+      // Registered on the CAPTURING phase (the `true` third argument),
+      // not the usual bubbling one -- deliberately, unlike those other
+      // two outside-click listeners. A plain click on a slot rebuilds
+      // #pgGearFrame's entire innerHTML as part of ITS OWN (bubbling-
+      // phase) click handler, which detaches the clicked element from
+      // the document while the same click event is still mid-dispatch;
+      // a bubbling-phase listener here would then see e.target as an
+      // already-detached node that .pg-doll-wrap.contains() can never
+      // find, and wrongly treat an ordinary slot click as "outside".
+      // Capturing fires top-down, before that rebuild ever happens, so
+      // .contains() still sees the real, still-attached element.
+      document.addEventListener('click', function (e) {
+        if (!PG.picker) return;
+        var wrap = document.querySelector('.pg-doll-wrap');
+        if (wrap && !wrap.contains(e.target)) {
+          PG.picker = null;
+          PG.multiSelect = [];
+          renderContent();
+        }
+      }, true);
+
       // ---- Still to Purchase: sort mode buttons + drag-to-reorder ----------
 
       // One button per metric now (GP, A-Z) instead of a separate
