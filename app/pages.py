@@ -4887,14 +4887,14 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
     # app/purchase_goals.py for exactly what a link freezes.
     purchase_share_icon_btn = (
         ' <span class="pg-share-wrap">'
-        '<button type="button" class="pg-share-icon-btn" id="pgShareIconBtn" aria-label="Export this setup" title="Export this setup">'
+        '<button type="button" class="pg-share-icon-btn" id="pgShareIconBtn" aria-label="Export the currently selected setup" data-tooltip="Export the currently selected setup">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
         '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
         '</svg></button>'
         '<div class="pg-share-card" id="pgShareCard" hidden>'
         '<button type="button" class="pg-share-generate-btn" id="pgShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
-        '<button type="button" class="pg-share-link-btn" id="pgShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
+        '<button type="button" class="pg-share-link-btn" id="pgShareLinkBtn" data-tooltip="Click to copy" hidden></button>'
         '<p class="pg-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p>'
         '</div>'
         '</span>'
@@ -4906,7 +4906,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
     <div class="pg-header">
       <div class="tracker-icon-row" id="setupIconRow"></div>
       <div class="tracker-menu-wrap">
-        <button class="icon-menu-btn" id="setupMenuBtn" type="button" title="Setup options">
+        <button class="icon-menu-btn" id="setupMenuBtn" type="button" data-tooltip="Setup options">
           <span class="hamburger-icon"><span></span><span></span><span></span></span>
         </button>
         <div class="tracker-menu" id="setupMenu" style="display:none;">
@@ -4932,7 +4932,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         <div class="progress-track overlay-track"><div class="progress-fill" id="pgOverlayFill" style="width:0%;"></div></div>
       </div>
       <div class="overlay-side overlay-target">
-        <div class="overlay-icon-wrap" id="pgIconTrigger" title="Set a display icon for this setup">
+        <div class="overlay-icon-wrap" id="pgIconTrigger">
           <img class="overlay-icon" id="pgOverlayIconImg" alt="" style="display:none;" />
           <span class="overlay-icon-placeholder" id="pgOverlayIconPlaceholder">+</span>
         </div>
@@ -5201,11 +5201,11 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         row.innerHTML = PG.data.gearSetups.map(function (s) {
           var active = s.id === PG.activeSetupId ? ' active' : '';
           if (s.icon && s.icon.icon) {
-            return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" draggable="true" type="button" title="' + esc(s.name) + '">' +
+            return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" draggable="true" type="button" data-tooltip="' + esc(s.name) + '">' +
               '<img src="' + esc(s.icon.icon) + '" alt="" /></button>';
           }
           var label = esc((s.icon && s.icon.itemName) || s.name || '?').slice(0, 3);
-          return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" draggable="true" type="button" title="' + esc(s.name) + '">' +
+          return '<button class="tracker-icon-btn' + active + '" data-setup-id="' + esc(s.id) + '" draggable="true" type="button" data-tooltip="' + esc(s.name) + '">' +
             '<span class="tracker-icon-fallback">' + label + '</span></button>';
         }).join('');
         row.querySelectorAll('[data-setup-id]').forEach(function (btn) {
@@ -5432,13 +5432,16 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
 
         var iconImgEl = document.getElementById('pgOverlayIconImg');
         var iconPlaceholderEl = document.getElementById('pgOverlayIconPlaceholder');
+        var iconTriggerEl = document.getElementById('pgIconTrigger');
         if (setup.icon && setup.icon.icon) {
           iconImgEl.src = setup.icon.icon;
           iconImgEl.style.display = '';
           iconPlaceholderEl.style.display = 'none';
+          iconTriggerEl.setAttribute('data-tooltip', 'Change setup icon');
         } else {
           iconImgEl.style.display = 'none';
           iconPlaceholderEl.style.display = '';
+          iconTriggerEl.setAttribute('data-tooltip', 'Add a setup icon');
         }
 
         var npEl = document.getElementById('pgNextPurchase');
@@ -5555,18 +5558,27 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         var inner = resolved && resolved.icon
           ? '<img class="gear-slot-icon" src="' + esc(resolved.icon) + '" alt="" draggable="false" />'
           : (resolved ? '<span class="tracker-icon-fallback">' + esc(resolved.itemName || '?').slice(0, 6) + '</span>' : '');
-        var title = resolved ? esc(resolved.itemName) : 'Empty slot';
+        // Blank slots get no tooltip at all (nothing there to name) --
+        // only a filled one does, via data-tooltip (the site-wide
+        // custom tooltip -- see .myscape-tooltip in myscape.css) rather
+        // than a native title, same as every other hover label on this
+        // page now.
+        var tooltipAttr = resolved ? ' data-tooltip="' + esc(resolved.itemName) + '"' : '';
         var itemNameAttr = resolved ? ' data-item-name="' + esc(resolved.itemName) + '"' : '';
         // The remove ("x") button only ever shows up on hover (see
         // .gear-slot-remove in purchase-goals.css) and only exists at all
         // when the slot is filled -- an empty slot has nothing to remove.
-        var removeBtn = resolved ? '<button class="gear-slot-remove" type="button" title="Remove item">&times;</button>' : '';
+        // Its own "Remove" data-tooltip wins over the slot's own (the
+        // item name) when hovering the button itself -- the site-wide
+        // tooltip script matches the closest [data-tooltip] to the
+        // pointer, not necessarily the outermost one.
+        var removeBtn = resolved ? '<button class="gear-slot-remove" type="button" data-tooltip="Remove">&times;</button>' : '';
         // Only a filled slot can be dragged FROM (nothing to move out of
         // an empty one) -- but every slot, filled or empty, is a valid
         // drop target either way (see wireSlotClicks), so this only ever
         // gates the `draggable` attribute, never drop handling.
         var draggableAttr = resolved ? ' draggable="true"' : '';
-        return '<div class="' + cls + '" data-slot-type="' + slotType + '" data-slot="' + esc(slot) + '"' + itemNameAttr + draggableAttr + ' title="' + title + '">' +
+        return '<div class="' + cls + '" data-slot-type="' + slotType + '" data-slot="' + esc(slot) + '"' + itemNameAttr + draggableAttr + tooltipAttr + '>' +
           inner + removeBtn + '</div>';
       }
 
@@ -5760,27 +5772,42 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
 
       // ---- Still to Purchase: sort mode buttons + drag-to-reorder ----------
 
-      // 'Low to High'/'High to Low' read as a plain "GP" label plus an
-      // arrow showing which direction that sorts -- up for ascending
-      // (cheapest first), down for descending (priciest first) -- the
-      // standard up-means-ascending/down-means-descending convention
-      // (same one Storages Viewer's own sortable column headers
-      // use, and the same shorthand the Loot Tracker's own sort tabs
-      // use now, see _sort_tabs in app/pages.py). The old single
-      // "Alphabetical" button is likewise now two direction-specific
-      // tabs, both labeled "A-Z" (same one-label-two-arrows pattern as
-      // the "GP" pair beside them) -- "A-Z ↓" (Z-to-A, descending) and
-      // "A-Z ↑" (A-to-Z, ascending) -- backed by the 'alphabetical'/
-      // 'reverse_alphabetical' sort_mode values (see
-      // STILL_TO_PURCHASE_SORT_MODES in app/schemas.py and
-      // _still_to_purchase_summary in app/purchase_goals.py).
-      var STILL_TO_PURCHASE_SORT_MODES = [
-        { key: 'high_to_low', label: 'GP \\u2193', title: 'GP, high to low' },
-        { key: 'low_to_high', label: 'GP \\u2191', title: 'GP, low to high' },
-        { key: 'reverse_alphabetical', label: 'A-Z \\u2193', title: 'Z to A' },
-        { key: 'alphabetical', label: 'A-Z \\u2191', title: 'A to Z' },
-        { key: 'custom', label: 'Custom' },
-      ];
+      // One button per metric now (GP, A-Z) instead of a separate
+      // high-to-low/low-to-high (or Z-to-A/A-to-Z) pair each, plus a
+      // standalone CUSTOM button with no direction of its own (nothing
+      // to toggle -- it's just the order the list was last dragged
+      // into, see wireSummaryDrag below) -- same single-button-
+      // toggles-direction convention the Loot Tracker's own sort tabs
+      // use (see _sort_tabs/updateSortTabs in app/pages.py), and the
+      // same "Sort by GP value"/"Sort alphabetically" tooltip text
+      // too. SORT_METRIC_MODE maps a metric+direction to one of the
+      // five sort_mode strings the API actually accepts (still exactly
+      // STILL_TO_PURCHASE_SORT_MODES in app/schemas.py -- unlike the
+      // Loot Tracker's own purely-client-side sort state, this one's a
+      // real field on the setup, so the vocabulary it's sent in can't
+      // just change); SORT_MODE_METRIC is its reverse, for figuring
+      // out which button (and which arrow) is active from whatever
+      // sort_mode the setup is currently on.
+      var SORT_METRIC_MODE = {
+        gp: { asc: 'low_to_high', desc: 'high_to_low' },
+        alpha: { asc: 'alphabetical', desc: 'reverse_alphabetical' },
+      };
+      var SORT_MODE_METRIC = {
+        low_to_high: { metric: 'gp', dir: 'asc' },
+        high_to_low: { metric: 'gp', dir: 'desc' },
+        alphabetical: { metric: 'alpha', dir: 'asc' },
+        reverse_alphabetical: { metric: 'alpha', dir: 'desc' },
+        custom: { metric: 'custom', dir: null },
+      };
+      // Each metric's own first-click direction when switching to it
+      // from a different metric (or from CUSTOM) -- gp starts
+      // descending (priciest first, matching this page's old default
+      // button), alpha starts ascending (A-to-Z) -- same metric ->
+      // default-direction shape as the Loot Tracker's own
+      // SORT_METRIC_DEFAULT_DIR. Clicking the metric that's already
+      // active instead flips its current direction, without
+      // consulting this.
+      var SORT_METRIC_DEFAULT_DIR = { gp: 'desc', alpha: 'asc' };
 
       // The buttons that replaced the old static "Still to purchase"
       // label -- rebuilt every render (like the rest of this page) so
@@ -5790,14 +5817,25 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         var el = document.getElementById('pgSortButtons');
         if (!el) return;
         var mode = setup.stillToPurchaseSort || 'low_to_high';
-        el.innerHTML = STILL_TO_PURCHASE_SORT_MODES.map(function (m) {
-          var cls = 'sort-btn' + (m.key === mode ? ' active' : '');
-          var titleAttr = m.title ? ' title="' + m.title + '"' : '';
-          return '<button type="button" class="' + cls + '" data-sort-mode="' + m.key + '"' + titleAttr + '>' + m.label + '</button>';
-        }).join('');
+        var active = SORT_MODE_METRIC[mode] || SORT_MODE_METRIC.low_to_high;
+        function arrow(metric) {
+          if (active.metric !== metric) return '';
+          return active.dir === 'asc' ? ' \\u2191' : ' \\u2193';
+        }
+        el.innerHTML =
+          '<button type="button" class="sort-btn' + (active.metric === 'gp' ? ' active' : '') + '" data-sort-metric="gp" data-tooltip="Sort by GP value">GP<span class="sort-btn-arrow">' + arrow('gp') + '</span></button>' +
+          '<button type="button" class="sort-btn' + (active.metric === 'alpha' ? ' active' : '') + '" data-sort-metric="alpha" data-tooltip="Sort alphabetically">A-Z<span class="sort-btn-arrow">' + arrow('alpha') + '</span></button>' +
+          '<button type="button" class="sort-btn' + (mode === 'custom' ? ' active' : '') + '" data-sort-metric="custom" data-tooltip="Sort by custom order">Custom</button>';
         el.querySelectorAll('.sort-btn').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            var newMode = btn.getAttribute('data-sort-mode');
+            var metric = btn.getAttribute('data-sort-metric');
+            var newMode;
+            if (metric === 'custom') {
+              newMode = 'custom';
+            } else {
+              var dir = active.metric === metric ? (active.dir === 'asc' ? 'desc' : 'asc') : (SORT_METRIC_DEFAULT_DIR[metric] || 'desc');
+              newMode = SORT_METRIC_MODE[metric][dir];
+            }
             if (newMode === mode) return;
             setStillToPurchaseSort(newMode);
           });
@@ -5894,7 +5932,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
       // beginning instead of being ignored because the class was
       // already present.
       function glowCustomSortButton() {
-        var btn = document.querySelector('#pgSortButtons .sort-btn[data-sort-mode="custom"]');
+        var btn = document.querySelector('#pgSortButtons .sort-btn[data-sort-metric="custom"]');
         if (!btn) return;
         btn.classList.remove('glow');
         void btn.offsetWidth;

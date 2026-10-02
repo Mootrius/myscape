@@ -83,8 +83,8 @@
   background: var(--panel); border: 1px solid var(--border); min-width: 128px;
   display: flex; flex-direction: column;
 }
-/* Same small/gray/all-caps text treatment as the "High to Low" / "Low
-   to High" / "Custom" sort buttons (.sort-btn below) -- applied here
+/* Same small/gray/all-caps text treatment as the "GP" / "A-Z" /
+   "Custom" sort buttons (.sort-btn below) -- applied here
    and on .btn-secondary so every secondary control on this page reads
    as one consistent family of text styling. Centered (not left-aligned)
    to match the menu itself now being centered under its trigger button
@@ -436,7 +436,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
   border-radius: var(--radius);
   padding: 18px 20px;
 }
-/* The five "Still to purchase" sort-mode buttons -- replaced what used
+/* The three "Still to purchase" sort buttons (GP/A-Z, each toggling
+   its own direction, plus a standalone CUSTOM) -- replaced what used
    to be a plain static heading label (see renderSortButtons in
    app/pages.py). */
 .gear-summary-sort { display: flex; gap: 6px; margin-bottom: 12px; }
@@ -456,6 +457,14 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 .sort-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .sort-btn.active { border-color: var(--gold); color: var(--gold); }
+/* No .loot-sort-arrow-style vertical nudge needed here, despite this
+   page sharing RuneScapePlain11 (and its own missing ↓/↑ glyphs,
+   same as loot-tracker.css's own .loot-sort-arrow) -- measured against
+   the real rendered glyph (not guessed), this button's own font-size/
+   padding/letter-spacing combination already centers the fallback-font
+   arrow against the label beside it with no correction, unlike the
+   Loot Tracker's own sort tabs. */
+.sort-btn-arrow { display: inline-block; }
 /* Nudge pulse for the CUSTOM button -- fires when a "still to
    purchase" row is clicked/dragged in any OTHER sort mode (see
    glowCustomSortButton in app/pages.py), same idea and same shape as
