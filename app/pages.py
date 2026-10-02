@@ -592,10 +592,7 @@ def _shell(
     // comment in myscape.css for the full picture (the matching styled
     // popup, and why this is one shared/reused element). Any element
     // with data-tooltip set (plain text) gets one on hover instead of
-    // a native browser title tooltip; data-tooltip-sub adds an
-    // optional dimmer suffix (a quantity, count, etc.), joined onto
-    // that same line with a middle dot rather than a line of its own.
-    // SHOW_DELAY is deliberately short
+    // a native browser title tooltip. SHOW_DELAY is deliberately short
     // -- not the browser's own ~1s+ native delay this is replacing --
     // but still enough that sweeping the mouse across a dense grid of
     // targets (the Collection Log's own item grid, the first place
@@ -647,20 +644,9 @@ def _shell(
         if (currentTarget !== target) return;
         const text = target.getAttribute('data-tooltip');
         if (!text) return;
-        const sub = target.getAttribute('data-tooltip-sub');
         const el = ensureTooltipEl();
         el.classList.remove('show');
         el.textContent = text;
-        if (sub) {
-          // A middle dot, not a line break -- see .myscape-tooltip-sub's
-          // own comment in myscape.css for why this reads as one line,
-          // dimmer color only, rather than a second line underneath.
-          el.appendChild(document.createTextNode(' \u00b7 '));
-          const subEl = document.createElement('span');
-          subEl.className = 'myscape-tooltip-sub';
-          subEl.textContent = sub;
-          el.appendChild(subEl);
-        }
         positionTooltip(target, el);
         // Forces the browser to commit the (still-hidden) state above
         // to a frame before the 'show' class below starts the actual
@@ -2444,7 +2430,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
     built and kept in sync."""
     stat_tiles = "\n      ".join(
         f"""<div class="co-stat">
-        <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" title="{escape(alt)}" {f'id="co-icon-{key}"' if key == "accountType" else ""} />
+        <img class="co-stat-icon" src="{escape(icon)}" alt="{escape(alt)}" data-tooltip="{escape(alt)}" {f'id="co-icon-{key}"' if key == "accountType" else ""} />
         <div class="co-stat-value" id="co-{key}">&mdash;</div>
       </div>"""
         for key, icon, alt in _SUMMARY_STATS
@@ -2649,7 +2635,14 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         if (icon) {
           icon.src = info[0];
           icon.alt = info[1];
-          icon.title = info[1];
+          // Site-styled tooltip (see .myscape-tooltip in myscape.css)
+          // instead of the native title -- this is the one tile whose
+          // tooltip text isn't fixed at render time (see this
+          // function's own comment above), so it's set here instead
+          // of as a static data-tooltip attribute in the markup, same
+          // as every other field this function already swaps in once
+          // the real account type is known.
+          icon.setAttribute('data-tooltip', info[1]);
         }
         setStat('accountType', info[1]);
       }
@@ -3114,12 +3107,9 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           tile.rel = 'noopener';
           // Site-styled hover tooltip (see .myscape-tooltip in
           // myscape.css and its own driving script in _shell's shared_
-          // script) instead of the native title -- same name/qty the
-          // old single-line title packed behind an em dash, just
-          // restyled (a middle dot now, via data-tooltip-sub, instead
-          // of the em dash).
+          // script) instead of the native title -- just the item's own
+          // name, per explicit instruction (no quantity suffix).
           tile.setAttribute('data-tooltip', item.name);
-          if (qty != null) tile.setAttribute('data-tooltip-sub', formatInt(qty));
           var img = document.createElement('img');
           img.className = 'clog-item-icon';
           img.src = clogIconUrl(item.id);

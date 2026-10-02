@@ -1633,11 +1633,9 @@ body.landing .footer-inner {
    once and repositioned/reused for every tooltip on the page rather
    than built fresh per hover -- see the IIFE at the end of _shell's
    own shared_script (app/pages.py) that drives it. Any element opts
-   in by setting data-tooltip (plain text, the main line) instead of
-   title, with an optional data-tooltip-sub for a dimmer suffix (a
-   quantity, count, etc.) joined onto that same line with a middle dot
-   -- see the Collection Log's own .clog-item tiles (app/pages.py) for
-   the first use.
+   in by setting data-tooltip (plain text) instead of title -- see the
+   Collection Log's own .clog-item tiles and the summary row's own
+   .co-stat-icon tiles (both app/pages.py) for the current uses.
 
    position: fixed (not absolute) since it's positioned straight off
    getBoundingClientRect's own viewport-relative coordinates -- no
@@ -1670,14 +1668,4 @@ body.landing .footer-inner {
 .myscape-tooltip.show {
   opacity: 1;
   transform: translateY(0);
-}
-/* Inline, on the same line as the main text (joined by a middle dot
-   -- see showTooltip in _shell's own shared_script, app/pages.py) --
-   not a block of its own any more, just a dimmer color at the same
-   14px the parent .myscape-tooltip already sets, stated explicitly
-   here rather than left to inherit for the same reason every other
-   color-only override on this site is still spelled out. */
-.myscape-tooltip-sub {
-  color: var(--text-muted);
-  font-size: 14px;
 }
