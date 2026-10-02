@@ -1663,6 +1663,11 @@ body.landing .footer-inner {
      ordinary runs of whitespace still collapse and still wrap
      normally at max-width. */
   white-space: pre-line;
+  /* Centered rather than left-aligned so a manually-broken multi-line
+     tooltip (see white-space above) reads as a balanced block instead
+     of a ragged left edge; makes no visible difference on the common
+     single-line case. */
+  text-align: center;
   /* Opacity/transform, not display -- the show/hide script needs this
      element laid out (with real dimensions to measure) the instant its
      text is set, before it's actually visible, to position it against
