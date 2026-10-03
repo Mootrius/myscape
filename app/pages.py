@@ -7681,6 +7681,17 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return /^Death spawn$/i.test(n.sourceName);
         }
 
+        // Goblin -- same story as Crawling Hand/Spider/Death spawn
+        // above (a real NPC kill, bare wiki guess off its own name
+        // already lands on the right picture, just reads a bit large
+        // at this box's shared 56px), per explicit instruction. Exact-
+        // name match, same reasoning isSpider gives for not sweeping
+        // in other NPCs that happen to share part of this name (e.g.
+        // "Goblin (Dorgesh-Kaan)" -- see app/npc_names.py).
+        function isGoblin(n) {
+          return /^Goblin$/i.test(n.sourceName);
+        }
+
         // Dossier -- Yama's own reward container (see
         // _NPC_DISPLAY_OVERRIDES in app/loot.py for the full
         // reasoning): shown under the wiki's bigger "detail" render,
@@ -7778,7 +7789,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" data-tooltip="' + escapeHtml(n.sourceName) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '') + (isSpider(n) ? ' loot-npc-box-icon-spider' : '') + (isDeathSpawn(n) ? ' loot-npc-box-icon-death-spawn' : '') + (isDossier(n) ? ' loot-npc-box-icon-dossier' : '')) +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '') + (isSpider(n) ? ' loot-npc-box-icon-spider' : '') + (isDeathSpawn(n) ? ' loot-npc-box-icon-death-spawn' : '') + (isGoblin(n) ? ' loot-npc-box-icon-goblin' : '') + (isDossier(n) ? ' loot-npc-box-icon-dossier' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +

@@ -572,6 +572,10 @@
    _NPC_DISPLAY_OVERRIDES entry needed, bare wiki guess off its own
    name already lands on the right picture), per explicit instruction. */
 .loot-npc-box-icon-death-spawn,
+/* Goblin -- same story as Death spawn/Spider above (a real NPC kill,
+   no _NPC_DISPLAY_OVERRIDES entry needed, bare wiki guess off its own
+   name already lands on the right picture), per explicit instruction. */
+.loot-npc-box-icon-goblin,
 /* Dossier -- Yama's own reward container (see isDossier in the script
    below, and _NPC_DISPLAY_OVERRIDES in app/loot.py): unlike Death
    spawn/Spider above, this one DOES need an explicit wiki filename
