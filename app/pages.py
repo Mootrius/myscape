@@ -4502,7 +4502,7 @@ def render_account(player: PlayerView) -> str:
         codeBtn.type = 'button';
         codeBtn.className = 'shared-link-code-btn';
         codeBtn.textContent = link.code;
-        codeBtn.title = 'Click to copy this link to your clipboard.';
+        codeBtn.setAttribute('data-tooltip', 'Click to copy');
         // Copies the full https://myscape.io/s/<code> URL (link.url,
         // built server-side -- see SharedLinkSummary in app/schemas.py),
         // not just the bare code shown on the button -- same click-to-
