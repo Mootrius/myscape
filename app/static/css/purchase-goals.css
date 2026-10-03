@@ -831,6 +831,10 @@ button.primary#pgNameSave, .pg-setup-form-save {
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
+  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
+     against the page-title text it's inline with. */
+  position: relative;
+  top: -2px;
 }
 .pg-share-icon-btn:hover { color: var(--text-dim); }
 .pg-share-icon-btn.open { color: var(--gold); }
@@ -877,6 +881,10 @@ button.primary#pgNameSave, .pg-setup-form-save {
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
+  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
+     against the page-title text it's inline with. */
+  position: relative;
+  top: -2px;
 }
 .pg-import-icon-btn:hover { color: var(--text-dim); }
 .pg-import-icon-btn.open { color: var(--gold); }
