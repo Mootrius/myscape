@@ -679,6 +679,11 @@ def _shell(
         const el = ensureTooltipEl();
         el.classList.remove('show');
         el.textContent = text;
+        // Opt-in wider box (data-tooltip-wide) for a tooltip whose
+        // deliberate first line is longer than the default 240px max-width
+        // -- otherwise that line wraps on its own and the manual break
+        // ends up as a third line.
+        el.classList.toggle('myscape-tooltip--wide', target.hasAttribute('data-tooltip-wide'));
         positionTooltip(target, el);
         // Forces the browser to commit the (still-hidden) state above
         // to a frame before the 'show' class below starts the actual
@@ -2557,8 +2562,8 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         public_profile_settings_btn += (
             '<div class="public-profile-card" id="publicProfileCard" hidden>'
             '<div class="public-profile-seg-group">'
-            '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private" data-tooltip="Your profile is invisible to anyone not on your friends list">Private</button>'
-            '<button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>'
+            '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private" data-tooltip="Makes your profile invisible to everyone\n(except those on your friends list)." data-tooltip-wide>Private</button>'
+            '<button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public" data-tooltip="Makes your profile visible\nto anyone with your URL">Public</button>'
             '</div>'
             '<button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" disabled></button>'
             '<button class="public-profile-link-btn" id="publicProfileRegenerateBtn" type="button" data-tooltip="Generating a new link will render your old link\nobsolete. You can do this once every 24 hours.">Generate new link</button>'
@@ -3923,18 +3928,17 @@ def render_account(player: PlayerView) -> str:
         </div>
 
         <div class="account-section" id="friendsSection">
-          <div class="friends-header">
-            <p class="account-section-title account-section-title--center">FRIENDS</p>
-            <div class="friends-code-wrap" id="friendsCodeWrap" hidden>
-              <span class="friends-code-label">Code</span>
-              <button type="button" class="shared-link-code-btn" id="friendsCodeBtn" data-tooltip="Your friend code — click to copy"></button>
-            </div>
-          </div>
+          <p class="account-section-title account-section-title--center">FRIENDS LIST</p>
           <p class="shared-links-empty" id="friendsHint" hidden></p>
           <div id="friendsBody">
             <form class="friends-add-form" id="friendsAddForm" autocomplete="off">
-              <input type="text" id="friendsAddInput" maxlength="12" placeholder="Enter a friend's code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Friend code" />
-              <button class="secondary" type="submit" id="friendsAddBtn">ADD</button>
+              <div class="friends-code-wrap" id="friendsCodeWrap" hidden>
+                <span class="friends-code-label">My code</span>
+                <button type="button" class="shared-link-code-btn" id="friendsCodeBtn" data-tooltip="Your friend code — click to copy"></button>
+                <span class="friends-add-divider" aria-hidden="true"></span>
+              </div>
+              <input type="text" id="friendsAddInput" maxlength="5" placeholder="Friend code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Friend code" />
+              <button class="secondary" type="submit" id="friendsAddBtn">SEND REQUEST</button>
             </form>
             <div class="auth-error" id="friendsError"></div>
             <div class="auth-success" id="friendsSuccess"></div>
@@ -3946,7 +3950,8 @@ def render_account(player: PlayerView) -> str:
               <table class="friends-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
+                    <th><button type="button" class="friend-sort-header" data-friend-sort-key="friend" data-tooltip="Sort by friends">Friend<span class="friend-sort-arrow"></span></button></th>
+                    <th><button type="button" class="friend-sort-header" data-friend-sort-key="since" data-tooltip="Sort by date">Since<span class="friend-sort-arrow"></span></button></th>
                     <th>Removal</th>
                   </tr>
                 </thead>
@@ -4694,6 +4699,12 @@ def render_account(player: PlayerView) -> str:
       const friendsTableBody = document.getElementById('friendsTableBody');
       const friendsEmpty = document.getElementById('friendsEmpty');
       let friendsCode = '';
+      // The friends list as last fetched (server order = A-Z) + the
+      // FRIEND/SINCE header sort -- same asc -> desc -> off cycle as the
+      // Shared Links table's own sortable headers.
+      let friendsData = [];
+      let friendsSortKey = null;
+      let friendsSortDir = 'asc';
 
       // A circle with a dash through it (not a trash can) -- reuses the
       // trash-delete button's whole arm-then-confirm machinery by keeping
@@ -4805,11 +4816,16 @@ def render_account(player: PlayerView) -> str:
           link.className = 'friend-name-link';
           link.href = '/c/' + encodeURIComponent(friend.code);
           link.textContent = friend.name;
+          link.setAttribute('data-tooltip', 'Visit profile');
           nameCell.appendChild(link);
         } else {
           nameCell.textContent = friend.name;
         }
         row.appendChild(nameCell);
+
+        const sinceCell = document.createElement('td');
+        sinceCell.textContent = friend.since ? friend.since.slice(0, 10) : '\u2014';
+        row.appendChild(sinceCell);
 
         const removeCell = document.createElement('td');
         const removeBtn = document.createElement('button');
@@ -4842,6 +4858,57 @@ def render_account(player: PlayerView) -> str:
 
         return row;
       }
+
+      function renderFriendsTable() {
+        friendsTableBody.innerHTML = '';
+        if (friendsData.length === 0) {
+          friendsTableWrap.style.display = 'none';
+          friendsEmpty.style.display = '';
+          return;
+        }
+        friendsEmpty.style.display = 'none';
+        friendsTableWrap.style.display = '';
+        let rows = friendsData;
+        if (friendsSortKey) {
+          rows = rows.slice().sort((a, b) => {
+            const av = friendsSortKey === 'since' ? (a.since || '') : a.name.toLowerCase();
+            const bv = friendsSortKey === 'since' ? (b.since || '') : b.name.toLowerCase();
+            if (av < bv) return friendsSortDir === 'asc' ? -1 : 1;
+            if (av > bv) return friendsSortDir === 'asc' ? 1 : -1;
+            return 0;
+          });
+        }
+        rows.forEach((friend) => friendsTableBody.appendChild(renderFriendRow(friend)));
+      }
+
+      const friendSortHeaders = document.querySelectorAll('.friend-sort-header');
+      function updateFriendSortHeaders() {
+        friendSortHeaders.forEach((btn) => {
+          const arrow = btn.querySelector('.friend-sort-arrow');
+          if (btn.getAttribute('data-friend-sort-key') === friendsSortKey) {
+            btn.classList.add('active');
+            arrow.textContent = friendsSortDir === 'asc' ? ' \u2191' : ' \u2193';
+          } else {
+            btn.classList.remove('active');
+            arrow.textContent = '';
+          }
+        });
+      }
+      friendSortHeaders.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-friend-sort-key');
+          if (key !== friendsSortKey) {
+            friendsSortKey = key;
+            friendsSortDir = 'asc';
+          } else if (friendsSortDir === 'asc') {
+            friendsSortDir = 'desc';
+          } else {
+            friendsSortKey = null;
+          }
+          updateFriendSortHeaders();
+          renderFriendsTable();
+        });
+      });
 
       function showFriendsHint(message) {
         friendsHint.textContent = message;
@@ -4881,15 +4948,8 @@ def render_account(player: PlayerView) -> str:
           data.incoming.forEach((request) => friendsRequestsList.appendChild(renderFriendRequestRow(request)));
           friendsRequests.hidden = data.incoming.length === 0;
 
-          friendsTableBody.innerHTML = '';
-          if (data.friends.length === 0) {
-            friendsTableWrap.style.display = 'none';
-            friendsEmpty.style.display = '';
-          } else {
-            friendsEmpty.style.display = 'none';
-            friendsTableWrap.style.display = '';
-            data.friends.forEach((friend) => friendsTableBody.appendChild(renderFriendRow(friend)));
-          }
+          friendsData = data.friends;
+          renderFriendsTable();
         } catch (err) {
           showFriendsError('Something went wrong. Please try again.');
         }
@@ -4913,7 +4973,7 @@ def render_account(player: PlayerView) -> str:
             showFriendsSuccess(
               data.status === 'accepted'
                 ? `You and ${data.name} are now friends.`
-                : `Friend request sent to ${data.name}.`
+                : 'If there is a character with that code, a friend request has been sent.'
             );
             if (data.status === 'accepted') {
               await loadFriends();

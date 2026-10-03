@@ -108,7 +108,15 @@ def list_friends(
     for row in rows:
         other = row.addressee if row.requester_id == me.id else row.requester
         if row.status == ACCEPTED:
-            friends.append({"id": str(row.id), "name": _name(other), "code": other.public_code})
+            became_friends = row.responded_at or row.created_at
+            friends.append({
+                "id": str(row.id),
+                "name": _name(other),
+                "code": other.public_code,
+                # When the request was accepted -- the Friends list's
+                # SINCE column shows its date.
+                "since": became_friends.isoformat() if became_friends else None,
+            })
         elif row.addressee_id == me.id:
             incoming.append({"id": str(row.id), "name": _name(other), "createdAt": row.created_at})
     friends.sort(key=lambda f: f["name"].lower())
@@ -184,7 +192,11 @@ def send_friend_request(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Link this character first.")
     target = find_game_account_by_code(db, payload.code)
     if target is None or target.account_hash is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No character found with that code.")
+        # Deliberately the same answer a real request gets -- the
+        # account page words it "If there is a character with that
+        # code, a friend request has been sent.", so typing codes
+        # can't be used to find out which ones exist.
+        return {"status": PENDING, "name": None}
     if target.id == me.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That's your own code.")
     if target.account_id == me.account_id:
