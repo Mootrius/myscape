@@ -15061,14 +15061,14 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
     # app/possessions.py).
     pm_share_icon_btn = (
         ' <span class="pm-share-wrap">'
-        '<button type="button" class="pm-share-icon-btn" id="pmShareIconBtn" aria-label="Export this view" title="Export this view">'
+        '<button type="button" class="pm-share-icon-btn" id="pmShareIconBtn" aria-label="Share a snapshot of your storages&#39; contents with the currently selected categories" data-tooltip="Share a snapshot of your storages&#39; contents with the currently selected categories">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
         '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
         '</svg></button>'
         '<div class="pm-share-card" id="pmShareCard" hidden>'
         '<button type="button" class="pm-share-generate-btn" id="pmShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
-        '<button type="button" class="pm-share-link-btn" id="pmShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
+        '<button type="button" class="pm-share-link-btn" id="pmShareLinkBtn" data-tooltip="Click to copy" hidden></button>'
         '<p class="pm-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p>'
         '</div>'
         '</span>'
@@ -15088,7 +15088,7 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
           {location_buttons}
         </div>
         <div class="pm-control-group pm-settings-wrap">
-          <button type="button" class="pm-settings-btn" id="pmSettingsBtn" title="Choose which storages to show">
+          <button type="button" class="pm-settings-btn" id="pmSettingsBtn" data-tooltip="Toggle specific storages">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.65 6.20 L9.54 2.82 L14.46 2.82 L15.35 6.20 L18.72 5.28 L21.18 9.54 L18.70 12.00 L21.18 14.46 L18.72 18.72 L15.35 17.80 L14.46 21.18 L9.54 21.18 L8.65 17.80 L5.28 18.72 L2.82 14.46 L5.30 12.00 L2.82 9.54 L5.28 5.28 Z"></path><circle cx="12" cy="12" r="3.1"></circle></svg>
           </button>
           <div class="pm-settings-menu" id="pmSettingsMenu" style="display:none;">
@@ -16069,10 +16069,10 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         var tradeableCls = item.tradeable ? 'pm-badge-yes' : 'pm-badge-no';
         var tradeableText = item.tradeable ? 'YES' : 'NO';
         var pinCls = 'pm-pin-btn' + (item.pinned ? ' pinned' : '');
-        var pinLabel = item.pinned ? 'Unpin' : 'Pin to top';
+        var pinLabel = item.pinned ? 'Unpin this item' : 'Pin this item';
         return '<div class="pm-row-wrap">' +
-          '<button type="button" class="' + pinCls + '" data-item-id="' + item.itemId + '" data-pinned="' + (item.pinned ? '1' : '0') + '" title="' + pinLabel + '" aria-label="' + pinLabel + '">' + PIN_GLYPH + '</button>' +
-          '<a class="pm-row" href="' + wikiItemUrl(item.name) + '" target="_blank" rel="noopener" title="' + escapeHtml(item.name) + '">' +
+          '<button type="button" class="' + pinCls + '" data-item-id="' + item.itemId + '" data-pinned="' + (item.pinned ? '1' : '0') + '" data-tooltip="' + pinLabel + '" aria-label="' + pinLabel + '">' + PIN_GLYPH + '</button>' +
+          '<a class="pm-row" href="' + wikiItemUrl(item.name) + '" target="_blank" rel="noopener">' +
             '<div class="pm-col pm-col-image">' + iconImg(item.icon) +
               '<span class="pm-row-name">' + escapeHtml(item.name) + '</span></div>' +
             '<div class="pm-col pm-col-qty">x' + fmtNum(v.qty) + '</div>' +
@@ -16382,7 +16382,7 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
             '<span class="pm-view-delete" data-view-delete="' + v.id + '" title="Delete this view" aria-label="Delete this view">&times;</span>' +
             '</button>'
           );
-        }).join('') + '<button type="button" class="pm-view-add-btn" id="pmViewAddBtn">+ Save View</button>';
+        }).join('') + '<button type="button" class="pm-view-add-btn" id="pmViewAddBtn" data-tooltip="Save a view with these currently selected categories, filters, and sorts">+ Save View</button>';
 
         row.querySelectorAll('.pm-view-chip').forEach(function (chip) {
           chip.addEventListener('click', function (e) {
