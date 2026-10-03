@@ -4449,12 +4449,25 @@ def render_account(player: PlayerView) -> str:
       let sharedLinksSortKey = null;
       let sharedLinksSortDir = 'asc';
 
-      // YYYY-MM-DD -- slicing the ISO string itself rather than going
-      // through toLocaleDateString's own formatting options, so this
-      // can't drift per-viewer with whatever locale/format their
-      // browser happens to default to.
+      // YYYY-MM-DD in the VIEWER'S local timezone (the server stores and
+      // sends UTC) -- assembled from the local getFullYear/getMonth/
+      // getDate parts rather than toLocaleDateString's own formatting
+      // options, so the format itself can't drift per-viewer with
+      // whatever locale their browser defaults to. A timestamp with no
+      // zone suffix is treated as UTC, same as the server's own. Shared
+      // by the Shared Links EXPIRATION column and the Friends list's
+      // SINCE column.
+      function fmtLocalDate(iso) {
+        if (!iso) return '\u2014';
+        const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso);
+        const d = new Date(hasZone ? iso : iso + 'Z');
+        if (isNaN(d.getTime())) return '\u2014';
+        const pad = (n) => String(n).padStart(2, '0');
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      }
+
       function fmtExpiration(iso) {
-        return new Date(iso).toISOString().slice(0, 10);
+        return fmtLocalDate(iso);
       }
 
       // No 'code' case -- the Code column isn't sortable (see the
@@ -4824,7 +4837,7 @@ def render_account(player: PlayerView) -> str:
         row.appendChild(nameCell);
 
         const sinceCell = document.createElement('td');
-        sinceCell.textContent = friend.since ? friend.since.slice(0, 10) : '\u2014';
+        sinceCell.textContent = fmtLocalDate(friend.since);
         row.appendChild(sinceCell);
 
         const removeCell = document.createElement('td');
