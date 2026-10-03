@@ -3820,11 +3820,11 @@ def render_account(player: PlayerView) -> str:
             <table class="shared-links-table">
               <thead>
                 <tr>
-                  <th><button type="button" class="shared-link-sort-header" data-sort-key="character">Character<span class="shared-link-sort-arrow"></span></button></th>
-                  <th><button type="button" class="shared-link-sort-header" data-sort-key="app">Type<span class="shared-link-sort-arrow"></span></button></th>
+                  <th><button type="button" class="shared-link-sort-header" data-sort-key="character" data-tooltip="Sort by character">Character<span class="shared-link-sort-arrow"></span></button></th>
+                  <th><button type="button" class="shared-link-sort-header" data-sort-key="app" data-tooltip="Sort by type">Type<span class="shared-link-sort-arrow"></span></button></th>
                   <th>Code</th>
-                  <th><button type="button" class="shared-link-sort-header" data-sort-key="expiration">Expiration<span class="shared-link-sort-arrow"></span></button></th>
-                  <th>Deletion</th>
+                  <th><button type="button" class="shared-link-sort-header" data-sort-key="expiration" data-tooltip="Sort by expiration">Expiration<span class="shared-link-sort-arrow"></span></button></th>
+                  <th><button type="button" class="shared-link-delete-all-header" id="sharedLinksDeleteAllBtn" data-tooltip="Delete all shared links">Deletion</button></th>
                 </tr>
               </thead>
               <tbody id="sharedLinksTableBody"></tbody>
@@ -3920,8 +3920,22 @@ def render_account(player: PlayerView) -> str:
           document.querySelectorAll('.trash-delete-btn--confirm').forEach((b) => {
             if (b !== btn) b.classList.remove('trash-delete-btn--confirm');
           });
+          disarmDeleteAllLinksHeader();
           btn.classList.add('trash-delete-btn--confirm');
         });
+      }
+
+      // Shared by both this file's trash-can buttons and the DELETION
+      // header's own bulk-delete toggle below -- resets the header back
+      // to its resting "Deletion" label/color, called whenever anything
+      // else on the page arms a *different* destructive confirm (a
+      // trash can, or an outside click), so at most one dangerous
+      // confirm is ever showing at a time.
+      function disarmDeleteAllLinksHeader() {
+        const btn = document.getElementById('sharedLinksDeleteAllBtn');
+        if (!btn) return;
+        btn.classList.remove('shared-link-delete-all-header--confirm');
+        btn.textContent = 'Deletion';
       }
 
       document.addEventListener('click', (e) => {
@@ -3929,6 +3943,9 @@ def render_account(player: PlayerView) -> str:
         document.querySelectorAll('.trash-delete-btn--confirm').forEach((b) => {
           b.classList.remove('trash-delete-btn--confirm');
         });
+        if (!e.target.closest('.shared-link-delete-all-header')) {
+          disarmDeleteAllLinksHeader();
+        }
       });
 
       // Update Email / Update Password / Delete Account -- now one
@@ -4331,8 +4348,8 @@ def render_account(player: PlayerView) -> str:
         const deactivateBtn = document.createElement('button');
         deactivateBtn.type = 'button';
         deactivateBtn.className = 'trash-delete-btn';
-        deactivateBtn.title = 'Deactivate link';
-        deactivateBtn.setAttribute('aria-label', 'Deactivate link');
+        deactivateBtn.setAttribute('aria-label', 'Delete');
+        deactivateBtn.setAttribute('data-tooltip', 'Delete');
         deactivateBtn.innerHTML = trashDeleteBtnHtml('SURE?');
         // Same two-step, click-away-to-cancel confirm as DELETE
         // CHARACTER below -- undoable only by sharing again, not a
@@ -4386,12 +4403,53 @@ def render_account(player: PlayerView) -> str:
         rows.forEach((link) => sharedLinksTableBody.appendChild(renderSharedLinkRow(link)));
       }
 
+      // DELETION header -- not a sort column, a destructive bulk
+      // action instead: first click arms it (red, "SURE?", same
+      // two-step confirm as every trash-can button on this page) and
+      // a second click while armed revokes every one of this
+      // account's share links in one call. Click-away-to-cancel is
+      // handled by the shared document click listener above
+      // (disarmDeleteAllLinksHeader), the same place every trash-can
+      // button's own confirm state gets cleared.
+      const sharedLinksDeleteAllBtn = document.getElementById('sharedLinksDeleteAllBtn');
+      if (sharedLinksDeleteAllBtn) {
+        sharedLinksDeleteAllBtn.addEventListener('click', async () => {
+          if (!sharedLinksDeleteAllBtn.classList.contains('shared-link-delete-all-header--confirm')) {
+            document.querySelectorAll('.trash-delete-btn--confirm').forEach((b) => {
+              b.classList.remove('trash-delete-btn--confirm');
+            });
+            sharedLinksDeleteAllBtn.classList.add('shared-link-delete-all-header--confirm');
+            sharedLinksDeleteAllBtn.textContent = 'SURE?';
+            return;
+          }
+          sharedLinksError.classList.remove('show');
+          sharedLinksDeleteAllBtn.disabled = true;
+          try {
+            const res = await fetch('/api/account/shared-links', { method: 'DELETE' });
+            if (res.ok) {
+              await loadSharedLinks();
+              return;
+            }
+            const data = await res.json().catch(() => ({}));
+            sharedLinksError.textContent = describeError(data, 'Could not delete your shared links.');
+            sharedLinksError.classList.add('show');
+          } catch (err) {
+            sharedLinksError.textContent = 'Something went wrong. Please try again.';
+            sharedLinksError.classList.add('show');
+          } finally {
+            sharedLinksDeleteAllBtn.disabled = false;
+            disarmDeleteAllLinksHeader();
+          }
+        });
+      }
+
       // Clicking a column header sorts the already-fetched data in
       // place (no re-fetch) -- a second click on the already-active
       // column flips direction, same click-to-sort/click-again-to-
       // flip convention as Storages Viewer's own .pm-sort-header.
-      // Deletion isn't a column anyone would sort by, so it's plain
-      // text with no header button at all.
+      // Deletion isn't a sortable column -- see sharedLinksDeleteAllBtn
+      // just above instead, its own clickable header with a totally
+      // different, destructive click behavior.
       const sharedLinkSortHeaders = document.querySelectorAll('.shared-link-sort-header');
       function updateSharedLinkSortHeaders() {
         sharedLinkSortHeaders.forEach((btn) => {

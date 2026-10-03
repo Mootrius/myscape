@@ -98,3 +98,31 @@ def delete_shared_link(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
     db.delete(share)
     db.commit()
+
+
+@router.delete("/shared-links", status_code=status.HTTP_204_NO_CONTENT)
+def delete_all_shared_links(
+    db: Session = Depends(get_db),
+    account: Account = Depends(get_current_account_from_session),
+):
+    """Revokes every one of this Account's share links at once -- the
+    account page's own "DELETION" column header, armed the same two-
+    click way as delete_shared_link's own per-row DEACTIVATE button
+    just above (see that endpoint's docstring for why this is a plain
+    delete with no tombstone). Same ownership join as
+    list_shared_links/delete_shared_link, just without the single-id
+    filter -- every SharedContent row reachable through one of this
+    account's own GameAccounts, valid or not, since there's nothing
+    worth keeping once the whole table's being cleared. A subquery
+    rather than a straight join, since Query.delete() can't act
+    through a joined table directly."""
+    (
+        db.query(SharedContent)
+        .filter(
+            SharedContent.game_account_id.in_(
+                db.query(GameAccount.id).filter(GameAccount.account_id == account.id)
+            )
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()

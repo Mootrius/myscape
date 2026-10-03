@@ -912,6 +912,24 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
    nothing permanently reserved beside the title. */
 .shared-link-sort-arrow { display: inline-block; }
 
+/* DELETION column header -- not sortable, a destructive bulk action
+   instead (see sharedLinksDeleteAllBtn in app/pages.py): gray at rest
+   like the sort headers beside it, but red on hover and red + "SURE?"
+   once armed, rather than this table's usual gold "active" convention
+   -- same red-on-hover-then-red-when-armed language as this table's
+   own per-row trash-can buttons below, just without their icon (this
+   one swaps its own text instead, there's no icon to begin with). A
+   standalone reset (not .shared-link-sort-header) on purpose, so its
+   red states never have to fight that class's own gold .active rule. */
+.shared-link-delete-all-header {
+  background: none; border: none; padding: 0; margin: 0; font: inherit;
+  color: inherit; letter-spacing: inherit; text-transform: inherit;
+  cursor: pointer;
+}
+.shared-link-delete-all-header:hover,
+.shared-link-delete-all-header--confirm,
+.shared-link-delete-all-header--confirm:hover { color: var(--red); }
+
 /* Shared gray-trash-can -> red-on-hover -> red "confirm" label delete
    button -- used by both DEACTIVATE (Shared Links table) and DELETE
    CHARACTER (Linked Accounts list below), same SVG-swaps-for-a-text-
