@@ -5025,6 +5025,24 @@ def render_account(player: PlayerView) -> str:
         if (changed) loadGameAccounts();
       });
 
+      // The friend code field only takes focus when the user puts it
+      // there (a click on it, or tabbing into it) -- never as a side
+      // effect of clicking elsewhere on the page or of a page load.
+      // Anything else that lands focus on it (the browser, a
+      // restored page, a stray label click) is bounced straight off.
+      let friendsInputIntent = false;
+      document.addEventListener('pointerdown', (e) => {
+        friendsInputIntent = e.target === friendsAddInput;
+      }, true);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') friendsInputIntent = true;
+      }, true);
+      friendsAddInput.addEventListener('focus', () => {
+        if (!friendsInputIntent) friendsAddInput.blur();
+      });
+      friendsAddInput.addEventListener('blur', () => { friendsInputIntent = false; });
+      if (document.activeElement === friendsAddInput) friendsAddInput.blur();
+
       // Shows the initial (default) sort in the headers right away.
       updateSharedLinkSortHeaders();
 
@@ -6973,6 +6991,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
       // sitting there to catch an unrelated next click later.
       function closeSetupMenu() {
         document.getElementById('setupMenu').style.display = 'none';
+        document.getElementById('setupMenuBtn').classList.remove('active');
         var deleteBtn = document.getElementById('menuDeleteSetup');
         if (deleteBtn) {
           deleteBtn.classList.remove('tracker-menu-item--confirm');
@@ -6981,7 +7000,10 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
       }
       document.getElementById('setupMenuBtn').addEventListener('click', function () {
         var menu = document.getElementById('setupMenu');
-        if (menu.style.display === 'none') { menu.style.display = 'flex'; } else { closeSetupMenu(); }
+        if (menu.style.display === 'none') {
+          menu.style.display = 'flex';
+          document.getElementById('setupMenuBtn').classList.add('active');
+        } else { closeSetupMenu(); }
       });
       document.addEventListener('click', function (e) {
         var wrap = document.querySelector('.tracker-menu-wrap');

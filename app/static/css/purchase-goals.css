@@ -62,7 +62,9 @@
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
 }
-.icon-menu-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+.icon-menu-btn:hover { border-color: var(--gold); color: var(--text); }
+/* Open (the menu it controls is showing): border and icon both gold. */
+.icon-menu-btn.active, .icon-menu-btn.active:hover { border-color: var(--gold); color: var(--gold); }
 
 /* A drawn three-bar hamburger rather than a text glyph, so it stays
    crisp and sharp-cornered like the rest of the site's iconography
