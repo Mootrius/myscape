@@ -15061,7 +15061,7 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
     # app/possessions.py).
     pm_share_icon_btn = (
         ' <span class="pm-share-wrap">'
-        '<button type="button" class="pm-share-icon-btn" id="pmShareIconBtn" aria-label="Share a snapshot of your storages&#39; contents with the currently selected categories" data-tooltip="Share a snapshot of your storages&#39; contents with the currently selected categories">'
+        '<button type="button" class="pm-share-icon-btn" id="pmShareIconBtn" aria-label="Share a snapshot of your storages&#39; contents\nwith the currently selected categories" data-tooltip="Share a snapshot of your storages&#39; contents\nwith the currently selected categories">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
         '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
@@ -15104,8 +15104,8 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
       <div class="pm-table" id="pmTable" style="display:none;">
         <div class="pm-row pm-row-header">
           <div class="pm-col pm-col-image pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="alpha" data-tooltip="Sort alphabetically">Item<span class="pm-sort-arrow"></span></button>
-            <button type="button" class="pm-filter-icon-btn" data-filter-col="alpha" data-tooltip="Filter by item" aria-label="Filter by item">{funnel_glyph}</button>
+            <button type="button" class="pm-sort-header" data-sort-key="alpha" data-tooltip="Sort by item name">Item<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="alpha" data-tooltip="Filter by item name" aria-label="Filter by item name">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-qty pm-header-cell">
             <button type="button" class="pm-sort-header" data-sort-key="qty" data-tooltip="Sort by quantity">Quantity<span class="pm-sort-arrow"></span></button>
