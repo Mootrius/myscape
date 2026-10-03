@@ -16377,9 +16377,9 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         row.innerHTML = state.views.map(function (v) {
           var active = v.id === state.activeViewId ? ' active' : '';
           return (
-            '<button type="button" class="pm-view-chip' + active + '" data-view-id="' + v.id + '" draggable="true" title="' + escapeHtml(v.name) + '">' +
+            '<button type="button" class="pm-view-chip' + active + '" data-view-id="' + v.id + '" draggable="true">' +
             '<span class="pm-view-chip-name">' + escapeHtml(v.name) + '</span>' +
-            '<span class="pm-view-delete" data-view-delete="' + v.id + '" title="Delete this view" aria-label="Delete this view">&times;</span>' +
+            '<span class="pm-view-delete" data-view-delete="' + v.id + '" data-tooltip="Delete" aria-label="Delete this view">&times;</span>' +
             '</button>'
           );
         }).join('') + '<button type="button" class="pm-view-add-btn" id="pmViewAddBtn" data-tooltip="Save a view with these currently selected categories, filters, and sorts">+ Save View</button>';
