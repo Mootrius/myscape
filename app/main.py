@@ -1600,6 +1600,46 @@ def sync_character_summary(
     return CharacterSummarySyncResponse(stat_count=11)
 
 
+def _diary_progress_rows(game_account: GameAccount) -> list[dict]:
+    """One entry per diary area with completed/total TASK counts and a
+    per-tier state, derived from diary_tiers (highest completed tier
+    per area) plus the static per-tier task totals. Shared by the
+    progress payload's diary rows and the summary payload's Achievement
+    Diaries tile so the two can never disagree."""
+    diary_totals = get_diary_tier_totals()
+    account_diary_tiers = game_account.diary_tiers or {}
+    diaries = []
+    for area, tier_totals in diary_totals.items():
+        highest = account_diary_tiers.get(area)
+        highest_index = DIARY_TIERS.index(highest) if highest in DIARY_TIERS else -1
+        completed = sum(tier_totals[t] for i, t in enumerate(DIARY_TIERS) if i <= highest_index and t in tier_totals)
+        total = sum(tier_totals.values())
+        tiers = {
+            t: ("completed" if i <= highest_index else "not_completed")
+            for i, t in enumerate(DIARY_TIERS)
+        }
+        diaries.append({"area": area, "completed": completed, "total": total, "tiers": tiers})
+    return diaries
+
+
+def _achievement_diary_tile_counts(game_account: GameAccount) -> tuple:
+    """(completed, total) for the summary row's Achievement Diaries
+    tile, in TASKS. The in-game Character Summary panel's own figure
+    is not a reliable source: depending on what the plugin read it can
+    be a tier count (e.g. 36/48 = 12 areas x 3 tiers) rather than a
+    task count, so whenever diary_tiers has been synced the tile is
+    computed from it -- the same numbers the per-area diary rows
+    show. Falls back to the plugin-reported values only for an account
+    that has never synced diary tiers."""
+    if game_account.diary_tiers:
+        rows = _diary_progress_rows(game_account)
+        return sum(r["completed"] for r in rows), sum(r["total"] for r in rows)
+    return (
+        game_account.character_summary_achievements_completed,
+        game_account.character_summary_achievements_total,
+    )
+
+
 def _character_overview_summary_payload(game_account: GameAccount) -> dict:
     """The actual summary-row payload, factored out of
     character_overview_summary below so the public, code-scoped
@@ -1615,14 +1655,15 @@ def _character_overview_summary_payload(game_account: GameAccount) -> dict:
     authenticated page ignores this field entirely and keeps using its
     own localStorage pick instead (see MODEL_VIEWER_BG_STORAGE_KEY's
     own comment there)."""
+    achievements_completed, achievements_total = _achievement_diary_tile_counts(game_account)
     return {
         "combatLevel": game_account.character_summary_combat_level,
         "totalLevel": game_account.character_summary_total_level,
         "totalXp": game_account.character_summary_total_xp,
         "questsCompleted": game_account.character_summary_quests_completed,
         "questsTotal": game_account.character_summary_quests_total,
-        "achievementsCompleted": game_account.character_summary_achievements_completed,
-        "achievementsTotal": game_account.character_summary_achievements_total,
+        "achievementsCompleted": achievements_completed,
+        "achievementsTotal": achievements_total,
         "combatTasksCompleted": game_account.character_summary_combat_tasks_completed,
         "combatTasksTotal": game_account.character_summary_combat_tasks_total,
         "collectionsCompleted": game_account.character_summary_collections_completed,
@@ -1697,19 +1738,7 @@ def _character_overview_progress_payload(game_account: GameAccount) -> dict:
         for group, names in quest_list.items()
     }
 
-    diary_totals = get_diary_tier_totals()
-    account_diary_tiers = game_account.diary_tiers or {}
-    diaries = []
-    for area, tier_totals in diary_totals.items():
-        highest = account_diary_tiers.get(area)
-        highest_index = DIARY_TIERS.index(highest) if highest in DIARY_TIERS else -1
-        completed = sum(tier_totals[t] for i, t in enumerate(DIARY_TIERS) if i <= highest_index and t in tier_totals)
-        total = sum(tier_totals.values())
-        tiers = {
-            t: ("completed" if i <= highest_index else "not_completed")
-            for i, t in enumerate(DIARY_TIERS)
-        }
-        diaries.append({"area": area, "completed": completed, "total": total, "tiers": tiers})
+    diaries = _diary_progress_rows(game_account)
 
     ca_totals = get_ca_tier_totals()
     ca_completed = game_account.character_summary_combat_task_tier_completed
