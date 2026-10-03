@@ -4450,8 +4450,8 @@ def render_account(player: PlayerView) -> str:
       // the server already returns them in (created_at desc, and every
       // share expires a fixed time after it's created), so the header
       // just shows what's already true (highlight + down arrow) from
-      // the moment the page loads. A null key still means "original
-      // fetch order" (the cycle's third click).
+      // the moment the page loads (and a sort stays active from then on --
+      // see the header click handler below).
       let sharedLinksSortKey = 'expiration';
       let sharedLinksSortDir = 'desc';
 
@@ -4659,22 +4659,23 @@ def render_account(player: PlayerView) -> str:
           }
         });
       }
-      // Three-click cycle per column: ascending, then descending,
-      // then back to no sort at all (sharedLinksSortKey = null, which
-      // renderSharedLinksTable already treats as "show the original
-      // fetch order") -- a 4th click starts the same cycle over from
-      // ascending, same as clicking a column that wasn't already
-      // active.
+      // A sort is always active -- there's no "off" state. EXPIRATION
+      // (the default, newest first) just flips between descending and
+      // ascending on every click; any other column goes ascending, then
+      // descending, then back to the default (EXPIRATION, newest first).
       sharedLinkSortHeaders.forEach((btn) => {
         btn.addEventListener('click', () => {
           const key = btn.getAttribute('data-sort-key');
           if (key !== sharedLinksSortKey) {
             sharedLinksSortKey = key;
-            sharedLinksSortDir = 'asc';
+            sharedLinksSortDir = key === 'expiration' ? 'desc' : 'asc';
+          } else if (key === 'expiration') {
+            sharedLinksSortDir = sharedLinksSortDir === 'desc' ? 'asc' : 'desc';
           } else if (sharedLinksSortDir === 'asc') {
             sharedLinksSortDir = 'desc';
           } else {
-            sharedLinksSortKey = null;
+            sharedLinksSortKey = 'expiration';
+            sharedLinksSortDir = 'desc';
           }
           updateSharedLinkSortHeaders();
           renderSharedLinksTable();
@@ -4719,12 +4720,12 @@ def render_account(player: PlayerView) -> str:
       const friendsEmpty = document.getElementById('friendsEmpty');
       let friendsCode = '';
       // The friends list as last fetched (server order = A-Z) + the
-      // FRIEND/SINCE header sort -- same asc -> desc -> off cycle as the
+      // FRIEND/SINCE header sort -- same always-sorted cycle as the
       // Shared Links table's own sortable headers.
       let friendsData = [];
       // Starts sorted by SINCE, newest friend first (the server's own
-      // order is A-Z, which is what the cycle's third click -- null key
-      // -- falls back to).
+      // order is A-Z) -- and a sort stays active from then on, see the
+      // header click handler below.
       let friendsSortKey = 'since';
       let friendsSortDir = 'desc';
 
@@ -4919,13 +4920,19 @@ def render_account(player: PlayerView) -> str:
       friendSortHeaders.forEach((btn) => {
         btn.addEventListener('click', () => {
           const key = btn.getAttribute('data-friend-sort-key');
+          // Same always-sorted cycle as Shared Links: SINCE (the default,
+          // newest first) flips between descending and ascending; FRIEND
+          // goes A-Z, then Z-A, then back to the default (SINCE, newest first).
           if (key !== friendsSortKey) {
             friendsSortKey = key;
-            friendsSortDir = 'asc';
+            friendsSortDir = key === 'since' ? 'desc' : 'asc';
+          } else if (key === 'since') {
+            friendsSortDir = friendsSortDir === 'desc' ? 'asc' : 'desc';
           } else if (friendsSortDir === 'asc') {
             friendsSortDir = 'desc';
           } else {
-            friendsSortKey = null;
+            friendsSortKey = 'since';
+            friendsSortDir = 'desc';
           }
           updateFriendSortHeaders();
           renderFriendsTable();
