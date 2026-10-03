@@ -5,6 +5,7 @@ linking) -- see README.md for how the pieces fit together.
 import base64
 import logging
 import os
+import copy
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -2815,6 +2816,47 @@ def create_gear_setup(
     return build_purchase_goals_state(db, game_account)
 
 
+def _duplicate_name(name: str) -> str:
+    """"<name> (copy)", trimmed so the whole thing still fits the 60
+    characters the name fields allow -- the base is what gets cut, so
+    the "(copy)" marker always survives."""
+    suffix = " (copy)"
+    base = (name or "").strip()
+    if len(base) + len(suffix) > 60:
+        base = base[: 60 - len(suffix)].rstrip()
+    return base + suffix
+
+
+@app.post("/api/gear-setups/{setup_id}/duplicate", status_code=status.HTTP_201_CREATED)
+def duplicate_gear_setup(
+    setup_id: str,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """A full copy of one of the player's own setups (name + " (copy)",
+    icon, equipment, inventory, still-to-purchase sort/custom order),
+    landing at the END of their setup list like any new setup (its
+    sort_order is left NULL, see GearSetup.sort_order). The response is
+    the normal GET /api/gear-setups shape plus newSetupId -- the copy's
+    id, so the page can select it."""
+    source = _get_owned_gear_setup(db, game_account, setup_id)
+    new_setup = GearSetup(
+        id=uuid.uuid4(),
+        game_account_id=game_account.id,
+        name=_duplicate_name(source.name),
+        icon=copy.deepcopy(source.icon),
+        equipment=copy.deepcopy(source.equipment or {}),
+        inventory=copy.deepcopy(source.inventory or [None] * INVENTORY_SIZE),
+        still_to_purchase_sort_mode=source.still_to_purchase_sort_mode or "low_to_high",
+        still_to_purchase_custom_order=copy.deepcopy(source.still_to_purchase_custom_order),
+    )
+    db.add(new_setup)
+    db.commit()
+    state = build_purchase_goals_state(db, game_account)
+    state["newSetupId"] = str(new_setup.id)
+    return state
+
+
 @app.put("/api/gear-setups/order")
 def set_gear_setup_order(
     payload: SetGearSetupOrderRequest,
@@ -3231,6 +3273,31 @@ def rename_mindmap(
     mindmap.name = payload.name
     db.commit()
     return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
+
+
+@app.post("/api/mindmaps/{mindmap_id}/duplicate", status_code=status.HTTP_201_CREATED)
+def duplicate_mindmap(
+    mindmap_id: str,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
+):
+    """A full copy of one of the player's own mindmaps (name + " (copy)",
+    every node as-is). Node ids are reused unchanged -- they're only
+    ever referenced from within their own mindmap's node list (see
+    import_mindmap_from_share_payload), so there's no collision. The
+    response is the normal GET /api/mindmaps shape plus newMindmapId."""
+    source = _get_owned_mindmap(db, game_account, mindmap_id)
+    new_mindmap = MindMap(
+        id=uuid.uuid4(),
+        game_account_id=game_account.id,
+        name=_duplicate_name(source.name),
+        nodes=copy.deepcopy(source.nodes or []),
+    )
+    db.add(new_mindmap)
+    db.commit()
+    state = build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
+    state["newMindmapId"] = str(new_mindmap.id)
+    return state
 
 
 @app.delete("/api/mindmaps/{mindmap_id}")

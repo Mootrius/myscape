@@ -5512,6 +5512,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         </button>
         <div class="tracker-menu" id="setupMenu" style="display:none;">
           <button class="tracker-menu-item" id="menuNewSetup" type="button">New setup</button>
+          <button class="tracker-menu-item" id="menuDuplicateSetup" type="button">Duplicate setup</button>
           <button class="tracker-menu-item" id="menuRenameSetup" type="button">Rename setup</button>
           <button class="tracker-menu-item danger" id="menuDeleteSetup" type="button">Delete setup</button>
         </div>
@@ -7013,6 +7014,21 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
       document.getElementById('menuNewSetup').addEventListener('click', function () {
         closeSetupMenu();
         openNameForm('new', '');
+      });
+      // Copies the active setup straight away (no name prompt) -- the
+      // copy is named "<name> (copy)" server-side and becomes the
+      // selected setup, ready to rename if wanted.
+      document.getElementById('menuDuplicateSetup').addEventListener('click', async function () {
+        closeSetupMenu();
+        var setup = activeSetup();
+        if (!setup) { showError('Create a setup first.'); return; }
+        const data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id) + '/duplicate', { method: 'POST' });
+        if (data) {
+          PG.stateVersion++;
+          PG.data = data;
+          if (data.newSetupId) setActiveSetupId(data.newSetupId);
+          render();
+        }
       });
       document.getElementById('menuRenameSetup').addEventListener('click', function () {
         closeSetupMenu();
@@ -14010,6 +14026,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         document.getElementById('mmMenu').innerHTML = rows +
           '<div class="mm-menu-divider"></div>' +
           '<button type="button" class="mm-menu-item" id="mmMenuNew">New mindmap</button>' +
+          '<button type="button" class="mm-menu-item" id="mmMenuDuplicate">Duplicate mindmap</button>' +
           '<button type="button" class="mm-menu-item" id="mmMenuRename">Rename mindmap</button>' +
           '<button type="button" class="mm-menu-item danger" id="mmMenuDelete">Delete mindmap</button>';
       }
@@ -14554,6 +14571,11 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           return;
         }
         if (e.target.id === 'mmMenuNew') { closeMenu(); openNameForm('new', ''); return; }
+        if (e.target.id === 'mmMenuDuplicate') {
+          closeMenu();
+          duplicateActiveMindmap();
+          return;
+        }
         if (e.target.id === 'mmMenuRename') {
           closeMenu();
           var mm = activeMindmap();
@@ -14571,6 +14593,24 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           return;
         }
       });
+
+      // Copies the active mindmap straight away (no name prompt) -- the
+      // copy is named "<name> (copy)" server-side and becomes the
+      // selected mindmap.
+      async function duplicateActiveMindmap() {
+        var mm = activeMindmap();
+        if (!mm) return;
+        const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id) + '/duplicate', { method: 'POST' });
+        if (data) {
+          MM.data = data;
+          if (data.newMindmapId) {
+            setActiveMindmapId(data.newMindmapId);
+            MM.selectedNodeId = null;
+          }
+          render();
+          zoomToFit();
+        }
+      }
 
       async function deleteActiveMindmap() {
         var mm = activeMindmap();
