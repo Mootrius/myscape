@@ -4446,8 +4446,14 @@ def render_account(player: PlayerView) -> str:
       const sharedLinksEmpty = document.getElementById('sharedLinksEmpty');
       const sharedLinksError = document.getElementById('sharedLinksError');
       let sharedLinksData = [];
-      let sharedLinksSortKey = null;
-      let sharedLinksSortDir = 'asc';
+      // Starts sorted by EXPIRATION, newest first -- which is the order
+      // the server already returns them in (created_at desc, and every
+      // share expires a fixed time after it's created), so the header
+      // just shows what's already true (highlight + down arrow) from
+      // the moment the page loads. A null key still means "original
+      // fetch order" (the cycle's third click).
+      let sharedLinksSortKey = 'expiration';
+      let sharedLinksSortDir = 'desc';
 
       // YYYY-MM-DD in the VIEWER'S local timezone (the server stores and
       // sends UTC) -- assembled from the local getFullYear/getMonth/
@@ -4716,8 +4722,11 @@ def render_account(player: PlayerView) -> str:
       // FRIEND/SINCE header sort -- same asc -> desc -> off cycle as the
       // Shared Links table's own sortable headers.
       let friendsData = [];
-      let friendsSortKey = null;
-      let friendsSortDir = 'asc';
+      // Starts sorted by SINCE, newest friend first (the server's own
+      // order is A-Z, which is what the cycle's third click -- null key
+      // -- falls back to).
+      let friendsSortKey = 'since';
+      let friendsSortDir = 'desc';
 
       // A circle with a dash through it (not a trash can) -- reuses the
       // trash-delete button's whole arm-then-confirm machinery by keeping
@@ -4923,6 +4932,9 @@ def render_account(player: PlayerView) -> str:
         });
       });
 
+      // Shows the initial (default) sort in the headers right away.
+      updateFriendSortHeaders();
+
       function showFriendsHint(message) {
         friendsHint.textContent = message;
         friendsHint.hidden = false;
@@ -5015,6 +5027,9 @@ def render_account(player: PlayerView) -> str:
         friendNotif = next;
         if (changed) loadGameAccounts();
       });
+
+      // Shows the initial (default) sort in the headers right away.
+      updateSharedLinkSortHeaders();
 
       loadGameAccounts();
       loadSharedLinks();
