@@ -4659,23 +4659,18 @@ def render_account(player: PlayerView) -> str:
           }
         });
       }
-      // A sort is always active -- there's no "off" state. EXPIRATION
-      // (the default, newest first) just flips between descending and
-      // ascending on every click; any other column goes ascending, then
-      // descending, then back to the default (EXPIRATION, newest first).
+      // A sort is always active -- there's no "off" state. Clicking a
+      // column that isn't the active one sorts by it (EXPIRATION starts
+      // newest first, every other column starts ascending); clicking
+      // the already-active column just flips its direction, forever.
       sharedLinkSortHeaders.forEach((btn) => {
         btn.addEventListener('click', () => {
           const key = btn.getAttribute('data-sort-key');
           if (key !== sharedLinksSortKey) {
             sharedLinksSortKey = key;
             sharedLinksSortDir = key === 'expiration' ? 'desc' : 'asc';
-          } else if (key === 'expiration') {
-            sharedLinksSortDir = sharedLinksSortDir === 'desc' ? 'asc' : 'desc';
-          } else if (sharedLinksSortDir === 'asc') {
-            sharedLinksSortDir = 'desc';
           } else {
-            sharedLinksSortKey = 'expiration';
-            sharedLinksSortDir = 'desc';
+            sharedLinksSortDir = sharedLinksSortDir === 'asc' ? 'desc' : 'asc';
           }
           updateSharedLinkSortHeaders();
           renderSharedLinksTable();
@@ -4920,19 +4915,14 @@ def render_account(player: PlayerView) -> str:
       friendSortHeaders.forEach((btn) => {
         btn.addEventListener('click', () => {
           const key = btn.getAttribute('data-friend-sort-key');
-          // Same always-sorted cycle as Shared Links: SINCE (the default,
-          // newest first) flips between descending and ascending; FRIEND
-          // goes A-Z, then Z-A, then back to the default (SINCE, newest first).
+          // Same always-sorted behavior as Shared Links: a newly clicked
+          // column starts at its natural direction (SINCE newest first,
+          // FRIEND A-Z); clicking the active column just flips it.
           if (key !== friendsSortKey) {
             friendsSortKey = key;
             friendsSortDir = key === 'since' ? 'desc' : 'asc';
-          } else if (key === 'since') {
-            friendsSortDir = friendsSortDir === 'desc' ? 'asc' : 'desc';
-          } else if (friendsSortDir === 'asc') {
-            friendsSortDir = 'desc';
           } else {
-            friendsSortKey = 'since';
-            friendsSortDir = 'desc';
+            friendsSortDir = friendsSortDir === 'asc' ? 'desc' : 'asc';
           }
           updateFriendSortHeaders();
           renderFriendsTable();
