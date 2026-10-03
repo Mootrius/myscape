@@ -360,7 +360,7 @@ def _nav_sides(player: Optional[PlayerView]) -> tuple[str, str]:
     if player:
         return (
             '<a href="/dashboard">Dashboard</a>',
-            '<a href="/account">Account</a>',
+            '<a href="/account">Account<span class="friend-badge" id="navAccountBadge" data-tooltip="Pending friend requests" hidden></span></a>',
         )
     return (
         '<a href="/login">Log in</a>',
@@ -587,6 +587,38 @@ def _shell(
         }
       }, 3000);
     }
+
+    // Friend-request notifications -- the little number next to ACCOUNT
+    // in the header (see _nav_sides). Polls a tiny, one-query endpoint
+    // every 10 seconds (pausing while the tab is hidden, and catching up
+    // the moment it's visible again), same polling approach as the link
+    // banner above. Each result is also broadcast as a window event so
+    // the account page's own character cards/Friends section can react
+    // to the same data without a second poll of their own.
+    (function () {
+      const badge = document.getElementById('navAccountBadge');
+      if (!badge) return;
+      function apply(data) {
+        const total = (data && data.total) || 0;
+        badge.textContent = total > 99 ? '99+' : String(total);
+        badge.hidden = total <= 0;
+        window.dispatchEvent(new CustomEvent('myscape:friend-notifications', { detail: data }));
+      }
+      async function poll() {
+        if (document.hidden) return;
+        try {
+          const res = await fetch('/api/friends/notifications');
+          if (!res.ok) return;
+          apply(await res.json());
+        } catch (err) {
+          // Transient network hiccup -- just try again next tick.
+        }
+      }
+      window.myscapePollFriendNotifications = poll;
+      poll();
+      setInterval(poll, 10000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+    })();
 
     // Custom hover tooltip, site-wide -- see .myscape-tooltip's own
     // comment in myscape.css for the full picture (the matching styled
@@ -2525,7 +2557,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         public_profile_settings_btn += (
             '<div class="public-profile-card" id="publicProfileCard" hidden>'
             '<div class="public-profile-seg-group">'
-            '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private">Private</button>'
+            '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private" data-tooltip="Your profile is invisible to anyone not on your friends list">Private</button>'
             '<button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public">Public</button>'
             '</div>'
             '<button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" disabled></button>'
@@ -3593,6 +3625,83 @@ def render_public_character_overview(game_account: "GameAccount", viewer: Option
       if (clogSyncBtn) {{
         clogSyncBtn.replaceWith(clogSyncBtn.cloneNode(true));
       }}
+
+      // ---- friend-request button, next to the character's name ----
+      // Real window.fetch on purpose (see the shim above -- the local
+      // `fetch` here answers only the Character Overview endpoints).
+      (function () {{
+        var title = document.querySelector('h2.page-title');
+        if (!title) return;
+        var wrap = document.createElement('span');
+        wrap.className = 'co-friend-wrap';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'co-friend-btn';
+        btn.id = 'friendRequestBtn';
+        btn.hidden = true;
+        wrap.appendChild(btn);
+        title.appendChild(document.createTextNode(' '));
+        title.appendChild(wrap);
+
+        var ICON_ADD = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6"></path><path d="M22 11h-6"></path></svg>';
+        var ICON_DONE = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M16 11l2 2 4-4"></path></svg>';
+
+        var state = 'none';
+        var restoreTimer = null;
+        function setState(next) {{
+          state = next;
+          btn.classList.remove('co-friend-btn--done');
+          btn.disabled = false;
+          if (next === 'self' || next === 'own') {{ btn.hidden = true; return; }}
+          btn.hidden = false;
+          var tip;
+          if (next === 'friends') {{
+            btn.innerHTML = ICON_DONE; tip = 'Friends';
+            btn.classList.add('co-friend-btn--done'); btn.disabled = true;
+          }} else if (next === 'pending_out') {{
+            btn.innerHTML = ICON_DONE; tip = 'Friend request sent';
+            btn.classList.add('co-friend-btn--done'); btn.disabled = true;
+          }} else if (next === 'pending_in') {{
+            btn.innerHTML = ICON_ADD; tip = 'Accept friend request';
+          }} else if (next === 'anonymous') {{
+            btn.innerHTML = ICON_ADD; tip = 'Log in to send a friend request';
+          }} else {{
+            btn.innerHTML = ICON_ADD; tip = 'Send friend request';
+          }}
+          btn.setAttribute('data-tooltip', tip);
+          btn.setAttribute('aria-label', tip);
+        }}
+
+        window.fetch('/api/friends/status/' + encodeURIComponent(PUBLIC_CODE))
+          .then(function (r) {{ return r.ok ? r.json() : null; }})
+          .then(function (d) {{ if (d && d.state) setState(d.state); }})
+          .catch(function () {{}});
+
+        btn.addEventListener('click', function () {{
+          if (state === 'anonymous') {{ window.location.href = '/login'; return; }}
+          if (state !== 'none' && state !== 'pending_in') return;
+          btn.disabled = true;
+          window.fetch('/api/friends/requests', {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            body: JSON.stringify({{ code: PUBLIC_CODE }}),
+          }}).then(function (r) {{
+            return r.json().catch(function () {{ return {{}}; }}).then(function (d) {{ return {{ ok: r.ok, data: d }}; }});
+          }}).then(function (res) {{
+            if (res.ok) {{
+              if (window.myscapePollFriendNotifications) window.myscapePollFriendNotifications();
+              setState(res.data.status === 'accepted' ? 'friends' : 'pending_out');
+              return;
+            }}
+            var msg = (res.data && typeof res.data.detail === 'string') ? res.data.detail : 'Could not send that request.';
+            btn.disabled = false;
+            var previous = btn.getAttribute('data-tooltip');
+            btn.setAttribute('data-tooltip', msg);
+            clearTimeout(restoreTimer);
+            restoreTimer = setTimeout(function () {{ btn.setAttribute('data-tooltip', previous); }}, 3500);
+          }}).catch(function () {{ btn.disabled = false; }});
+        }});
+      }})();
     }})();
     """
 
@@ -3811,6 +3920,41 @@ def render_account(player: PlayerView) -> str:
           <div class="auth-error" id="gameAccountsError"></div>
           <div class="game-accounts-list" id="gameAccountsList"></div>
           <button class="secondary" id="addGameAccountBtn" type="button">+ ADD CHARACTER</button>
+        </div>
+
+        <div class="account-section" id="friendsSection">
+          <div class="friends-header">
+            <p class="account-section-title account-section-title--center">FRIENDS</p>
+            <div class="friends-code-wrap" id="friendsCodeWrap" hidden>
+              <span class="friends-code-label">Code</span>
+              <button type="button" class="shared-link-code-btn" id="friendsCodeBtn" data-tooltip="Your friend code — click to copy"></button>
+            </div>
+          </div>
+          <p class="shared-links-empty" id="friendsHint" hidden></p>
+          <div id="friendsBody">
+            <form class="friends-add-form" id="friendsAddForm" autocomplete="off">
+              <input type="text" id="friendsAddInput" maxlength="12" placeholder="Enter a friend's code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Friend code" />
+              <button class="secondary" type="submit" id="friendsAddBtn">ADD</button>
+            </form>
+            <div class="auth-error" id="friendsError"></div>
+            <div class="auth-success" id="friendsSuccess"></div>
+            <div class="friends-requests" id="friendsRequests" hidden>
+              <p class="friends-requests-title">Friend requests</p>
+              <div id="friendsRequestsList"></div>
+            </div>
+            <div class="friends-table-wrap" id="friendsTableWrap" style="display:none;">
+              <table class="friends-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Removal</th>
+                  </tr>
+                </thead>
+                <tbody id="friendsTableBody"></tbody>
+              </table>
+            </div>
+            <p class="shared-links-empty" id="friendsEmpty" style="display:none;">No friends yet.</p>
+          </div>
         </div>
 
         <div class="account-section">
@@ -4123,6 +4267,10 @@ def render_account(player: PlayerView) -> str:
       // (gear setups, mindmaps, ...): it's the same data an action
       // right here on this page (switch/remove/add) can immediately
       // change, so there's no point building it twice.
+      // Pending friend-request counts per character (from GET
+      // /api/friends/notifications) -- drives the little badge on each
+      // character card below.
+      let friendNotif = { total: 0, byCharacter: {} };
       const gameAccountsList = document.getElementById('gameAccountsList');
       const gameAccountsError = document.getElementById('gameAccountsError');
       const addGameAccountBtn = document.getElementById('addGameAccountBtn');
@@ -4141,6 +4289,20 @@ def render_account(player: PlayerView) -> str:
           badge.className = 'game-account-active-badge';
           badge.textContent = 'ACTIVE';
           nameEl.appendChild(badge);
+        }
+
+        // A friend request waiting on THIS character -- switch to it
+        // (SWITCH) and the Friends section below shows who it's from.
+        const pendingFriendRequests = (friendNotif.byCharacter || {})[gameAccount.id] || 0;
+        if (pendingFriendRequests > 0) {
+          const friendBadge = document.createElement('span');
+          friendBadge.className = 'friend-badge game-account-friend-badge';
+          friendBadge.textContent = String(pendingFriendRequests);
+          friendBadge.setAttribute(
+            'data-tooltip',
+            pendingFriendRequests === 1 ? 'New friend request' : pendingFriendRequests + ' new friend requests'
+          );
+          nameEl.appendChild(friendBadge);
         }
 
         const actions = document.createElement('div');
@@ -4213,15 +4375,24 @@ def render_account(player: PlayerView) -> str:
       async function loadGameAccounts() {
         gameAccountsError.classList.remove('show');
         try {
-          const res = await fetch('/api/link/game-accounts');
+          const [res, notifRes] = await Promise.all([
+            fetch('/api/link/game-accounts'),
+            fetch('/api/friends/notifications').catch(() => null),
+          ]);
           if (!res.ok) {
             gameAccountsError.textContent = 'Could not load your linked accounts.';
             gameAccountsError.classList.add('show');
             return;
           }
+          if (notifRes && notifRes.ok) {
+            friendNotif = await notifRes.json().catch(() => friendNotif);
+          }
           const gameAccounts = await res.json();
           gameAccountsList.innerHTML = '';
           gameAccounts.forEach((gameAccount) => gameAccountsList.appendChild(renderGameAccountRow(gameAccount)));
+          // The active character may just have changed (SWITCH/delete)
+          // -- the Friends section always follows it.
+          loadFriends();
         } catch (err) {
           gameAccountsError.textContent = 'Something went wrong. Please try again.';
           gameAccountsError.classList.add('show');
@@ -4502,6 +4673,275 @@ def render_account(player: PlayerView) -> str:
           sharedLinksError.classList.add('show');
         }
       }
+
+
+      // Friends section -- follows the session's ACTIVE character
+      // (GET /api/friends is scoped server-side to it), so it reloads
+      // whenever the active character can change (loadGameAccounts
+      // calls loadFriends at its end -- initial load, SWITCH, delete).
+      const friendsHint = document.getElementById('friendsHint');
+      const friendsBody = document.getElementById('friendsBody');
+      const friendsCodeWrap = document.getElementById('friendsCodeWrap');
+      const friendsCodeBtn = document.getElementById('friendsCodeBtn');
+      const friendsAddForm = document.getElementById('friendsAddForm');
+      const friendsAddInput = document.getElementById('friendsAddInput');
+      const friendsAddBtn = document.getElementById('friendsAddBtn');
+      const friendsError = document.getElementById('friendsError');
+      const friendsSuccess = document.getElementById('friendsSuccess');
+      const friendsRequests = document.getElementById('friendsRequests');
+      const friendsRequestsList = document.getElementById('friendsRequestsList');
+      const friendsTableWrap = document.getElementById('friendsTableWrap');
+      const friendsTableBody = document.getElementById('friendsTableBody');
+      const friendsEmpty = document.getElementById('friendsEmpty');
+      let friendsCode = '';
+
+      // A circle with a dash through it (not a trash can) -- reuses the
+      // trash-delete button's whole arm-then-confirm machinery by keeping
+      // the .trash-delete-icon class on it, same shape as TRASH_ICON_SVG.
+      const REMOVE_FRIEND_ICON_SVG = '<svg class="trash-delete-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="8" cy="8" r="6.3" stroke="currentColor" stroke-width="1.4"/><path d="M5 8H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+
+      function clearFriendsMessages() {
+        friendsError.classList.remove('show');
+        friendsSuccess.classList.remove('show');
+      }
+      function showFriendsError(message) {
+        friendsSuccess.classList.remove('show');
+        friendsError.textContent = message;
+        friendsError.classList.add('show');
+      }
+      function showFriendsSuccess(message) {
+        friendsError.classList.remove('show');
+        friendsSuccess.textContent = message;
+        friendsSuccess.classList.add('show');
+      }
+      function refreshHeaderFriendBadge() {
+        if (window.myscapePollFriendNotifications) window.myscapePollFriendNotifications();
+      }
+
+      async function copyFriendText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const temp = document.createElement('textarea');
+          temp.value = text;
+          temp.style.position = 'fixed';
+          temp.style.opacity = '0';
+          document.body.appendChild(temp);
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+        }
+      }
+
+      friendsCodeBtn.addEventListener('click', async () => {
+        try {
+          await copyFriendText(friendsCode);
+          friendsCodeBtn.textContent = 'COPIED';
+          setTimeout(() => { friendsCodeBtn.textContent = friendsCode; }, 1200);
+        } catch (err) {
+          showFriendsError('Could not copy your code -- please copy it manually.');
+        }
+      });
+
+      function renderFriendRequestRow(request) {
+        const row = document.createElement('div');
+        row.className = 'friend-request-row';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'friend-request-name';
+        nameEl.textContent = request.name;
+        row.appendChild(nameEl);
+
+        const actions = document.createElement('div');
+        actions.className = 'friend-request-actions';
+
+        async function respond(method, url, failMessage, btn) {
+          clearFriendsMessages();
+          btn.disabled = true;
+          try {
+            const res = await fetch(url, { method: method });
+            if (res.ok) {
+              await loadFriends();
+              refreshHeaderFriendBadge();
+              return;
+            }
+            const data = await res.json().catch(() => ({}));
+            showFriendsError(describeError(data, failMessage));
+          } catch (err) {
+            showFriendsError('Something went wrong. Please try again.');
+          } finally {
+            btn.disabled = false;
+          }
+        }
+
+        const acceptBtn = document.createElement('button');
+        acceptBtn.type = 'button';
+        acceptBtn.className = 'secondary';
+        acceptBtn.textContent = 'ACCEPT';
+        acceptBtn.addEventListener('click', () => {
+          respond('POST', `/api/friends/requests/${request.id}/accept`, 'Could not accept this request.', acceptBtn);
+        });
+        actions.appendChild(acceptBtn);
+
+        const declineBtn = document.createElement('button');
+        declineBtn.type = 'button';
+        declineBtn.className = 'secondary friend-decline-btn';
+        declineBtn.textContent = 'DECLINE';
+        declineBtn.addEventListener('click', () => {
+          respond('DELETE', `/api/friends/requests/${request.id}`, 'Could not decline this request.', declineBtn);
+        });
+        actions.appendChild(declineBtn);
+
+        row.appendChild(actions);
+        return row;
+      }
+
+      function renderFriendRow(friend) {
+        const row = document.createElement('tr');
+
+        const nameCell = document.createElement('td');
+        if (friend.code) {
+          const link = document.createElement('a');
+          link.className = 'friend-name-link';
+          link.href = '/c/' + encodeURIComponent(friend.code);
+          link.textContent = friend.name;
+          nameCell.appendChild(link);
+        } else {
+          nameCell.textContent = friend.name;
+        }
+        row.appendChild(nameCell);
+
+        const removeCell = document.createElement('td');
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'trash-delete-btn friend-remove-btn';
+        removeBtn.setAttribute('aria-label', 'Remove friend');
+        removeBtn.setAttribute('data-tooltip', 'Remove friend');
+        removeBtn.innerHTML = REMOVE_FRIEND_ICON_SVG + '<span class="trash-delete-confirm">SURE?</span>';
+        wireTrashDeleteBtn(removeBtn, async () => {
+          clearFriendsMessages();
+          removeBtn.disabled = true;
+          try {
+            const res = await fetch(`/api/friends/${friend.id}`, { method: 'DELETE' });
+            if (res.ok) {
+              await loadFriends();
+              return;
+            }
+            const data = await res.json().catch(() => ({}));
+            showFriendsError(describeError(data, 'Could not remove this friend.'));
+            removeBtn.classList.remove('trash-delete-btn--confirm');
+          } catch (err) {
+            showFriendsError('Something went wrong. Please try again.');
+            removeBtn.classList.remove('trash-delete-btn--confirm');
+          } finally {
+            removeBtn.disabled = false;
+          }
+        });
+        removeCell.appendChild(removeBtn);
+        row.appendChild(removeCell);
+
+        return row;
+      }
+
+      function showFriendsHint(message) {
+        friendsHint.textContent = message;
+        friendsHint.hidden = false;
+        friendsBody.hidden = true;
+        friendsCodeWrap.hidden = true;
+      }
+
+      async function loadFriends() {
+        clearFriendsMessages();
+        try {
+          const res = await fetch('/api/friends');
+          if (res.status === 403) {
+            showFriendsHint('Verify your email to use friends.');
+            return;
+          }
+          if (res.status === 409) {
+            showFriendsHint('Add a character to use friends.');
+            return;
+          }
+          if (!res.ok) {
+            showFriendsError('Could not load your friends.');
+            return;
+          }
+          const data = await res.json();
+          if (data.linked === false) {
+            showFriendsHint('Link this character to use friends.');
+            return;
+          }
+          friendsHint.hidden = true;
+          friendsBody.hidden = false;
+          friendsCode = data.code || '';
+          friendsCodeBtn.textContent = friendsCode;
+          friendsCodeWrap.hidden = !friendsCode;
+
+          friendsRequestsList.innerHTML = '';
+          data.incoming.forEach((request) => friendsRequestsList.appendChild(renderFriendRequestRow(request)));
+          friendsRequests.hidden = data.incoming.length === 0;
+
+          friendsTableBody.innerHTML = '';
+          if (data.friends.length === 0) {
+            friendsTableWrap.style.display = 'none';
+            friendsEmpty.style.display = '';
+          } else {
+            friendsEmpty.style.display = 'none';
+            friendsTableWrap.style.display = '';
+            data.friends.forEach((friend) => friendsTableBody.appendChild(renderFriendRow(friend)));
+          }
+        } catch (err) {
+          showFriendsError('Something went wrong. Please try again.');
+        }
+      }
+
+      friendsAddForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        clearFriendsMessages();
+        const code = friendsAddInput.value.trim();
+        if (!code) return;
+        friendsAddBtn.disabled = true;
+        try {
+          const res = await fetch('/api/friends/requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: code }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            friendsAddInput.value = '';
+            showFriendsSuccess(
+              data.status === 'accepted'
+                ? `You and ${data.name} are now friends.`
+                : `Friend request sent to ${data.name}.`
+            );
+            if (data.status === 'accepted') {
+              await loadFriends();
+              showFriendsSuccess(`You and ${data.name} are now friends.`);
+              refreshHeaderFriendBadge();
+            }
+            return;
+          }
+          showFriendsError(describeError(data, 'Could not send that request.'));
+        } catch (err) {
+          showFriendsError('Something went wrong. Please try again.');
+        } finally {
+          friendsAddBtn.disabled = false;
+        }
+      });
+
+      // The header's poll (see _shell) broadcasts each result -- when
+      // the per-character counts change (a request arrived for some
+      // character, or one was answered elsewhere), rebuild the
+      // character cards' badges and, since the active character's
+      // incoming-requests block may have changed too, the Friends
+      // section along with them (loadGameAccounts ends by reloading it).
+      window.addEventListener('myscape:friend-notifications', (e) => {
+        const next = e.detail || { total: 0, byCharacter: {} };
+        const changed = JSON.stringify(friendNotif.byCharacter) !== JSON.stringify(next.byCharacter);
+        friendNotif = next;
+        if (changed) loadGameAccounts();
+      });
 
       loadGameAccounts();
       loadSharedLinks();

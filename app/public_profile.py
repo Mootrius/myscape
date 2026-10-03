@@ -25,7 +25,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import GameAccount, _as_aware_utc, _utcnow
+from app.models import Friendship, GameAccount, _as_aware_utc, _utcnow
 
 CODE_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz"
 CODE_LENGTH = 5
@@ -150,3 +150,50 @@ def find_public_game_account(db: Session, raw_code: str) -> Optional[GameAccount
         .filter(GameAccount.public_code == normalized, GameAccount.is_public_profile.is_(True))
         .first()
     )
+
+
+def find_game_account_by_code(db: Session, raw_code: str) -> Optional[GameAccount]:
+    """Resolves a code (any case) to its GameAccount regardless of
+    whether the profile is public -- what the friends feature needs,
+    since the code doubles as the friend code and every character has
+    one whether or not their profile is public. NEVER use this to
+    decide who can see a Character Overview; that's
+    find_public_game_account / find_viewable_game_account."""
+    normalized = normalize_public_code(raw_code)
+    if not normalized:
+        return None
+    return db.query(GameAccount).filter(GameAccount.public_code == normalized).first()
+
+
+def are_friends(db: Session, a_id, b_id) -> bool:
+    """True if an *accepted* friendship exists between these two
+    characters, in either direction."""
+    return (
+        db.query(Friendship.id)
+        .filter(
+            Friendship.status == "accepted",
+            (
+                ((Friendship.requester_id == a_id) & (Friendship.addressee_id == b_id))
+                | ((Friendship.requester_id == b_id) & (Friendship.addressee_id == a_id))
+            ),
+        )
+        .first()
+        is not None
+    )
+
+
+def find_viewable_game_account(db: Session, raw_code: str, viewer: Optional[GameAccount]) -> Optional[GameAccount]:
+    """find_public_game_account, plus the friends exception: a private
+    profile is also viewable by the signed-in session's active
+    character if it's the profile's own character or an accepted
+    friend of it. None otherwise -- the same single result as "no such
+    code", so the 404 still can't tell a wrong code from a private
+    profile the viewer isn't friends with."""
+    game_account = find_game_account_by_code(db, raw_code)
+    if game_account is None:
+        return None
+    if game_account.is_public_profile:
+        return game_account
+    if viewer is not None and (viewer.id == game_account.id or are_friends(db, viewer.id, game_account.id)):
+        return game_account
+    return None

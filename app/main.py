@@ -124,7 +124,7 @@ from app.pages import (
     render_verify_email,
     render_verify_email_required,
 )
-from app.public_profile import find_public_game_account, format_cooldown_remaining, generate_public_code, regenerate_cooldown_remaining
+from app.public_profile import find_public_game_account, find_viewable_game_account, format_cooldown_remaining, generate_public_code, regenerate_cooldown_remaining
 from app.possessions import (
     build_possession_views,
     build_possessions_share_snapshot,
@@ -151,7 +151,7 @@ from app.purchase_goals import (
 )
 from app.recipes import expand_recipe_components
 from app.sharing import SHARE_DEFAULT_LIFETIME, find_valid_share, generate_share_code
-from app.routers import account, auth, linking
+from app.routers import account, auth, friends, linking
 from app.schemas import (
     AddMindMapNodeRequest,
     AddMindMapSharedChildRequest,
@@ -449,6 +449,7 @@ app.add_middleware(
 )
 app.include_router(account.router)
 app.include_router(auth.router)
+app.include_router(friends.router)
 app.include_router(linking.router)
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -1919,8 +1920,14 @@ def update_model_viewer_background(
 # one public profile (one page load, five fetches) never notices it,
 # while still bounding how fast the ~28.6 million possible codes could
 # ever be enumerated from one address.
-def _get_public_game_account_or_404(db: Session, code: str) -> GameAccount:
-    game_account = find_public_game_account(db, code)
+def _get_public_game_account_or_404(
+    db: Session, code: str, viewer: Optional[GameAccount] = None
+) -> GameAccount:
+    """404s unless the profile is public OR the signed-in session's
+    active character (`viewer`) is the profile's own character or an
+    accepted friend of it -- see find_viewable_game_account in
+    app/public_profile.py. Same single 404 either way."""
+    game_account = find_viewable_game_account(db, code, viewer)
     if game_account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
     return game_account
@@ -1928,32 +1935,57 @@ def _get_public_game_account_or_404(db: Session, code: str) -> GameAccount:
 
 @app.get("/api/public/{code}/summary")
 @limiter.limit("30/minute")
-def public_character_overview_summary(code: str, request: Request, db: Session = Depends(get_db)):
-    return _character_overview_summary_payload(_get_public_game_account_or_404(db, code))
+def public_character_overview_summary(
+    code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
+):
+    return _character_overview_summary_payload(_get_public_game_account_or_404(db, code, viewer))
 
 
 @app.get("/api/public/{code}/progress")
 @limiter.limit("30/minute")
-def public_character_overview_progress(code: str, request: Request, db: Session = Depends(get_db)):
-    return _character_overview_progress_payload(_get_public_game_account_or_404(db, code))
+def public_character_overview_progress(
+    code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
+):
+    return _character_overview_progress_payload(_get_public_game_account_or_404(db, code, viewer))
 
 
 @app.get("/api/public/{code}/skills")
 @limiter.limit("30/minute")
-def public_skills(code: str, request: Request, db: Session = Depends(get_db)):
-    return _skills_payload(_get_public_game_account_or_404(db, code))
+def public_skills(
+    code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
+):
+    return _skills_payload(_get_public_game_account_or_404(db, code, viewer))
 
 
 @app.get("/api/public/{code}/collection-log")
 @limiter.limit("30/minute")
-def public_collection_log(code: str, request: Request, db: Session = Depends(get_db)):
-    return _collection_log_payload(_get_public_game_account_or_404(db, code))
+def public_collection_log(
+    code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
+):
+    return _collection_log_payload(_get_public_game_account_or_404(db, code, viewer))
 
 
 @app.get("/api/public/{code}/model")
 @limiter.limit("30/minute")
-def public_character_overview_model(code: str, request: Request, db: Session = Depends(get_db)):
-    return _character_overview_model_response(_get_public_game_account_or_404(db, code))
+def public_character_overview_model(
+    code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
+):
+    return _character_overview_model_response(_get_public_game_account_or_404(db, code, viewer))
 
 
 @app.get("/c/{code}", response_class=HTMLResponse)
@@ -1963,6 +1995,7 @@ def public_character_overview_page(
     request: Request,
     db: Session = Depends(get_db),
     viewer: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
+    viewer_game_account: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
     """The actual shared-link page -- reuses
     render_character_overview's own panel markup verbatim (see
@@ -1974,7 +2007,9 @@ def public_character_overview_page(
     gets (see _styled_not_found_handler above) -- not a special
     "this profile is private" page, so a guess can't tell a wrong code
     apart from a real, private one."""
-    game_account = find_public_game_account(db, code)
+    # Friends (and the owner) can open a private profile too -- see
+    # find_viewable_game_account.
+    game_account = find_viewable_game_account(db, code, viewer_game_account)
     if game_account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
     return render_public_character_overview(game_account, viewer)

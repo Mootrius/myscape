@@ -20,7 +20,8 @@ from app.auth import (
 )
 from app.database import get_db
 from app.limiter import limiter
-from app.models import LINK_CODE_LIFETIME, Account, GameAccount, LinkCode, PlayerApiKey
+from app.models import LINK_CODE_LIFETIME, Account, Friendship, GameAccount, LinkCode, PlayerApiKey
+from app.public_profile import generate_public_code
 from app.schemas import GameAccountSummary, LinkExchangeRequest, LinkExchangeResponse, LinkStartResponse
 from app.security import generate_token, hash_token
 
@@ -47,6 +48,12 @@ def revoke_link(db: Session, game_account: GameAccount) -> None:
             api_key.revoked_at = now
     game_account.account_hash = None
     game_account.runescape_name = None
+    # Friendships are with the *character*, and this slot can be
+    # relinked to a different OSRS character afterward -- so every
+    # friend and pending request goes with the link.
+    db.query(Friendship).filter(
+        (Friendship.requester_id == game_account.id) | (Friendship.addressee_id == game_account.id)
+    ).delete(synchronize_session=False)
     db.commit()
 
 
@@ -127,6 +134,10 @@ def exchange_link_code(
     game_account.account_hash = payload.account_hash
     if payload.runescape_name:
         game_account.runescape_name = payload.runescape_name
+    # Every linked character gets a code right away (private profile by
+    # default, so nothing is exposed) -- it doubles as the friend code.
+    if not game_account.public_code:
+        game_account.public_code = generate_public_code(db)
 
     raw_api_key = generate_token()
     api_key = PlayerApiKey(game_account_id=game_account.id, key_hash=hash_token(raw_api_key))

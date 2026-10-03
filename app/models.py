@@ -500,6 +500,14 @@ class GameAccount(Base):
     possession_views = relationship("PossessionView", back_populates="game_account", cascade="all, delete-orphan")
     goals = relationship("Goal", back_populates="game_account", cascade="all, delete-orphan")
     shared_content = relationship("SharedContent", back_populates="game_account", cascade="all, delete-orphan")
+    # Friend requests/friendships this character sent and received --
+    # see Friendship below. Deleting the character deletes both sets.
+    friendships_sent = relationship(
+        "Friendship", foreign_keys="Friendship.requester_id", back_populates="requester", cascade="all, delete-orphan"
+    )
+    friendships_received = relationship(
+        "Friendship", foreign_keys="Friendship.addressee_id", back_populates="addressee", cascade="all, delete-orphan"
+    )
 
 
 class LinkCode(Base):
@@ -1702,3 +1710,37 @@ class SharedContent(Base):
     @property
     def is_valid(self) -> bool:
         return _utcnow() < _as_aware_utc(self.expires_at)
+
+
+class Friendship(Base):
+    """A friend request (status "pending") or an accepted friendship
+    (status "accepted") between two GameAccounts -- friends are per
+    *character*, not per login, since that's where the Character
+    Overview privacy setting lives. requester_id is whoever sent the
+    request, addressee_id whoever has to accept it; once accepted the
+    direction no longer matters (both sides see each other's Character
+    Overview even while it's private -- see find_viewable_game_account
+    in app/public_profile.py). At most one row exists per pair of
+    characters in either direction: a request sent while the other
+    side's request is already pending just accepts that one instead
+    (see send_friend_request in app/routers/friends.py).
+
+    Declining or removing deletes the row outright, so there's no
+    "declined"/"removed" state to remember. Rows for a character are
+    also deleted whenever it's unlinked (revoke_link in
+    app/routers/linking.py -- the slot can be relinked to a *different*
+    OSRS character afterward, and friendships are with the character,
+    not the slot) or deleted (cascade on GameAccount above)."""
+
+    __tablename__ = "friendships"
+    __table_args__ = (UniqueConstraint("requester_id", "addressee_id", name="uq_friendships_pair"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    requester_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False, index=True)
+    addressee_id = Column(UUID(as_uuid=True), ForeignKey("game_accounts.id"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="pending", server_default="pending")
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    responded_at = Column(DateTime(timezone=True), nullable=True)
+
+    requester = relationship("GameAccount", foreign_keys=[requester_id], back_populates="friendships_sent")
+    addressee = relationship("GameAccount", foreign_keys=[addressee_id], back_populates="friendships_received")
