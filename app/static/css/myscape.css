@@ -1887,3 +1887,15 @@ body.landing .footer-inner {
 }
 #emailToggleBtn.active,
 #passwordToggleBtn.active { color: var(--gold); }
+
+/* Thin darker separators between header cells, on both the Shared Links
+   and Friends tables. The Shared Links header had been showing these
+   only by accident (sub-pixel seams between its fractional-width sticky
+   cells -- which cells showed one depended on the display's scaling),
+   so they're drawn deliberately now, the same on every display: an
+   inset shadow rather than a border so it travels with the sticky
+   header cell when the list scrolls, and never shifts the layout. */
+.shared-links-table th:not(:first-child),
+.friends-table th:not(:first-child) {
+  box-shadow: inset 1px 0 0 var(--panel);
+}
