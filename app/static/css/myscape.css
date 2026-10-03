@@ -1904,3 +1904,9 @@ body.landing .footer-inner {
 .friends-table th:not(:first-child) {
   box-shadow: inset 1px 0 0 var(--panel);
 }
+
+/* The DELETE ACCOUNT warning (render_account) -- centered, with its key
+   words (PERMANENTLY / CANNOT) picked out in the same red as the DELETE
+   ACCOUNT button itself. */
+.account-section-hint--center { text-align: center; }
+.account-hint-emphasis { color: var(--red); }
