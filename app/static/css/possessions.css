@@ -480,10 +480,11 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 }
 
 /* GE/HA's Stack/Single toggle -- sits to the left of the Value field
-   itself rather than above it, so it never costs the popover its own
-   row. Sized to the input's own 28px height (rather than reusing the
-   22px item/tradeable/operator segmented-control height elsewhere in
-   this popover) so the two line up cleanly as one visual row; flex
+   (or, in Between mode, the Min/Max pair -- see below) rather than
+   above it, so it never costs the popover its own row. Sized to the
+   input's own 28px height (rather than reusing the 22px item/
+   tradeable/operator segmented-control height elsewhere in this
+   popover) so the two line up cleanly as one visual row; flex
    centering on each segment button is what gets an exact 28px match
    regardless of this button's own font metrics, the same problem the
    operator row's explicit line-height solved a different way. */
@@ -508,6 +509,16 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-filter-input-pair { display: flex; align-items: center; gap: 6px; }
 .pm-filter-input-pair .pm-filter-input { flex: 1 1 0; min-width: 0; }
 .pm-filter-input-pair-sep { color: var(--text-faint); font-size: 11px; flex: 0 0 auto; }
+/* The Between row's Min/Max pair is itself a flex child of
+   .pm-filter-value-row now (see filterPopoverHtml in app/pages.py),
+   same as the Value input it swaps places with -- this is what lets
+   it share a row with GE/HA's Stack/Single toggle instead of needing
+   one of its own, and what keeps every numeric column's popover the
+   same height switching in or out of Between, since there's only
+   ever this one row to begin with. flex: 1 1 auto here matches the
+   sibling Value input's own rule two rules up, so whichever of the
+   two is visible fills the same remaining space the same way. */
+.pm-filter-value-row .pm-filter-input-pair { flex: 1 1 auto; min-width: 0; }
 .pm-filter-popover-actions { display: flex; gap: 8px; margin-top: 2px; }
 .pm-filter-popover-actions button {
   flex: 1 1 auto; height: 28px; box-sizing: border-box;

@@ -15388,29 +15388,39 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
           var placeholder = NUMERIC_PLACEHOLDERS[col] || 'Value';
           // GE/HA only -- lets a player filter by either the stack
           // total (price * quantity, this column's own default/
-          // displayed number) or the single per-unit price. Sits
-          // beside the Value field rather than above it so it never
-          // costs its own row, and stays visible even while Between
-          // is selected and the Value field itself is hidden (it's a
-          // flex sibling of that input, not nested inside it), since
-          // Stack/Single still governs what the Min/Max fields below
-          // are being compared against either way.
+          // displayed number) or the single per-unit price. A flex
+          // sibling of the Value input (and, in Between mode, of the
+          // Min/Max pair -- see below) inside the one shared
+          // .pm-filter-value-row, rather than a row of its own, so it
+          // never costs any extra height and stays visible regardless
+          // of which of those two the player is currently looking at,
+          // since Stack/Single still governs what either one is being
+          // compared against.
           var showStackToggle = (col === 'ge' || col === 'ha');
           var valueMode = showStackToggle ? ((current && current.valueMode) || 'stack') : null;
+          // The Min/Max pair lives INSIDE .pm-filter-value-row too --
+          // a third flex sibling alongside the Stack/Single toggle
+          // and the Value input, not a separate row below them -- so
+          // switching Between on/off only ever swaps which sibling is
+          // visible (Value vs. this pair) within the SAME single row,
+          // instead of leaving one row empty-but-still-gapped while a
+          // whole new one appears. That's what keeps the popover's
+          // own height constant across every op, and what puts GE/
+          // HA's Min/Max beside Stack/Single rather than below it.
           var valueRow = (
             '<div class="pm-filter-value-row">' +
             (showStackToggle ? segmentGroupHtml('stackMode', STACK_MODE_OPTIONS, valueMode) : '') +
             '<input type="text" inputmode="decimal" class="pm-filter-input" data-role="value" placeholder="' + placeholder + '" value="' + value + '"' + (isBetween ? ' style="display:none;"' : '') + ' />' +
-            '</div>'
-          );
-          return (
-            segmentGroupHtml('op', NUMERIC_OP_OPTIONS, op) +
-            valueRow +
             '<div class="pm-filter-input-pair" data-role="between-row"' + (isBetween ? '' : ' style="display:none;"') + '>' +
             '<input type="text" inputmode="decimal" class="pm-filter-input" data-role="min" placeholder="Min" value="' + min + '" />' +
             '<span class="pm-filter-input-pair-sep">&ndash;</span>' +
             '<input type="text" inputmode="decimal" class="pm-filter-input" data-role="max" placeholder="Max" value="' + max + '" />' +
             '</div>' +
+            '</div>'
+          );
+          return (
+            segmentGroupHtml('op', NUMERIC_OP_OPTIONS, op) +
+            valueRow +
             actions
           );
         }
