@@ -15751,11 +15751,36 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
           // Which location-filter GROUPS are active travels straight
           // into the GENERATE SHAREABLE LINK request body (see
           // pmShareGenerateBtn's own activeLocations below) -- see
-          // resetPossessionsShareState's own comment above.
+          // resetPossessionsShareState's own comment above. It's also
+          // now part of what a saved view's own config captures (see
+          // currentConfigSnapshot/applyView below), so a hand click
+          // here needs to drop any view's highlight the same way the
+          // sort header and the per-column filter Apply/Clear buttons
+          // already do -- otherwise a view's chip would keep reading
+          // "active" even once the locations on screen no longer
+          // match what that view actually saved.
           resetPossessionsShareState();
+          clearActiveViewHighlight();
           renderTable();
         });
       });
+
+      // Syncs every .pm-filter-btn's own "active" class from
+      // state.locations directly, without going through a real click
+      // -- the exact same allActive check the click handler just
+      // above uses, just read instead of toggled. Needed anywhere
+      // state.locations is set some OTHER way than a player's own
+      // click: applyView (restoring a saved view's own locations) and
+      // the view-chip deselect branch below (resetting back to the
+      // page's all-on default) both call this after writing
+      // state.locations themselves.
+      function updateLocationButtonStates() {
+        document.querySelectorAll('.pm-filter-btn').forEach(function (btn) {
+          var keys = btn.getAttribute('data-locations').split(',');
+          var allActive = keys.every(function (k) { return state.locations[k]; });
+          btn.classList.toggle('active', allActive);
+        });
+      }
 
       // ---- Settings (per-storage on/off, persisted server-side) --------
       // The gear-icon menu next to the location filter buttons -- one
@@ -16257,19 +16282,24 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
 
       // ---- Saved views (named, reorderable, server-persisted -- see
       // PossessionView in app/models.py) -- lets a player switch
-      // between several different filter/sort setups without
-      // re-building each one by hand every time. Unlike gear setups'
-      // OWN icon row (Purchase Goals, wireSetupIconDrag), a view isn't
-      // "active" just by existing -- state.activeViewId only reflects
-      // one that was actually just applied (or saved), and is dropped
-      // the moment the player changes sort/filters by hand (see
-      // clearActiveViewHighlight, called from the sort header click
-      // handler above and every filter Apply/Clear above).
+      // between several different filter/sort/location setups without
+      // re-building each one by hand every time (deliberately NOT the
+      // settings-cog's per-storage checkboxes -- state.enabledStorages
+      // stays a single persisted account-wide setting always, same on
+      // every view, same as it is everywhere else on this page -- see
+      // applyHiddenStorageKeys/HiddenPossessionStorage). Unlike gear
+      // setups' OWN icon row (Purchase Goals, wireSetupIconDrag), a
+      // view isn't "active" just by existing -- state.activeViewId
+      // only reflects one that was actually just applied (or saved),
+      // and is dropped the moment the player changes sort/filters/
+      // locations by hand (see clearActiveViewHighlight, called from
+      // the sort header click handler above, every filter Apply/Clear
+      // above, and the .pm-filter-btn click handler further above).
 
       var viewDragSuppressClick = false;
 
       function currentConfigSnapshot() {
-        return { sortKey: state.sortKey, sortDir: state.sortDir, filters: state.filters };
+        return { sortKey: state.sortKey, sortDir: state.sortDir, filters: state.filters, locations: state.locations };
       }
 
       function clearActiveViewHighlight() {
@@ -16283,9 +16313,14 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         state.sortKey = config.sortKey || 'ge';
         state.sortDir = config.sortDir || 'desc';
         state.filters = config.filters || {};
+        var savedLocations = config.locations || null;
+        Object.keys(state.locations).forEach(function (k) {
+          state.locations[k] = savedLocations ? !!savedLocations[k] : true;
+        });
         state.activeViewId = view.id;
         updateSortHeaders();
         updateFilterIconStates();
+        updateLocationButtonStates();
         renderViewsRow();
         renderTable();
       }
@@ -16359,7 +16394,8 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
               // back to the page's own plain defaults, same as a fresh
               // load with no view applied.
               state.sortKey = 'ge'; state.sortDir = 'desc'; state.filters = {}; state.activeViewId = null;
-              updateSortHeaders(); updateFilterIconStates(); renderViewsRow(); renderTable();
+              Object.keys(state.locations).forEach(function (k) { state.locations[k] = true; });
+              updateSortHeaders(); updateFilterIconStates(); updateLocationButtonStates(); renderViewsRow(); renderTable();
               return;
             }
             var view = state.views.filter(function (v) { return v.id === id; })[0];
@@ -16740,17 +16776,22 @@ def render_storages_share(share: "SharedContent", game_account: Optional["GameAc
     """myscape.io/s/<code> for a Storages Viewer share (see POST
     /api/possessions/share in app/main.py and build_possessions_share_
     snapshot in app/possessions.py for exactly what's frozen into
-    share.payload) -- a visitor's own read-only view of exactly what
-    the owner had on screen at share time: everything they currently
-    owned (priced, broken down, and marked pinned exactly as build_
+    share.payload) -- a visitor's own view of exactly what the owner
+    had on screen at share time: everything they currently owned
+    (priced, broken down, and marked pinned exactly as build_
     possessions_summary already has it), which raw storages were
     hidden (HiddenPossessionStorage, a real persisted setting), and
     which location-filter GROUPS were active (activeLocations, the
     one piece of this snapshot that ISN'T sitting in a persisted table
-    anywhere -- see that function's own docstring). Nothing live,
-    nothing outside it, same "frozen, point-in-time, never live
-    again" contract render_loot_tracker_share/render_purchase_goals_
-    share above already establish for their own tables.
+    anywhere -- see that function's own docstring) when the link was
+    made. Nothing live, nothing outside it, same "frozen, point-in-
+    time, never live again" contract render_loot_tracker_share/
+    render_purchase_goals_share above already establish for their own
+    tables -- with one narrow exception: the location filter buttons
+    stay interactive for the visitor (see the read-only-surfaces
+    comment below), since re-narrowing them changes only what THIS
+    visitor currently sees, never the frozen snapshot or the owner's
+    own account.
 
     Reuses _possessions_panel_markup's body/script completely
     unmodified, wrapped the same way those two functions already wrap
@@ -16773,21 +16814,10 @@ def render_storages_share(share: "SharedContent", game_account: Optional["GameAc
     second line of defense behind the click listener, not because
     either one is expected to ever actually run.
 
-    Three surfaces this reused panel normally lets a player change are
-    read-only here instead, per explicit instruction -- a visitor can
-    SEE exactly what the owner chose, never change it:
+    Two surfaces this reused panel normally lets a player change stay
+    read-only here, per explicit instruction -- a visitor can SEE
+    exactly what the owner chose, never change it:
 
-    - The location filter buttons (.pm-filter-btn) -- these start
-      ALL-ON by default in the reused script, same as a real page
-      load, since state.locations is never persisted or fetched from
-      anywhere (see that field's own docstring in app/possessions.py);
-      simulating a real click on whichever button groups should
-      actually start OFF, per PAYLOAD.activeLocations, runs that exact
-      same toggle handler -- flipping state.locations, the button's
-      own "active" class, and triggering a re-render -- before the
-      capturing-phase listener below starts blocking every FURTHER
-      click; this is the only point where a "click" on one of these
-      buttons is still allowed to do anything.
     - The settings-cog's per-storage checkboxes (.pm-settings-item) --
       these already start checked/unchecked correctly on their own,
       no simulated clicks needed, since applyHiddenStorageKeys
@@ -16801,18 +16831,33 @@ def render_storages_share(share: "SharedContent", game_account: Optional["GameAc
       summary's own docstring in app/possessions.py), no extra work
       needed to show it right.
 
-    All three are locked against further clicks the same way -- one
-    delegated, capturing-phase listener on document (added only AFTER
-    the activeLocations simulation above, so it doesn't block that)
-    that stops a click on any of them dead before the reused script's
-    own bubble-phase handlers ever see it, same technique (and same
-    "stops this before it can fire, not just visually") as
-    #pgGearFrame's own mousedown/dragstart/click listener in
-    render_purchase_goals_share. The settings-cog TRIGGER button
-    itself (#pmSettingsBtn, opens/closes the menu, no network call
-    either way) is deliberately left clickable -- per explicit
-    instruction a visitor can still SEE what's selected inside, just
-    never change it.
+    Both are locked against further clicks the same way -- one
+    delegated, capturing-phase listener on document that stops a click
+    on either of them dead before the reused script's own bubble-phase
+    handlers ever see it, same technique (and same "stops this before
+    it can fire, not just visually") as #pgGearFrame's own mousedown/
+    dragstart/click listener in render_purchase_goals_share. The
+    settings-cog TRIGGER button itself (#pmSettingsBtn, opens/closes
+    the menu, no network call either way) is deliberately left
+    clickable -- per explicit instruction a visitor can still SEE
+    what's selected inside, just never change it.
+
+    The location filter buttons (.pm-filter-btn) are the one exception
+    to "read-only" here, per explicit instruction -- a visitor CAN
+    toggle these, same as the owner could on the real page, since
+    state.locations is never persisted or fetched from anywhere in the
+    first place (see that field's own docstring in app/possessions.py)
+    -- there is nothing for a visitor's own click to overwrite or leak
+    into the owner's account, it only ever changes what THIS visitor,
+    on THIS load of the share page, currently sees. These still start
+    out matching exactly what the owner had on screen at share time:
+    simulating a real click on whichever button groups should actually
+    start OFF, per PAYLOAD.activeLocations, runs that exact same
+    toggle handler -- flipping state.locations, the button's own
+    "active" class, and triggering a re-render -- before this page
+    even finishes loading; every click after that, including the
+    visitor's own, keeps running that same unmodified handler, now
+    with nothing blocking it.
 
     #pmViewsRow (the saved-filter-preset chips underneath the search/
     location/settings row) is hidden outright via CSS instead (see
@@ -16977,7 +17022,7 @@ def render_storages_share(share: "SharedContent", game_account: Optional["GameAc
       }});
 
       document.addEventListener('click', function (e) {{
-        if (e.target.closest('.pm-filter-btn') || e.target.closest('.pm-pin-btn') || e.target.closest('.pm-settings-item')) {{
+        if (e.target.closest('.pm-pin-btn') || e.target.closest('.pm-settings-item')) {{
           e.stopImmediatePropagation();
           e.preventDefault();
         }}
