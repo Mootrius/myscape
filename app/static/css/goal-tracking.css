@@ -370,14 +370,15 @@
    pairs, just a two-up toggle rather than a single button, and the
    same site-wide 25px button height every other button/toggle on the
    site shares (see .gt-wizard-btn's own comment above). */
-.gt-metric-toggle { display: flex; gap: 0; height: 25px; width: 108px; flex: none; }
+.gt-metric-toggle { display: flex; gap: 0; height: 25px; width: 108px; flex: none; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-metric-btn {
   flex: 1 1 50%;
   height: 100%;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  background: #100e0b;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-dim);
   font-family: inherit;
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -389,15 +390,13 @@
   justify-content: center;
 }
 
-/* Only suppressed when NOT active -- keeping it unconditional (the
-   original bug) meant the active Lvl button's right edge never got
-   its own gold border back, so the gold outline looked broken on
-   that one side while the other three sides highlighted normally. */
-.gt-metric-btn:first-child:not(.active) { border-right: none; }
+/* 1px divider between segments; the last one has none (the toggle's
+   own border closes it off). */
+.gt-metric-btn:last-child { border-right: none; }
 
 .gt-metric-btn:hover { color: var(--text); }
 
-.gt-metric-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+.gt-metric-btn.active { background: var(--panel-2); color: var(--gold); }
 
 /* Same segmented-pair idea as .gt-metric-toggle above (reused look,
    own class -- this is a different CHOICE about the same target-value
@@ -409,14 +408,15 @@
    the same size its old wrapping .gt-field-target-mode flex-basis
    gave it, sized for "GAIN"/"REACH" being longer than Lvl/XP's own
    2-3 letters) rather than relying on a flex sibling to size it. */
-.gt-target-mode-toggle { display: flex; gap: 0; height: 25px; width: 128px; flex: none; }
+.gt-target-mode-toggle { display: flex; gap: 0; height: 25px; width: 128px; flex: none; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-target-mode-btn {
   flex: 1 1 50%;
   height: 100%;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  background: #100e0b;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-dim);
   font-family: inherit;
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -428,14 +428,11 @@
   justify-content: center;
 }
 
-/* Same first-child border fix as .gt-metric-btn's own -- see its
-   comment just above for why this only suppresses the seam while
-   NOT active. */
-.gt-target-mode-btn:first-child:not(.active) { border-right: none; }
+.gt-target-mode-btn:last-child { border-right: none; }
 
 .gt-target-mode-btn:hover { color: var(--text); }
 
-.gt-target-mode-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+.gt-target-mode-btn.active { background: var(--panel-2); color: var(--gold); }
 
 /* A one-time skill goal on LEVEL -- see targetModeVisible/
    wireTargetModeToggle in the script -- renders this toggle rather
@@ -446,7 +443,7 @@
    its normal, interactive state. Neither button carries .active while
    this class is present either (see wireTargetModeToggle's own
    applies && check) -- .gt-target-mode-btn's plain, un-highlighted
-   look (gray border, muted text) is what both buttons fall back to,
+   look (near-black segments, dim text) is what both buttons fall back to,
    so nothing reads as "chosen" on a goal type where that choice isn't
    real yet. Switching to XP re-wires this toggle from scratch with
    GAIN selected (see the metric toggle's own click handler) rather
@@ -498,16 +495,15 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
    own justify-content: center is what centers this narrower-than-
    before control under the row above it now that it no longer
    stretches to fill the row's full width. */
-.gt-recur-unit-toggle { display: flex; height: 25px; flex: none; width: 266px; }
+.gt-recur-unit-toggle { display: flex; height: 25px; flex: none; width: 266px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-recur-unit-btn {
-  flex: 0 0 54px;
-  width: 54px;
+  flex: 1 1 0;
   height: 100%;
-  margin-left: -1px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  background: #100e0b;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-dim);
   font-family: inherit;
   font-size: 10px;
   letter-spacing: 0.03em;
@@ -519,11 +515,11 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
   justify-content: center;
 }
 
-.gt-recur-unit-btn:first-child { margin-left: 0; }
+.gt-recur-unit-btn:last-child { border-right: none; }
 
-.gt-recur-unit-btn:hover { color: var(--text); position: relative; z-index: 1; }
+.gt-recur-unit-btn:hover { color: var(--text); }
 
-.gt-recur-unit-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); position: relative; z-index: 1; }
+.gt-recur-unit-btn.active { background: var(--panel-2); color: var(--gold); }
 
 /* Stage 5 (recurring goals only) -- when this goal's cadence starts.
    Same three-row shape stage 4 uses (.gt-wizard-stage2/.gt-wizard-
@@ -561,14 +557,15 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
    longer than "REACH", the longest word either of THAT toggle's two
    segments ever has to fit, so this one needs a little more room to
    keep the same comfortable side padding around its own longer label. */
-.gt-recur-start-toggle { display: flex; gap: 0; height: 25px; width: 140px; flex: none; }
+.gt-recur-start-toggle { display: flex; gap: 0; height: 25px; width: 140px; flex: none; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-recur-start-btn {
   flex: 1 1 50%;
   height: 100%;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  background: #100e0b;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-dim);
   font-family: inherit;
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -580,14 +577,11 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
   justify-content: center;
 }
 
-/* Same first-child border fix as .gt-metric-btn/.gt-target-mode-btn's
-   own -- see either one's own comment for why this only suppresses the
-   seam while NOT active. */
-.gt-recur-start-btn:first-child:not(.active) { border-right: none; }
+.gt-recur-start-btn:last-child { border-right: none; }
 
 .gt-recur-start-btn:hover { color: var(--text); }
 
-.gt-recur-start-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+.gt-recur-start-btn.active { background: var(--panel-2); color: var(--gold); }
 
 .gt-field-target-search { position: relative; }
 
@@ -1233,3 +1227,5 @@ input[type="text"].invalid { border-color: var(--red); }
    preview's own #gtWizard hide above already uses, just scoped to
    .goal-tracking-share instead of .landing-goal-tracking-preview. */
 .goal-tracking-share .gt-wizard { display: none; }
+
+/* Segmented-control look shared site-wide (standardized on the Storages viewer's .pm-segment-btn): near-black idle segments, the active one a --panel-2 fill with gold text, 1px dividers between segments inside one outer border. (.gt-metric-btn, .gt-target-mode-btn, .gt-recur-unit-btn and .gt-recur-start-btn above.) */

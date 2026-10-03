@@ -1275,37 +1275,25 @@
    keeps to its own file. flex: 0 0 auto (not Mindmaps' own full-width
    100%) since this group sits beside the link field/buttons in one
    row rather than stacked above a form of its own. Hover/selection
-   coloring below is the Goal Tracking wizard's own .gt-metric-btn
-   (Lvl/Xp) treatment instead, though -- a gold BORDER on the active
-   segment rather than Mindmaps' gold TEXT, per explicit instruction
-   to match that control instead. overflow: hidden keeps the group's
-   own rounded corners intact now that each button draws its own
-   square-cornered border inside it (not a container border any
-   more -- see .public-profile-seg-btn's own comment below). */
+   coloring follows the site-wide segmented-control look (see
+   .public-profile-seg-btn's own comment below). */
 .public-profile-seg-group {
   display: flex;
   flex: 0 0 auto;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
-/* Each segment gets its own full border (not just a shared border-
-   right divider the way this used to work) so there's an actual
-   border to turn gold on .active below, same structure .gt-metric-btn
-   uses. first-child:not(.active) drops its own right edge so the
-   non-active default state still shows just one shared divider line
-   between the two buttons rather than a doubled seam -- restored
-   when that button IS active, so its own gold outline doesn't come
-   up short on that one side (same fix, same reasoning, as .gt-metric-
-   btn:first-child:not(.active) in goal-tracking.css). */
+/* Same segmented-control look as the Storages viewer's .pm-segment-btn
+   (and every other segmented control on the site): near-black idle
+   segments, the active one a lighter --panel-2 fill with gold text,
+   a 1px divider between segments inside the group's own border. */
 .public-profile-seg-btn {
-  height: 25px;
-  /* --panel-2 (lighter) by default, --panel (darker) once active --
-     same light-gray-unless-selected/darker-when-selected convention
-     as .gt-metric-btn (goal-tracking.css), not this control's own
-     original near-black #100e0b idle state, per explicit instruction
-     to match that control instead. */
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  /* 23px + the group's own 1px top/bottom border = the site-wide 25px. */
+  height: 23px;
+  background: #100e0b;
+  border: none;
+  border-right: 1px solid var(--border);
   color: var(--text-dim);
   font-family: inherit;
   font-size: 15px;
@@ -1318,9 +1306,9 @@
   align-items: center;
   justify-content: center;
 }
-.public-profile-seg-btn:first-child:not(.active) { border-right: none; }
+.public-profile-seg-btn:last-child { border-right: none; }
 .public-profile-seg-btn:hover { color: var(--text); }
-.public-profile-seg-btn.active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+.public-profile-seg-btn.active { background: var(--panel-2); color: var(--gold); }
 .public-profile-seg-btn:disabled { cursor: default; opacity: 0.7; }
 
 /* Click-to-copy/Generate new link -- same site-wide button
