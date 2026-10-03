@@ -672,27 +672,26 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
    own CSS file" convention every page here already follows. Hidden
    whenever the list itself is (see renderGoalList) -- sorting an
    empty list has nothing to show for it. */
-/* 9 buttons now (8 direction-paired + Custom) instead of the original
-   4 unpaired ones -- see the body's own #gtSortTabs markup -- but
-   still one row, same as loot-tracker.css's own single-row
-   .loot-sort-tabs manages for its 8 (7 sort tabs + the eye toggle).
-   "Progress" is the longest label here (longer than anything in that
-   row, which maxes out at "Recent"), so fitting a 9th button next to
-   it needed a further trim below loot-tracker.css's own numbers --
-   smaller gap, tighter padding, smaller font/letter-spacing, and no
-   nowrap -- a label that still doesn't fit at its button's own share
-   of the row (mainly "Progress ↓"/"Progress ↑" on a narrow screen)
-   wraps onto a second line within that one button rather than
-   pushing any other button down, so the tab ROW itself always stays
-   a single line regardless of viewport width. */
-.gt-sort-tabs { display: flex; gap: 3px; margin-bottom: 14px; }
+/* 5 buttons now -- one per metric (Progress/Type/A-Z/Time), each
+   toggling its own ascending/descending direction in place via its
+   own .gt-sort-arrow child span, plus Custom -- same single-button-
+   per-metric convention Loot Tracker's own .loot-sort-tab row and
+   Purchase Goals' own .sort-btn row already use (see each file's own
+   comment), replacing what used to be 8 direction-paired buttons (4
+   metrics x asc/desc) plus Custom. Same 25px box model those two
+   already share -- see loot-tracker.css's own comment on why that
+   number is pinned sitewide -- rather than this page's old, much
+   smaller/tighter sizing that only existed to cram 9 buttons into one
+   row. */
+.gt-sort-tabs { display: flex; gap: 5px; margin-bottom: 14px; }
 
 .gt-sort-tab {
   flex: 1;
-  padding: 5px 1px;
-  font-size: 8px;
-  line-height: 1.3;
-  letter-spacing: 0.01em;
+  height: 25px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--text-dim);
   background: var(--panel-2);
@@ -704,6 +703,11 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 
 .gt-sort-tab:hover { border-color: var(--gold-dim); color: var(--text); }
 .gt-sort-tab.active { border-color: var(--gold); color: var(--gold); }
+/* Same RuneScapePlain11-has-no-arrow-glyphs fallback-font nudge
+   .loot-sort-arrow already documents in loot-tracker.css -- the
+   browser's fallback glyph for ↓/↑ sits visibly low against this
+   page's own pixel-font label beside it without this. */
+.gt-sort-arrow { position: relative; top: -1px; }
 
 /* Nudge pulse for the CUSTOM tab -- fires when a goal row is
    clicked/dragged in any OTHER sort mode (see glowCustomSortTab in

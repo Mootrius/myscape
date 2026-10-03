@@ -17130,7 +17130,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
     skill_names_json = json.dumps(sorted(SKILL_NAMES))
 
     body = """
-    <h2 class="page-title">Goal Tracking <span class="gt-share-wrap"><button type="button" class="gt-share-icon-btn" id="gtShareIconBtn" aria-label="Export this goal list" title="Export this goal list"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></button><div class="gt-share-card" id="gtShareCard" hidden><button type="button" class="gt-share-generate-btn" id="gtShareGenerateBtn">GENERATE SHAREABLE LINK</button><button type="button" class="gt-share-link-btn" id="gtShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button><p class="gt-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p></div></span></h2>
+    <h2 class="page-title">Goal Tracking <span class="gt-share-wrap"><button type="button" class="gt-share-icon-btn" id="gtShareIconBtn" aria-label="Share your list of goals" data-tooltip="Share your list of goals"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></button><div class="gt-share-card" id="gtShareCard" hidden><button type="button" class="gt-share-generate-btn" id="gtShareGenerateBtn">GENERATE SHAREABLE LINK</button><button type="button" class="gt-share-link-btn" id="gtShareLinkBtn" data-tooltip="Click to copy" hidden></button><p class="gt-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p></div></span></h2>
     <div class="auth-error" id="gtError"></div>
 
     <div class="gt-wizard" id="gtWizard">
@@ -17142,15 +17142,11 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
 
     <div class="gt-card gt-list-card">
       <div class="gt-sort-tabs" id="gtSortTabs">
-        <button type="button" class="gt-sort-tab" data-sort="progress_desc" title="Progress, closest to done first">Progress &darr;</button>
-        <button type="button" class="gt-sort-tab" data-sort="progress_asc" title="Progress, furthest from done first">Progress &uarr;</button>
-        <button type="button" class="gt-sort-tab" data-sort="type_desc" title="Type, Item to KC">Type &darr;</button>
-        <button type="button" class="gt-sort-tab" data-sort="type_asc" title="Type, KC to Item">Type &uarr;</button>
-        <button type="button" class="gt-sort-tab" data-sort="reverse_alphabetical" title="Z to A">A-Z &darr;</button>
-        <button type="button" class="gt-sort-tab" data-sort="alphabetical" title="A to Z">A-Z &uarr;</button>
-        <button type="button" class="gt-sort-tab" data-sort="recent" title="Newest created first">Recent &darr;</button>
-        <button type="button" class="gt-sort-tab" data-sort="oldest" title="Oldest created first">Recent &uarr;</button>
-        <button type="button" class="gt-sort-tab" data-sort="custom">Custom</button>
+        <button type="button" class="gt-sort-tab" data-sort-metric="progress" data-tooltip="Sort by progress">Progress<span class="gt-sort-arrow"></span></button>
+        <button type="button" class="gt-sort-tab" data-sort-metric="type" data-tooltip="Sort by type">Type<span class="gt-sort-arrow"></span></button>
+        <button type="button" class="gt-sort-tab" data-sort-metric="alpha" data-tooltip="Sort alphabetically">A-Z<span class="gt-sort-arrow"></span></button>
+        <button type="button" class="gt-sort-tab" data-sort-metric="time" data-tooltip="Sort by time created">Time<span class="gt-sort-arrow"></span></button>
+        <button type="button" class="gt-sort-tab" data-sort="custom" data-tooltip="Sort by custom order">Custom</button>
       </div>
       <p class="gt-empty" id="gtEmpty" style="display:none;">Add a goal above to start tracking.</p>
       <div class="gt-goal-list" id="gtGoalList"></div>
@@ -18774,7 +18770,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
           '    </div>' +
           '    <div class="gt-goal-bar"><div class="gt-goal-bar-fill" style="width:' + pct + '%"></div></div>' +
           '  </div>' +
-          '  <button type="button" class="gt-goal-delete" data-goal-id="' + g.id + '" title="Delete goal" aria-label="Delete goal">' +
+          '  <button type="button" class="gt-goal-delete" data-goal-id="' + g.id + '" data-tooltip="Delete goal" aria-label="Delete goal">' +
           '    <svg class="gt-goal-delete-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
           '      <path d="M2 4H14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
           '      <path d="M6 4V2.5C6 2.22386 6.22386 2 6.5 2H9.5C9.77614 2 10 2.22386 10 2.5V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
@@ -18848,12 +18844,71 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         return out;
       }
 
-      // Toggles which #gtSortTabs button looks active -- same pattern
-      // Loot Tracker's own updateSortTabs already uses for its two
-      // sort-tab rows, just the one container here.
+      // Maps this page's 9 persisted sort_mode strings (exact server/
+      // API vocabulary -- see GOAL_SORT_MODES in app/schemas.py) to
+      // and from the {metric, dir} pairs the 5-button single-button-
+      // per-metric row below actually clicks through -- same split
+      // Loot Tracker's own splitSort/SORT_METRIC_DEFAULT_DIR pair does
+      // for its own sort tabs, just keyed by full mode string here
+      // (rather than split mechanically on a dash) since these mode
+      // strings don't all share that "metric-dir" shape on their own
+      // (e.g. "reverse_alphabetical" isn't "alpha-desc" to begin
+      // with). Custom has no direction -- it's excluded from both
+      // maps and handled as its own case everywhere below, same as it
+      // always has been.
+      var SORT_MODE_METRIC = {
+        progress_desc: { metric: 'progress', dir: 'desc' },
+        progress_asc: { metric: 'progress', dir: 'asc' },
+        type_desc: { metric: 'type', dir: 'desc' },
+        type_asc: { metric: 'type', dir: 'asc' },
+        alphabetical: { metric: 'alpha', dir: 'asc' },
+        reverse_alphabetical: { metric: 'alpha', dir: 'desc' },
+        recent: { metric: 'time', dir: 'desc' },
+        oldest: { metric: 'time', dir: 'asc' },
+      };
+      var SORT_METRIC_MODE = {
+        progress: { asc: 'progress_asc', desc: 'progress_desc' },
+        type: { asc: 'type_asc', desc: 'type_desc' },
+        alpha: { asc: 'alphabetical', desc: 'reverse_alphabetical' },
+        time: { asc: 'oldest', desc: 'recent' },
+      };
+      // Which direction a metric button starts at on a fresh click
+      // (i.e. when some OTHER metric -- or Custom -- was active) --
+      // same per-metric defaults convention Loot Tracker's own
+      // SORT_METRIC_DEFAULT_DIR uses: alpha defaults ascending (A
+      // first), same as it does there and as Purchase Goals' own A-Z
+      // button does, every other metric defaults descending (closest-
+      // to-done first, Item-before-KC, newest-first).
+      var SORT_METRIC_DEFAULT_DIR = { progress: 'desc', type: 'desc', alpha: 'asc', time: 'desc' };
+
+      // Toggles which #gtSortTabs button looks active and paints its
+      // arrow -- same pattern Loot Tracker's own updateSortTabs
+      // already uses for its two sort-tab rows, just the one
+      // container here, and keyed through SORT_MODE_METRIC above
+      // since this page's buttons carry a bare metric (data-sort-
+      // metric) rather than Loot Tracker's own dash-joined "metric-
+      // dir" sort string. Custom carries no data-sort-metric at all
+      // (just its own literal data-sort="custom", unchanged from
+      // before), so it falls through to comparing GT.sortMode itself
+      // -- it has no arrow span to paint either way.
       function updateSortTabs() {
+        var active = SORT_MODE_METRIC[GT.sortMode];
         document.querySelectorAll('#gtSortTabs .gt-sort-tab').forEach(function (b) {
-          b.classList.toggle('active', b.getAttribute('data-sort') === GT.sortMode);
+          var metric = b.getAttribute('data-sort-metric');
+          // !!(...) matters here, not just style -- active is undefined
+          // whenever GT.sortMode is 'custom' (excluded from
+          // SORT_MODE_METRIC on purpose), and classList.toggle('active',
+          // undefined) doesn't force the class off the way toggle(x,
+          // false) does -- an explicitly-undefined second argument is
+          // WebIDL's own signal for "no force argument was given", so
+          // it just flips whatever the class already was instead,
+          // leaving a previously-active metric button stuck active
+          // forever once Custom is picked. Coercing to a real boolean
+          // first is what makes this an actual force-set every time.
+          var isActive = !!(metric ? (active && active.metric === metric) : (b.getAttribute('data-sort') === GT.sortMode));
+          b.classList.toggle('active', isActive);
+          var arrow = b.querySelector('.gt-sort-arrow');
+          if (arrow) arrow.textContent = isActive && active ? (active.dir === 'asc' ? ' ↑' : ' ↓') : '';
         });
       }
 
@@ -18990,7 +19045,20 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       document.getElementById('gtSortTabs').addEventListener('click', function (e) {
         var btn = e.target.closest('.gt-sort-tab');
         if (!btn) return;
-        var mode = btn.getAttribute('data-sort');
+        var metric = btn.getAttribute('data-sort-metric');
+        var mode;
+        if (!metric) {
+          // Custom -- no direction, just its own literal mode string,
+          // same as every other button used to work before this row
+          // became metric+direction-toggle buttons.
+          mode = btn.getAttribute('data-sort');
+        } else {
+          var current = SORT_MODE_METRIC[GT.sortMode];
+          var dir = (current && current.metric === metric)
+            ? (current.dir === 'asc' ? 'desc' : 'asc')
+            : SORT_METRIC_DEFAULT_DIR[metric];
+          mode = SORT_METRIC_MODE[metric][dir];
+        }
         if (mode === GT.sortMode) return;
         setGoalSortMode(mode);
       });
