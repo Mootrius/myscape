@@ -113,6 +113,18 @@
   font-size: 10.5px;
 }
 .tracker-menu-item.danger:hover { color: var(--red); }
+/* Delete setup's armed "Are you sure?" state (see closeSetupMenu's
+   own comment in the script for when this gets applied/cleared) --
+   same red-tint treatment button.danger:hover already uses
+   elsewhere (myscape.css), just held permanently instead of only
+   while the pointer happens to be over it, since this one has to
+   stay legible as "you're about to delete something" even after
+   the player's moved their mouse to actually click it again. */
+.tracker-menu-item--confirm,
+.tracker-menu-item--confirm:hover {
+  color: var(--red);
+  background: rgba(192, 90, 76, 0.12);
+}
 
 .pg-setup-form {
   display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 18px;

@@ -6380,30 +6380,55 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
 
       // ---- Setup CRUD (menu + name form) -----------------------------------
 
+      // Also resets Delete setup's own armed "Are you sure?" state --
+      // same click-away-to-cancel convention Mindmaps' own Delete
+      // mindmap button uses (see closeMenu there) -- so closing this
+      // menu any way other than actually confirming the delete (a
+      // New/Rename click, all of which call this same function;
+      // clicking anywhere outside the menu; or this button's own
+      // toggle closing it) never leaves a stale "ARE YOU SURE?"
+      // sitting there to catch an unrelated next click later.
+      function closeSetupMenu() {
+        document.getElementById('setupMenu').style.display = 'none';
+        var deleteBtn = document.getElementById('menuDeleteSetup');
+        if (deleteBtn) {
+          deleteBtn.classList.remove('tracker-menu-item--confirm');
+          deleteBtn.textContent = 'Delete setup';
+        }
+      }
       document.getElementById('setupMenuBtn').addEventListener('click', function () {
         var menu = document.getElementById('setupMenu');
-        menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+        if (menu.style.display === 'none') { menu.style.display = 'flex'; } else { closeSetupMenu(); }
       });
       document.addEventListener('click', function (e) {
         var wrap = document.querySelector('.tracker-menu-wrap');
-        if (wrap && !wrap.contains(e.target)) document.getElementById('setupMenu').style.display = 'none';
+        if (wrap && !wrap.contains(e.target)) closeSetupMenu();
       });
 
       document.getElementById('menuNewSetup').addEventListener('click', function () {
-        document.getElementById('setupMenu').style.display = 'none';
+        closeSetupMenu();
         openNameForm('new', '');
       });
       document.getElementById('menuRenameSetup').addEventListener('click', function () {
-        document.getElementById('setupMenu').style.display = 'none';
+        closeSetupMenu();
         var setup = activeSetup();
         if (!setup) { showError('Create a setup first.'); return; }
         openNameForm('rename', setup.name);
       });
+      // First click just arms it (shows "Are you sure?", turns red)
+      // rather than deleting immediately -- same two-step, no-popup
+      // confirm Mindmaps' own Delete mindmap button uses. A second
+      // click while already armed is what actually deletes.
       document.getElementById('menuDeleteSetup').addEventListener('click', async function () {
-        document.getElementById('setupMenu').style.display = 'none';
+        var btn = document.getElementById('menuDeleteSetup');
         var setup = activeSetup();
-        if (!setup) return;
-        if (!window.confirm('Delete "' + setup.name + '"? This cannot be undone.')) return;
+        if (!setup) { closeSetupMenu(); return; }
+        if (!btn.classList.contains('tracker-menu-item--confirm')) {
+          btn.classList.add('tracker-menu-item--confirm');
+          btn.textContent = 'Are you sure?';
+          return;
+        }
+        closeSetupMenu();
         const data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id), { method: 'DELETE' });
         if (data) { PG.stateVersion++; PG.data = data; setActiveSetupId(data.gearSetups.length ? data.gearSetups[0].id : null); render(); }
       });
@@ -13871,11 +13896,27 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
 
       // ---- Mindmap switcher menu -----------------------------------------
 
-      function closeMenu() { document.getElementById('mmMenu').style.display = 'none'; }
+      // Also resets Delete mindmap's own armed "Are you sure?" state
+      // -- same click-away-to-cancel convention Purchase Goals' own
+      // Delete setup button uses (see closeSetupMenu there) -- so
+      // closing the menu any way other than actually confirming the
+      // delete (a New/Rename/switch click, all of which call this
+      // same function; clicking anywhere outside the menu; or this
+      // button's own toggle closing it -- see mmSwitchBtn below)
+      // never leaves a stale "ARE YOU SURE?" sitting there to catch
+      // an unrelated next click on this button later.
+      function closeMenu() {
+        document.getElementById('mmMenu').style.display = 'none';
+        var deleteBtn = document.getElementById('mmMenuDelete');
+        if (deleteBtn) {
+          deleteBtn.classList.remove('mm-menu-item--confirm');
+          deleteBtn.textContent = 'Delete mindmap';
+        }
+      }
       document.getElementById('mmSwitchBtn').addEventListener('click', function () {
         commitActiveLabelIfEditing();
         var menu = document.getElementById('mmMenu');
-        menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+        if (menu.style.display === 'none') { menu.style.display = 'flex'; } else { closeMenu(); }
       });
       document.addEventListener('click', function (e) {
         var wrap = document.querySelector('.mm-menu-wrap');
@@ -13903,13 +13944,21 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           if (mm) openNameForm('rename', mm.name);
           return;
         }
-        if (e.target.id === 'mmMenuDelete') { closeMenu(); deleteActiveMindmap(); return; }
+        if (e.target.id === 'mmMenuDelete') {
+          if (e.target.classList.contains('mm-menu-item--confirm')) {
+            closeMenu();
+            deleteActiveMindmap();
+            return;
+          }
+          e.target.classList.add('mm-menu-item--confirm');
+          e.target.textContent = 'Are you sure?';
+          return;
+        }
       });
 
       async function deleteActiveMindmap() {
         var mm = activeMindmap();
         if (!mm) return;
-        if (!window.confirm('Delete "' + mm.name + '"? This cannot be undone.')) return;
         const data = await apiCall('/api/mindmaps/' + encodeURIComponent(mm.id), { method: 'DELETE' });
         if (data) {
           MM.data = data;

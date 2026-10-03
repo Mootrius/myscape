@@ -73,6 +73,18 @@
   font-size: 11.5px;
 }
 .mm-menu-item.danger:hover { color: var(--red); }
+/* Delete mindmap's armed "Are you sure?" state (see closeMenu's
+   own comment in the script for when this gets applied/cleared) --
+   same red-tint treatment button.danger:hover already uses
+   elsewhere (myscape.css), just held permanently instead of only
+   while the pointer happens to be over it, since this one has to
+   stay legible as "you're about to delete something" even after
+   the player's moved their mouse to actually click it again. */
+.mm-menu-item--confirm,
+.mm-menu-item--confirm:hover {
+  color: var(--red);
+  background: rgba(192, 90, 76, 0.12);
+}
 .mm-menu-divider { border-top: 1px solid var(--border); margin: 4px 0; }
 
 /* The mindmap-switch rows (the player's own mindmap names) are
