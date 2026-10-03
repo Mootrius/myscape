@@ -509,7 +509,7 @@ button.secondary {
   width: 100%;
 }
 
-button.secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
+button.secondary:hover { border-color: var(--gold-dim); }
 button.secondary:disabled { opacity: 0.5; cursor: default; }
 
 /* Delete account -- same shape as button.secondary above, but in
@@ -1045,13 +1045,13 @@ button.danger--filled:hover { background: #a84a3d; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 6px 16px;
-  color: var(--text-dim);
+  color: #fff;
   font-size: 13px;
   letter-spacing: 0.05em;
   cursor: pointer;
 }
 
-.account-logout-link:hover { border-color: var(--gold-dim); color: var(--gold); }
+.account-logout-link:hover { border-color: var(--gold-dim); }
 
 /* The 404/teleport-icon header on render_not_found (app/pages.py) --
    the 404 number sits plain (not a link) right under the heading, and
@@ -1301,7 +1301,9 @@ footer {
   font-family: inherit;
   cursor: pointer;
   flex: 0 0 auto;
+  width: 256px;
   max-width: 100%;
+  text-align: center;
   word-break: break-all;
 }
 

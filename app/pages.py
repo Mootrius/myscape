@@ -4176,8 +4176,8 @@ def render_account(player: PlayerView) -> str:
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'trash-delete-btn';
-        removeBtn.title = 'Delete character';
         removeBtn.setAttribute('aria-label', 'Delete character');
+        removeBtn.setAttribute('data-tooltip', 'Delete character');
         removeBtn.innerHTML = trashDeleteBtnHtml('ARE YOU SURE?');
         // Same two-step, click-away-to-cancel confirm as the Shared
         // Links table's own DEACTIVATE button -- this is also a
