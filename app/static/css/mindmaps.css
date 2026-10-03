@@ -95,7 +95,7 @@
 .mm-menu-switch { text-align: center; }
 /* The New/Rename/Delete actions -- centered and all-caps to read as
    actions rather than more list entries. */
-#mmMenuNew, #mmMenuRename, #mmMenuDelete { text-align: center; text-transform: uppercase; }
+#mmMenuNew, #mmMenuDuplicate, #mmMenuRename, #mmMenuDelete { text-align: center; text-transform: uppercase; }
 
 /* Inline new/rename form -- same shape as .pg-setup-form
    (purchase-goals.css), duplicated for the same self-contained-
