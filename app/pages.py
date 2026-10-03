@@ -10836,7 +10836,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
     <div id="mmBody" style="display:none;">
       <div class="mm-header">
         <div class="mm-menu-wrap">
-          <button class="mm-switch-btn" id="mmSwitchBtn" type="button" title="Switch or manage mindmaps">
+          <button class="mm-switch-btn" id="mmSwitchBtn" type="button" data-tooltip="Mindmap options">
             <span class="mm-switch-name" id="mmSwitchName"></span>
             <span class="mm-switch-caret">&#9662;</span>
           </button>
@@ -10845,23 +10845,23 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       </div>
       <div class="mm-canvas" id="mmCanvas">
         <div class="mm-zoom-controls">
-          <button type="button" id="mmUndoBtn" title="Undo" disabled>
+          <button type="button" id="mmUndoBtn" data-tooltip="Undo" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
           </button>
-          <button type="button" id="mmRedoBtn" title="Redo" disabled>
+          <button type="button" id="mmRedoBtn" data-tooltip="Redo" disabled>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           </button>
           <div class="mm-zoom-divider"></div>
-          <button type="button" id="mmZoomIn" title="Zoom in">+</button>
-          <button type="button" id="mmZoomOut" title="Zoom out">&minus;</button>
-          <button type="button" id="mmZoomFit" title="Zoom to fit">
+          <button type="button" id="mmZoomIn" data-tooltip="Zoom in">+</button>
+          <button type="button" id="mmZoomOut" data-tooltip="Zoom out">&minus;</button>
+          <button type="button" id="mmZoomFit" data-tooltip="Fit to zoom">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><line x1="20" y1="20" x2="15.5" y2="15.5"></line></svg>
           </button>
-          <button type="button" id="mmFullscreenBtn" title="Fill browser window">
+          <button type="button" id="mmFullscreenBtn" data-tooltip="Enter fullscreen">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
           </button>
           <div class="mm-zoom-divider"></div>
-          <button type="button" id="mmEditModeBtn" title="Toggle Edit Mode">
+          <button type="button" id="mmEditModeBtn" data-tooltip="Enter edit mode">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="M15 5l4 4"></path></svg>
           </button>
         </div>
@@ -10890,14 +10890,14 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
     # one of those just to interpolate one small piece of markup.
     mm_share_icon_btn = (
         ' <span class="mm-share-wrap">'
-        '<button type="button" class="mm-share-icon-btn" id="mmShareIconBtn" aria-label="Export this mindmap" title="Export this mindmap">'
+        '<button type="button" class="mm-share-icon-btn" id="mmShareIconBtn" aria-label="Share the currently selected mindmap" data-tooltip="Share the currently selected mindmap">'
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
         '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>'
         '<polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>'
         '</svg></button>'
         '<div class="mm-share-card" id="mmShareCard" hidden>'
         '<button type="button" class="mm-share-generate-btn" id="mmShareGenerateBtn">GENERATE SHAREABLE LINK</button>'
-        '<button type="button" class="mm-share-link-btn" id="mmShareLinkBtn" title="Click to copy this link to your clipboard." hidden></button>'
+        '<button type="button" class="mm-share-link-btn" id="mmShareLinkBtn" data-tooltip="Click to copy" hidden></button>'
         '<p class="mm-share-popup-hint">Links are active for 30 days, but can be<br>deleted sooner on your Account page.</p>'
         '</div>'
         '</span>'
@@ -11788,7 +11788,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         document.documentElement.style.overflow = on ? 'hidden' : '';
         var btn = document.getElementById('mmFullscreenBtn');
         btn.classList.toggle('active', on);
-        btn.title = on ? 'Exit full-browser view' : 'Fill browser window';
+        btn.setAttribute('data-tooltip', on ? 'Exit fullscreen' : 'Enter fullscreen');
         btn.innerHTML = on ? MM_FULLSCREEN_EXIT_ICON : MM_FULLSCREEN_ENTER_ICON;
         zoomToFit();
         // zoomToFit just re-framed the WHOLE tree for the canvas's new
@@ -13163,10 +13163,10 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           // Edge buttons only ever change the tree's structure, so
           // they're Edit-Mode-only too.
           var edgeButtonsHtml = !MM.editMode ? '' :
-            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-top" data-relation="parent" title="Add parent">+</button>') +
-            '<button type="button" class="mm-edge-btn mm-edge-bottom" data-relation="child" title="Add child">+</button>' +
-            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-left" data-relation="sibling" data-before="1" title="Add sibling">+</button>') +
-            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-right" data-relation="sibling" data-before="0" title="Add sibling">+</button>');
+            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-top" data-relation="parent">+</button>') +
+            '<button type="button" class="mm-edge-btn mm-edge-bottom" data-relation="child">+</button>' +
+            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-left" data-relation="sibling" data-before="1">+</button>') +
+            (isRoot ? '' : '<button type="button" class="mm-edge-btn mm-edge-right" data-relation="sibling" data-before="0">+</button>');
           // The popover below the anchor node is the color swatches +
           // goal-criteria form + delete when it's the only thing
           // selected (see renderNodePopoverHtml -- also how the
@@ -13201,8 +13201,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
           if (!hasNote) MM.flippedNodeIds.delete(n.id);
           var isFlipped = hasNote && MM.flippedNodeIds.has(n.id);
           var noteToggleHtml = !hasNote ? '' :
-            '<button type="button" class="mm-node-note-toggle" data-role="note-toggle" title="' +
-            (isFlipped ? 'Back to node' : 'View note') + '">' +
+            '<button type="button" class="mm-node-note-toggle" data-role="note-toggle">' +
             (isFlipped ? NOTE_ICON_ARROW_SVG : NOTE_ICON_PAPER_SVG) + '</button>';
           // The front face is exactly what a non-flippable node has
           // always rendered (labelCls/labelAttrs/labelInner, untouched)
@@ -13596,7 +13595,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
             // "reset/remove tracking" the same way a "no" sign would.
             ? '<span class="mm-type-btn-swatch mm-type-btn-swatch-manual"></span>'
             : '<img class="mm-type-btn-icon" src="' + opt.icon + '" alt="">';
-          return '<button type="button" class="mm-type-btn' + activeCls + '" data-color="' + opt.color + '" title="' + opt.label + '">' +
+          return '<button type="button" class="mm-type-btn' + activeCls + '" data-color="' + opt.color + '">' +
             inner + '<span class="mm-type-btn-label">' + opt.label + '</span></button>';
         }).join('');
         return '<div class="mm-type-picker">' + buttons + '</div>';
@@ -14021,7 +14020,9 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       // the button correctly on its very first render.
       function updateEditModeButton() {
         var btn = document.getElementById('mmEditModeBtn');
-        if (btn) btn.classList.toggle('active', MM.editMode);
+        if (!btn) return;
+        btn.classList.toggle('active', MM.editMode);
+        btn.setAttribute('data-tooltip', MM.editMode ? 'Exit edit mode' : 'Enter edit mode');
       }
 
       // Pulses the Edit Mode button gold a couple of times -- called
