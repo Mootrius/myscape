@@ -1640,6 +1640,19 @@ def _achievement_diary_tile_counts(game_account: GameAccount) -> tuple:
     )
 
 
+def _combat_tasks_tile_total(game_account: GameAccount):
+    """Total for the summary row's Combat Achievements tile. The
+    in-game panel's own total is not the same for every account (one
+    synced 632 where the full task list is 655), so the tile uses the
+    fixed per-tier totals -- the same ones the per-tier combat
+    achievement rows show -- once this account has synced a completed
+    count at all. An account that never synced keeps the plugin value
+    (null), so the tile still renders as an em dash."""
+    if game_account.character_summary_combat_tasks_completed is None:
+        return game_account.character_summary_combat_tasks_total
+    return sum(get_ca_tier_totals().values())
+
+
 def _character_overview_summary_payload(game_account: GameAccount) -> dict:
     """The actual summary-row payload, factored out of
     character_overview_summary below so the public, code-scoped
@@ -1665,7 +1678,7 @@ def _character_overview_summary_payload(game_account: GameAccount) -> dict:
         "achievementsCompleted": achievements_completed,
         "achievementsTotal": achievements_total,
         "combatTasksCompleted": game_account.character_summary_combat_tasks_completed,
-        "combatTasksTotal": game_account.character_summary_combat_tasks_total,
+        "combatTasksTotal": _combat_tasks_tile_total(game_account),
         "collectionsCompleted": game_account.character_summary_collections_completed,
         "collectionsTotal": game_account.character_summary_collections_total,
         "accountType": game_account.account_type,
