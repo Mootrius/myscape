@@ -2562,7 +2562,7 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         public_profile_settings_btn += (
             '<div class="public-profile-card" id="publicProfileCard" hidden>'
             '<div class="public-profile-seg-group">'
-            '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private" data-tooltip="Makes your profile invisible to everyone\n(except those on your friends list)." data-tooltip-wide>Private</button>'
+            '<button type="button" class="public-profile-seg-btn active" id="publicProfileSegPrivate" data-segment-value="private" data-tooltip="Makes your profile invisible to everyone\n(except those on your friends list)" data-tooltip-wide>Private</button>'
             '<button type="button" class="public-profile-seg-btn" id="publicProfileSegPublic" data-segment-value="public" data-tooltip="Makes your profile visible\nto anyone with your URL">Public</button>'
             '</div>'
             '<button type="button" class="public-profile-link-btn public-profile-link-display" id="publicProfileLinkBtn" disabled></button>'
