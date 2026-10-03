@@ -15104,24 +15104,24 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
       <div class="pm-table" id="pmTable" style="display:none;">
         <div class="pm-row pm-row-header">
           <div class="pm-col pm-col-image pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="alpha">Item<span class="pm-sort-arrow"></span></button>
-            <button type="button" class="pm-filter-icon-btn" data-filter-col="alpha" title="Filter Item" aria-label="Filter Item">{funnel_glyph}</button>
+            <button type="button" class="pm-sort-header" data-sort-key="alpha" data-tooltip="Sort alphabetically">Item<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="alpha" data-tooltip="Filter by item" aria-label="Filter by item">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-qty pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="qty">Quantity<span class="pm-sort-arrow"></span></button>
-            <button type="button" class="pm-filter-icon-btn" data-filter-col="qty" title="Filter Quantity" aria-label="Filter Quantity">{funnel_glyph}</button>
+            <button type="button" class="pm-sort-header" data-sort-key="qty" data-tooltip="Sort by quantity">Quantity<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="qty" data-tooltip="Filter by quantity" aria-label="Filter by quantity">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-ge pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="ge">GE Value<span class="pm-sort-arrow"></span></button>
-            <button type="button" class="pm-filter-icon-btn" data-filter-col="ge" title="Filter GE Value" aria-label="Filter GE Value">{funnel_glyph}</button>
+            <button type="button" class="pm-sort-header" data-sort-key="ge" data-tooltip="Sort by GE value">GE Value<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="ge" data-tooltip="Filter by GE value" aria-label="Filter by GE value">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-ha pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="ha">HA Value<span class="pm-sort-arrow"></span></button>
-            <button type="button" class="pm-filter-icon-btn" data-filter-col="ha" title="Filter HA Value" aria-label="Filter HA Value">{funnel_glyph}</button>
+            <button type="button" class="pm-sort-header" data-sort-key="ha" data-tooltip="Sort by HA value">HA Value<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="ha" data-tooltip="Filter by HA value" aria-label="Filter by HA value">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-tradeable pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="tradeable">Tradeable?<span class="pm-sort-arrow"></span></button>
-            <button type="button" class="pm-filter-icon-btn" data-filter-col="tradeable" title="Filter Tradeable?" aria-label="Filter Tradeable?">{funnel_glyph}</button>
+            <button type="button" class="pm-sort-header" data-sort-key="tradeable" data-tooltip="Sort by tradability">Tradeable?<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-filter-icon-btn" data-filter-col="tradeable" data-tooltip="Filter by tradability" aria-label="Filter by tradability">{funnel_glyph}</button>
           </div>
         </div>
         <div id="pmRows"></div>
@@ -16199,7 +16199,6 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
           var refs = lastPmRowRefs[i];
           if (!refs) return;
           var item = v.item;
-          if (refs.link) refs.link.title = item.name;
           if (refs.qtyEl) refs.qtyEl.textContent = 'x' + fmtNum(v.qty);
           if (refs.geEl) refs.geEl.innerHTML = valueCell(item.gePrice, v.qty, item.geDerived);
           if (refs.haEl) refs.haEl.innerHTML = valueCell(item.highAlch, v.qty);
@@ -16382,7 +16381,7 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
             '<span class="pm-view-delete" data-view-delete="' + v.id + '" data-tooltip="Delete" aria-label="Delete this view">&times;</span>' +
             '</button>'
           );
-        }).join('') + '<button type="button" class="pm-view-add-btn" id="pmViewAddBtn" data-tooltip="Save a view with these currently selected categories, filters, and sorts">+ Save View</button>';
+        }).join('') + '<button type="button" class="pm-view-add-btn" id="pmViewAddBtn" data-tooltip="Save current categories, filters, and sorts">+ Save View</button>';
 
         row.querySelectorAll('.pm-view-chip').forEach(function (chip) {
           chip.addEventListener('click', function (e) {
