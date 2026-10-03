@@ -1866,3 +1866,24 @@ body.landing .footer-inner {
    showTooltip in _shell, app/pages.py) for a manually-broken tooltip
    whose first line wouldn't fit the default 240px. */
 .myscape-tooltip.myscape-tooltip--wide { max-width: 320px; }
+
+/* Account page buttons that sat too dark (transparent / --panel fill) --
+   brought up to the same lighter fill and text color as the Loot
+   Tracker's sort buttons (.loot-sort-tab in loot-tracker.css:
+   --panel-2 fill, --text-dim text). Scoped by id/class to just these
+   buttons: LOG OUT, + ADD CHARACTER, SEND REQUEST, UPDATE EMAIL,
+   UPDATE PASSWORD, and every code button (Shared Links' CODE column
+   and the Friends list's MY CODE). Borders and hover/active treatments
+   are unchanged -- the id selectors here outrank the open-tab rule
+   above, so its gold text is restated just below. */
+.account-logout-link,
+#addGameAccountBtn,
+#friendsAddBtn,
+#emailToggleBtn,
+#passwordToggleBtn,
+.shared-link-code-btn {
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+#emailToggleBtn.active,
+#passwordToggleBtn.active { color: var(--gold); }

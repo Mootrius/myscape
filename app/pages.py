@@ -3934,7 +3934,7 @@ def render_account(player: PlayerView) -> str:
             <form class="friends-add-form" id="friendsAddForm" autocomplete="off">
               <div class="friends-code-wrap" id="friendsCodeWrap" hidden>
                 <span class="friends-code-label">My code</span>
-                <button type="button" class="shared-link-code-btn" id="friendsCodeBtn" data-tooltip="Your friend code — click to copy"></button>
+                <button type="button" class="shared-link-code-btn" id="friendsCodeBtn" data-tooltip="Click to copy"></button>
                 <span class="friends-add-divider" aria-hidden="true"></span>
               </div>
               <input type="text" id="friendsAddInput" maxlength="5" placeholder="Friend code" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Friend code" />
@@ -3950,7 +3950,7 @@ def render_account(player: PlayerView) -> str:
               <table class="friends-table">
                 <thead>
                   <tr>
-                    <th><button type="button" class="friend-sort-header" data-friend-sort-key="friend" data-tooltip="Sort by friends">Friend<span class="friend-sort-arrow"></span></button></th>
+                    <th><button type="button" class="friend-sort-header" data-friend-sort-key="friend" data-tooltip="Sort by friend">Friend<span class="friend-sort-arrow"></span></button></th>
                     <th><button type="button" class="friend-sort-header" data-friend-sort-key="since" data-tooltip="Sort by date">Since<span class="friend-sort-arrow"></span></button></th>
                     <th>Removal</th>
                   </tr>
