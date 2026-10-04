@@ -100,6 +100,69 @@ def get_item_index() -> Dict[str, dict]:
     return _item_index
 
 
+# Master Scroll Book interface text -> real teleport item name, for the
+# few scrolls whose book label isn't simply "<label> teleport".
+_MASTER_SCROLL_BOOK_ALIASES = {
+    "chasm of fire": "chasm teleport scroll",
+    "chasm": "chasm teleport scroll",
+    "elf camp": "iorwerth camp teleport",
+    "cerberus": "key master teleport",
+    "revenants": "revenant cave teleport",
+    "revenant": "revenant cave teleport",
+}
+
+_teleport_item_ids: Optional[set] = None
+
+
+def _get_teleport_item_ids() -> set:
+    global _teleport_item_ids
+    if _teleport_item_ids is None:
+        _teleport_item_ids = {
+            item_id
+            for key, entry in get_item_index().items()
+            if "teleport" in key
+            for item_id in entry.get("ids", [])
+        }
+    return _teleport_item_ids
+
+
+def canonical_master_scroll_item_id(item_id: int, item_name: Optional[str]) -> int:
+    """The Master Scroll Book's own interface shows the scroll set as
+    the book's DEFAULT teleport with a different, untradeable cosmetic
+    item id (drawn green, labelled with the short interface text such
+    as "Nardah" or "Chasm of fire" instead of the real item name), so
+    reading the icon widget's id verbatim made that one scroll lose its
+    normal icon, its full name, and its Grand Exchange value. The
+    interface text is the only thing that identifies it, so resolve
+    that back to the real teleport scroll's id. An id that already
+    belongs to a real teleport item is returned unchanged, as is
+    anything whose text can't be resolved."""
+    if item_id in _get_teleport_item_ids() or not item_name:
+        return item_id
+    label = " ".join(item_name.replace("\u2019", "'").replace("<br>", "").split()).lower()
+    if not label:
+        return item_id
+    # The interface wraps long labels with a hyphen ("Arde-" / "aglais"),
+    # which survives once the line break itself is stripped -- so also
+    # try the label with hyphens removed.
+    labels = [label]
+    if "-" in label:
+        labels.append(label.replace("-", ""))
+    for text in labels:
+        candidates = []
+        alias = _MASTER_SCROLL_BOOK_ALIASES.get(text)
+        if alias:
+            candidates.append(alias)
+        candidates += [text + " teleport", text + " teleport scroll"]
+        if "teleport" in text:
+            candidates.append(text)
+        for name in candidates:
+            ids = find_item_ids(name)
+            if ids:
+                return ids[0]
+    return item_id
+
+
 def get_icon_filename_index() -> Dict[str, List[int]]:
     global _icon_filename_index
     if _icon_filename_index is None:

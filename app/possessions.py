@@ -28,7 +28,7 @@ from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.item_ids import find_item_by_exact_name, find_item_ids
+from app.item_ids import canonical_master_scroll_item_id, find_item_by_exact_name, find_item_ids
 from app.models import (
     BankItem,
     BoatCargoItem,
@@ -94,7 +94,14 @@ def get_owned_breakdown(db: Session, game_account: GameAccount) -> Dict[int, dic
     for key, model in STORAGE_SOURCES:
         rows = db.query(model).filter(model.game_account_id == game_account.id).all()
         for row in rows:
-            entry = breakdown.setdefault(row.item_id, {"itemName": None, "total": 0, "byLocation": {}})
+            row_item_id = row.item_id
+            if key == "master_scroll_book":
+                # Rows synced before the plugin's id was corrected
+                # server-side still hold the Book's untradeable
+                # "default teleport" cosmetic id -- see
+                # canonical_master_scroll_item_id.
+                row_item_id = canonical_master_scroll_item_id(row_item_id, row.item_name)
+            entry = breakdown.setdefault(row_item_id, {"itemName": None, "total": 0, "byLocation": {}})
             entry["total"] += row.quantity
             entry["byLocation"][key] = entry["byLocation"].get(key, 0) + row.quantity
             if row.item_name and not entry["itemName"]:

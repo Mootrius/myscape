@@ -49,7 +49,7 @@ from app.limiter import limiter
 from app.loot import build_loot_share_snapshot, build_loot_state, kc_counts_by_player, parse_loot_range_bound, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
 from app.bosses import collection_log_page_kill_counts
 from app.collectionlog import get_collection_log_tabs, get_valid_item_ids
-from app.item_ids import find_item_ids
+from app.item_ids import canonical_master_scroll_item_id, find_item_ids
 from app.npc_names import search_npc_names
 from app.quest_names import search_quest_names
 from app.character_progress_data import (
@@ -1200,10 +1200,21 @@ def sync_master_scroll_book(
 
     db.query(MasterScrollBookItem).filter(MasterScrollBookItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
+    # The Book shows its default teleport under a different untradeable
+    # cosmetic id -- store the real scroll's id instead (see
+    # canonical_master_scroll_item_id), merging if two rows collapse
+    # onto the same id so the unique constraint can't trip.
+    merged_scrolls = {}
     for item in payload.items:
+        real_id = canonical_master_scroll_item_id(item.item_id, item.item_name)
+        if real_id in merged_scrolls:
+            merged_scrolls[real_id]["quantity"] += item.quantity
+        else:
+            merged_scrolls[real_id] = {"item_name": item.item_name, "quantity": item.quantity}
+    for real_id, scroll in merged_scrolls.items():
         db.add(MasterScrollBookItem(
-            game_account_id=game_account.id, item_id=item.item_id, item_name=item.item_name,
-            quantity=item.quantity, updated_at=now,
+            game_account_id=game_account.id, item_id=real_id, item_name=scroll["item_name"],
+            quantity=scroll["quantity"], updated_at=now,
         ))
     _stamp_storage_synced(game_account, "master_scroll_book", now)
     db.commit()

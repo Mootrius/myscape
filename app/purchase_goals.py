@@ -40,6 +40,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.item_ids import (
+    canonical_master_scroll_item_id,
     find_item_by_exact_name,
     find_item_id_by_icon_filename,
     find_item_ids,
@@ -1263,7 +1264,7 @@ def build_owned_pools(db: Session, game_account: GameAccount) -> Tuple[Dict[int,
     for item in db.query(ForestryKitItem).filter(ForestryKitItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
     for item in db.query(MasterScrollBookItem).filter(MasterScrollBookItem.game_account_id == game_account.id).all():
-        add(item.item_id, item.item_name, item.quantity)
+        add(canonical_master_scroll_item_id(item.item_id, item.item_name), item.item_name, item.quantity)
     for item in db.query(SeedBoxItem).filter(SeedBoxItem.game_account_id == game_account.id).all():
         add(item.item_id, item.item_name, item.quantity)
 
