@@ -1167,6 +1167,27 @@ class CollectionLogSyncResponse(BaseModel):
     item_count: int
 
 
+class CollectionLogItemAddRequest(BaseModel):
+    item_name: str
+
+    @field_validator("item_name")
+    @classmethod
+    def check_item_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value or len(value) > 200:
+            raise ValueError("item_name must be 1-200 characters.")
+        return value
+
+
+class CollectionLogItemAddResponse(BaseModel):
+    # The collection log item id this name resolved to, or null when it
+    # couldn't be resolved unambiguously (nothing was changed then).
+    # applied_count is 1 or 0 to match (the plugin's generic sync
+    # plumbing reads a count field, same as kill-count updates).
+    item_id: Optional[int] = None
+    applied_count: int = 0
+
+
 ACCOUNT_TYPE_CODES = {"MAIN", "IRONMAN", "UIM", "HCIM", "GIM", "HCGIM", "UGIM"}
 
 

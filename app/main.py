@@ -48,7 +48,7 @@ from app.icon_cache import ensure_cached_icon_path
 from app.limiter import limiter
 from app.loot import build_loot_share_snapshot, build_loot_state, kc_counts_by_player, parse_loot_range_bound, resolve_range, set_item_hidden, set_npc_hidden, sync_loot_events
 from app.bosses import collection_log_page_kill_counts
-from app.collectionlog import get_collection_log_tabs, get_valid_item_ids
+from app.collectionlog import find_unique_item_id_by_name, get_collection_log_tabs, get_valid_item_ids
 from app.item_ids import canonical_master_scroll_item_id, find_item_ids
 from app.npc_names import search_npc_names
 from app.quest_names import search_quest_names
@@ -169,6 +169,8 @@ from app.schemas import (
     CharacterSummarySyncRequest,
     CharacterSummarySyncResponse,
     CollectionLogSyncRequest,
+    CollectionLogItemAddRequest,
+    CollectionLogItemAddResponse,
     CollectionLogSyncResponse,
     CreateGearSetupRequest,
     CreateMindMapRequest,
@@ -1529,6 +1531,39 @@ def sync_collection_log(
     game_account.collection_log_synced_at = datetime.now(timezone.utc)
     db.commit()
     return CollectionLogSyncResponse(item_count=len(game_account.collection_log_items))
+
+
+@app.post("/api/players/me/collection-log/item", response_model=CollectionLogItemAddResponse)
+def add_collection_log_item(
+    payload: CollectionLogItemAddRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
+):
+    """Marks ONE collection log item obtained the moment the game
+    announces it ("New item added to your collection log: <name>" --
+    see MyscapePlugin#onChatMessage in the Mootrius/myscape-plugin
+    repo), so the Character Overview's collection log reflects a fresh
+    unlock without the player having to reopen the in-game log (the
+    full per-item capture only runs then -- see CollectionLogItemCapture).
+    Unlike POST /api/players/me/collection-log above this is an add,
+    never a replace: every other item and its quantity is left exactly
+    as it was, and a new item starts at quantity 1 (an item already
+    marked obtained keeps its recorded quantity). A name that isn't
+    exactly one log slot (see find_unique_item_id_by_name) changes
+    nothing and returns item_id null -- the next full capture picks it
+    up instead."""
+    item_id = find_unique_item_id_by_name(payload.item_name)
+    if item_id is None:
+        return CollectionLogItemAddResponse(item_id=None, applied_count=0)
+    items = dict(game_account.collection_log_items or {})
+    if str(item_id) not in items:
+        items[str(item_id)] = 1
+        # Reassigned (not mutated in place) so SQLAlchemy sees the
+        # JSON column change.
+        game_account.collection_log_items = items
+    game_account.collection_log_synced_at = datetime.now(timezone.utc)
+    db.commit()
+    return CollectionLogItemAddResponse(item_id=item_id, applied_count=1)
 
 
 def _collection_log_payload(game_account: GameAccount) -> dict:

@@ -81,6 +81,35 @@ def get_item_name(item_id: int) -> Optional[str]:
     return _load_item_names().get(item_id)
 
 
+_item_ids_by_name: Optional[Dict[str, List[int]]] = None
+
+
+def _normalize_item_name(name: str) -> str:
+    return " ".join(name.replace("\u2019", "'").split()).lower()
+
+
+def find_unique_item_id_by_name(name: Optional[str]) -> Optional[int]:
+    """The collection log item id for a name the game itself printed
+    (the "New item added to your collection log: <name>" chat line --
+    see POST /api/players/me/collection-log/item), or None when the
+    name isn't in the log OR isn't unambiguous. A handful of names
+    belong to several distinct log slots (every Ancient page, each
+    Graceful recolor, Decorative armour, ...), and the chat line says
+    nothing about which one was just unlocked, so those are
+    deliberately NOT guessed at -- they simply show up the next time
+    the player opens the in-game collection log."""
+    global _item_ids_by_name
+    if not name:
+        return None
+    if _item_ids_by_name is None:
+        index: Dict[str, List[int]] = {}
+        for item_id, item_name in _load_item_names().items():
+            index.setdefault(_normalize_item_name(item_name), []).append(item_id)
+        _item_ids_by_name = index
+    ids = _item_ids_by_name.get(_normalize_item_name(name))
+    return ids[0] if ids and len(ids) == 1 else None
+
+
 def get_valid_item_ids() -> FrozenSet[int]:
     """Every item id the collection log schema actually uses -- the
     real ceiling a synced item id is validated against (see
