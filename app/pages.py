@@ -2145,6 +2145,170 @@ _MODEL_VIEWER_HEAD = """
             }
           });
 
+          // Translucent draw order. Every translucent primitive is
+          // depthWrite=false (above), so nothing occludes anything else
+          // among them; three.js then draws them in a FIXED order (all
+          // primitives share one origin, so its per-object distance sort
+          // ties and falls back to creation order). That is wrong
+          // whenever two translucent pieces overlap on screen: whichever
+          // is drawn LAST lands on top, even when it is physically BEHIND
+          // the other one. The Bow of Faerdhinen is the visible case --
+          // its (translucent) limbs held in front of translucent armor
+          // were repainted by that armor and "disappeared". The fix is
+          // the same one RuneProfile's exporter is built around (it
+          // merges translucent faces into one mesh "for correct alpha
+          // sorting"): fold every plain (untextured) translucent
+          // primitive into ONE mesh and re-sort its triangles
+          // back-to-front before each draw. The per-priority view-space
+          // nudge moves to a per-vertex attribute so overlay ordering
+          // by priority is unchanged, and the sort key includes it.
+          // Textured translucent primitives, and any whose own material
+          // needs something a merged mesh can't carry, are left exactly
+          // as they were.
+          (function mergeTranslucent() {
+            var candidates = [];
+            model.traverse(function (node) {
+              if (!node.isMesh || !node.geometry || !node.material) return;
+              var m = node.material;
+              if (Array.isArray(m) || !m.transparent || m.map) return;
+              var g = node.geometry;
+              if (!g.attributes.position || !g.attributes.color) return;
+              if (g.userData && g.userData.missingTexture) return;
+              if (!node.parent || !node.matrix.equals(new THREE.Matrix4())) return;
+              candidates.push(node);
+            });
+            if (candidates.length < 2) return;
+            var parent = candidates[0].parent;
+            candidates = candidates.filter(function (n) { return n.parent === parent; });
+            if (candidates.length < 2) return;
+
+            var positions = [];
+            var colors = [];
+            var nudges = [];
+            var tris = [];
+            var base = 0;
+            candidates.forEach(function (node) {
+              var g = node.geometry;
+              var p = g.attributes.position;
+              var c = g.attributes.color;
+              var m = node.material;
+              var priority = (g.userData && g.userData.osrsPriority) || 0;
+              var nudge = Math.min(priority, PRIORITY_MAX_STEPS) * PRIORITY_STEP_GAME_UNITS * PRIORITY_NUDGE_MULTIPLIER;
+              for (var i = 0; i < p.count; i++) {
+                positions.push(p.getX(i), p.getY(i), p.getZ(i));
+                // Bake the material's own tint/opacity into the vertex
+                // color so one shared material reproduces each piece.
+                colors.push(
+                  c.getX(i) * m.color.r,
+                  c.getY(i) * m.color.g,
+                  c.getZ(i) * m.color.b,
+                  (c.itemSize === 4 ? c.getW(i) : 1) * m.opacity
+                );
+                nudges.push(nudge);
+              }
+              var idx = g.index;
+              var count = idx ? idx.count : p.count;
+              for (var j = 0; j < count; j += 3) {
+                tris.push(idx
+                  ? [base + idx.getX(j), base + idx.getX(j + 1), base + idx.getX(j + 2)]
+                  : [base + j, base + j + 1, base + j + 2]);
+              }
+              base += p.count;
+            });
+            if (!tris.length) return;
+
+            var geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 4));
+            geometry.setAttribute("aPriorityNudge", new THREE.Float32BufferAttribute(nudges, 1));
+            var indexArray = new Uint32Array(tris.length * 3);
+            var indexAttr = new THREE.BufferAttribute(indexArray, 1);
+            indexAttr.setUsage(THREE.DynamicDrawUsage);
+            geometry.setIndex(indexAttr);
+
+            // Clone a real exported material (keeps unlit/tone-mapping/
+            // fog behavior identical), then neutralise the parts that
+            // were baked into the vertex colors above.
+            var material = candidates[0].material.clone();
+            material.color.setRGB(1, 1, 1);
+            material.opacity = 1;
+            material.side = THREE.FrontSide;
+            material.transparent = true;
+            material.depthWrite = false;
+            material.vertexColors = true;
+            material.onBeforeCompile = function (shader) {
+              shader.vertexShader = shader.vertexShader
+                .replace(
+                  "#include <common>",
+                  "#include <common>\\nattribute float aPriorityNudge;"
+                )
+                .replace(
+                  "#include <project_vertex>",
+                  [
+                    "vec4 mvPosition = vec4( transformed, 1.0 );",
+                    "mvPosition = modelViewMatrix * mvPosition;",
+                    "mvPosition.z += aPriorityNudge;",
+                    "gl_Position = projectionMatrix * mvPosition;",
+                  ].join("\\n")
+                );
+            };
+            material.customProgramCacheKey = function () {
+              return "osrs-priority-nudge-attr";
+            };
+            material.needsUpdate = true;
+
+            // Per-triangle sort key inputs: centroid + mean nudge.
+            var triCount = tris.length;
+            var centroids = new Float32Array(triCount * 3);
+            var triNudge = new Float32Array(triCount);
+            for (var t = 0; t < triCount; t++) {
+              var a = tris[t][0], b = tris[t][1], d = tris[t][2];
+              for (var k = 0; k < 3; k++) {
+                centroids[t * 3 + k] = (positions[a * 3 + k] + positions[b * 3 + k] + positions[d * 3 + k]) / 3;
+              }
+              triNudge[t] = (nudges[a] + nudges[b] + nudges[d]) / 3;
+            }
+            var order = new Array(triCount);
+            var depth = new Float32Array(triCount);
+            var viewMatrix = new THREE.Matrix4();
+            var lastView = new Float32Array(16);
+
+            var merged = new THREE.Mesh(geometry, material);
+            merged.name = "translucent_merged";
+            merged.frustumCulled = false;
+            merged.onBeforeRender = function (renderer, sceneArg, camera) {
+              viewMatrix.multiplyMatrices(camera.matrixWorldInverse, merged.matrixWorld);
+              var e = viewMatrix.elements;
+              var same = true;
+              for (var q = 0; q < 16; q++) {
+                if (e[q] !== lastView[q]) { same = false; break; }
+              }
+              if (same) return;
+              for (var q2 = 0; q2 < 16; q2++) lastView[q2] = e[q2];
+              for (var i2 = 0; i2 < triCount; i2++) {
+                order[i2] = i2;
+                depth[i2] = e[2] * centroids[i2 * 3] + e[6] * centroids[i2 * 3 + 1] + e[10] * centroids[i2 * 3 + 2] + e[14] + triNudge[i2];
+              }
+              // View space looks down -Z: the most negative value is the
+              // farthest, and must be drawn first.
+              order.sort(function (x, y) { return depth[x] - depth[y]; });
+              for (var i3 = 0; i3 < triCount; i3++) {
+                var tri = tris[order[i3]];
+                indexArray[i3 * 3] = tri[0];
+                indexArray[i3 * 3 + 1] = tri[1];
+                indexArray[i3 * 3 + 2] = tri[2];
+              }
+              indexAttr.needsUpdate = true;
+            };
+
+            candidates.forEach(function (node) {
+              parent.remove(node);
+              node.geometry.dispose();
+              if (node.material && node.material.dispose) node.material.dispose();
+            });
+            parent.add(merged);
+          })();
+
           // Frame the camera to fit the model's own real bounding box,
           // using the standard "fit object in view" distance formula
           // (derived purely from the camera's own vertical FOV and the
