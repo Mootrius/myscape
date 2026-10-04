@@ -740,7 +740,7 @@ def _shell(
        thin auth-flow utility page (signup/login/forgot-reset-verify)
        -- none of that is content worth a search result of its own,
        and letting Google index e.g. a logged-out "please log in"
-       shell under /dashboard/loot would just dilute the one page
+       shell under /dashboard/loot-tracker would just dilute the one page
        that's actually meant to be found. noindex defaults to True in
        _shell()'s own signature above for exactly that reason -- the
        landing page's own render_landing() is the one call site that
@@ -1392,7 +1392,7 @@ DASHBOARD_CARD_KEYS = (
 def render_dashboard(player: PlayerView) -> str:
     cards = {
         "loot_tracker": _dash_card_wrap(
-            "/dashboard/loot",
+            "/dashboard/loot-tracker",
             _ICON_BONES,
             "Dragon bones",
             "Loot Tracker",
@@ -1419,7 +1419,7 @@ def render_dashboard(player: PlayerView) -> str:
             "auto-detecting completion functionality.",
         ),
         "possessions": _dash_card_wrap(
-            "/dashboard/possessions",
+            "/dashboard/storages-viewer",
             _ICON_HEAVY_CASKET,
             "Heavy casket",
             "Storages Viewer",

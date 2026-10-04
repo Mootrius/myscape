@@ -2418,7 +2418,21 @@ def purchase_goals_page(player: Optional[PlayerView] = Depends(get_optional_curr
     return render_purchase_goals(player)
 
 
-@app.get("/dashboard/loot", response_class=HTMLResponse)
+# The Loot Tracker and Storages Viewer pages used to live at
+# /dashboard/loot and /dashboard/possessions; they now use their full app
+# names like every other app page. The old addresses stay as permanent
+# redirects so existing bookmarks and links keep working.
+@app.get("/dashboard/loot", include_in_schema=False)
+def loot_tracker_legacy_redirect():
+    return RedirectResponse("/dashboard/loot-tracker", status_code=301)
+
+
+@app.get("/dashboard/possessions", include_in_schema=False)
+def possessions_legacy_redirect():
+    return RedirectResponse("/dashboard/storages-viewer", status_code=301)
+
+
+@app.get("/dashboard/loot-tracker", response_class=HTMLResponse)
 def loot_tracker_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
@@ -2436,7 +2450,7 @@ def mindmaps_page(player: Optional[PlayerView] = Depends(get_optional_current_pl
     return render_mindmaps(player)
 
 
-@app.get("/dashboard/possessions", response_class=HTMLResponse)
+@app.get("/dashboard/storages-viewer", response_class=HTMLResponse)
 def possessions_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if not player:
         return RedirectResponse("/login", status_code=302)
