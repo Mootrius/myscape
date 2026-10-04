@@ -1523,11 +1523,18 @@ def sync_collection_log(
             detail=f"Too many collection log items in one sync (max {MAX_COLLECTION_LOG_ITEMS_PER_SYNC}).",
         )
     valid_item_ids = get_valid_item_ids()
-    game_account.collection_log_items = {
-        str(item.item_id): item.quantity
-        for item in payload.items
-        if item.item_id in valid_item_ids and item.quantity >= 1
-    }
+    collection_log_items = {}
+    for item in payload.items:
+        item_id = item.item_id
+        # The log announces some slots under their item's placeholder
+        # variant (id + 2) rather than the id its own structure lists --
+        # the Yama Dossier arrives as 30805, structure id 30803 -- so
+        # an unknown id whose placeholder base IS a log id is that slot.
+        if item_id not in valid_item_ids and (item_id - 2) in valid_item_ids:
+            item_id -= 2
+        if item_id in valid_item_ids and item.quantity >= 1:
+            collection_log_items[str(item_id)] = max(item.quantity, collection_log_items.get(str(item_id), 0))
+    game_account.collection_log_items = collection_log_items
     game_account.collection_log_synced_at = datetime.now(timezone.utc)
     db.commit()
     return CollectionLogSyncResponse(item_count=len(game_account.collection_log_items))
