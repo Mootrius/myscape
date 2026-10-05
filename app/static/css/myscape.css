@@ -1222,7 +1222,10 @@ button.danger--filled:hover { background: #a84a3d; }
   letter-spacing: 0.02em;
 }
 
-.dash-card .subtitle { margin-top: 0; margin-bottom: 14px; }
+/* No bottom margin -- the card's own bottom padding is the only space
+   under the description (a 14px margin here used to leave the cards
+   with noticeably more blank space below the text than above it). */
+.dash-card .subtitle { margin-top: 0; margin-bottom: 0; }
 
 /* Site-wide footer (see _footer() in app/pages.py) -- the visual mirror
    of header above: same full-bleed darkening gradient technique, but
