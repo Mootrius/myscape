@@ -107,6 +107,7 @@ from app.pages import (
     render_dashboard,
     render_forgot_password,
     render_goal_tracking,
+    render_help_support,
     render_goal_tracking_share,
     render_landing,
     render_login,
@@ -2505,6 +2506,17 @@ def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_curre
     if not player.email_verified_at:
         return RedirectResponse("/verify-email-required", status_code=302)
     return render_goal_tracking(player)
+
+
+@app.get("/dashboard/help-and-support", response_class=HTMLResponse)
+def help_support_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
+    """Same login/verified gate as every other /dashboard/* page above --
+    see render_help_support's own docstring in app/pages.py."""
+    if not player:
+        return RedirectResponse("/login", status_code=302)
+    if not player.email_verified_at:
+        return RedirectResponse("/verify-email-required", status_code=302)
+    return render_help_support(player)
 
 
 @app.get("/dashboard/character-overview", response_class=HTMLResponse)

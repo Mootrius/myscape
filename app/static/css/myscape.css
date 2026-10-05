@@ -1186,6 +1186,24 @@ button.danger--filled:hover { background: #a84a3d; }
 
 .dash-card-body { flex: 1 1 auto; min-width: 0; }
 
+/* Help & Support's own row, below the six-card grid above -- the one
+   card on this page that isn't a full-size app card, so it gets its own
+   centered row rather than a slot in .dash-grid. */
+.dash-support-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+.dash-support-row .dash-card-wrap { width: 100%; max-width: 340px; }
+
+/* Smaller variant of .dash-card (shorter AND narrower than the app
+   cards): a 52px icon chip, tighter padding, and a smaller title with
+   no extra bottom margin on its one-line description. */
+.dash-card--compact { gap: 14px; padding: 14px 16px 16px; align-items: center; }
+.dash-card--compact .dash-card-icon { width: 52px; height: 52px; padding: 6px; }
+.dash-card--compact h3 { font-size: 15px; margin-bottom: 4px; }
+.dash-card--compact .subtitle { margin-bottom: 0; font-size: 13px; }
+
 .dash-card h3 {
   font-weight: normal;
   font-size: 17px;

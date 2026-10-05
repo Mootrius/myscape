@@ -1273,6 +1273,9 @@ _ICON_BONES = item_icon_url(536)
 _ICON_CLUELESS_SCROLL = item_icon_url(20249)
 _ICON_HEAVY_CASKET = item_icon_url(19941)
 _ICON_MAX_CAPE = item_icon_url(13280)
+# Help & Support's card icon -- "Cake of guidance" (a real item), same
+# item_icon_url convention as every icon above.
+_ICON_CAKE_OF_GUIDANCE = item_icon_url(7542)
 # Not item_icon_url like every icon above -- there's no real OSRS item
 # that reads as "your character," so this one's a small bundled PNG
 # (a player head portrait) instead of a RuneLite CDN hit, same
@@ -1340,13 +1343,14 @@ _ACCOUNT_TYPE_INFO = {
 }
 
 
-def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> str:
+def _dash_card(icon_src: str, icon_alt: str, title: str, description: str, extra_class: str = "") -> str:
     """One dashboard feature card -- an icon chip on the left, heading and
     description stacked on the right. Both current cards describe features
     that aren't live yet, but their copy explains what's coming rather than
     just saying "coming soon" now that there's something to say about them."""
+    card_class = f"dash-card {extra_class}".strip()
     return f"""
-    <div class="dash-card">
+    <div class="{card_class}">
       <div class="dash-card-icon"><img src="{escape(icon_src)}" alt="{escape(icon_alt)}" /></div>
       <div class="dash-card-body">
         <h3>{escape(title)}</h3>
@@ -1356,7 +1360,7 @@ def _dash_card(icon_src: str, icon_alt: str, title: str, description: str) -> st
     """
 
 
-def _dash_card_wrap(href: str, icon_src: str, icon_alt: str, title: str, description: str) -> str:
+def _dash_card_wrap(href: str, icon_src: str, icon_alt: str, title: str, description: str, extra_class: str = "") -> str:
     """One dashboard card, wrapped in its own link out to that app's page.
     A separate wrapper div (rather than just returning _dash_card's own
     markup straight inside the <a>) purely so .dash-card-link's own
@@ -1365,7 +1369,7 @@ def _dash_card_wrap(href: str, icon_src: str, icon_alt: str, title: str, descrip
     return f"""
     <div class="dash-card-wrap">
       <a href="{escape(href)}" class="dash-card-link">
-        {_dash_card(icon_src, icon_alt, title, description)}
+        {_dash_card(icon_src, icon_alt, title, description, extra_class)}
       </a>
     </div>
     """
@@ -1453,13 +1457,39 @@ def render_dashboard(player: PlayerView) -> str:
     # player); the grid below just renders it.
     cards_html = "\n      ".join(cards[key] for key in DASHBOARD_CARD_KEYS)
 
+    # Help & Support sits OUTSIDE DASHBOARD_CARD_KEYS' fixed grid on
+    # purpose: it's a smaller, secondary card centered on its own row
+    # below the six app cards (see .dash-support-row/.dash-card--compact
+    # in myscape.css), not a seventh equal-sized app card in the grid.
+    support_card_html = _dash_card_wrap(
+        "/dashboard/help-and-support",
+        _ICON_CAKE_OF_GUIDANCE,
+        "Cake of guidance",
+        "Help & Support",
+        "See the FAQ, report bugs, and request features.",
+        "dash-card--compact",
+    )
+
     body = f"""
     <div class="dash-grid" id="dashGrid">
       {cards_html}
     </div>
+    <div class="dash-support-row">
+      {support_card_html}
+    </div>
     """
 
     return _shell(title="Dashboard — myscape", player=player, body=body)
+
+
+def render_help_support(player: PlayerView) -> str:
+    """The Help & Support page -- just a titled, otherwise blank page for
+    now; the FAQ, bug-report and feature-request sections get added to
+    it later."""
+    body = """
+    <h2 class="page-title">Help &amp; Support</h2>
+    """
+    return _shell(title="Help & Support — myscape", player=player, body=body)
 
 
 _SUMMARY_STATS = (
