@@ -1199,10 +1199,15 @@ button.danger--filled:hover { background: #a84a3d; }
 /* Smaller variant of .dash-card (shorter AND narrower than the app
    cards): a 52px icon chip and tighter padding. Title/description font
    sizes deliberately match the app cards. */
-.dash-card--compact { gap: 14px; padding: 14px 16px 16px; align-items: center; }
+.dash-card--compact { gap: 14px; padding: 14px 16px 16px; align-items: flex-start; }
 .dash-card--compact .dash-card-icon { width: 52px; height: 52px; padding: 6px; }
-.dash-card--compact h3 { margin-bottom: 4px; }
-.dash-card--compact .subtitle { margin-bottom: 0; }
+/* (.dash-card.dash-card--compact, not just .dash-card--compact, so these
+   beat the plain .dash-card h3/.subtitle margins defined further down.)
+   Text block nudged down so the title's top sits a touch below the
+   icon chip's top edge, rather than level with or above it. */
+.dash-card.dash-card--compact .dash-card-body { padding-top: 6px; }
+.dash-card.dash-card--compact h3 { margin-bottom: 4px; }
+.dash-card.dash-card--compact .subtitle { margin-bottom: 0; }
 
 .dash-card h3 {
   font-weight: normal;
