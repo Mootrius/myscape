@@ -1658,11 +1658,30 @@ _HELP_SUPPORT_SCRIPT = r"""
         });
       }
 
-      input.addEventListener('input', render);
-      input.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') { input.value = ''; render(); }
+      // Results only appear once the visitor pauses typing (so the list
+      // doesn't flicker through matches on every keystroke); until then
+      // the old results are cleared and a "Loading..." note is shown.
+      // Enter, Escape, Clear and an emptied box all skip the wait.
+      var TYPING_PAUSE_MS = 1000;
+      var typingTimer = null;
+      function renderNow() {
+        clearTimeout(typingTimer);
+        typingTimer = null;
+        render();
+      }
+      input.addEventListener('input', function () {
+        clearTimeout(typingTimer);
+        if (!input.value.trim()) { renderNow(); return; }
+        resultsEl.textContent = '';
+        clearBtn.style.display = '';
+        setStatus('Loading...');
+        typingTimer = setTimeout(renderNow, TYPING_PAUSE_MS);
       });
-      clearBtn.addEventListener('click', function () { input.value = ''; render(); input.focus(); });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { input.value = ''; renderNow(); }
+        else if (e.key === 'Enter') { renderNow(); }
+      });
+      clearBtn.addEventListener('click', function () { input.value = ''; renderNow(); input.focus(); });
       render();
     })();
 """
