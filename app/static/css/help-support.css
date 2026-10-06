@@ -16,6 +16,10 @@
 .hs-status a { color: var(--gold-dim); }
 .hs-status a:hover { color: var(--gold); }
 
+.hs-note { margin: 18px 0 0; text-align: center; color: var(--text-faint); font-size: 13px; }
+.hs-note a { color: var(--gold-dim); }
+.hs-note a:hover { color: var(--gold); }
+
 .hs-results { display: flex; flex-direction: column; gap: 18px; }
 
 .hs-result {

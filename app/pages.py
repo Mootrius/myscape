@@ -1510,6 +1510,8 @@ _HELP_SUPPORT_SCRIPT = r"""
       var input = document.getElementById('hsSearch');
       var clearBtn = document.getElementById('hsSearchClear');
       var statusEl = document.getElementById('hsStatus');
+      var noteEl = document.getElementById('hsNote');
+      var DISCORD = '<a href="https://discord.gg/myscape" target="_blank" rel="noopener noreferrer">Discord server</a>';
       var resultsEl = document.getElementById('hsResults');
 
       var STOP = {};
@@ -1619,21 +1621,26 @@ _HELP_SUPPORT_SCRIPT = r"""
         return { hits: full.map(function (s) { return s.f; }), partial: partial };
       }
 
+      // statusEl sits above the results ("Loading...", "closest matches");
+      // noteEl sits below them (the Discord pointers).
       function setStatus(html) { statusEl.innerHTML = html; statusEl.style.display = html ? '' : 'none'; }
+      function setNote(html) { noteEl.innerHTML = html; noteEl.style.display = html ? '' : 'none'; }
 
       function render() {
         var q = input.value.trim();
         clearBtn.style.display = q ? '' : 'none';
         resultsEl.textContent = '';
+        setStatus('');
         if (!q) {
-          setStatus('Type a question above to search the FAQ.');
+          setNote('Search above via keyword or question, or visit our ' + DISCORD + '.');
           return;
         }
         var res = search(q);
         if (!res.hits.length) {
-          setStatus('No matching FAQs. Try different words, or ask in our <a href="https://discord.gg/myscape" target="_blank" rel="noopener noreferrer">Discord server</a>.');
+          setNote('No matching results. Try again, or ask in our ' + DISCORD + '.');
           return;
         }
+        setNote('Can\'t find an answer? Try asking in our ' + DISCORD + '.');
         setStatus(res.partial ? 'No exact matches \u2014 here are the closest ones.' : '');
         res.hits.forEach(function (f) {
           // One collapsed row per match: a chevron + the question, which
@@ -1683,6 +1690,7 @@ _HELP_SUPPORT_SCRIPT = r"""
         clearTimeout(typingTimer);
         if (!input.value.trim()) { renderNow(); return; }
         resultsEl.textContent = '';
+        setNote('');
         clearBtn.style.display = '';
         setStatus('Loading...');
         typingTimer = setTimeout(renderNow, TYPING_PAUSE_MS);
@@ -1716,6 +1724,7 @@ def render_help_support(player: PlayerView) -> str:
     </div>
     <p class="hs-status" id="hsStatus"></p>
     <div class="hs-results" id="hsResults"></div>
+    <p class="hs-note" id="hsNote"></p>
     """
     return _shell(
         title="Help & Support — myscape",
