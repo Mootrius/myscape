@@ -538,6 +538,11 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     # hand-picked here instead, per explicit instruction (confirmed
     # against the wiki's own File:Dossier detail.png).
     "dossier": (None, "Dossier detail.png"),
+    # The Grotesque Guardians boss fight's loot is recorded under one of
+    # its two phase NPCs, "Dusk" -- shown as the fight's own name
+    # instead, per explicit instruction, with the same portrait the bare
+    # wiki guess off "Dusk" already used (so it looks exactly as before).
+    "dusk": ("Grotesque Guardians", "Dusk.png"),
 }
 
 
