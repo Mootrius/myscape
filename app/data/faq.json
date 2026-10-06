@@ -18,7 +18,19 @@
    "website",
    "plugin",
    "companion",
-   "runelite plugin"
+   "runelite plugin",
+   "what is myscape all about",
+   "what exactly is myscape",
+   "what does myscape do",
+   "can you explain what myscape is",
+   "what is this website for",
+   "what is this site",
+   "what is this plugin and website",
+   "what can i do with myscape",
+   "what apps does myscape have",
+   "tell me about myscape",
+   "what is myscape used for",
+   "why would i use myscape"
   ]
  },
  {
@@ -43,7 +55,19 @@
    "fee",
    "charge",
    "membership",
-   "cheap"
+   "cheap",
+   "does myscape cost anything",
+   "how much does myscape cost",
+   "do i have to pay for myscape",
+   "is there a subscription",
+   "is there a paid version",
+   "will myscape ever cost money",
+   "is myscape free to use",
+   "is myscape going to be free forever",
+   "are there any fees",
+   "is there a premium plan",
+   "is it free or paid",
+   "do you charge for myscape"
   ]
  },
  {
@@ -60,7 +84,18 @@
    "require",
    "runelite",
    "do i need the plugin",
-   "optional"
+   "optional",
+   "can i use the website without the plugin",
+   "do i have to install the plugin",
+   "is the plugin required",
+   "can i use myscape without runelite",
+   "why do i need the plugin",
+   "does myscape work without the plugin",
+   "can i use myscape on its own",
+   "is the runelite plugin necessary",
+   "how does the site get my data",
+   "can i just use the website",
+   "is the plugin mandatory"
   ]
  },
  {
@@ -81,7 +116,23 @@
    "where to get",
    "safe download",
    "official",
-   "how to get"
+   "how to get",
+   "where do i download the plugin",
+   "how do i get the myscape plugin",
+   "how can i install myscape",
+   "where can i find the plugin in runelite",
+   "how do i add myscape to runelite",
+   "where do i get myscape for runelite",
+   "how do i set up the plugin",
+   "is the plugin on the plugin hub",
+   "what do i search for in the plugin hub",
+   "can i download the plugin from your website",
+   "is it safe to download the plugin from somewhere else",
+   "how do i install the runelite plugin",
+   "what is the process for installing the plugin",
+   "what are the steps to install myscape",
+   "what do i need to do to install the plugin",
+   "how do i go about installing myscape"
   ]
  },
  {
@@ -100,7 +151,18 @@
    "account required",
    "before linking",
    "link character",
-   "join"
+   "join",
+   "do i need to sign up first",
+   "do i have to make an account before installing the plugin",
+   "can i link my character without an account",
+   "how do i create a myscape account",
+   "how do i sign up",
+   "do i need an account to use myscape",
+   "should i register on the website first",
+   "how do i make an account",
+   "what do i do first the plugin or the website",
+   "do i make an account before or after installing the plugin",
+   "where do i register"
   ]
  },
  {
@@ -121,7 +183,18 @@
    "resend",
    "locked out",
    "verification link",
-   "activate"
+   "activate",
+   "why do i have to confirm my email",
+   "why does myscape ask for email verification",
+   "what is the verification email for",
+   "i never got my verification email",
+   "the verification email didnt arrive",
+   "how do i verify my email address",
+   "where is my confirmation email",
+   "why do you need my email",
+   "can i skip email verification",
+   "do i have to verify my email to use the site",
+   "why is my email being verified"
   ]
  },
  {
@@ -141,7 +214,19 @@
    "creator",
    "who made this",
    "who runs this",
-   "developer"
+   "developer",
+   "is myscape made by jagex",
+   "does jagex run myscape",
+   "is myscape an official jagex product",
+   "is myscape official",
+   "is myscape endorsed by jagex",
+   "who created myscape",
+   "who owns myscape",
+   "is myscape connected to jagex",
+   "does jagex support myscape",
+   "who is behind myscape",
+   "is this an official osrs site",
+   "does jagex know about myscape"
   ]
  },
  {
@@ -169,7 +254,20 @@
    "account security",
    "hacked",
    "input",
-   "is it safe"
+   "is it safe",
+   "is myscape safe to use",
+   "is the plugin safe",
+   "will i get banned for using myscape",
+   "can i get banned for using the plugin",
+   "is myscape against the rules",
+   "does myscape break jagex rules",
+   "is the plugin allowed by jagex",
+   "does the plugin put my account at risk",
+   "can the plugin hurt my account",
+   "does the plugin play the game for me",
+   "does the plugin automate anything",
+   "will myscape get my account hacked",
+   "can myscape see my password"
   ]
  },
  {
@@ -196,7 +294,20 @@
    "connect account",
    "link account",
    "link character",
-   "sidebar"
+   "sidebar",
+   "how do i connect my character to the website",
+   "how do i connect runelite to myscape",
+   "how do i use the link code",
+   "where do i enter the link code",
+   "how do i set up the plugin after installing",
+   "how do i start syncing my data",
+   "how do i link my osrs account",
+   "how do i pair my account",
+   "how do i connect my account to myscape",
+   "what do i do after i create my account",
+   "where do i paste the code in runelite",
+   "how do i get my data onto the site",
+   "what do i do to get started after linking"
   ]
  },
  {
@@ -218,7 +329,19 @@
    "10 minutes",
    "wont link",
    "cant link",
-   "linking problem"
+   "linking problem",
+   "my link code isnt working",
+   "the code says invalid",
+   "the code says expired",
+   "why is my linking code expired",
+   "how do i get a new link code",
+   "how long does the link code last",
+   "how do i generate a new code",
+   "the code i pasted doesnt work",
+   "linking failed what do i do",
+   "i cant link my character the code is rejected",
+   "where do i get another code",
+   "why wont my code link"
   ]
  },
  {
@@ -236,7 +359,18 @@
    "stop syncing",
    "remove account",
    "detach",
-   "unpair"
+   "unpair",
+   "how do i disconnect my character",
+   "how do i remove my character from myscape",
+   "how do i stop syncing my character",
+   "how do i unlink my account",
+   "how do i delete a character from myscape",
+   "how do i remove a linked character",
+   "where is the unlink button",
+   "how do i unlink runelite from myscape",
+   "can i unlink a character and keep my account",
+   "what happens when i unlink my character",
+   "how do i disconnect the plugin"
   ]
  },
  {
@@ -258,7 +392,19 @@
    "main and ironman",
    "add alt",
    "another account",
-   "extra character"
+   "extra character",
+   "can i add another character",
+   "can i link my alt",
+   "can i link multiple accounts",
+   "how do i add a second character",
+   "can i use myscape with more than one account",
+   "how do i link an alt account",
+   "can i have my main and ironman on myscape",
+   "how many characters can i link",
+   "how do i add another osrs account",
+   "can one myscape account have several characters",
+   "do i need a separate account for each character",
+   "how do i set up runelite profiles for multiple characters"
   ]
  },
  {
@@ -276,7 +422,19 @@
    "alt",
    "view other character",
    "which character",
-   "select character"
+   "select character",
+   "how do i change which character im viewing",
+   "how do i switch to my alt",
+   "how do i view a different character",
+   "how do i change characters on the website",
+   "how do i switch accounts",
+   "can i see my other character data",
+   "where do i switch characters",
+   "how do i pick which character is active",
+   "how do i swap between my characters",
+   "why am i seeing the wrong characters data",
+   "do my other characters keep syncing",
+   "how do i go back to my main"
   ]
  },
  {
@@ -295,7 +453,16 @@
    "character name",
    "changed my name",
    "in game name",
-   "osrs name"
+   "osrs name",
+   "what happens if i change my osrs name",
+   "i changed my name in game do i need to relink",
+   "will changing my display name break myscape",
+   "does a name change affect my linked character",
+   "do i have to link again after a name change",
+   "i renamed my character will it still work",
+   "will my data stay after changing my name",
+   "my character name changed and the site shows the old one",
+   "does myscape track name changes"
   ]
  },
  {
@@ -319,7 +486,19 @@
    "hardcore ironman",
    "hcgim",
    "ugim",
-   "iron accounts"
+   "iron accounts",
+   "does myscape work for ironmen",
+   "does myscape work with ironman accounts",
+   "can i use myscape on a group ironman",
+   "does it support hardcore ironman",
+   "does it work with ultimate ironman",
+   "can i use myscape on my iron",
+   "are there ironman features",
+   "is myscape useful for ironmen",
+   "does myscape support all account types",
+   "will myscape work on my gim account",
+   "is there ironman support",
+   "does it work for my hcim"
   ]
  },
  {
@@ -338,7 +517,19 @@
    "lost password",
    "password",
    "cant remember password",
-   "update password"
+   "update password",
+   "i forgot my password how do i reset it",
+   "how do i change my password",
+   "how can i change my email address",
+   "how do i update my email",
+   "where do i change my password",
+   "how do i reset my myscape password",
+   "i lost my password",
+   "how do i get back into my account",
+   "can i change the email on my account",
+   "where do i update my account email",
+   "what if i forget my password",
+   "i want to use a different email"
   ]
  },
  {
@@ -361,7 +552,20 @@
    "latency",
    "how fast",
    "update interval",
-   "how long"
+   "how long",
+   "how long does it take for my data to show up",
+   "how fast does the site update",
+   "how quickly does the plugin send data",
+   "is the data real time",
+   "how often does myscape update",
+   "how often is my data refreshed",
+   "does it update automatically",
+   "does the site update live",
+   "how soon will my data appear on the site",
+   "how long until my loot shows up",
+   "does the plugin sync in real time",
+   "how often does my bank update",
+   "when does my data update"
   ]
  },
  {
@@ -386,7 +590,21 @@
    "wrong data",
    "site not updating",
    "nothing here",
-   "broken sync"
+   "broken sync",
+   "why is my data not showing up",
+   "why is the site empty",
+   "why isnt anything showing on myscape",
+   "why isnt my xp updating",
+   "my dashboard is blank",
+   "why isnt the site updating",
+   "why is nothing syncing",
+   "my data isnt syncing to the website",
+   "why do i have to refresh the page",
+   "why doesnt the site show my latest data",
+   "the site isnt showing my new loot",
+   "my data is missing from the site",
+   "why is my data out of date",
+   "the website doesnt match my game"
   ]
  },
  {
@@ -410,7 +628,19 @@
    "not logged in",
    "without runelite",
    "played on phone",
-   "outside runelite"
+   "outside runelite",
+   "what if i play on mobile",
+   "does myscape track mobile play",
+   "what if i played without the plugin",
+   "will myscape catch up on what i did offline",
+   "will my progress from my phone show up",
+   "does it count things i did on mobile",
+   "what happens to data i gained without runelite",
+   "will i lose progress if i play on my phone",
+   "how do i sync data from when the plugin was off",
+   "can myscape see what i did on mobile",
+   "do i need to resync after playing on mobile",
+   "what if i played on another computer without the plugin"
   ]
  },
  {
@@ -433,7 +663,19 @@
    "collection log empty",
    "clog not syncing",
    "missing items",
-   "log slots"
+   "log slots",
+   "why is my collection log empty",
+   "why are some of my collection log items missing",
+   "why isnt my collection log showing everything",
+   "how do i sync my collection log",
+   "how do i get my collection log on the site",
+   "my clog isnt complete on myscape",
+   "do i need to open my collection log in game",
+   "why doesnt my collection log match the game",
+   "why are my clog slots missing",
+   "how do i update my collection log",
+   "what do i do if my collection log is incomplete",
+   "my collection log didnt sync"
   ]
  },
  {
@@ -459,7 +701,20 @@
    "bank not updating",
    "out of date",
    "doesnt match",
-   "wrong bank"
+   "wrong bank",
+   "why doesnt my bank match the game",
+   "why is my bank out of date on the site",
+   "why are items missing from my storages",
+   "why doesnt my storage viewer match my bank",
+   "my bank isnt updating on the website",
+   "why is my seed vault empty",
+   "how do i update my storages",
+   "why are my storages wrong",
+   "how do i fix my storages not matching",
+   "why is my bank showing old items",
+   "why isnt my bank syncing",
+   "how do i refresh my bank on the site",
+   "why are some storages not showing up"
   ]
  },
  {
@@ -482,7 +737,19 @@
    "kc wrong",
    "boss kc",
    "different kill count",
-   "doesnt match"
+   "doesnt match",
+   "why is my kill count wrong",
+   "why dont my kill counts match the game",
+   "why is my kc different on myscape",
+   "how do i fix my kill counts",
+   "how do i update my boss kill counts",
+   "why are my boss kills off",
+   "my kc is lower on the site than in game",
+   "how do i sync my kill counts",
+   "why is my kill count missing",
+   "why do my kill counts not match the hiscores",
+   "how do i refresh my kill counts",
+   "my goal tracking kc is wrong"
   ]
  },
  {
@@ -508,7 +775,20 @@
    "invisible",
    "hide profile",
    "make private",
-   "make public"
+   "make public",
+   "who can see my character overview",
+   "is my profile public",
+   "can other people see my character overview",
+   "is my character page private",
+   "how do i make my profile private",
+   "how do i make my profile public",
+   "how do i share my character overview",
+   "how do i get a link to my profile",
+   "can strangers see my profile",
+   "how do i hide my character overview",
+   "how do i change my profile visibility",
+   "what is the cog icon on character overview",
+   "how do i reset my profile link"
   ]
  },
  {
@@ -533,7 +813,19 @@
    "old gear",
    "character looks wrong",
    "wrong outfit",
-   "update character"
+   "update character",
+   "why does my character look different on the site",
+   "why is my character model outdated",
+   "why is my model wearing old gear",
+   "how do i update my character model",
+   "why doesnt my model show my current armor",
+   "how do i refresh my character model",
+   "why doesnt the character model match my game",
+   "does the model update automatically",
+   "how do i make the model match what im wearing",
+   "why is my characters appearance wrong",
+   "what does the update model button do",
+   "how do i change the gear shown on my model"
   ]
  },
  {
@@ -554,7 +846,19 @@
    "loot tracker",
    "past loot",
    "loot before installing",
-   "import loot"
+   "import loot",
+   "will my old drops show up in the loot tracker",
+   "can i import my past loot",
+   "does the loot tracker track loot from before i installed it",
+   "can i see loot from before linking",
+   "will it track drops i got before installing the plugin",
+   "how do i add my previous loot",
+   "does the loot tracker have my old drops",
+   "why is my loot history empty",
+   "can i get my past drops into myscape",
+   "does loot count before i linked my character",
+   "where is my old loot",
+   "will the loot tracker show loot from before the plugin"
   ]
  },
  {
@@ -579,7 +883,19 @@
    "hide item",
    "unhide",
    "show hidden",
-   "delete npc"
+   "delete npc",
+   "how do i remove an npc from the loot tracker",
+   "how do i stop tracking a monster",
+   "how do i hide a drop",
+   "how do i hide an item from my loot",
+   "how do i remove an item from the loot tracker",
+   "how do i unhide something i hid",
+   "how do i hide a boss from loot tracker",
+   "what is the eye icon on the loot tracker",
+   "how do i exclude an npc from my loot",
+   "how do i stop an npc from showing",
+   "can i delete an npc from the loot tracker",
+   "how do i filter out junk drops"
   ]
  },
  {
@@ -603,7 +919,19 @@
    "loot tracker",
    "drop value",
    "price update",
-   "how much"
+   "how much",
+   "how does the loot tracker work out value",
+   "where do loot prices come from",
+   "how are my drops valued",
+   "how does the loot tracker calculate gp",
+   "are loot prices live",
+   "why does my loot value change",
+   "what prices does the loot tracker use",
+   "how often do loot prices update",
+   "does the loot tracker use ge prices",
+   "how is my profit calculated",
+   "how is loot worth determined",
+   "why is my loot value different from in game"
   ]
  },
  {
@@ -625,7 +953,19 @@
    "gp",
    "how much",
    "price source",
-   "bank value"
+   "bank value",
+   "how does storages viewer calculate item value",
+   "where do storages prices come from",
+   "how are my items priced",
+   "are the prices live",
+   "why does the value of my items change",
+   "what prices does the storages viewer use",
+   "how often do storage prices update",
+   "does it use ge prices",
+   "how is my net worth calculated",
+   "how is my bank value calculated",
+   "why is my bank value different from in game",
+   "how is the price of an item decided"
   ]
  },
  {
@@ -649,7 +989,18 @@
    "price symbol",
    "price marker",
    "what does ~ mean",
-   "wavy line"
+   "wavy line",
+   "what does the squiggly line next to prices mean",
+   "what is the tilde next to an items price",
+   "what does the wavy symbol mean",
+   "why do some prices have a ~",
+   "what does the ~ symbol mean on the storages viewer",
+   "why do some items have a tilde",
+   "what does the icon next to my item price mean",
+   "how are untradeable items priced",
+   "why does an untradeable item have a value",
+   "how is the value of an untradeable item worked out",
+   "what does the approximate price icon mean"
   ]
  },
  {
@@ -675,7 +1026,19 @@
    "goal missing",
    "supplies",
    "consumables",
-   "add item"
+   "add item",
+   "why isnt my item showing in next purchase",
+   "why is an item missing from purchase goals",
+   "why doesnt my item show a price",
+   "why cant i see my food in next purchase",
+   "why dont potions show up in purchase goals",
+   "why isnt my ammo in the next purchase section",
+   "why does purchase goals ignore some items",
+   "why isnt my gear setup showing everything",
+   "what items are left out of next purchase",
+   "why is an item not appearing in my setup",
+   "why does an item have no price in purchase goals",
+   "how does next purchase decide what to show"
   ]
  },
  {
@@ -700,7 +1063,19 @@
    "give link",
    "share page",
    "share icon",
-   "generate link"
+   "generate link",
+   "how do i share my loot tracker",
+   "how do i share my mindmap",
+   "how do i send my goals to a friend",
+   "how do i make a shareable link",
+   "how do i share my storages",
+   "how do i give someone a link to my page",
+   "how do i share a snapshot of my data",
+   "can i share my dashboard with other people",
+   "where is the share button",
+   "can people without myscape see my shared link",
+   "how do i show my loot to others",
+   "how do i share my purchase goals"
   ]
  },
  {
@@ -721,7 +1096,19 @@
    "disable link",
    "cancel share",
    "make link private",
-   "undo share"
+   "undo share",
+   "how do i delete a share link",
+   "how do i unshare something",
+   "how do i remove a shared link",
+   "how do i stop people from seeing my shared link",
+   "how do i revoke a link i shared",
+   "where can i see my shared links",
+   "how do i turn off a share link",
+   "how do i delete all my shared links",
+   "can i cancel a share link",
+   "how do i make a shared page private again",
+   "how do i disable a link i sent",
+   "where are my shared links"
   ]
  },
  {
@@ -743,7 +1130,19 @@
    "add someone",
    "friend system",
    "send request",
-   "delete friend"
+   "delete friend",
+   "how do i add a friend on myscape",
+   "how do i send a friend request",
+   "how do i find my friend code",
+   "how do i accept a friend request",
+   "how do i remove a friend",
+   "can my friends see my private profile",
+   "how do i view my friends list",
+   "how do i see a friends profile",
+   "what can friends see",
+   "what happens when i delete a friend",
+   "how do friends work",
+   "how do i invite someone to be my friend"
   ]
  },
  {
@@ -766,7 +1165,19 @@
    "profile url",
    "publish",
    "who can see my profile",
-   "toggle"
+   "toggle",
+   "what is a public profile",
+   "how do i make my public profile public",
+   "how do i turn off my public profile",
+   "how do i turn my public profile on",
+   "what does a public profile show",
+   "how do i get my public profile link",
+   "how do i share my public profile",
+   "how do i change my public profile url",
+   "how do i make my profile private again",
+   "can i reset my public profile link",
+   "what does public mean on my profile",
+   "is my public profile live"
   ]
  },
  {
@@ -799,7 +1210,23 @@
    "privacy policy",
    "do you sell my data",
    "jagex account",
-   "osrs password"
+   "osrs password",
+   "what information does myscape collect",
+   "what data does myscape store",
+   "does myscape store my password",
+   "can you see my password",
+   "can you see my osrs login",
+   "does myscape have access to my jagex account",
+   "does myscape use cookies",
+   "what cookies does myscape use",
+   "who can see my data",
+   "is my data private",
+   "is my information safe",
+   "do you sell my data",
+   "do you share my data",
+   "what do you know about me",
+   "is my password encrypted",
+   "does myscape track me"
   ]
  },
  {
@@ -822,7 +1249,19 @@
    "remove my data",
    "delete everything",
    "cancel account",
-   "permanently delete"
+   "permanently delete",
+   "how do i delete my myscape account",
+   "how do i delete all my data",
+   "how do i remove my account",
+   "how do i close my account",
+   "can i delete my data",
+   "how do i erase everything myscape has about me",
+   "where do i delete my account",
+   "how do i permanently delete my account",
+   "what happens when i delete my account",
+   "how do i leave myscape",
+   "how do i wipe my data",
+   "can i get my data removed"
   ]
  },
  {
@@ -848,7 +1287,19 @@
    "something wrong",
    "found a bug",
    "report problem",
-   "report issue"
+   "report issue",
+   "how do i report a bug",
+   "where do i report a problem",
+   "something is broken on myscape",
+   "i found a bug where do i tell you",
+   "how do i report an issue",
+   "how do i contact support",
+   "where can i get help",
+   "where do i send feedback",
+   "how do i tell you about an error",
+   "the site isnt working who do i contact",
+   "is there a discord for support",
+   "where do i report a glitch"
   ]
  },
  {
@@ -871,7 +1322,19 @@
    "ask for feature",
    "feature idea",
    "want a feature",
-   "can you add"
+   "can you add",
+   "how do i suggest a feature",
+   "where do i request a new feature",
+   "can i suggest an idea for myscape",
+   "how do i ask for a new tool",
+   "where do i send feature ideas",
+   "can you add a feature i want",
+   "how do i give feedback on myscape",
+   "how do i suggest an improvement",
+   "where can i post a suggestion",
+   "is there somewhere to request features",
+   "i have an idea for myscape",
+   "how do i vote for a feature"
   ]
  },
  {
@@ -896,7 +1359,23 @@
    "wrong password",
    "unable to log in",
    "login problem",
-   "forgot email"
+   "forgot email",
+   "i cant log in to myscape",
+   "why cant i sign in",
+   "i forgot my password and cant log in",
+   "i am locked out of my account",
+   "why is my login not working",
+   "how do i get back into my account",
+   "what do i do if i cant log in",
+   "i cant access my account",
+   "my password isnt working",
+   "how do i recover my account",
+   "i forgot my email",
+   "how do i log in",
+   "i cant get into my account anymore",
+   "why cant i get into my account",
+   "i cant get back into my account",
+   "i cant log back in"
   ]
  }
 ]

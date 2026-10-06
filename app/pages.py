@@ -1516,7 +1516,8 @@ _HELP_SUPPORT_SCRIPT = r"""
       ('a an and are as at be but by can could do does for from get got ' +
        'have how i if in into is it its me my of on or our so than that ' +
        'the their then there these they this to up us was we what when ' +
-       'where which who why will with would you your').split(' ').forEach(function (w) { STOP[w] = true; });
+       'where which who why will with would you your ' +
+       'here too also just really please very anymore into about').split(' ').forEach(function (w) { STOP[w] = true; });
 
       function words(s) {
         return String(s).toLowerCase().replace(/['\u2019]/g, '').match(/[a-z0-9~]+/g) || [];
@@ -1598,14 +1599,23 @@ _HELP_SUPPORT_SCRIPT = r"""
           });
           scored.push({ f: f, matched: matched, score: score });
         });
-        var full = scored.filter(function (s) { return s.matched === tokens.length; });
+        var byScore = function (x, y) { return y.score - x.score || x.f.id - y.f.id; };
+        var full = scored.filter(function (s) { return s.matched === tokens.length; }).sort(byScore);
         var partial = false;
-        if (!full.length) {
+        // Partial matches (at least half the typed words) are the fallback
+        // when nothing matches every word -- and also trail a short list
+        // of full matches, so a stray word that only some FAQs contain
+        // can't push out an otherwise relevant one.
+        if (tokens.length > 1 && full.length < 3) {
           var need = Math.ceil(tokens.length / 2);
-          full = scored.filter(function (s) { return s.matched >= need; });
-          partial = full.length > 0;
+          var rest = scored.filter(function (s) { return s.matched < tokens.length && s.matched >= need; }).sort(byScore);
+          // ...but only ones scoring at least half as well as the best
+          // match overall, to keep weak coincidental hits out.
+          var top = full.length ? full[0].score : (rest.length ? rest[0].score : 0);
+          rest = rest.filter(function (s) { return s.score >= top * 0.5; });
+          partial = !full.length && rest.length > 0;
+          full = full.concat(rest.slice(0, 5 - full.length));
         }
-        full.sort(function (x, y) { return y.score - x.score || x.f.id - y.f.id; });
         return { hits: full.map(function (s) { return s.f; }), partial: partial };
       }
 
