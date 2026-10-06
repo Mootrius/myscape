@@ -1626,18 +1626,33 @@ _HELP_SUPPORT_SCRIPT = r"""
         }
         setStatus(res.partial ? 'No exact matches \u2014 here are the closest ones.' : '');
         res.hits.forEach(function (f) {
+          // One collapsed row per match: a chevron + the question, which
+          // expands (click or keyboard) to reveal the answer.
           var card = document.createElement('div');
           card.className = 'hs-result';
-          var cat = document.createElement('p');
-          cat.className = 'hs-result-cat';
-          cat.textContent = f.category;
-          var h = document.createElement('h3');
-          h.textContent = f.question;
-          var ans = document.createElement('p');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'hs-result-q';
+          btn.setAttribute('aria-expanded', 'false');
+          var icon = document.createElement('span');
+          icon.className = 'hs-chevron';
+          icon.setAttribute('aria-hidden', 'true');
+          var q = document.createElement('span');
+          q.className = 'hs-result-qtext';
+          q.textContent = f.question;
+          btn.appendChild(icon);
+          btn.appendChild(q);
+          var ans = document.createElement('div');
           ans.className = 'hs-result-answer';
+          ans.hidden = true;
           ans.innerHTML = f.answerHtml;
-          card.appendChild(cat);
-          card.appendChild(h);
+          btn.addEventListener('click', function () {
+            var open = ans.hidden;
+            ans.hidden = !open;
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            card.classList.toggle('open', open);
+          });
+          card.appendChild(btn);
           card.appendChild(ans);
           resultsEl.appendChild(card);
         });
@@ -1657,8 +1672,9 @@ def render_help_support(player: PlayerView) -> str:
     """The Help & Support page -- a search box over the FAQ (app/faq.py,
     app/data/faq.json). Everything is embedded in the page and searched
     client-side (there are only a few dozen entries), so results appear
-    as the visitor types with no requests; see _HELP_SUPPORT_SCRIPT for
-    how matching works. More sections get added below the FAQ search
+    as the visitor types with no requests -- each as a collapsed
+    question row that expands to its answer; see _HELP_SUPPORT_SCRIPT
+    for how matching works. More sections get added below the FAQ search
     later."""
     extra_head = f'<link rel="stylesheet" href="/static/css/help-support.css?v={_HELP_SUPPORT_CSS_VERSION}" />'
     faq_json = json.dumps(get_faq_items(), ensure_ascii=False).replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")

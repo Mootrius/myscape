@@ -22,17 +22,36 @@
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 18px 24px 20px;
 }
-.hs-result-cat {
-  margin: 0 0 6px;
-  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--text-faint);
+/* The question row -- a full-width button: chevron on the left, question
+   text beside it. Hover brightens the same way the dashboard cards do. */
+.hs-result-q {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; padding: 16px 20px;
+  background: none; border: none; margin: 0;
+  color: var(--text); font: inherit; font-size: 16px; letter-spacing: 0.02em;
+  text-align: left; cursor: pointer;
 }
-.hs-result h3 {
-  margin: 0 0 8px;
-  font-size: 17px; font-weight: normal; letter-spacing: 0.02em;
+.hs-result-q:hover { background-color: rgb(51, 51, 54); }
+.hs-result-q:focus-visible { outline: 1px solid var(--gold-dim); outline-offset: -1px; }
+.hs-result-qtext { flex: 1 1 auto; min-width: 0; }
+
+/* Right-pointing chevron that turns downward when the answer is open. */
+.hs-chevron {
+  flex: 0 0 auto; width: 8px; height: 8px;
+  border-right: 2px solid var(--gold-dim); border-bottom: 2px solid var(--gold-dim);
+  transform: rotate(-45deg); transition: transform 0.12s ease;
+  margin-left: 2px;
 }
-.hs-result-answer { margin: 0; color: var(--text-muted); font-size: 15px; line-height: 1.5; }
+.hs-result-q:hover .hs-chevron { border-color: var(--gold); }
+.hs-result.open .hs-chevron { transform: rotate(45deg); }
+
+/* Answer text lines up under the question text (20px padding + 8px icon
+   + 2px margin + 14px gap = 44px). */
+.hs-result-answer {
+  margin: 0; padding: 0 20px 18px 44px;
+  color: var(--text-muted); font-size: 15px; line-height: 1.5;
+}
+.hs-result-answer[hidden] { display: none; }
 .hs-result-answer a { color: var(--gold-dim); }
 .hs-result-answer a:hover { color: var(--gold); }

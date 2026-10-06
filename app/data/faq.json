@@ -202,7 +202,7 @@
  {
   "category": "Linking & Accounts",
   "question": "My linking code says it's expired or invalid. What do I do?",
-  "answer": "Linking codes expire after 10 minutes, so you'll need to generate a new on on myscape.io by refreshing the page and clicking the \"GENERATE CODE\" button again.",
+  "answer": "Linking codes expire after 10 minutes, so you'll need to generate a new one on myscape.io by refreshing the page and clicking the \"GENERATE CODE\" button again.",
   "id": 10,
   "tags": [
    "link code expired",
@@ -224,7 +224,7 @@
  {
   "category": "Linking & Accounts",
   "question": "How do I unlink my character?",
-  "answer": "You can unlink your by clicking the \"UNLINK\" button in the RuneLite plugin's sidebar. You can also delete a character, or your entire myscape account, from the [Account page](https://myscape.io/account) on myscape.io, but doing so will permanently delete your character or account data on myscape permanently.",
+  "answer": "You can unlink your character by clicking the \"UNLINK\" button in the RuneLite plugin's sidebar. You can also delete a character, or your entire myscape account, from the [Account page](https://myscape.io/account) on myscape.io, but doing so will delete your character or account data on myscape permanently.",
   "id": 11,
   "tags": [
    "unlink",
@@ -344,7 +344,7 @@
  {
   "category": "Syncing & Data Accuracy",
   "question": "How often does the plugin sync my data to the site?",
-  "answer": "The plugin automatically sends data when something in your game changes, usually within a couple of seconds. This includes xp drops, getting loot from an NPC, changing the contents of your bank/inventory, and much more. The main exception to this is the collection log; the data is still sent immediately when a new clog is received, but an inital opening of the collection log must happen for its contents to back-sync for the first time.",
+  "answer": "The plugin automatically sends data when something in your game changes, usually within a couple of seconds. This includes xp drops, getting loot from an NPC, changing the contents of your bank/inventory, and much more. The main exception to this is the collection log; the data is still sent immediately when a new clog is received, but an initial opening of the collection log must happen for its contents to back-sync for the first time.",
   "id": 17,
   "tags": [
    "sync",
@@ -772,7 +772,7 @@
  {
   "category": "Privacy & Account Deletion",
   "question": "What data does myscape collect, and who can see it?",
-  "answer": "The only data that myscape collects and stores is your email, in case we ever need to send you an email to reset your password. Your password is encrypted and hidden to us. We cannot see or gain access to your OSRS or Jagex accounts. The only cookies that are collected are those which strictly allow the site to retain your preferences on your various apps' pages (such as a custom sort you create on the Purchase Goals, for example).",
+  "answer": "The only pesronal data that myscape collects and stores is your email, in case we ever need to send you an email to reset your password. Your password is encrypted and hidden to us. We cannot see or gain access to your OSRS or Jagex accounts. The only cookie we keep is one that keeps you logged in to the site.",
   "id": 35,
   "tags": [
    "privacy",
