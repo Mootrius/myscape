@@ -1183,7 +1183,7 @@
  {
   "category": "Privacy & Account Deletion",
   "question": "What data does myscape collect, and who can see it?",
-  "answer": "The only pesronal data that myscape collects and stores is your email, in case we ever need to send you an email to reset your password. Your password is encrypted and hidden to us. We cannot see or gain access to your OSRS or Jagex accounts. The only cookie we keep is one that keeps you logged in to the site.",
+  "answer": "The only personal data that myscape collects and stores is your email, in case we ever need to send you an email to reset your password. Your password is encrypted and hidden to us. We cannot see or gain access to your OSRS or Jagex accounts. The only cookie we keep is one that keeps you logged in to the site.",
   "id": 35,
   "tags": [
    "privacy",
