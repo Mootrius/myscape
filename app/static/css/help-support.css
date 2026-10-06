@@ -1,0 +1,38 @@
+/* Help & Support page (render_help_support in app/pages.py) -- the FAQ
+   search box and its result cards. Same per-page-CSS convention as
+   loot-tracker.css / goal-tracking.css. */
+
+.hs-search-group { position: relative; margin-bottom: 18px; }
+.hs-search { height: 44px; padding: 0 58px 0 14px; font-size: 15px; }
+.hs-search-clear {
+  position: absolute; top: 50%; right: 14px; transform: translateY(-50%);
+  background: none; border: none; padding: 0; margin: 0;
+  font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--text-faint); cursor: pointer;
+}
+.hs-search-clear:hover { color: var(--text); }
+
+.hs-status { margin: 0 0 14px; text-align: center; color: var(--text-faint); font-size: 13px; }
+.hs-status a { color: var(--gold-dim); }
+.hs-status a:hover { color: var(--gold); }
+
+.hs-results { display: flex; flex-direction: column; gap: 18px; }
+
+.hs-result {
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 24px 20px;
+}
+.hs-result-cat {
+  margin: 0 0 6px;
+  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.hs-result h3 {
+  margin: 0 0 8px;
+  font-size: 17px; font-weight: normal; letter-spacing: 0.02em;
+}
+.hs-result-answer { margin: 0; color: var(--text-muted); font-size: 15px; line-height: 1.5; }
+.hs-result-answer a { color: var(--gold-dim); }
+.hs-result-answer a:hover { color: var(--gold); }

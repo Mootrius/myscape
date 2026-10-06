@@ -14,6 +14,7 @@ from html import escape
 from typing import TYPE_CHECKING, Optional, Tuple
 
 from app.bosses import HISCORE_BOSSES
+from app.faq import get_faq_items
 from app.mindmaps import SKILL_NAMES
 from app.purchase_goals import item_icon_url
 
@@ -102,6 +103,16 @@ try:
     _LOOT_TRACKER_CSS_VERSION = int(os.path.getmtime(_LOOT_TRACKER_CSS_PATH))
 except OSError:
     _LOOT_TRACKER_CSS_VERSION = 0
+
+# Same cache-busting trick again, for the Help & Support page's own
+# stylesheet.
+_HELP_SUPPORT_CSS_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "css", "help-support.css"
+)
+try:
+    _HELP_SUPPORT_CSS_VERSION = int(os.path.getmtime(_HELP_SUPPORT_CSS_PATH))
+except OSError:
+    _HELP_SUPPORT_CSS_VERSION = 0
 
 # Same cache-busting trick again, for the Character Overview page's own
 # stylesheet.
@@ -1482,14 +1493,192 @@ def render_dashboard(player: PlayerView) -> str:
     return _shell(title="Dashboard — myscape", player=player, body=body)
 
 
+# Help & Support's FAQ search -- a plain (non-f-string) script so its
+# braces and regexes need no escaping; __FAQ_JSON__ is swapped for the
+# FAQ entries (see app/faq.py) in render_help_support below.
+#
+# Ranking in short: the typed words (minus filler like "how"/"do"/"my")
+# are each matched against three things per FAQ -- its question, its
+# search tags, and its answer text -- with a question/tag hit counting
+# double an answer hit. A word matches on a shared stem ("linking" ~
+# "link"), a shared prefix, or (for longer words) a one-letter typo. An
+# FAQ must match every typed word to show up; if none does, the closest
+# partial matches are shown instead, flagged as such.
+_HELP_SUPPORT_SCRIPT = r"""
+    (function () {
+      var FAQ = __FAQ_JSON__;
+      var input = document.getElementById('hsSearch');
+      var clearBtn = document.getElementById('hsSearchClear');
+      var statusEl = document.getElementById('hsStatus');
+      var resultsEl = document.getElementById('hsResults');
+
+      var STOP = {};
+      ('a an and are as at be but by can could do does for from get got ' +
+       'have how i if in into is it its me my of on or our so than that ' +
+       'the their then there these they this to up us was we what when ' +
+       'where which who why will with would you your').split(' ').forEach(function (w) { STOP[w] = true; });
+
+      function words(s) {
+        return String(s).toLowerCase().replace(/['\u2019]/g, '').match(/[a-z0-9~]+/g) || [];
+      }
+      function stem(w) {
+        var n = w.length;
+        if (n > 4 && w.slice(-3) === 'ies') return w.slice(0, -3) + 'y';
+        if (n > 5 && w.slice(-3) === 'ing') return w.slice(0, -3);
+        if (n > 4 && w.slice(-2) === 'ed') return w.slice(0, -2);
+        if (n > 3 && w.slice(-1) === 's' && w.slice(-2) !== 'ss') return w.slice(0, -1);
+        return w;
+      }
+      function stems(s) { return words(s).map(stem); }
+
+      // True when a and b differ by at most one inserted, deleted,
+      // substituted or swapped-adjacent letter.
+      function near(a, b) {
+        if (Math.abs(a.length - b.length) > 1) return false;
+        var i = 0;
+        while (i < a.length && i < b.length && a[i] === b[i]) i++;
+        if (i === a.length || i === b.length) return Math.abs(a.length - b.length) <= 1;
+        if (a.length === b.length) {
+          if (a.slice(i + 1) === b.slice(i + 1)) return true;
+          if (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2)) return true;
+          return false;
+        }
+        return a.length > b.length ? a.slice(i + 1) === b.slice(i) : b.slice(i + 1) === a.slice(i);
+      }
+
+      // How well one typed word matches the best word in a list: 3 exact,
+      // 2 shared prefix, 1.5 one-typo, 0 none.
+      function best(t, list) {
+        var b = 0;
+        for (var i = 0; i < list.length; i++) {
+          var w = list[i];
+          if (w === t) return 3;
+          if (t.length >= 4 && w.length >= 4 && (w.indexOf(t) === 0 || t.indexOf(w) === 0)) b = Math.max(b, 2);
+          else if (t.length >= 5 && w.length >= 5 && near(t, w)) b = Math.max(b, 1.5);
+        }
+        return b;
+      }
+
+      FAQ.forEach(function (f) {
+        f.qStems = stems(f.question);
+        f.aStems = stems(f.answer);
+        f.tagPhrases = f.tags.map(function (t) { return words(t).filter(function (w) { return !STOP[w]; }).map(stem); });
+        f.tagStems = [].concat.apply([], f.tagPhrases);
+        f.qJoined = f.qStems.join(' ');
+        f.aJoined = f.aStems.join(' ');
+      });
+
+      function search(query) {
+        var raw = words(query);
+        var tokens = raw.filter(function (w) { return !STOP[w]; }).map(stem);
+        if (!tokens.length) tokens = raw.map(stem);
+        tokens = tokens.filter(function (t, i) { return tokens.indexOf(t) === i; });
+        if (!tokens.length) return { hits: [], partial: false };
+        var phrase = tokens.join(' ');
+        var scored = [];
+        FAQ.forEach(function (f) {
+          var matched = 0, score = 0;
+          tokens.forEach(function (t) {
+            var q = best(t, f.qStems), g = best(t, f.tagStems), a = best(t, f.aStems) * 0.5;
+            var top = Math.max(q, g, a);
+            if (top > 0) {
+              matched++;
+              score += top + ((q > 0) + (g > 0) + (a > 0) - 1) * 0.5;
+            }
+          });
+          if (!matched) return;
+          if (tokens.length > 1) {
+            if (f.qJoined.indexOf(phrase) !== -1) score += 4;
+            if (f.aJoined.indexOf(phrase) !== -1) score += 1.5;
+          }
+          f.tagPhrases.forEach(function (tp) {
+            var tj = tp.join(' ');
+            if (tj === phrase) score += 6;
+            else if (tokens.length > 1 && tj.indexOf(phrase) !== -1) score += 3;
+          });
+          scored.push({ f: f, matched: matched, score: score });
+        });
+        var full = scored.filter(function (s) { return s.matched === tokens.length; });
+        var partial = false;
+        if (!full.length) {
+          var need = Math.ceil(tokens.length / 2);
+          full = scored.filter(function (s) { return s.matched >= need; });
+          partial = full.length > 0;
+        }
+        full.sort(function (x, y) { return y.score - x.score || x.f.id - y.f.id; });
+        return { hits: full.map(function (s) { return s.f; }), partial: partial };
+      }
+
+      function setStatus(html) { statusEl.innerHTML = html; statusEl.style.display = html ? '' : 'none'; }
+
+      function render() {
+        var q = input.value.trim();
+        clearBtn.style.display = q ? '' : 'none';
+        resultsEl.textContent = '';
+        if (!q) {
+          setStatus('Type a question above to search the FAQ.');
+          return;
+        }
+        var res = search(q);
+        if (!res.hits.length) {
+          setStatus('No matching FAQs. Try different words, or ask in our <a href="https://discord.gg/myscape" target="_blank" rel="noopener noreferrer">Discord server</a>.');
+          return;
+        }
+        setStatus(res.partial ? 'No exact matches \u2014 here are the closest ones.' : '');
+        res.hits.forEach(function (f) {
+          var card = document.createElement('div');
+          card.className = 'hs-result';
+          var cat = document.createElement('p');
+          cat.className = 'hs-result-cat';
+          cat.textContent = f.category;
+          var h = document.createElement('h3');
+          h.textContent = f.question;
+          var ans = document.createElement('p');
+          ans.className = 'hs-result-answer';
+          ans.innerHTML = f.answerHtml;
+          card.appendChild(cat);
+          card.appendChild(h);
+          card.appendChild(ans);
+          resultsEl.appendChild(card);
+        });
+      }
+
+      input.addEventListener('input', render);
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { input.value = ''; render(); }
+      });
+      clearBtn.addEventListener('click', function () { input.value = ''; render(); input.focus(); });
+      render();
+    })();
+"""
+
+
 def render_help_support(player: PlayerView) -> str:
-    """The Help & Support page -- just a titled, otherwise blank page for
-    now; the FAQ, bug-report and feature-request sections get added to
-    it later."""
+    """The Help & Support page -- a search box over the FAQ (app/faq.py,
+    app/data/faq.json). Everything is embedded in the page and searched
+    client-side (there are only a few dozen entries), so results appear
+    as the visitor types with no requests; see _HELP_SUPPORT_SCRIPT for
+    how matching works. More sections get added below the FAQ search
+    later."""
+    extra_head = f'<link rel="stylesheet" href="/static/css/help-support.css?v={_HELP_SUPPORT_CSS_VERSION}" />'
+    faq_json = json.dumps(get_faq_items(), ensure_ascii=False).replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    script = _HELP_SUPPORT_SCRIPT.replace("__FAQ_JSON__", faq_json)
     body = """
     <h2 class="page-title">Help &amp; Support</h2>
+    <div class="hs-search-group">
+      <input type="text" class="hs-search" id="hsSearch" placeholder="Search the FAQ" autocomplete="off" />
+      <button type="button" class="hs-search-clear" id="hsSearchClear" style="display:none;">Clear</button>
+    </div>
+    <p class="hs-status" id="hsStatus"></p>
+    <div class="hs-results" id="hsResults"></div>
     """
-    return _shell(title="Help & Support — myscape", player=player, body=body)
+    return _shell(
+        title="Help & Support — myscape",
+        player=player,
+        body=body,
+        extra_script=script,
+        extra_head=extra_head,
+    )
 
 
 _SUMMARY_STATS = (
