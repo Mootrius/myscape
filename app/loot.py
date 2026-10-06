@@ -543,7 +543,19 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     # instead, per explicit instruction, with the same portrait the bare
     # wiki guess off "Dusk" already used (so it looks exactly as before).
     "dusk": ("Grotesque Guardians", "Dusk.png"),
+    # Duke Sucellus -- portrait swapped for a bundled image (a value
+    # starting with "/" is a direct URL rather than a wiki filename --
+    # see _override_icon_url below), per explicit instruction.
+    "duke sucellus": (None, "/static/img/npc-duke-sucellus.png"),
 }
+
+
+def _override_icon_url(icon: str) -> Optional[str]:
+    """The portrait URL for a _NPC_DISPLAY_OVERRIDES entry: a value
+    starting with "/" is already a URL (a bundled /static/ image), used
+    as-is; anything else is a wiki filename routed through npc_icon_url's
+    /icon-cache/ route like every other portrait."""
+    return icon if icon.startswith("/") else npc_icon_url(icon)
 
 
 # The six clue tiers this app knows how to recognize a casket by -- the
@@ -1004,13 +1016,13 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
         override = _NPC_DISPLAY_OVERRIDES.get(stripped_name.lower())
         if event.source_type == "npc":
             npc_like_name = (override[0] if override else None) or event.source_name
-            npc_like_icon = npc_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
+            npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
         elif tier is not None:
             npc_like_name = f"Reward casket ({tier.lower()})"
             npc_like_icon = clue_casket_icon_url(tier)
         elif event.source_type == "event" and stripped_name and stripped_name.lower() != "casket":
             npc_like_name = (override[0] if override else None) or stripped_name
-            npc_like_icon = npc_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
+            npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
         else:
             npc_like_name = None
             npc_like_icon = None
