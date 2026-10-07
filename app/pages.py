@@ -9446,14 +9446,15 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       // Same CLEAR button treatment as the NPC search box above -- see
       // its own comment for why.
       // On touch screens a tap on any of these shows no tooltip: the
-      // share icon and its link button, the sort buttons, and the eye
+      // date range picker, the share icon and its link button, the
+      // sort buttons, and the eye
       // buttons (the show-hidden toggles beside the sort buttons and
       // the ones on each NPC/item tile). Every other tooltip here still
       // shows. Read by the shared tooltip script in _shell; mouse
       // hover is unaffected.
       window.myscapeTouchTooltipFilter = function (el) {
         return !(el.closest && el.closest(
-          '.loot-share-icon-btn, .loot-share-link-btn, .loot-sort-tab, .loot-hide-toggle, .loot-eye-btn'
+          '.loot-share-icon-btn, .loot-share-link-btn, .loot-sort-tab, .loot-hide-toggle, .loot-eye-btn, .loot-range-btn'
         ));
       };
       var lootItemSearchInput = document.getElementById('lootItemSearch');
@@ -10607,6 +10608,9 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
       if (rangeBtn) {{
         rangeBtn.replaceWith(rangeBtn.cloneNode(true));
         document.getElementById('lootRangeBtn').classList.add('loot-range-btn--static');
+        // Nothing to change on a shared page, so no "Change date range"
+        // tooltip on hover (desktop) or tap (touch).
+        document.getElementById('lootRangeBtn').removeAttribute('data-tooltip');
       }}
 
       // The clone above keeps whatever this button's own label said
