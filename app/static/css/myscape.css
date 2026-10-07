@@ -2044,15 +2044,18 @@ body.landing .footer-inner {
     text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* Shared link: character on its own line; below it the code and the
-     expiry date side by side, then the type at the right; trash on the
-     far right spanning both lines. */
-  body:not(.landing) .shared-links-table tbody tr { grid-template-columns: 68px auto minmax(0, 1fr) 44px; column-gap: 10px; }
-  body:not(.landing) .shared-links-table td:nth-child(1) { grid-column: 1 / 4; grid-row: 1; font-size: 13px; color: var(--text); }
-  body:not(.landing) .shared-links-table td:nth-child(2) { grid-column: 3; grid-row: 2; text-align: right; font-size: 11px; color: var(--text-faint); }
-  body:not(.landing) .shared-links-table td:nth-child(3) { grid-column: 1; grid-row: 2; overflow: visible; }
-  body:not(.landing) .shared-links-table td:nth-child(4) { grid-column: 2; grid-row: 2; font-size: 11px; color: var(--text-faint); }
-  body:not(.landing) .shared-links-table td:nth-child(5) { grid-column: 4; grid-row: 1 / span 2; overflow: visible; }
+  /* Shared link: character and type stacked on the left; the code and
+     the expiry date side by side in the middle, vertically centered
+     against that pair; trash on the far right. */
+  body:not(.landing) .shared-links-table tbody tr { grid-template-columns: minmax(0, 1fr) 62px 52px 40px; column-gap: 8px; }
+  body:not(.landing) .shared-links-table td:nth-child(1) { grid-column: 1; grid-row: 1; font-size: 13px; color: var(--text); }
+  body:not(.landing) .shared-links-table td:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 11px; color: var(--text-faint); }
+  body:not(.landing) .shared-links-table td:nth-child(3) { grid-column: 2; grid-row: 1 / span 2; align-self: center; overflow: visible; }
+  body:not(.landing) .shared-links-table td:nth-child(4) { grid-column: 3; grid-row: 1 / span 2; align-self: center; font-size: 11px; color: var(--text-faint); }
+  body:not(.landing) .shared-links-table td:nth-child(5) { grid-column: 4; grid-row: 1 / span 2; align-self: center; overflow: visible; }
+  body:not(.landing) .shared-links-table .shared-link-code-btn { width: 62px; }
+  body:not(.landing) .shared-links-table .trash-delete-btn,
+  body:not(.landing) .shared-links-table .trash-delete-btn--confirm { width: 40px; }
 
   /* Friend: name / since / remove on one line. Header and rows share
      the same three columns, with Friend and Since centered over them. */
