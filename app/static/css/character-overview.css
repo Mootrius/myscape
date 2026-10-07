@@ -1552,7 +1552,7 @@
   body:not(.landing) .diaries-list {
     scrollbar-width: none;
     overflow-y: auto;
-    padding-right: 18px;
+    padding-right: 16px;
   }
   body:not(.landing) .clog-pages::-webkit-scrollbar,
   body:not(.landing) .clog-items::-webkit-scrollbar,
@@ -1560,18 +1560,21 @@
   body:not(.landing) .diaries-list::-webkit-scrollbar {
     display: none;
   }
+  /* The track itself is invisible and 14px wide -- a comfortable
+     finger target -- while the thumb inside it is a thin 6px bar
+     hugging its right edge. */
   body:not(.landing) .co-sb {
     position: absolute;
-    width: 12px;
-    background: var(--bg);
-    border-radius: var(--radius);
+    width: 14px;
+    background: transparent;
     z-index: 1;
     touch-action: none;
     visibility: hidden;
   }
   body:not(.landing) .co-sb--on { visibility: visible; }
   body:not(.landing) .co-sb-thumb {
-    width: 100%;
+    width: 6px;
+    margin-left: 8px;
     background: var(--gold-dim);
     border-radius: var(--radius);
     touch-action: none;
@@ -1661,7 +1664,6 @@
     flex: 1 1 0;
     min-height: 0;
     align-content: start;
-    padding-right: 4px;
   }
 
   /* Public-profile settings popup: on desktop it floats centered under
