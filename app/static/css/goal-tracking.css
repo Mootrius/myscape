@@ -1272,3 +1272,37 @@ input[type="text"].invalid { border-color: var(--red); }
   body:not(.landing) .gt-share-wrap { position: static; }
   body:not(.landing) .gt-share-card { top: 100%; margin-top: 6px; width: min(280px, calc(100vw - 32px)); }
 }
+
+
+/* ---- Touch: no sticky hover --------------------------------------------
+   A tap leaves :hover stuck on whatever's under the finger, so when the
+   wizard swaps to the next step, the button that lands in the same spot
+   showed up highlighted. On screens with no hover, put every hover
+   style back to its resting look and give a brief :active press look on
+   the tappable cards/buttons instead. Not applied on the homepage
+   preview. */
+@media (hover: none) {
+  body:not(.landing) .gt-wizard-add-btn:hover,
+  body:not(.landing) .gt-add-btn:hover { background: var(--gold); }
+  body:not(.landing) .gt-wizard-add-btn:active,
+  body:not(.landing) .gt-add-btn:active { background: #ffab42; }
+  body:not(.landing) .gt-wizard-type-btn:hover { border-color: var(--border); color: var(--text-muted); background: var(--panel-2); }
+  body:not(.landing) .gt-wizard-type-btn:active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+  body:not(.landing) .gt-wizard-btn:hover { border-color: var(--border); color: var(--text-dim); }
+  body:not(.landing) .gt-wizard-btn:active { border-color: var(--gold-dim); color: var(--text); }
+  body:not(.landing) .gt-wizard-actions .gt-add-btn.gt-wizard-btn-next:hover { background: var(--panel-2); border-color: var(--border); color: var(--text-dim); }
+  body:not(.landing) .gt-wizard-actions .gt-add-btn.gt-wizard-btn-next:active { border-color: var(--gold-dim); color: var(--text); }
+  body:not(.landing) .gt-metric-btn:not(.active):hover,
+  body:not(.landing) .gt-target-mode-btn:not(.active):hover,
+  body:not(.landing) .gt-recur-unit-btn:not(.active):hover,
+  body:not(.landing) .gt-recur-start-btn:not(.active):hover { color: var(--text-dim); }
+  body:not(.landing) .gt-suggestion:hover { background: transparent; }
+  body:not(.landing) .gt-suggestion:active { background: var(--panel-2); }
+  body:not(.landing) .gt-sort-tab:not(.active):hover { border-color: var(--border); color: var(--text-dim); }
+  body:not(.landing) .gt-goal-row.draggable:hover { background-color: transparent; }
+  body:not(.landing) .gt-goal-info-icon:hover { color: var(--text-faint); }
+  body:not(.landing) .gt-goal-delete:not(.gt-goal-delete--confirm):hover { color: var(--text-faint); }
+  body:not(.landing) .gt-share-icon-btn:not(.open):hover { color: var(--text-faint); }
+  body:not(.landing) .gt-share-generate-btn:hover,
+  body:not(.landing) .gt-share-link-btn:hover { border-color: var(--border); color: var(--text-dim); }
+}
