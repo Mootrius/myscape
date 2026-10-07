@@ -20799,6 +20799,15 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
         listEl.innerHTML = sorted.map(function (g) { return goalRowHtml(g, customMode); }).join('');
         fixGoalNameMinWidths(listEl);
         wireGoalDrag(customMode);
+        // Touch screens never show a native title="" tooltip, so the
+        // recurring/"started at" info icon's text moves to data-tooltip,
+        // which the shared tap-tooltip script does show.
+        if (GT_TOUCH) {
+          listEl.querySelectorAll('.gt-goal-info-icon[title]').forEach(function (ic) {
+            ic.setAttribute('data-tooltip', ic.getAttribute('title'));
+            ic.removeAttribute('title');
+          });
+        }
       }
 
       // Keeps the gap between a goal's title and its progress readout
@@ -20838,6 +20847,8 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // custom-mode reordering afterward since that only ever moves
       // these same row elements around, never recreates them.
       var goalNameMeasureCtx = document.createElement('canvas').getContext('2d');
+      var GT_TOUCH = !document.body.classList.contains('landing')
+        && !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
       var GT_GOAL_NAME_MIN_WIDTH = 48; // matches .gt-goal-name's own min-width in goal-tracking.css
       function fixGoalNameMinWidths(listEl) {
         listEl.querySelectorAll('.gt-goal-name').forEach(function (el) {
@@ -20971,6 +20982,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
           // untrue and not what a delete press is even about. Only a
           // press on the row itself, outside that button, is what
           // should ever point someone at Custom mode.
+          if (GT_TOUCH) return;
           listEl.querySelectorAll('.gt-goal-row').forEach(function (el) {
             el.addEventListener('pointerdown', function (e) {
               if (e.target.closest('.gt-goal-delete')) return;
@@ -21186,9 +21198,187 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // serves both the initial paint and every refresh after it. -----
 
       async function loadGoals() {
+        if (GT.dragging) return; // a touch long-press drag is in flight
         var data = await apiCall('/api/goals');
-        if (!data) return;
+        if (!data || GT.dragging) return;
         applyGoalsResponse(data);
+      }
+
+
+      // ---- Touch only, Goal Tracking only (not the homepage preview) ----
+      if (GT_TOUCH) {
+        // Tap tooltips: only the info icon (recurrence / started-at) has
+        // anything worth showing; the labelled controls show none.
+        window.myscapeTouchTooltipFilter = function (el) {
+          return !(el.closest && el.closest('.gt-sort-tab, .gt-share-icon-btn, .gt-share-link-btn, .gt-goal-delete'));
+        };
+
+        // Keyboard: keep a focused text field (plus a bit of its
+        // suggestion list) above the on-screen keyboard.
+        (function () {
+          var vv = window.visualViewport;
+          var pending = null;
+          function isTextField(el) {
+            return !!el && el.tagName === 'INPUT' && /^(text|search|number|tel|)$/.test(el.type || '');
+          }
+          function reveal() {
+            var el = document.activeElement;
+            if (!isTextField(el)) return;
+            var viewTop = vv ? vv.offsetTop : 0;
+            var viewBottom = viewTop + (vv ? vv.height : window.innerHeight);
+            var r = el.getBoundingClientRect();
+            var need = r.bottom + 16;
+            var sug = document.querySelector('.gt-suggestions.show');
+            if (sug) need = Math.min(sug.getBoundingClientRect().bottom, r.bottom + 170) + 8;
+            var dy = need - viewBottom;
+            if (dy > 0) {
+              dy = Math.min(dy, Math.max(0, r.top - viewTop - 8));
+              if (dy > 0) window.scrollBy({ top: dy, left: 0, behavior: 'smooth' });
+            } else if (r.top < viewTop + 8) {
+              window.scrollBy({ top: r.top - viewTop - 8, left: 0, behavior: 'smooth' });
+            }
+          }
+          function schedule(delay) { clearTimeout(pending); pending = setTimeout(reveal, delay); }
+          document.addEventListener('focusin', function (e) {
+            if (!isTextField(e.target)) return;
+            schedule(150); setTimeout(reveal, 450); setTimeout(reveal, 800);
+          });
+          document.addEventListener('input', function (e) {
+            if (isTextField(e.target)) schedule(450);
+          });
+          if (vv) vv.addEventListener('resize', function () {
+            if (isTextField(document.activeElement)) schedule(60);
+          });
+        })();
+
+        // Long-press drag (Custom sort). HTML5 drag-and-drop doesn't
+        // start from a finger reliably, so a press held ~0.35s on a goal
+        // row starts the same drag the mouse does by firing the same
+        // dragstart/dragenter/dragover/drop/dragend events at the same
+        // handlers (stand-in dataTransfer) while a ghost copy follows the
+        // finger. Moving before the hold completes is a normal scroll.
+        (function () {
+          var HOLD_MS = 350, MOVE_TOL = 10, EDGE = 90;
+          var st = null;
+          var SOURCE_SEL = '#gtGoalList .gt-goal-row[draggable="true"]';
+          function makeDT() {
+            var d = {};
+            return {
+              effectAllowed: 'none', dropEffect: 'none', types: [],
+              setData: function (k, v) { d[k] = String(v); },
+              getData: function (k) { return d[k] || ''; },
+              clearData: function () { d = {}; },
+              setDragImage: function () {}
+            };
+          }
+          function fire(type, target, x, y, dt) {
+            var ev = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window });
+            Object.defineProperty(ev, 'dataTransfer', { value: dt });
+            return target.dispatchEvent(ev);
+          }
+          function moveGhost() {
+            if (!st || !st.ghost) return;
+            st.ghost.style.left = (st.x - st.gx) + 'px';
+            st.ghost.style.top = (st.y - st.gy) + 'px';
+          }
+          function hover() {
+            if (!st || !st.active) return;
+            var el = document.elementFromPoint(st.x, st.y);
+            if (el !== st.over) {
+              if (st.over) fire('dragleave', st.over, st.x, st.y, st.dt);
+              st.over = el;
+              if (el) fire('dragenter', el, st.x, st.y, st.dt);
+            }
+            if (el) fire('dragover', el, st.x, st.y, st.dt);
+          }
+          function scrollLoop() {
+            if (!st || !st.active) return;
+            var dy = 0;
+            if (st.y < EDGE) dy = -Math.ceil((EDGE - st.y) / 6);
+            else if (st.y > window.innerHeight - EDGE) dy = Math.ceil((st.y - (window.innerHeight - EDGE)) / 6);
+            if (dy) { window.scrollBy(0, dy); moveGhost(); hover(); }
+            st.raf = requestAnimationFrame(scrollLoop);
+          }
+          function release(s) {
+            if (s.src && s.wasDraggable != null) s.src.setAttribute('draggable', s.wasDraggable);
+            GT.dragging = false;
+          }
+          function begin() {
+            if (!st || st.active) return;
+            if (!document.contains(st.src)) { st = null; GT.dragging = false; return; }
+            st.active = true;
+            fire('dragstart', st.src, st.x, st.y, st.dt);
+            var r = st.src.getBoundingClientRect();
+            var g = st.src.cloneNode(true);
+            g.classList.remove('dragging');
+            g.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:9999;' +
+              'width:' + r.width + 'px;height:' + r.height + 'px;transform:scale(1.03);box-sizing:border-box;' +
+              'background:var(--panel);border:1px solid var(--gold-dim);opacity:1;' +
+              'box-shadow:0 6px 18px rgba(0,0,0,0.5);transition:none;';
+            document.body.appendChild(g);
+            st.ghost = g; st.gx = st.x0 - r.left; st.gy = st.y0 - r.top;
+            moveGhost();
+            if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) {} }
+            st.raf = requestAnimationFrame(scrollLoop);
+          }
+          function finish(doDrop) {
+            if (!st) return;
+            var s = st; st = null;
+            clearTimeout(s.timer);
+            release(s);
+            if (!s.active) return;
+            cancelAnimationFrame(s.raf);
+            var el = document.elementFromPoint(s.x, s.y);
+            if (doDrop && el) {
+              var ok = fire('dragover', el, s.x, s.y, s.dt);
+              if (ok === false) fire('drop', el, s.x, s.y, s.dt);
+            } else if (s.over) {
+              fire('dragleave', s.over, s.x, s.y, s.dt);
+            }
+            fire('dragend', s.src, s.x, s.y, s.dt);
+            GT.dragging = false;
+            if (s.ghost && s.ghost.parentNode) s.ghost.parentNode.removeChild(s.ghost);
+          }
+          document.addEventListener('touchstart', function (e) {
+            if (st || e.touches.length !== 1) return;
+            var src = e.target.closest && e.target.closest(SOURCE_SEL);
+            if (!src || e.target.closest('.gt-goal-delete')) return;
+            var t = e.touches[0];
+            st = { src: src, x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY,
+                   active: false, dt: makeDT(), over: null, ghost: null, raf: 0,
+                   timer: setTimeout(begin, HOLD_MS) };
+            GT.dragging = true; // hold off the 5s refresh for the whole gesture
+            // Chrome on Android starts its own native drag after ~0.5s,
+            // which cancels the touch -- switch it off for this touch.
+            st.wasDraggable = src.getAttribute('draggable');
+            src.setAttribute('draggable', 'false');
+          }, { passive: true });
+          document.addEventListener('touchmove', function (e) {
+            if (!st) return;
+            var t = e.touches[0];
+            st.x = t.clientX; st.y = t.clientY;
+            if (!st.active) {
+              if (Math.abs(st.x - st.x0) > MOVE_TOL || Math.abs(st.y - st.y0) > MOVE_TOL) {
+                clearTimeout(st.timer); release(st); st = null;
+              }
+              return;
+            }
+            e.preventDefault(); // hold page scroll while dragging
+            moveGhost();
+            hover();
+          }, { passive: false });
+          document.addEventListener('touchend', function (e) {
+            if (st && st.active && e.cancelable) e.preventDefault();
+            finish(true);
+          }, { passive: false });
+          document.addEventListener('touchcancel', function () { finish(false); });
+          document.addEventListener('contextmenu', function (e) {
+            if (st || (e.target.closest && e.target.closest(SOURCE_SEL))) e.preventDefault();
+          });
+          document.addEventListener('dragstart', function (e) {
+            if (e.isTrusted && e.target.closest && e.target.closest(SOURCE_SEL)) e.preventDefault();
+          }, true);
+        })();
       }
 
       loadGoals();

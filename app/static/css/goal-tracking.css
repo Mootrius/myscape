@@ -1229,3 +1229,42 @@ input[type="text"].invalid { border-color: var(--red); }
 .goal-tracking-share .gt-wizard { display: none; }
 
 /* Segmented-control look shared site-wide (standardized on the Storages viewer's .pm-segment-btn): near-black idle segments, the active one a --panel-2 fill with gold text, 1px dividers between segments inside one outer border. (.gt-metric-btn, .gt-target-mode-btn, .gt-recur-unit-btn and .gt-recur-start-btn above.) */
+
+
+/* ---- Phone ----------------------------------------------------------
+   Same 320px centered column as the other phone pages. Scoped
+   body:not(.landing) so the homepage preview (which reuses these
+   classes) is untouched. */
+@media (max-width: 700px) {
+  body:not(.landing) .gt-wizard-expanded { max-width: 320px; padding: 26px 14px 20px; }
+  body:not(.landing) .gt-card { max-width: 320px; margin-left: auto; margin-right: auto; padding: 14px; }
+  body:not(.landing) .gt-wizard-row .gt-field-target { flex-basis: 112px; }
+  body:not(.landing) .gt-wizard-actions { width: 100%; }
+  body:not(.landing) .gt-wizard-btn,
+  body:not(.landing) .gt-wizard-actions .gt-add-btn { flex: 1 1 0; width: auto; min-width: 0; padding: 0 4px; }
+  body:not(.landing) .gt-wizard-expanded input[type="text"]::placeholder { font-size: 12px; }
+
+  /* Name on its own line (full width, ellipsized), progress readout
+     below it -- the one-line name+progress pair truncated long names. */
+  body:not(.landing) .gt-goal-row { gap: 12px; padding: 12px 0; }
+  body:not(.landing) .gt-goal-headline {
+    flex-direction: column; align-items: flex-start; gap: 2px;
+    padding-right: 0;
+  }
+  body:not(.landing) .gt-goal-name { max-width: 100%; padding-right: 34px; box-sizing: border-box; }
+  body:not(.landing) .gt-goal-row:has(.gt-goal-delete--confirm) .gt-goal-name { padding-right: 96px; }
+  body:not(.landing) .gt-goal-sub { white-space: normal; }
+  /* Bigger tap target for the info icon without moving anything. */
+  body:not(.landing) .gt-goal-info-icon { padding: 7px; margin: -7px -7px -7px -4px; }
+  body:not(.landing) .gt-goal-row.draggable { -webkit-touch-callout: none; -webkit-user-drag: none; }
+
+  /* Sort tabs: five in 290px. */
+  body:not(.landing) .gt-sort-tabs { gap: 4px; }
+  body:not(.landing) .gt-sort-tab { height: 28px; padding: 0 2px; font-size: 9.5px; }
+
+  /* The share popup anchors to the title row, not the small icon, so
+     it can't run off the screen edge. */
+  body:not(.landing) h2.page-title { position: relative; }
+  body:not(.landing) .gt-share-wrap { position: static; }
+  body:not(.landing) .gt-share-card { top: 100%; margin-top: 6px; width: min(280px, calc(100vw - 32px)); }
+}
