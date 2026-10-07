@@ -766,24 +766,25 @@ def _shell(
        paste e.g. a dashboard link to themselves or a friend even
        though it requires login -- there's no reason that should
        preview as a bare, description-less URL when the branded
-       fallback costs nothing. og-image.jpg is a 1200x630 render of
-       the same wordmark the landing page's own intro anchor uses,
-       composited onto the site's real background color (matching
-       myscape.css's --bg) rather than left as the source PNG's
-       transparency, since a transparent image previews against an
-       unpredictable -- often white -- background on most platforms. -->
+       fallback costs nothing. og-image-v2.jpg is a 1200x630 image of the
+       myscape wordmark over the group of characters, on the site's
+       real background color (matching myscape.css's --bg) rather than
+       left transparent, since a transparent image previews against an
+       unpredictable -- often white -- background on most platforms.
+       It's "-v2" so Discord/Twitter, which cache a preview by its
+       image URL, fetch the new picture instead of the old one. -->
   <meta property="og:site_name" content="myscape" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="{escape(title)}" />
   <meta property="og:description" content="{escape(meta_description)}" />
-  <meta property="og:image" content="{escape(_SITE_URL + '/static/img/og-image.jpg')}" />
+  <meta property="og:image" content="{escape(_SITE_URL + '/static/img/og-image-v2.jpg')}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   {f'<meta property="og:url" content="{escape(_SITE_URL + canonical_path)}" />' if canonical_path else ""}
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="{escape(title)}" />
   <meta name="twitter:description" content="{escape(meta_description)}" />
-  <meta name="twitter:image" content="{escape(_SITE_URL + '/static/img/og-image.jpg')}" />
+  <meta name="twitter:image" content="{escape(_SITE_URL + '/static/img/og-image-v2.jpg')}" />
   <!-- Preloaded as early as possible in <head>, ahead of the
        stylesheet that actually declares @font-face for it (see
        myscape.css) -- the site's whole look rides on this one pixel
