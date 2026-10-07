@@ -13359,12 +13359,13 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         var boxW = maxX - minX, boxH = maxY - minY;
         var canvas = document.getElementById('mmCanvas');
         var viewW = canvas.clientWidth, viewH = canvas.clientHeight;
-        var pad = 40; // breathing room inside the viewport edges
-        var availW = Math.max(1, viewW - pad * 2), availH = Math.max(1, viewH - pad * 2);
+        var pad = (window.matchMedia && window.matchMedia('(max-width: 700px)').matches) ? 16 : 40; // breathing room inside the viewport edges
+        var rightInset = (window.matchMedia && window.matchMedia('(max-width: 700px)').matches) ? 44 : 0; // phone: the control column covers the right edge
+        var availW = Math.max(1, viewW - rightInset - pad * 2), availH = Math.max(1, viewH - pad * 2);
         var z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min(availW / boxW, availH / boxH)));
         MM.zoom = z;
         var boxCenterX = minX + boxW / 2, boxCenterY = minY + boxH / 2;
-        MM.pan.x = viewW / 2 - boxCenterX * z;
+        MM.pan.x = (viewW - rightInset) / 2 - boxCenterX * z;
         MM.pan.y = viewH / 2 - boxCenterY * z;
         applyTransform();
         updateZoomButtons();
@@ -13488,6 +13489,9 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       var panState = { active: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0, moved: false };
       canvasEl.addEventListener('pointerdown', function (e) {
         commitActiveLabelIfEditing();
+        // Touch has its own handler below (one-finger pan, two-finger
+        // pinch-zoom) -- this one is mouse/pen only.
+        if (e.pointerType === 'touch') return;
         // A node's own handler owns clicks on it (selection), and the
         // zoom/undo/redo control buttons need their native click to
         // fire normally -- setPointerCapture below would otherwise
@@ -13522,6 +13526,140 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       }
       canvasEl.addEventListener('pointerup', endPan);
       canvasEl.addEventListener('pointercancel', endPan);
+
+      // ---- Touch: pinch-to-zoom, two-finger pan, one-finger pan ---------
+      // .mm-canvas is touch-action: none, so the browser never starts
+      // its own scroll/zoom on it and every finger arrives here as
+      // pointer events (pointerType 'touch'). Up to two fingers are
+      // tracked. One finger pans (starting on a node too, once it
+      // moves past a small slop so a plain tap still selects/clicks).
+      // Two fingers pinch: zoom = starting zoom x (current finger
+      // distance / starting distance), and the world point that was
+      // under the fingers' midpoint at the start is kept under the
+      // CURRENT midpoint -- so the same gesture also pans. Transitions
+      // are off for the whole gesture (same reason as mouse-dragging
+      // and wheel-zoom above). Taps/clicks that end a gesture are
+      // swallowed so a pan or pinch that began on a node never also
+      // "clicks" it.
+      var touchPtrs = {};
+      var touchPan = null;
+      var pinch = null;
+      var touchClickBlockUntil = 0;
+      var TOUCH_SLOP = 8;
+      function touchIds() { return Object.keys(touchPtrs); }
+      function touchIgnored(t) {
+        return !!(t.closest && t.closest('.mm-zoom-controls, [data-role="popover"], .mm-suggestions, input, textarea, select, [contenteditable="true"], .mm-edge-btn, [data-role="manual-toggle"], [data-role="note-toggle"]'));
+      }
+      function touchFinish() {
+        canvasEl.classList.remove('panning');
+        mmWorldEl.style.transitionDuration = '';
+      }
+      function touchHoldPointer(id) {
+        try { canvasEl.setPointerCapture(id); } catch (_) {}
+      }
+      function startPinch() {
+        var ids = touchIds();
+        var a = touchPtrs[ids[0]], b = touchPtrs[ids[1]];
+        var rect = canvasEl.getBoundingClientRect();
+        var mx = (a.x + b.x) / 2 - rect.left, my = (a.y + b.y) / 2 - rect.top;
+        pinch = {
+          dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+          zoom: MM.zoom,
+          wx: (mx - MM.pan.x) / MM.zoom,
+          wy: (my - MM.pan.y) / MM.zoom
+        };
+        touchPan = null;
+        mmWorldEl.style.transitionDuration = '0s';
+        canvasEl.classList.add('panning');
+        touchClickBlockUntil = Date.now() + 600;
+        ids.forEach(function (id) { touchHoldPointer(+id); });
+      }
+      function updatePinch() {
+        var ids = touchIds();
+        var a = touchPtrs[ids[0]], b = touchPtrs[ids[1]];
+        if (!a || !b) return;
+        var rect = canvasEl.getBoundingClientRect();
+        var mx = (a.x + b.x) / 2 - rect.left, my = (a.y + b.y) / 2 - rect.top;
+        var dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+        var z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinch.zoom * dist / pinch.dist));
+        MM.zoom = z;
+        MM.pan.x = mx - pinch.wx * z;
+        MM.pan.y = my - pinch.wy * z;
+        applyTransform();
+        updateZoomButtons();
+      }
+      canvasEl.addEventListener('pointerdown', function (e) {
+        if (e.pointerType !== 'touch' || touchIgnored(e.target)) return;
+        if (touchIds().length >= 2) return; // a third finger is ignored
+        touchPtrs[e.pointerId] = { x: e.clientX, y: e.clientY };
+        if (touchIds().length === 1) {
+          touchPan = {
+            id: e.pointerId, sx: e.clientX, sy: e.clientY,
+            px: MM.pan.x, py: MM.pan.y, moved: false,
+            empty: !e.target.closest('.mm-node')
+          };
+        } else {
+          startPinch();
+        }
+      }, true);
+      canvasEl.addEventListener('pointermove', function (e) {
+        if (e.pointerType !== 'touch') return;
+        var p = touchPtrs[e.pointerId];
+        if (!p) return;
+        p.x = e.clientX; p.y = e.clientY;
+        if (pinch) { updatePinch(); return; }
+        if (!touchPan || touchPan.id !== e.pointerId) return;
+        var dx = e.clientX - touchPan.sx, dy = e.clientY - touchPan.sy;
+        if (!touchPan.moved) {
+          if (Math.hypot(dx, dy) < TOUCH_SLOP) return;
+          touchPan.moved = true;
+          // Re-base so the view doesn't jump by the slop distance.
+          touchPan.sx = e.clientX; touchPan.sy = e.clientY;
+          touchPan.px = MM.pan.x; touchPan.py = MM.pan.y;
+          dx = 0; dy = 0;
+          touchHoldPointer(e.pointerId);
+          canvasEl.classList.add('panning');
+          mmWorldEl.style.transitionDuration = '0s';
+        }
+        MM.pan.x = touchPan.px + dx;
+        MM.pan.y = touchPan.py + dy;
+        applyTransform();
+      });
+      function touchEnd(e) {
+        if (e.pointerType !== 'touch' || !touchPtrs[e.pointerId]) return;
+        delete touchPtrs[e.pointerId];
+        var left = touchIds();
+        if (pinch) {
+          pinch = null;
+          touchClickBlockUntil = Date.now() + 600;
+          if (left.length === 1) {
+            // One finger still down: carry on as a one-finger pan.
+            var rest = touchPtrs[left[0]];
+            touchPan = { id: +left[0], sx: rest.x, sy: rest.y, px: MM.pan.x, py: MM.pan.y, moved: true, empty: false };
+          } else {
+            touchFinish();
+          }
+          return;
+        }
+        if (touchPan && touchPan.id === e.pointerId) {
+          var tp = touchPan;
+          touchPan = null;
+          if (tp.moved) {
+            touchClickBlockUntil = Date.now() + 400;
+            touchFinish();
+          } else if (tp.empty && e.type === 'pointerup') {
+            selectNode(null); // a plain tap on empty canvas deselects
+          }
+        }
+      }
+      canvasEl.addEventListener('pointerup', touchEnd);
+      canvasEl.addEventListener('pointercancel', touchEnd);
+      canvasEl.addEventListener('click', function (e) {
+        if (Date.now() < touchClickBlockUntil && !e.target.closest('.mm-zoom-controls')) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      }, true);
       // ---- Wheel-zoom ---------------------------------------------------
       // Same reasoning as the pan-dragging handlers just above: a real
       // scroll/pinch-to-zoom gesture fires MANY wheel events per second
