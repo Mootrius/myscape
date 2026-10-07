@@ -10414,10 +10414,7 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=(
-            f"{owner_name} shared their Loot Tracker on myscape — "
-            f"{range_label_fallback}."
-        ),
+        meta_description=f"{owner_name} shared a snapshot from their Loot Tracker from myscape.",
     )
 
 
@@ -11181,7 +11178,7 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f'{owner_name} shared their "{setup_name}" Purchase Goals setup on myscape.',
+        meta_description=f'{owner_name} shared their "{setup_name}" Purchase Goal setup from myscape.',
     )
 
 
@@ -16031,12 +16028,12 @@ def render_mindmap_share(share: "SharedContent", game_account: Optional["GameAcc
     """
 
     return _shell(
-        title=f"{owner_name}'s shared mindmap — myscape",
+        title=f"{owner_name}'s shared Mindmap — myscape",
         player=viewer,
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f"{owner_name} shared a mindmap on myscape.",
+        meta_description=f'{owner_name} shared their "{mindmap_name}" Mindmap from myscape.',
     )
 
 
@@ -18238,7 +18235,7 @@ def render_storages_share(share: "SharedContent", game_account: Optional["GameAc
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f"{owner_name} shared their Storages Viewer on myscape.",
+        meta_description=f"{owner_name} shared a snapshot of their Storages Viewer from myscape.",
     )
 
 
@@ -21123,10 +21120,10 @@ def render_goal_tracking_share(share: "SharedContent", game_account: Optional["G
     """
 
     return _shell(
-        title=f"{owner_name}'s shared goal list — myscape",
+        title=f"{owner_name}'s shared Goal Tracking — myscape",
         player=viewer,
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f"{owner_name} shared a goal list on myscape.",
+        meta_description=f"{owner_name} shared their Goal Tracking list from myscape.",
     )
