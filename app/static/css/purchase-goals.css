@@ -1148,3 +1148,95 @@ button.primary#pgNameSave, .pg-setup-form-save {
    doesn't" convention every other all-caps label on this site
    already follows). */
 .pg-share-label { text-align: center; margin: 0 0 4px; text-transform: uppercase; }
+
+/* ---------- Phone layout (the whole site's phone breakpoint, 700px).
+   Scoped with body:not(.landing) so the homepage preview, which reuses
+   these classes, is untouched. Every section is max 320px wide and
+   centered -- the same gutter Character Overview and Loot Tracker leave
+   so there is always page to put a thumb on when scrolling. ---------- */
+@media (max-width: 700px) {
+  /* Overview card: coins on the left, target on the right, each with
+     its icon above its amount, and the progress bar on its own row
+     underneath -- the one-row desktop layout is ~500px wide. */
+  body:not(.landing) .overlay-card {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 14px;
+    column-gap: 8px;
+    padding: 14px 12px;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+  body:not(.landing) .overlay-side,
+  body:not(.landing) .overlay-side.overlay-target {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+  }
+  body:not(.landing) .overlay-amount { font-size: 15px; }
+  body:not(.landing) .overlay-progress { order: 3; flex: 0 0 100%; min-width: 0; }
+
+  /* Gear + inventory frame, then the summary: one centered column. The
+     doll column's width is pinned in px by JS on desktop (see
+     .pg-doll-wrap above), hence !important. */
+  body:not(.landing) .pg-body { align-items: center; gap: 18px; }
+  body:not(.landing) .pg-doll-wrap {
+    width: 100% !important;
+    max-width: 320px;
+  }
+  body:not(.landing) .pg-gear-frame {
+    width: 100%;
+    align-items: center;
+    gap: 20px;
+    padding: 16px;
+  }
+  body:not(.landing) .pg-summary-col {
+    flex: none;
+    width: 100%;
+    max-width: 320px;
+    min-width: 0;
+  }
+  body:not(.landing) .gear-summary { padding: 14px 12px; }
+
+  /* The setup-icon picker sits outside .pg-body, so give it the same
+     width and centering. */
+  body:not(.landing) .gear-icon-picker,
+  body:not(.landing) #pgIconPicker > * {
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  body:not(.landing) .pg-setup-form { max-width: 320px; margin-left: auto; margin-right: auto; }
+
+  /* 16px inputs so iOS doesn't zoom the page on focus; taller buttons. */
+  body:not(.landing) .search-box input[type="text"],
+  body:not(.landing) .pg-setup-form input[type="text"] { font-size: 16px; height: 40px; }
+  body:not(.landing) .sort-btn { height: 36px; font-size: 11px; }
+}
+
+@media (max-width: 700px) {
+  /* Share / import popups: anchored to the title row (not the small
+     icon) and no wider than it, so they can't run off the right edge. */
+  body:not(.landing) .page-title:has(.pg-share-wrap),
+  body:not(.landing) .page-title:has(.pg-import-wrap) { position: relative; }
+  body:not(.landing) .pg-share-wrap,
+  body:not(.landing) .pg-import-wrap { position: static; }
+  body:not(.landing) .pg-share-card,
+  body:not(.landing) .pg-import-card {
+    top: calc(100% + 6px);
+    width: min(280px, 100%);
+    box-sizing: border-box;
+  }
+}
+
+/* Touch: no hover, so the slot "x" shows only on the slot armed by a
+   first tap (see wireSlotClicks), and is a bigger target. */
+@media (hover: none) {
+  body:not(.landing) .gear-slot.filled:hover .gear-slot-remove { display: none; }
+  body:not(.landing) .gear-slot.filled.touch-armed .gear-slot-remove { display: flex; }
+  body:not(.landing) .gear-slot-remove { width: 24px; height: 24px; top: -9px; right: -9px; font-size: 15px; }
+  body:not(.landing) .gear-slot.touch-armed { outline: 2px solid var(--gold); outline-offset: -2px; }
+}

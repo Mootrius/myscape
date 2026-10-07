@@ -6889,6 +6889,26 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
           inner + removeBtn + '</div>';
       }
 
+      // On touch screens only these taps show a tooltip: gear/inventory
+      // slots (the item name), setup icons (the setup name) and the
+      // overview icons. The labelled or self-explanatory controls --
+      // sort buttons, the options menu button, the export icon, its
+      // link button and the slot "x" -- show none. Read by the shared
+      // tooltip script in _shell; mouse hover is unaffected.
+      if (!document.body.classList.contains('landing')) {
+        window.myscapeTouchTooltipFilter = function (el) {
+          return !(el.closest && el.closest(
+            '.sort-btn, .icon-menu-btn, .pg-share-icon-btn, .pg-share-link-btn, .pg-import-icon-btn, .gear-slot-remove'
+          ));
+        };
+      }
+      document.addEventListener('click', function (e) {
+        var armed = document.querySelectorAll('.gear-slot.touch-armed');
+        if (!armed.length) return;
+        var hit = e.target.closest && e.target.closest('.gear-slot.touch-armed');
+        armed.forEach(function (n) { if (n !== hit) n.classList.remove('touch-armed'); });
+      });
+
       function wireSlotClicks() {
         document.querySelectorAll('.gear-slot').forEach(function (el) {
           var removeBtn = el.querySelector('.gear-slot-remove');
@@ -6999,6 +7019,18 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             }
 
             var itemName = el.getAttribute('data-item-name');
+
+            // Touch: a filled slot's first tap only "arms" it -- its
+            // tooltip (item name) and its remove "x" appear (there is no
+            // hover on a phone to reveal either) -- and a second tap on
+            // the same slot opens the wiki, like the desktop click.
+            // Tapping anywhere else disarms it (document listener below).
+            if (itemName && window.matchMedia && window.matchMedia('(hover: none)').matches
+                && !document.body.classList.contains('landing') && !el.classList.contains('touch-armed')) {
+              document.querySelectorAll('.gear-slot.touch-armed').forEach(function (n) { n.classList.remove('touch-armed'); });
+              el.classList.add('touch-armed');
+              return;
+            }
 
             // A plain click (no shift) always abandons any pending
             // multi-select group -- and the shared picker that came
