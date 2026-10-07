@@ -1400,6 +1400,12 @@
    else. */
 .clog-tabs-arrow { display: none; }
 
+/* Registered so the tab strip's edge-fade widths can be transitioned
+   (an unregistered custom property can't be animated). Where @property
+   isn't supported the fade simply switches instantly. */
+@property --clog-fade-l { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@property --clog-fade-r { syntax: '<length>'; inherits: false; initial-value: 0px; }
+
 
 /* ---- Phone layout ---------------------------------------------------
    The first @media block on this page, on purpose: everything above is
@@ -1460,15 +1466,86 @@
     width: 100%;
     box-sizing: border-box;
   }
-  /* The viewer shouldn't be a full-width, 500px-tall portrait. */
+  /* Every section except the summary row is the same 2:3 portrait
+     box -- the shape the model viewer has on desktop -- so the page
+     reads as a stack of identical panels. Each one's own content
+     (the list, grid or canvas) then fills whatever room is left
+     inside it, scrolling if it has more than fits. overflow: hidden
+     keeps a section from ever growing past its box. */
+  body:not(.landing) .model-viewer-card,
+  body:not(.landing) .clog-card,
+  body:not(.landing) .skills-card,
+  body:not(.landing) .quests-card,
+  body:not(.landing) .diaries-card,
+  body:not(.landing) .ca-card {
+    aspect-ratio: 2 / 3;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+  }
   body:not(.landing) .model-viewer-card {
     width: 100%;
-    max-width: 320px;
-    margin: 0 auto;
     box-sizing: border-box;
   }
   body:not(.landing) .model-viewer-canvas-wrap {
-    aspect-ratio: 3 / 4;
+    aspect-ratio: auto;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  body:not(.landing) .clog-body {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  body:not(.landing) .clog-panes {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  body:not(.landing) .clog-items-col {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  body:not(.landing) .quests-list,
+  body:not(.landing) .diaries-list {
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
+  }
+  body:not(.landing) .skills-grid {
+    flex: 1 1 0;
+    min-height: 0;
+    grid-template-rows: repeat(8, minmax(0, 1fr));
+  }
+  body:not(.landing) .ca-list {
+    flex: 1 1 0;
+    min-height: 0;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+  }
+
+  /* Scrollbars on the scrolling lists: phones normally draw thin
+     overlay scrollbars that sit on top of the content and fade away
+     when idle. The site-wide scrollbar-color on :root (myscape.css)
+     is what makes browsers use that overlay style, so reset it to auto
+     on these lists and let the ::-webkit-scrollbar styling (10px gold
+     thumb, also in myscape.css) apply instead -- a real scrollbar that
+     takes its own room beside the content and stays visible whenever
+     the list can scroll. (Firefox on Android doesn't allow this.) */
+  body:not(.landing) .clog-pages,
+  body:not(.landing) .clog-items,
+  body:not(.landing) .quests-list,
+  body:not(.landing) .diaries-list {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+    overflow-y: auto;
+  }
+  body:not(.landing) .clog-pages::-webkit-scrollbar,
+  body:not(.landing) .clog-items::-webkit-scrollbar,
+  body:not(.landing) .quests-list::-webkit-scrollbar,
+  body:not(.landing) .diaries-list::-webkit-scrollbar {
+    width: 12px;
+    -webkit-appearance: none;
   }
   body:not(.landing) .model-viewer-btn {
     width: 36px;
@@ -1487,25 +1564,22 @@
   /* "There's more this way": the strip fades out at whichever edge has
      more tabs past it (can-scroll-left / can-scroll-right on the
      wrapper, set by updateClogTabsFade in this page's script), and a
-     small gold chevron sits in the faded area, nudging gently toward
-     the hidden tabs. All of it goes away on its own at the end of the
-     scroll. The fade is a mask on the strip itself rather than an
-     overlay gradient, so it works over the card's translucent
+     small gold chevron sits in the faded area. All of it eases in and
+     out on its own (opacity for the chevrons; the fade widths are
+     registered custom properties -- see @property above the phone
+     block -- so the mask itself can transition) and is gone at the end
+     of the scroll. The fade is a mask on the strip itself rather than
+     an overlay gradient, so it works over the card's translucent
      background without needing a matching solid color. */
-  body:not(.landing) .clog-tabs-wrap.can-scroll-right .clog-tabs {
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+  body:not(.landing) .clog-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--clog-fade-l), #000 calc(100% - var(--clog-fade-r)), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 var(--clog-fade-l), #000 calc(100% - var(--clog-fade-r)), transparent);
+    transition: --clog-fade-l 0.25s ease, --clog-fade-r 0.25s ease;
   }
-  body:not(.landing) .clog-tabs-wrap.can-scroll-left .clog-tabs {
-    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent);
-    mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent);
-  }
-  body:not(.landing) .clog-tabs-wrap.can-scroll-left.can-scroll-right .clog-tabs {
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent);
-    mask-image: linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent);
-  }
+  body:not(.landing) .clog-tabs-wrap.can-scroll-left .clog-tabs { --clog-fade-l: 44px; }
+  body:not(.landing) .clog-tabs-wrap.can-scroll-right .clog-tabs { --clog-fade-r: 44px; }
   body:not(.landing) .clog-tabs-arrow {
-    display: none;
+    display: block;
     position: absolute;
     top: 50%;
     width: 9px;
@@ -1514,31 +1588,20 @@
     border-top: 2px solid var(--gold);
     border-right: 2px solid var(--gold);
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease;
   }
   body:not(.landing) .clog-tabs-arrow--right {
     right: 6px;
     transform: rotate(45deg);
-    animation: clog-tabs-nudge-right 1.4s ease-in-out infinite;
   }
   body:not(.landing) .clog-tabs-arrow--left {
     left: 6px;
     transform: rotate(-135deg);
-    animation: clog-tabs-nudge-left 1.4s ease-in-out infinite;
   }
   body:not(.landing) .clog-tabs-wrap.can-scroll-right .clog-tabs-arrow--right,
   body:not(.landing) .clog-tabs-wrap.can-scroll-left .clog-tabs-arrow--left {
-    display: block;
-  }
-  @keyframes clog-tabs-nudge-right {
-    0%, 100% { transform: translateX(0) rotate(45deg); }
-    50% { transform: translateX(3px) rotate(45deg); }
-  }
-  @keyframes clog-tabs-nudge-left {
-    0%, 100% { transform: translateX(0) rotate(-135deg); }
-    50% { transform: translateX(-3px) rotate(-135deg); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    body:not(.landing) .clog-tabs-arrow { animation: none; }
+    opacity: 1;
   }
   body:not(.landing) .clog-tab {
     flex: 0 0 auto;
@@ -1564,7 +1627,9 @@
   body:not(.landing) .clog-items {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     height: auto;
-    max-height: 300px;
+    flex: 1 1 0;
+    min-height: 0;
+    align-content: start;
     padding-right: 4px;
   }
 
@@ -1605,7 +1670,15 @@
   /* Roomier tap targets in the four cards. */
   body:not(.landing) .skill-cell,
   body:not(.landing) .skill-cell:hover {
-    padding: 7px 4px;
+    padding: 4px;
+    gap: 8px;
+  }
+  body:not(.landing) .skill-cell-icon {
+    width: 26px;
+    height: 26px;
+  }
+  body:not(.landing) .skill-cell-level {
+    font-size: 17px;
   }
   body:not(.landing) .quest-row {
     padding: 5px 4px;
