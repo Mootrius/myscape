@@ -1418,6 +1418,31 @@
     scrollbar-width: auto;
     scrollbar-color: auto;
   }
+  /* Thin (6px, like the drawn phone scrollbars) with no visible track
+     behind the thumb -- just the bar itself. The thumb's own color,
+     hover and square corners come from the site-wide rules. */
+  .clog-pages::-webkit-scrollbar,
+  .clog-items::-webkit-scrollbar,
+  .quests-list::-webkit-scrollbar,
+  .diaries-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  .clog-pages::-webkit-scrollbar-track,
+  .clog-items::-webkit-scrollbar-track,
+  .quests-list::-webkit-scrollbar-track,
+  .diaries-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+/* Firefox (no ::-webkit-scrollbar): same invisible track, as far as its
+   scrollbar-color allows. */
+@supports not selector(::-webkit-scrollbar) {
+  .clog-pages,
+  .clog-items,
+  .quests-list,
+  .diaries-list {
+    scrollbar-color: var(--gold-dim) transparent;
+  }
 }
 
 /* The drawn scrollbars (see the phone block) are phone-only too. */
