@@ -271,6 +271,13 @@ button.link:disabled { opacity: 0.5; cursor: default; }
    follows .page and supplies its own breathing room above the fold. */
 .page { padding: 32px 20px 40px; flex: 1 0 auto; }
 
+/* Phone width (700px is this site's phone breakpoint -- see
+   character-overview.css's own phone block): trim the page's side
+   gutters so cards get the room, 12px each side instead of 20px. */
+@media (max-width: 700px) {
+  body:not(.landing) .page { padding: 24px 12px 32px; }
+}
+
 .wrap { max-width: 880px; margin: 0 auto; }
 
 /* header is a full-width sibling of .page (see _shell), the same

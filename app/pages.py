@@ -737,6 +737,40 @@ def _shell(
       // elsewhere on this site has to account for nested scroll areas.
       window.addEventListener('scroll', hideTooltip, true);
       window.addEventListener('resize', hideTooltip);
+
+      // Touch screens have no hover, so a tooltip-carrying LINK (the
+      // Skills cells, Collection Log tiles -- both wiki links) gets a
+      // two-tap flow instead: the first tap shows its tooltip and holds
+      // off navigating, a second tap on the same link goes through. The
+      // tooltip fades again after a few seconds. Only links need this;
+      // a tooltip-carrying button still just acts on tap (the browser's
+      // own tap-then-hover emulation shows its tooltip alongside).
+      // (hover: none) is how this stays out of desktop's way entirely.
+      (function () {
+        const noHover = window.matchMedia('(hover: none)');
+        let armedLink = null;
+        let armTimer = null;
+        // A tap anywhere else dismisses whatever tooltip a previous tap
+        // left up (a touch screen never sends the mouseout that would).
+        document.addEventListener('touchstart', (e) => {
+          if (!currentTarget) return;
+          if (e.target.closest && e.target.closest('[data-tooltip]') === currentTarget) return;
+          armedLink = null;
+          hideTooltip();
+        }, { passive: true });
+        document.addEventListener('click', (e) => {
+          if (!noHover.matches) return;
+          const link = e.target.closest ? e.target.closest('a[data-tooltip]') : null;
+          if (!link) { armedLink = null; return; }
+          if (armedLink === link) { armedLink = null; clearTimeout(armTimer); return; }
+          e.preventDefault();
+          armedLink = link;
+          currentTarget = link;
+          showTooltip(link);
+          clearTimeout(armTimer);
+          armTimer = setTimeout(() => { armedLink = null; hideTooltip(); }, 3000);
+        }, true);
+      })();
     })();
     """
     return f"""<!doctype html>
@@ -3700,6 +3734,16 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
       var modelViewerCard = document.getElementById('modelViewerCard');
       function syncClogHeight() {
         if (!modelViewerCard || !clogCard || !clogPagesEl || !clogItemsEl || !clogItemsHeaderEl) return;
+        // Phone layout (the same 700px breakpoint as character-
+        // overview.css's own @media block): the log is stacked below the
+        // viewer instead of beside it, so there's no height to match --
+        // drop the inline heights and let the stylesheet's own phone
+        // heights apply.
+        if (window.matchMedia('(max-width: 700px)').matches) {
+          clogPagesEl.style.height = '';
+          clogItemsEl.style.height = '';
+          return;
+        }
         var modelBoxHeight = modelViewerCard.getBoundingClientRect().height;
         if (!modelBoxHeight) return;
         var clogCS = getComputedStyle(clogCard);
