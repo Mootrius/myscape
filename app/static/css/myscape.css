@@ -1977,3 +1977,101 @@ body.landing .footer-inner {
   body:not(.landing) .dash-card:hover { background-color: var(--panel-translucent); }
   body:not(.landing) .dash-card:active { background-color: rgb(51, 51, 54); }
 }
+
+
+/* ---- Account: phone -------------------------------------------------
+   Same 320px centered column as the other phone pages. The Shared Links
+   and Friends tables become stacked rows (their fixed percentage
+   columns truncated every name), with the sortable headers turned into
+   a row of small chips above them. Scoped to the Account page's own
+   .account-shell. */
+@media (max-width: 700px) {
+  body:not(.landing) .account-shell .auth-card { max-width: 320px; padding: 22px 14px 22px; }
+  body:not(.landing) .account-shell .auth-card h2 { margin-bottom: 20px; }
+
+  /* Linked characters */
+  body:not(.landing) .game-account-row { padding: 10px 10px; gap: 8px; }
+  body:not(.landing) .game-account-name { min-width: 0; flex: 1 1 auto; }
+  body:not(.landing) .game-account-actions { gap: 6px; }
+  body:not(.landing) .game-account-actions button { padding: 6px 10px; }
+
+  /* Friends: MY CODE on its own centered line, then input + SEND REQUEST
+     filling the next. 16px so focusing the input doesn't zoom the page. */
+  body:not(.landing) .friends-add-form { flex-wrap: wrap; gap: 10px; }
+  body:not(.landing) .friends-code-wrap { width: 100%; justify-content: center; }
+  body:not(.landing) .friends-add-divider { display: none; }
+  body:not(.landing) .friends-add-form input[type="text"] { flex: 1 1 0; min-width: 0; width: auto; font-size: 16px; }
+  body:not(.landing) .friend-request-row { padding: 8px 10px; gap: 8px; }
+  body:not(.landing) .friend-request-name { min-width: 0; }
+
+  /* Update email / password / delete: stacked, full width. */
+  body:not(.landing) .account-tab-row { flex-direction: column; }
+  body:not(.landing) .account-tab-row button.secondary,
+  body:not(.landing) .account-tab-row button.danger { flex: none; width: 100%; padding: 10px 6px; }
+
+  /* Tables -> stacked rows */
+  body:not(.landing) .shared-links-table-wrap,
+  body:not(.landing) .friends-table-wrap { overflow-x: hidden; }
+  body:not(.landing) .shared-links-table,
+  body:not(.landing) .friends-table,
+  body:not(.landing) .shared-links-table thead,
+  body:not(.landing) .friends-table thead,
+  body:not(.landing) .shared-links-table tbody,
+  body:not(.landing) .friends-table tbody { display: block; table-layout: auto; }
+  body:not(.landing) .shared-links-table thead,
+  body:not(.landing) .friends-table thead { position: sticky; top: 0; z-index: 1; background: var(--panel-2); border-bottom: 1px solid var(--border); }
+  body:not(.landing) .shared-links-table thead tr,
+  body:not(.landing) .friends-table thead tr { display: flex; justify-content: space-around; gap: 4px; padding: 4px 6px; }
+  body:not(.landing) .shared-links-table th,
+  body:not(.landing) .friends-table th {
+    display: block; position: static; width: auto; flex: 1 1 auto;
+    padding: 8px 2px; border-bottom: none; box-shadow: none; font-size: 10px;
+  }
+  body:not(.landing) .shared-links-table th:nth-child(3),
+  body:not(.landing) .friends-table th:nth-child(3) { display: none; }
+  body:not(.landing) .shared-links-table th:nth-child(5) { width: auto; }
+
+  body:not(.landing) .shared-links-table tbody tr,
+  body:not(.landing) .friends-table tbody tr {
+    display: grid; column-gap: 8px; row-gap: 4px; align-items: center;
+    padding: 10px 10px; border-bottom: 1px solid var(--border);
+  }
+  body:not(.landing) .shared-links-table tbody tr:last-child,
+  body:not(.landing) .friends-table tbody tr:last-child { border-bottom: none; }
+  body:not(.landing) .shared-links-table tbody tr td,
+  body:not(.landing) .friends-table tbody tr td {
+    display: block; width: auto; padding: 0; border-bottom: none;
+    text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Shared link: name / type on the left, code / expiry in the middle, trash on the right */
+  body:not(.landing) .shared-links-table tbody tr { grid-template-columns: minmax(0, 1fr) auto 44px; }
+  body:not(.landing) .shared-links-table td:nth-child(1) { grid-column: 1; grid-row: 1; font-size: 13px; color: var(--text); }
+  body:not(.landing) .shared-links-table td:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 11px; color: var(--text-faint); }
+  body:not(.landing) .shared-links-table td:nth-child(3) { grid-column: 2; grid-row: 1; overflow: visible; }
+  body:not(.landing) .shared-links-table td:nth-child(4) { grid-column: 2; grid-row: 2; text-align: right; font-size: 11px; color: var(--text-faint); }
+  body:not(.landing) .shared-links-table td:nth-child(5) { grid-column: 3; grid-row: 1 / span 2; overflow: visible; }
+
+  /* Friend: name / since / remove on one line */
+  body:not(.landing) .friends-table tbody tr { grid-template-columns: minmax(0, 1fr) auto 44px; }
+  body:not(.landing) .friends-table td:nth-child(1) { font-size: 13px; }
+  body:not(.landing) .friends-table td:nth-child(2) { font-size: 11px; color: var(--text-faint); }
+  body:not(.landing) .friends-table td:nth-child(3) { overflow: visible; }
+
+  /* Bigger tap targets for the row buttons */
+  body:not(.landing) .shared-links-table .trash-delete-btn,
+  body:not(.landing) .shared-links-table .trash-delete-btn--confirm,
+  body:not(.landing) .friends-table .trash-delete-btn,
+  body:not(.landing) .friends-table .trash-delete-btn--confirm { height: 34px; }
+}
+
+/* Touch: no sticky hover look after a tap on the Account page's buttons. */
+@media (hover: none) {
+  body:not(.landing) button.trash-delete-btn:not(.trash-delete-btn--confirm):hover { color: var(--text-faint); }
+  body:not(.landing) .shared-link-code-btn:hover { border-color: var(--border); color: var(--text-dim); }
+  body:not(.landing) .shared-link-sort-header:not(.active):hover,
+  body:not(.landing) .friend-sort-header:not(.active):hover { color: inherit; }
+  body:not(.landing) .shared-link-delete-all-header:not(.shared-link-delete-all-header--confirm):hover { color: inherit; }
+  body:not(.landing) .friend-name-link:hover { color: var(--text); }
+  body:not(.landing) .friend-request-actions button.friend-decline-btn:hover { border-color: var(--border); }
+}

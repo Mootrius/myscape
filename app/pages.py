@@ -4761,6 +4761,12 @@ def render_account(player: PlayerView) -> str:
     """
     script = """
     (function () {
+      // Touch screens (no hover) show no tap tooltips on the Account
+      // page -- the sort headers, code buttons, trash/remove buttons and
+      // badges are all self-explanatory. Read by the shared tooltip
+      // script in _shell; mouse hover is unaffected.
+      window.myscapeTouchTooltipFilter = function () { return false; };
+
       // Same trash-can icon Goal Tracking's own .gt-goal-delete button
       // draws (see goalRowHtml in this file) -- shared here by both
       // DEACTIVATE (Shared Links table) and DELETE CHARACTER (Linked
