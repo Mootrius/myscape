@@ -9410,7 +9410,11 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         state.npcSearch = '';
         updateNpcSearchClear();
         if (lastData) renderNpcRow(currentNpcs());
-        lootNpcSearchInput.focus();
+        // Desktop keeps the box focused so you can keep typing; on a
+        // touch screen focus would leave the on-screen keyboard up, so
+        // let go of it instead.
+        if (window.matchMedia('(hover: none)').matches) lootNpcSearchInput.blur();
+        else lootNpcSearchInput.focus();
       });
       document.getElementById('lootNpcSortTabs').addEventListener('click', function (e) {
         var toggleBtn = e.target.closest('.loot-hide-toggle');
@@ -9441,6 +9445,17 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       });
       // Same CLEAR button treatment as the NPC search box above -- see
       // its own comment for why.
+      // On touch screens a tap on any of these shows no tooltip: the
+      // share icon and its link button, the sort buttons, and the eye
+      // buttons (the show-hidden toggles beside the sort buttons and
+      // the ones on each NPC/item tile). Every other tooltip here still
+      // shows. Read by the shared tooltip script in _shell; mouse
+      // hover is unaffected.
+      window.myscapeTouchTooltipFilter = function (el) {
+        return !(el.closest && el.closest(
+          '.loot-share-icon-btn, .loot-share-link-btn, .loot-sort-tab, .loot-hide-toggle, .loot-eye-btn'
+        ));
+      };
       var lootItemSearchInput = document.getElementById('lootItemSearch');
       var lootItemSearchClear = document.getElementById('lootItemSearchClear');
       function updateItemSearchClear() {
@@ -9456,7 +9471,9 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         state.itemSearch = '';
         updateItemSearchClear();
         renderItemList(currentItems());
-        lootItemSearchInput.focus();
+        // Same as the NPC box's CLEAR above.
+        if (window.matchMedia('(hover: none)').matches) lootItemSearchInput.blur();
+        else lootItemSearchInput.focus();
       });
       document.getElementById('lootItemSortTabs').addEventListener('click', function (e) {
         var toggleBtn = e.target.closest('.loot-hide-toggle');

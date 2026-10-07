@@ -1211,15 +1211,27 @@
 }
 
 /* Touch screens: the per-tile hide/unhide eye is normally revealed by
-   hovering its tile, which a finger can't do reliably -- show it all
-   the time instead, dimmed, with a bigger tap area. */
+   hovering its tile, which a finger can't do (and a tap leaves a
+   "stuck" hover on whichever tile was touched last). So here the tile
+   eyes stay hidden until the panel's own eye toggle -- the one beside
+   the sort buttons -- is switched on, and then show on every tile of
+   that panel, dimmed and with a bigger tap area. Turning the toggle
+   off hides them again. */
 @media (hover: none) {
-  body:not(.landing) .loot-eye-btn {
-    opacity: 0.65;
-    pointer-events: auto;
+  body:not(.landing) .loot-eye-btn,
+  body:not(.landing) .loot-npc-box-wrap:hover .loot-eye-btn,
+  body:not(.landing) .loot-item-box-wrap:hover .loot-eye-btn {
+    opacity: 0;
+    pointer-events: none;
     width: 26px;
     height: 26px;
     top: 2px;
     right: 2px;
+  }
+  body:not(.landing) .loot-panel:has(.loot-hide-toggle.active) .loot-eye-btn,
+  body:not(.landing) .loot-panel:has(.loot-hide-toggle.active) .loot-npc-box-wrap:hover .loot-eye-btn,
+  body:not(.landing) .loot-panel:has(.loot-hide-toggle.active) .loot-item-box-wrap:hover .loot-eye-btn {
+    opacity: 0.65;
+    pointer-events: auto;
   }
 }
