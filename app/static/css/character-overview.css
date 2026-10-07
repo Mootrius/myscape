@@ -1101,6 +1101,10 @@
   height: 15%;
   background: linear-gradient(to bottom, transparent, var(--bg));
   pointer-events: none;
+  /* Above everything in the reused panel -- the model viewer's canvas
+     (z-index 1) and its buttons (z-index 2) are positioned with their
+     own z-index, which otherwise paints them over this fade. */
+  z-index: 10;
 }
 
 /* The reused body's own heading -- hidden rather than stripped from
