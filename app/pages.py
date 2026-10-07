@@ -1946,9 +1946,12 @@ _MODEL_VIEWER_HEAD = """
     // own comment for why index 0 is the default.
     var MODEL_VIEWER_BACKGROUNDS = __MODEL_VIEWER_BACKGROUNDS_JSON__;
     // Remembers the player's chosen background across sessions/
-    // reloads, per explicit instruction -- localStorage rather than
-    // anything server-side since this is a pure per-browser display
-    // preference, nothing GameAccount needs to know about. null here
+    // reloads -- localStorage for the instant first paint, with the
+    // account's own saved pick (GameAccount.model_viewer_background_
+    // index, delivered by the summary fetch and applied through
+    // applyModelViewerBackgroundFromServer below) taking over as soon
+    // as it arrives, so every device ends up on the same background
+    // rather than each browser keeping its own. null here
     // (see __MODEL_VIEWER_BG_STORAGE_KEY_JSON__'s own substitution in
     // _character_overview_panel_markup) turns this persistence off
     // entirely rather than just pointing it at a different key --
@@ -2048,6 +2051,14 @@ _MODEL_VIEWER_HEAD = """
       }
       bgIndex = index;
       applyBackground();
+      // On the signed-in page, keep this browser's own copy in step with
+      // the account's, so the next load starts on the right image
+      // instead of flashing the stale one first.
+      if (MODEL_VIEWER_BG_STORAGE_KEY === "myscape.modelViewerBgIndex") {
+        try {
+          localStorage.setItem(MODEL_VIEWER_BG_STORAGE_KEY, String(index));
+        } catch (e) {}
+      }
     }
     window.myscapeApplyModelViewerBackground = applyModelViewerBackgroundFromServer;
     // This module script tag is deferred (type="module" always is,
@@ -3238,6 +3249,18 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (!data) return;
+          // The shuffled model-viewer background is saved on the account
+          // (the shuffle button POSTs it), so every device shows the
+          // same one -- this page's own localStorage pick only covers
+          // the first paint, before this response lands. The pending
+          // value covers this arriving before the viewer's module
+          // script has run (see __myscapePendingModelViewerBg there).
+          if (typeof data.modelViewerBackgroundIndex === 'number') {
+            window.__myscapePendingModelViewerBg = data.modelViewerBackgroundIndex;
+            if (typeof window.myscapeApplyModelViewerBackground === 'function') {
+              window.myscapeApplyModelViewerBackground(data.modelViewerBackgroundIndex);
+            }
+          }
           setAccountType(data.accountType);
           if (data.combatLevel != null) setStat('combatLevel', formatIntPlain(data.combatLevel));
           if (data.totalLevel != null) setStat('totalLevel', formatIntPlain(data.totalLevel));

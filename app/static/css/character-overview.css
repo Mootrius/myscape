@@ -1400,6 +1400,26 @@
    else. */
 .clog-tabs-arrow { display: none; }
 
+/* Desktop scrollbars on the four scrolling lists (Collection Log pages
+   + items, Quests, Achievement Diaries). myscape.css sets the standard
+   scrollbar-color/scrollbar-width on every element, and when either is
+   set Chrome ignores the ::-webkit-scrollbar rules there -- the ones
+   that give the thumb the site's square corners -- and draws its own
+   rounded one instead. Resetting both to auto on these lists lets the
+   site's ::-webkit-scrollbar styling (10px, square gold-dim thumb)
+   through. Wrapped in @supports so Firefox, which has no
+   ::-webkit-scrollbar, keeps its themed thin scrollbar. (The phone
+   block below hides these natively and draws its own.) */
+@supports selector(::-webkit-scrollbar) {
+  .clog-pages,
+  .clog-items,
+  .quests-list,
+  .diaries-list {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+}
+
 /* The drawn scrollbars (see the phone block) are phone-only too. */
 .co-sb { display: none; }
 @media (max-width: 700px) {

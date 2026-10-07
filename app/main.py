@@ -1720,9 +1720,10 @@ def _character_overview_summary_payload(game_account: GameAccount) -> dict:
     page's own fetch of this same endpoint -- see the model-viewer
     script's applyServerBackground in app/pages.py -- can pick up the
     owner's current background without a second round trip; the
-    authenticated page ignores this field entirely and keeps using its
-    own localStorage pick instead (see MODEL_VIEWER_BG_STORAGE_KEY's
-    own comment there)."""
+    authenticated page applies it too, so the owner's shuffled
+    background follows them across devices (its localStorage pick only
+    covers the first paint -- see MODEL_VIEWER_BG_STORAGE_KEY's own
+    comment there)."""
     achievements_completed, achievements_total = _achievement_diary_tile_counts(game_account)
     return {
         "combatLevel": game_account.character_summary_combat_level,
