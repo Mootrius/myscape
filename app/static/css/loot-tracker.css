@@ -1062,3 +1062,136 @@
 .landing-loot-preview .loot-preview-char--flipped img {
   transform: scaleX(-1);
 }
+
+
+/* ---- Phone layout ---------------------------------------------------
+   700px is this site's phone breakpoint (see character-overview.css's
+   own phone block). Scoped to body:not(.landing) so the homepage's
+   preview of this page, which reuses these classes, is untouched.
+
+   The big one: the old rule above (.loot-panels { flex-direction:
+   column } at 640px) left align-items: flex-start in force. In a
+   column that means "shrink each panel to its own content width", and
+   .loot-panel is container-type: inline-size, which makes its content
+   width zero -- so on a phone both panels collapsed to a ~36px sliver
+   and every tile inside crushed together. Stretching them fixes it. */
+@media (max-width: 700px) {
+  body:not(.landing) .loot-panels {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  body:not(.landing) .loot-panel {
+    width: 100%;
+    flex: none;
+    padding: 14px 12px;
+  }
+  body:not(.landing) .loot-chart-card {
+    padding: 14px 12px 12px;
+  }
+
+  /* Controls: finger-sized (the desktop ones are 25px tall), and inputs
+     at 16px -- anything smaller makes iOS Safari zoom the page in when
+     the field is focused. */
+  body:not(.landing) .loot-range-btn,
+  body:not(.landing) .loot-sort-tab,
+  body:not(.landing) .loot-hide-toggle {
+    height: 36px;
+    font-size: 12px;
+  }
+  body:not(.landing) .loot-hide-toggle {
+    flex: 0 0 40px;
+  }
+  body:not(.landing) .loot-search {
+    height: 40px;
+    font-size: 16px;
+  }
+  body:not(.landing) .loot-range-custom-field input[type="text"] {
+    font-size: 16px;
+    padding: 8px 6px;
+  }
+  body:not(.landing) .loot-range-option,
+  body:not(.landing) .loot-range-apply {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  /* Share popup: fixed 280px, centered under the little share icon --
+     which isn't the middle of the page, so on a phone it ran off the
+     right edge (and made the whole page wider). Anchor it to the title
+     row instead, centered, and never wider than the page. */
+  body:not(.landing) .page-title:has(.loot-share-wrap) {
+    position: relative;
+  }
+  body:not(.landing) .loot-share-wrap {
+    position: static;
+  }
+  body:not(.landing) .loot-share-card {
+    top: calc(100% + 6px);
+    width: min(280px, 100%);
+    box-sizing: border-box;
+  }
+
+  /* Chart axis labels were 9-10px. */
+  body:not(.landing) .loot-bar-x-label {
+    font-size: 10px;
+  }
+  body:not(.landing) .loot-bar-gridline-label {
+    font-size: 11px;
+  }
+
+  /* Item tiles: 4 to a row instead of 6 (they were ~48px, with 8-9px
+     text), so the icon, quantity and gp value are legible and each
+     tile is a fair tap target. NPC tiles stay 4 to a row but get
+     slightly larger text. */
+  body:not(.landing) .loot-item-box-wrap {
+    flex: 0 0 calc((100% - 24px) / 4);
+  }
+  body:not(.landing) .loot-item-box-icon {
+    width: 34px;
+    height: 34px;
+  }
+  body:not(.landing) .loot-item-box-qty {
+    font-size: 12px;
+  }
+  body:not(.landing) .loot-item-box-value {
+    font-size: 11px;
+  }
+  /* The 56px NPC icon plus the box padding is wider than a quarter of a
+     narrow phone's row (about 62px at 320 wide), and a flex item never
+     shrinks below its content -- so the tiles stayed ~74px, only three
+     fit, and the row was left ragged. Let the tile and its icon scale
+     down with the row instead. */
+  body:not(.landing) .loot-npc-box-wrap,
+  body:not(.landing) .loot-npc-box {
+    min-width: 0;
+  }
+  body:not(.landing) .loot-npc-box {
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+  body:not(.landing) .loot-npc-box-icon {
+    width: min(56px, 70%);
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+  body:not(.landing) .loot-npc-box-kc {
+    font-size: 12px;
+  }
+  body:not(.landing) .loot-npc-box-value {
+    font-size: 11px;
+  }
+}
+
+/* Touch screens: the per-tile hide/unhide eye is normally revealed by
+   hovering its tile, which a finger can't do reliably -- show it all
+   the time instead, dimmed, with a bigger tap area. */
+@media (hover: none) {
+  body:not(.landing) .loot-eye-btn {
+    opacity: 0.65;
+    pointer-events: auto;
+    width: 26px;
+    height: 26px;
+    top: 2px;
+    right: 2px;
+  }
+}
