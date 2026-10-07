@@ -16791,19 +16791,19 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
             <button type="button" class="pm-filter-icon-btn" data-filter-col="alpha" data-tooltip="Filter by item name" aria-label="Filter by item name">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-qty pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="qty" data-tooltip="Sort by quantity">Quantity<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-sort-header" data-sort-key="qty" data-tooltip="Sort by quantity"><span class="pm-hl-full">Quantity</span><span class="pm-hl-short">Qty</span><span class="pm-sort-arrow"></span></button>
             <button type="button" class="pm-filter-icon-btn" data-filter-col="qty" data-tooltip="Filter by quantity" aria-label="Filter by quantity">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-ge pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="ge" data-tooltip="Sort by GE value">GE Value<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-sort-header" data-sort-key="ge" data-tooltip="Sort by GE value"><span class="pm-hl-full">GE Value</span><span class="pm-hl-short">GE</span><span class="pm-sort-arrow"></span></button>
             <button type="button" class="pm-filter-icon-btn" data-filter-col="ge" data-tooltip="Filter by GE value" aria-label="Filter by GE value">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-ha pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="ha" data-tooltip="Sort by HA value">HA Value<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-sort-header" data-sort-key="ha" data-tooltip="Sort by HA value"><span class="pm-hl-full">HA Value</span><span class="pm-hl-short">HA</span><span class="pm-sort-arrow"></span></button>
             <button type="button" class="pm-filter-icon-btn" data-filter-col="ha" data-tooltip="Filter by HA value" aria-label="Filter by HA value">{funnel_glyph}</button>
           </div>
           <div class="pm-col pm-col-tradeable pm-header-cell">
-            <button type="button" class="pm-sort-header" data-sort-key="tradeable" data-tooltip="Sort by tradability">Tradeable?<span class="pm-sort-arrow"></span></button>
+            <button type="button" class="pm-sort-header" data-sort-key="tradeable" data-tooltip="Sort by tradability"><span class="pm-hl-full">Tradeable?</span><span class="pm-hl-short">Trade?</span><span class="pm-sort-arrow"></span></button>
             <button type="button" class="pm-filter-icon-btn" data-filter-col="tradeable" data-tooltip="Filter by tradability" aria-label="Filter by tradability">{funnel_glyph}</button>
           </div>
         </div>
