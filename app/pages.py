@@ -16760,7 +16760,11 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
           <button type="button" class="pm-search-clear" id="pmSearchClear" style="display:none;">Clear</button>
         </div>
         <div class="pm-control-group pm-location-group">
-          {location_buttons}
+          <div class="pm-loc-wrap" id="pmLocWrap">
+            <div class="pm-loc-scroll" id="pmLocScroll">{location_buttons}</div>
+            <span class="pm-scroll-arrow pm-scroll-arrow--left" aria-hidden="true"></span>
+            <span class="pm-scroll-arrow pm-scroll-arrow--right" aria-hidden="true"></span>
+          </div>
         </div>
         <div class="pm-control-group pm-settings-wrap">
           <button type="button" class="pm-settings-btn" id="pmSettingsBtn" data-tooltip="Toggle specific storages">
@@ -16774,7 +16778,11 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
 
       <p class="pg-empty" id="pmEmpty" style="display:none;">Nothing synced yet.</p>
 
-      <div class="pm-views-row" id="pmViewsRow"></div>
+      <div class="pm-views-wrap" id="pmViewsWrap">
+        <div class="pm-views-row" id="pmViewsRow"></div>
+        <span class="pm-scroll-arrow pm-scroll-arrow--left" aria-hidden="true"></span>
+        <span class="pm-scroll-arrow pm-scroll-arrow--right" aria-hidden="true"></span>
+      </div>
 
       <div class="pm-table" id="pmTable" style="display:none;">
         <div class="pm-row pm-row-header">
@@ -18025,7 +18033,7 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
 
       function openSaveViewPopover() {
         closeAllFilterPopovers();
-        var row = document.getElementById('pmViewsRow');
+        var row = document.getElementById('pmViewsWrap');
         var existing = row.querySelector('.pm-view-save-popover');
         if (existing) { existing.remove(); return; }
         var popover = document.createElement('div');
@@ -18212,6 +18220,31 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         state.views = data.views || [];
         renderViewsRow();
       }
+
+      // Phone width only: the location buttons and the saved-views row
+      // scroll sideways, so these classes on their wrappers drive the
+      // edge fade + chevron that say "there's more this way" (see
+      // .pm-loc-wrap/.pm-views-wrap in possessions.css). Harmless on
+      // desktop, where neither strip overflows.
+      function wireScrollCue(wrap, scroller) {
+        if (!wrap || !scroller) return;
+        function update() {
+          var max = scroller.scrollWidth - scroller.clientWidth;
+          wrap.classList.toggle('can-scroll-left', scroller.scrollLeft > 2);
+          wrap.classList.toggle('can-scroll-right', scroller.scrollLeft < max - 2);
+        }
+        scroller.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+        if (window.ResizeObserver) new ResizeObserver(update).observe(scroller);
+        // Buttons hidden/shown by the storage settings, chips added/removed.
+        if (window.MutationObserver) {
+          new MutationObserver(update).observe(scroller, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+        }
+        setTimeout(update, 0);
+        setTimeout(update, 400);
+      }
+      wireScrollCue(document.getElementById('pmLocWrap'), document.getElementById('pmLocScroll'));
+      wireScrollCue(document.getElementById('pmViewsWrap'), document.getElementById('pmViewsRow'));
 
       updateSortHeaders();
       updateFilterIconStates();
