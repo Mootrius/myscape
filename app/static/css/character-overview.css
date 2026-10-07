@@ -1404,6 +1404,20 @@
    page (same classes, inside a fixed-size frame) is left exactly as is;
    the homepage gets its own phone pass separately. */
 @media (max-width: 700px) {
+  /* Every section is the same width as the model viewer (320px, or
+     the screen minus the page gutters if narrower), centered. That
+     leaves a strip of plain page on each side of the scrollable lists
+     (Quests, Diaries, Collection Log...) -- somewhere to put a thumb
+     to scroll the PAGE past them instead of scrolling the list. */
+  body:not(.landing) .co-summary-row,
+  body:not(.landing) .co-main-row,
+  body:not(.landing) .co-quad-row {
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+
   /* Summary row: a tidy 4x2 grid instead of a 3-3-2 wrap. */
   body:not(.landing) .co-summary-row {
     display: grid;
@@ -1416,7 +1430,7 @@
     gap: 6px;
   }
   body:not(.landing) .co-stat-value {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   /* One column: model viewer, Collection Log, then the four cards. */
