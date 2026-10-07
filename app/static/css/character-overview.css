@@ -1400,6 +1400,12 @@
    else. */
 .clog-tabs-arrow { display: none; }
 
+/* The drawn scrollbars (see the phone block) are phone-only too. */
+.co-sb { display: none; }
+@media (max-width: 700px) {
+  body:not(.landing) .co-sb { display: block; }
+}
+
 /* Registered so the tab strip's edge-fade widths can be transitioned
    (an unregistered custom property can't be animated). Where @property
    isn't supported the fade simply switches instantly. */
@@ -1524,29 +1530,54 @@
     grid-template-rows: repeat(3, minmax(0, 1fr));
   }
 
-  /* Scrollbars on the scrolling lists: phones normally draw thin
+  /* Scrollbars on the scrolling lists. Phone browsers draw thin
      overlay scrollbars that sit on top of the content and fade away
-     when idle. The site-wide scrollbar-color on :root (myscape.css)
-     is what makes browsers use that overlay style, so reset it to auto
-     on these lists and let the ::-webkit-scrollbar styling (10px gold
-     thumb, also in myscape.css) apply instead -- a real scrollbar that
-     takes its own room beside the content and stays visible whenever
-     the list can scroll. (Firefox on Android doesn't allow this.) */
+     when idle, and iOS in particular gives a page no way to turn that
+     off. So on phones the real scrollbar is hidden and the page draws
+     its own instead (.co-sb, built by the "drawn scrollbars" script in
+     this page's script, app/pages.py): a 12px track beside the list,
+     in the strip each list reserves for it with padding-right, with a
+     draggable thumb. It is always on screen while the list can scroll,
+     and gone when it can't. Positioned against each list's parent, so
+     those parents are position: relative here. */
+  body:not(.landing) .clog-panes,
+  body:not(.landing) .clog-items-col,
+  body:not(.landing) .quests-card,
+  body:not(.landing) .diaries-card {
+    position: relative;
+  }
   body:not(.landing) .clog-pages,
   body:not(.landing) .clog-items,
   body:not(.landing) .quests-list,
   body:not(.landing) .diaries-list {
-    scrollbar-width: auto;
-    scrollbar-color: auto;
+    scrollbar-width: none;
     overflow-y: auto;
+    padding-right: 18px;
   }
   body:not(.landing) .clog-pages::-webkit-scrollbar,
   body:not(.landing) .clog-items::-webkit-scrollbar,
   body:not(.landing) .quests-list::-webkit-scrollbar,
   body:not(.landing) .diaries-list::-webkit-scrollbar {
-    width: 12px;
-    -webkit-appearance: none;
+    display: none;
   }
+  body:not(.landing) .co-sb {
+    position: absolute;
+    width: 12px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    z-index: 1;
+    touch-action: none;
+    visibility: hidden;
+  }
+  body:not(.landing) .co-sb--on { visibility: visible; }
+  body:not(.landing) .co-sb-thumb {
+    width: 100%;
+    background: var(--gold-dim);
+    border-radius: var(--radius);
+    touch-action: none;
+    cursor: grab;
+  }
+  body:not(.landing) .co-sb-thumb.dragging { background: var(--gold); }
   body:not(.landing) .model-viewer-btn {
     width: 36px;
     height: 36px;

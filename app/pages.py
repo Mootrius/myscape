@@ -3818,6 +3818,71 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         document.fonts.ready.then(syncClogHeight);
       }
 
+      // Drawn scrollbars for the four scrolling lists (Collection Log
+      // pages + items, Quests, Achievement Diaries). Only shown at phone
+      // width -- see the "Scrollbars on the scrolling lists" comment in
+      // character-overview.css for why the native ones can't be used
+      // there. Always built (cheap), and the CSS decides whether the
+      // track is displayed. Each list's track sits against its right
+      // edge, in the padding-right strip that CSS reserves; its thumb
+      // is sized/placed from scrollTop and can be dragged.
+      (function () {
+        function attach(list) {
+          if (!list || !list.parentElement) return;
+          var track = document.createElement('div');
+          track.className = 'co-sb';
+          track.setAttribute('aria-hidden', 'true');
+          var thumb = document.createElement('div');
+          thumb.className = 'co-sb-thumb';
+          track.appendChild(thumb);
+          list.parentElement.appendChild(track);
+
+          var thumbH = 0;
+          function update() {
+            var ch = list.clientHeight;
+            var sh = list.scrollHeight;
+            var scrollable = ch > 0 && sh > ch + 1;
+            track.classList.toggle('co-sb--on', scrollable);
+            if (!scrollable) return;
+            track.style.top = list.offsetTop + 'px';
+            track.style.height = list.offsetHeight + 'px';
+            track.style.left = (list.offsetLeft + list.offsetWidth - 16) + 'px';
+            thumbH = Math.max(28, Math.round(ch * ch / sh));
+            thumb.style.height = thumbH + 'px';
+            var maxTop = list.offsetHeight - thumbH;
+            var y = maxTop * list.scrollTop / (sh - ch);
+            thumb.style.transform = 'translateY(' + Math.max(0, Math.min(maxTop, Math.round(y))) + 'px)';
+          }
+          list.addEventListener('scroll', update, { passive: true });
+          window.addEventListener('resize', update);
+          if (window.ResizeObserver) new ResizeObserver(update).observe(list);
+          if (window.MutationObserver) new MutationObserver(update).observe(list, { childList: true });
+
+          var dragStartY = 0;
+          var dragStartScroll = 0;
+          thumb.addEventListener('pointerdown', function (e) {
+            dragStartY = e.clientY;
+            dragStartScroll = list.scrollTop;
+            thumb.classList.add('dragging');
+            thumb.setPointerCapture(e.pointerId);
+            e.preventDefault();
+          });
+          thumb.addEventListener('pointermove', function (e) {
+            if (!thumb.classList.contains('dragging')) return;
+            var travel = list.offsetHeight - thumbH;
+            if (travel <= 0) return;
+            list.scrollTop = dragStartScroll + (e.clientY - dragStartY) * (list.scrollHeight - list.clientHeight) / travel;
+          });
+          function endDrag() { thumb.classList.remove('dragging'); }
+          thumb.addEventListener('pointerup', endDrag);
+          thumb.addEventListener('pointercancel', endDrag);
+          update();
+        }
+        ['clogPages', 'clogItems', 'questsList', 'diariesList'].forEach(function (id) {
+          attach(document.getElementById(id));
+        });
+      })();
+
       // Named (not an inline .then chain) so the manual sync button
       // below can re-run it after a successful resync, same as the
       // page's own initial load does.
