@@ -1240,3 +1240,32 @@ button.primary#pgNameSave, .pg-setup-form-save {
   body:not(.landing) .gear-slot-remove { width: 24px; height: 24px; top: -9px; right: -9px; font-size: 15px; }
   body:not(.landing) .gear-slot.touch-armed { outline: 2px solid var(--gold); outline-offset: -2px; }
 }
+
+/* Setup row: the icons and the menu (hamburger) button are one wrapping
+   row, so when there are more setups than fit, the button follows the
+   last setup instead of jumping to the far right. The icon row's own
+   box is dissolved (display: contents) so its buttons and the menu wrap
+   are siblings in .pg-header's flex row. */
+.pg-header { flex-wrap: wrap; gap: 8px; }
+.tracker-icon-row { display: contents; }
+
+@media (max-width: 700px) {
+  body:not(.landing) .pg-header { max-width: 320px; margin-left: auto; margin-right: auto; }
+  /* The 8 small slots sat flush against the paperdoll's bottom row
+     (margin-top: auto only helps on desktop, where the column is
+     stretched to the inventory's height). */
+  body:not(.landing) .gear-doll-misc { margin-top: 16px; }
+}
+
+@media (hover: none) {
+  /* No text selection / callout when long-pressing something draggable. */
+  body:not(.landing) #pgBody [draggable="true"],
+  body:not(.landing) #setupIconRow [draggable="true"] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* New / Duplicate setup once a phone is at its setup limit. */
+.tracker-menu-item.at-limit { opacity: 0.45; }

@@ -6538,6 +6538,11 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
           });
         });
         wireSetupIconDrag(row);
+        var limited = atPhoneSetupLimit();
+        ['menuNewSetup', 'menuDuplicateSetup'].forEach(function (id) {
+          var b = document.getElementById(id);
+          if (b) b.classList.toggle('at-limit', limited);
+        });
       }
 
       // Drag-and-drop reordering for the setup icon row itself --
@@ -6908,6 +6913,186 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         var hit = e.target.closest && e.target.closest('.gear-slot.touch-armed');
         armed.forEach(function (n) { if (n !== hit) n.classList.remove('touch-armed'); });
       });
+
+      // ---- Touch only, Purchase Goals only (not the homepage preview) ----
+      if (!document.body.classList.contains('landing')
+          && window.matchMedia && window.matchMedia('(hover: none)').matches) {
+
+        // Keyboard: the picker code focuses its search box with
+        // preventScroll (it scrolls on its own, measured against the
+        // full window), so on a phone the on-screen keyboard ends up
+        // covering the box. Whenever a text field has focus, keep it --
+        // plus a little of its suggestion list -- inside the visual
+        // viewport, i.e. above the keyboard.
+        (function () {
+          var vv = window.visualViewport;
+          var pending = null;
+          function isTextField(el) {
+            if (!el) return false;
+            if (el.tagName === 'TEXTAREA') return true;
+            return el.tagName === 'INPUT' && /^(text|search|)$/.test(el.type || '');
+          }
+          function reveal() {
+            var el = document.activeElement;
+            if (!isTextField(el)) return;
+            var viewTop = vv ? vv.offsetTop : 0;
+            var viewBottom = viewTop + (vv ? vv.height : window.innerHeight);
+            var r = el.getBoundingClientRect();
+            var need = r.bottom + 16;
+            var sug = el.parentElement && el.parentElement.querySelector('.suggestions.show');
+            if (sug) need = Math.min(sug.getBoundingClientRect().bottom, r.bottom + 170) + 8;
+            var dy = need - viewBottom;
+            if (dy > 0) {
+              // Never push the field itself off the top.
+              dy = Math.min(dy, Math.max(0, r.top - viewTop - 8));
+              if (dy > 0) window.scrollBy({ top: dy, left: 0, behavior: 'smooth' });
+            } else if (r.top < viewTop + 8) {
+              window.scrollBy({ top: r.top - viewTop - 8, left: 0, behavior: 'smooth' });
+            }
+          }
+          function schedule(delay) {
+            clearTimeout(pending);
+            pending = setTimeout(reveal, delay);
+          }
+          document.addEventListener('focusin', function (e) {
+            if (!isTextField(e.target)) return;
+            // The keyboard animates in over a few hundred ms.
+            schedule(150); setTimeout(reveal, 450); setTimeout(reveal, 800);
+          });
+          document.addEventListener('input', function (e) {
+            if (isTextField(e.target)) schedule(450);
+          });
+          if (vv) vv.addEventListener('resize', function () {
+            if (isTextField(document.activeElement)) schedule(60);
+          });
+        })();
+
+        // Long-press drag. HTML5 drag-and-drop doesn't start from a finger
+        // reliably, so a press held ~0.35s on a draggable setup icon,
+        // "still to purchase" row or filled slot starts the same drag
+        // the mouse does, by firing the same dragstart/dragover/drop/
+        // dragend events at the same handlers (with a stand-in
+        // dataTransfer) while a ghost copy follows the finger. Moving
+        // before the hold completes is a normal scroll.
+        (function () {
+          var HOLD_MS = 350, MOVE_TOL = 10, EDGE = 90;
+          var st = null;
+          var SOURCE_SEL = '#pgBody [draggable="true"], #setupIconRow [draggable="true"]';
+
+          function makeDT() {
+            var d = {};
+            return {
+              effectAllowed: 'none', dropEffect: 'none', types: [],
+              setData: function (k, v) { d[k] = String(v); },
+              getData: function (k) { return d[k] || ''; },
+              clearData: function () { d = {}; },
+              setDragImage: function () {}
+            };
+          }
+          function fire(type, target, x, y, dt) {
+            var ev = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window });
+            Object.defineProperty(ev, 'dataTransfer', { value: dt });
+            return target.dispatchEvent(ev); // false when a handler called preventDefault
+          }
+          function moveGhost() {
+            if (!st || !st.ghost) return;
+            st.ghost.style.left = (st.x - st.gx) + 'px';
+            st.ghost.style.top = (st.y - st.gy) + 'px';
+          }
+          function hover() {
+            if (!st || !st.active) return;
+            var el = document.elementFromPoint(st.x, st.y);
+            if (el !== st.over) {
+              if (st.over) fire('dragleave', st.over, st.x, st.y, st.dt);
+              st.over = el;
+              if (el) fire('dragenter', el, st.x, st.y, st.dt);
+            }
+            if (el) fire('dragover', el, st.x, st.y, st.dt);
+          }
+          function scrollLoop() {
+            if (!st || !st.active) return;
+            var dy = 0;
+            if (st.y < EDGE) dy = -Math.ceil((EDGE - st.y) / 6);
+            else if (st.y > window.innerHeight - EDGE) dy = Math.ceil((st.y - (window.innerHeight - EDGE)) / 6);
+            if (dy) { window.scrollBy(0, dy); moveGhost(); hover(); }
+            st.raf = requestAnimationFrame(scrollLoop);
+          }
+          function begin() {
+            if (!st || st.active) return;
+            if (!document.contains(st.src)) { st = null; return; }
+            st.active = true;
+            fire('dragstart', st.src, st.x, st.y, st.dt);
+            var r = st.src.getBoundingClientRect();
+            var g = st.src.cloneNode(true);
+            g.removeAttribute('id');
+            g.classList.remove('dragging', 'touch-armed');
+            g.style.cssText = 'position:fixed;margin:0;pointer-events:none;z-index:9999;opacity:0.9;' +
+              'width:' + r.width + 'px;height:' + r.height + 'px;transform:scale(1.08);' +
+              'box-shadow:0 6px 18px rgba(0,0,0,0.5);transition:none;';
+            document.body.appendChild(g);
+            st.ghost = g; st.gx = st.x0 - r.left; st.gy = st.y0 - r.top;
+            moveGhost();
+            if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) {} }
+            st.raf = requestAnimationFrame(scrollLoop);
+          }
+          function finish(doDrop) {
+            if (!st) return;
+            var s = st; st = null;
+            clearTimeout(s.timer);
+            if (!s.active) return;
+            cancelAnimationFrame(s.raf);
+            var el = document.elementFromPoint(s.x, s.y);
+            if (doDrop && el) {
+              var ok = fire('dragover', el, s.x, s.y, s.dt);
+              if (ok === false) fire('drop', el, s.x, s.y, s.dt);
+            } else if (s.over) {
+              fire('dragleave', s.over, s.x, s.y, s.dt);
+            }
+            fire('dragend', s.src, s.x, s.y, s.dt);
+            if (s.ghost && s.ghost.parentNode) s.ghost.parentNode.removeChild(s.ghost);
+            // A long press yields no click, so don't leave the
+            // "swallow the next click" flag the dragend handlers set.
+            setTimeout(function () { PG.dragSuppressClick = false; }, 400);
+          }
+
+          document.addEventListener('touchstart', function (e) {
+            if (st || e.touches.length !== 1) return;
+            var src = e.target.closest && e.target.closest(SOURCE_SEL);
+            if (!src) return;
+            var t = e.touches[0];
+            st = { src: src, x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY,
+                   active: false, dt: makeDT(), over: null, ghost: null, raf: 0,
+                   timer: setTimeout(begin, HOLD_MS) };
+          }, { passive: true });
+          document.addEventListener('touchmove', function (e) {
+            if (!st) return;
+            var t = e.touches[0];
+            st.x = t.clientX; st.y = t.clientY;
+            if (!st.active) {
+              if (Math.abs(st.x - st.x0) > MOVE_TOL || Math.abs(st.y - st.y0) > MOVE_TOL) {
+                clearTimeout(st.timer); st = null;
+              }
+              return;
+            }
+            e.preventDefault(); // hold page scroll while dragging
+            moveGhost();
+            hover();
+          }, { passive: false });
+          document.addEventListener('touchend', function (e) {
+            if (st && st.active && e.cancelable) e.preventDefault(); // no synthetic click
+            finish(true);
+          }, { passive: false });
+          document.addEventListener('touchcancel', function () { finish(false); });
+          // The browser's own long-press image/link menu and its native
+          // drag would fight this one.
+          document.addEventListener('contextmenu', function (e) {
+            if (st || (e.target.closest && e.target.closest(SOURCE_SEL))) e.preventDefault();
+          });
+          document.addEventListener('dragstart', function (e) {
+            if (e.isTrusted && e.target.closest && e.target.closest(SOURCE_SEL)) e.preventDefault();
+          }, true);
+        })();
+      }
 
       function wireSlotClicks() {
         document.querySelectorAll('.gear-slot').forEach(function (el) {
@@ -7748,8 +7933,20 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         if (wrap && !wrap.contains(e.target)) closeSetupMenu();
       });
 
+      // Phones fit 5 setup icons plus the menu button in one 320px row,
+      // so New/Duplicate stop there on a phone-width screen (existing
+      // setups beyond that, made elsewhere, still show and wrap).
+      var PHONE_SETUP_LIMIT = 5;
+      function atPhoneSetupLimit() {
+        return !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches
+          && PG.data && PG.data.gearSetups && PG.data.gearSetups.length >= PHONE_SETUP_LIMIT);
+      }
+      function phoneLimitMessage() {
+        showError('Phones are limited to ' + PHONE_SETUP_LIMIT + ' setups. Delete one, or add more from a computer.');
+      }
       document.getElementById('menuNewSetup').addEventListener('click', function () {
         closeSetupMenu();
+        if (atPhoneSetupLimit()) { phoneLimitMessage(); return; }
         openNameForm('new', '');
       });
       // Copies the active setup straight away (no name prompt) -- the
@@ -7759,6 +7956,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         closeSetupMenu();
         var setup = activeSetup();
         if (!setup) { showError('Create a setup first.'); return; }
+        if (atPhoneSetupLimit()) { phoneLimitMessage(); return; }
         const data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id) + '/duplicate', { method: 'POST' });
         if (data) {
           PG.stateVersion++;
