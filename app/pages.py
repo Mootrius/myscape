@@ -18578,18 +18578,7 @@ def render_landing_storages_preview() -> Optional[Tuple[str, str, str]]:
     """
     body = hero_markup + body
 
-    # Only the 50 most valuable items (the table's own default GE-value
-    # column: price x quantity, descending) -- the full snapshot is a
-    # couple hundred rows, and on a phone this preview is scrolled
-    # through as part of the page itself (see the landing block at the
-    # end of myscape.css), so a few hundred rows would be a very long
-    # way to scroll past it.
-    demo_items = sorted(
-        demo.get("items") or [],
-        key=lambda i: (i.get("gePrice") or 0) * (i.get("total") or 0),
-        reverse=True,
-    )[:50]
-    items_json = json.dumps(demo_items)
+    items_json = json.dumps(demo.get("items") or [])
     hidden_keys_json = json.dumps(demo.get("hiddenStorageKeys") or [])
     wrapper_script = f"""
     (function () {{
@@ -20925,8 +20914,12 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // custom-mode reordering afterward since that only ever moves
       // these same row elements around, never recreates them.
       var goalNameMeasureCtx = document.createElement('canvas').getContext('2d');
-      var GT_TOUCH = !document.body.classList.contains('landing')
-        && !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+      // Touch behaviour (long-press drag, no tooltips on the labelled
+      // controls, info-icon tap tooltips) is on for the homepage
+      // preview too; the few places where that preview differs (page
+      // snap scrolling, other previews' own tooltips) check ON_LANDING.
+      var ON_LANDING = document.body.classList.contains('landing');
+      var GT_TOUCH = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
       var GT_GOAL_NAME_MIN_WIDTH = 48; // matches .gt-goal-name's own min-width in goal-tracking.css
       function fixGoalNameMinWidths(listEl) {
         listEl.querySelectorAll('.gt-goal-name').forEach(function (el) {
@@ -21283,11 +21276,14 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       }
 
 
-      // ---- Touch only, Goal Tracking only (not the homepage preview) ----
+      // ---- Touch only (the real page and the homepage preview) ----
       if (GT_TOUCH) {
         // Tap tooltips: only the info icon (recurrence / started-at) has
-        // anything worth showing; the labelled controls show none.
+        // anything worth showing; the labelled controls show none. On
+        // the homepage this filter is shared with every other preview on
+        // the page, so anything outside this preview keeps its tooltips.
         window.myscapeTouchTooltipFilter = function (el) {
+          if (ON_LANDING && !(el.closest && el.closest('.landing-goal-tracking-preview'))) return true;
           return !(el.closest && el.closest('.gt-sort-tab, .gt-share-icon-btn, .gt-share-link-btn, .gt-goal-delete'));
         };
 
@@ -21372,7 +21368,10 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
           function scrollLoop() {
             if (!st || !st.active) return;
             var dy = 0;
-            if (st.y < EDGE) dy = -Math.ceil((EDGE - st.y) / 6);
+            // Not on the homepage: its page is a set of snap-scrolled
+            // screens, and the preview is a single screen anyway.
+            if (ON_LANDING) { /* no edge auto-scroll */ }
+            else if (st.y < EDGE) dy = -Math.ceil((EDGE - st.y) / 6);
             else if (st.y > window.innerHeight - EDGE) dy = Math.ceil((st.y - (window.innerHeight - EDGE)) / 6);
             if (dy) { window.scrollBy(0, dy); moveGhost(); hover(); }
             st.raf = requestAnimationFrame(scrollLoop);

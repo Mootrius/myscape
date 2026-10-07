@@ -900,6 +900,16 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   body:not(.phone-off) .pm-value-stack, body:not(.phone-off) .pm-row:not(.pm-row-header) > .pm-col-qty { font-size: 12px; }
 }
 
+/* Phone browsers can inflate small text on their own, block by block --
+   the 9px QTY / GE / HA / TRADE? labels must all stay the same size, so
+   each item card opts out. */
+@media (max-width: 700px) {
+  body:not(.phone-off) .pm-row:not(.pm-row-header) {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+
 /* Touch: no hover, so the pin button is always showing (dim until pinned). */
 @media (hover: none) {
   body:not(.phone-off) .pm-pin-btn {
