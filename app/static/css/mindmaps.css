@@ -1407,19 +1407,19 @@ button.primary#mmCreateFirstBtn {
    Same 320px centered column as the other phone pages, leaving a side
    gutter for thumb page-scroll (the canvas itself is touch-action:
    none, so a page scroll can't start on it). Fullscreen opts back out.
-   Scoped body:not(.landing) so the homepage preview is untouched. */
+   Scoped body:not(.phone-off) so the homepage preview is untouched. */
 @media (max-width: 700px) {
-  body:not(.landing) .mm-header { margin-bottom: 12px; }
-  body:not(.landing) .mm-switch-btn { max-width: 320px; }
-  body:not(.landing) .mm-name-form { flex-wrap: wrap; max-width: 320px; margin-left: auto; margin-right: auto; }
-  body:not(.landing) .mm-name-form input[type="text"] { flex: 1 1 100%; max-width: none; }
-  body:not(.landing) .mm-canvas {
+  body:not(.phone-off) .mm-header { margin-bottom: 12px; }
+  body:not(.phone-off) .mm-switch-btn { max-width: 320px; }
+  body:not(.phone-off) .mm-name-form { flex-wrap: wrap; max-width: 320px; margin-left: auto; margin-right: auto; }
+  body:not(.phone-off) .mm-name-form input[type="text"] { flex: 1 1 100%; max-width: none; }
+  body:not(.phone-off) .mm-canvas {
     width: 100%; max-width: 320px; margin-left: auto; margin-right: auto;
     height: 480px;
   }
-  body:not(.landing) .mm-canvas.mm-fullscreen {
+  body:not(.phone-off) .mm-canvas.mm-fullscreen {
     max-width: none; width: auto; height: auto; margin: 0;
   }
-  body:not(.landing) .mm-zoom-controls { top: 8px; right: 8px; }
-  body:not(.landing) .mm-zoom-controls button { width: 34px; height: 34px; }
+  body:not(.phone-off) .mm-zoom-controls { top: 8px; right: 8px; }
+  body:not(.phone-off) .mm-zoom-controls button { width: 34px; height: 34px; }
 }

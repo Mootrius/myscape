@@ -2086,3 +2086,82 @@ body.landing .footer-inner {
   body:not(.landing) .friend-name-link:hover { color: var(--text); }
   body:not(.landing) .friend-request-actions button.friend-decline-btn:hover { border-color: var(--border); }
 }
+
+
+/* ---------- Landing page, phones (<= 700px). ----------
+   Every feature panel keeps its own scroll-snap stop (see
+   .landing-anchor above), but each interactive preview is now a
+   free-scrolling box of its own, one screen tall, instead of a clipped
+   screenful with a fade over its bottom edge: swipe inside a preview
+   to explore it, and once you hit its end the next swipe carries on
+   to the next app's snap stop (overscroll-behavior stays at its
+   default "auto" on purpose -- "contain" would trap the page inside
+   the box). The page's own side gutter (20px each side of the box)
+   is still there for a thumb to page-scroll without touching the
+   preview's own content. The other per-preview phone layouts
+   (loot-tracker.css, purchase-goals.css, ...) are shared with the
+   real pages -- see their body:not(.phone-off) rules. */
+@media (max-width: 700px) {
+  body.landing .landing-anchor:not(.landing-anchor--intro) {
+    padding: 20px;
+  }
+  body.landing :is(
+    .landing-character-overview-preview,
+    .landing-loot-preview,
+    .landing-purchase-preview,
+    .landing-storages-preview,
+    .landing-mindmap-preview,
+    .landing-goal-tracking-preview
+  ) {
+    max-width: 350px;
+    height: calc(100vh - 40px);
+    height: calc(100svh - 40px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* No fade any more -- it only existed to hide the clipped bottom
+       edge of a box that couldn't scroll. */
+  }
+  body.landing :is(
+    .landing-character-overview-preview,
+    .landing-loot-preview,
+    .landing-purchase-preview,
+    .landing-storages-preview,
+    .landing-mindmap-preview,
+    .landing-goal-tracking-preview
+  )::after {
+    display: none;
+  }
+
+  /* Hero rows: character stays put, but the text beside it is now a
+     left-aligned block -- the gold app name big on a line of its own
+     (landing script's fit pass only ever shrinks it, and only when
+     the name wouldn't otherwise fit beside the character), the rest
+     of the sentence small and wrapping down the side. */
+  body.landing :is(.co-preview-hero, .loot-preview-hero, .purchase-preview-hero, .storages-preview-hero, .mindmap-preview-hero, .gt-preview-hero) {
+    gap: 10px;
+  }
+  body.landing :is(.co-preview-char, .loot-preview-char, .purchase-preview-char, .storages-preview-char, .mindmap-preview-char, .gt-preview-char) {
+    height: clamp(120px, 40vw, 157px);
+  }
+  body.landing :is(.co-preview-tagline-wrap, .loot-preview-tagline-wrap, .purchase-preview-tagline-wrap, .storages-preview-tagline-wrap, .mindmap-preview-tagline-wrap, .gt-preview-tagline-wrap) {
+    justify-content: flex-start;
+    padding-right: 8px;
+  }
+  body.landing :is(.co-preview-tagline, .loot-preview-tagline, .purchase-preview-tagline, .storages-preview-tagline, .mindmap-preview-tagline, .gt-preview-tagline) {
+    text-align: left;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  body.landing :is(.co-preview-tagline-gold, .loot-preview-tagline-gold, .purchase-preview-tagline-gold, .storages-preview-tagline-gold, .mindmap-preview-tagline-gold, .gt-preview-tagline-gold) {
+    display: block;
+    white-space: nowrap;
+    font-size: 30px;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+}

@@ -1066,7 +1066,7 @@
 
 /* ---- Phone layout ---------------------------------------------------
    700px is this site's phone breakpoint (see character-overview.css's
-   own phone block). Scoped to body:not(.landing) so the homepage's
+   own phone block). Scoped to body:not(.phone-off) so the homepage's
    preview of this page, which reuses these classes, is untouched.
 
    The big one: the old rule above (.loot-panels { flex-direction:
@@ -1076,24 +1076,24 @@
    width zero -- so on a phone both panels collapsed to a ~36px sliver
    and every tile inside crushed together. Stretching them fixes it. */
 @media (max-width: 700px) {
-  body:not(.landing) .loot-panels {
+  body:not(.phone-off) .loot-panels {
     flex-direction: column;
     align-items: stretch;
   }
-  body:not(.landing) .loot-panel {
+  body:not(.phone-off) .loot-panel {
     width: 100%;
     flex: none;
     padding: 14px 12px;
   }
-  body:not(.landing) .loot-chart-card {
+  body:not(.phone-off) .loot-chart-card {
     padding: 14px 12px 12px;
   }
 
   /* Same side cushion as the Character Overview phone page: every
      section is at most 320px wide, centered, leaving a strip of plain
      page either side (somewhere to put a thumb to scroll the page). */
-  body:not(.landing) .loot-chart-card,
-  body:not(.landing) .loot-panels {
+  body:not(.phone-off) .loot-chart-card,
+  body:not(.phone-off) .loot-panels {
     max-width: 320px;
     margin-left: auto;
     margin-right: auto;
@@ -1104,11 +1104,11 @@
      ("ALL NPCs", or the date range when drilled into a bar) moved down
      onto its own centered row -- it used to be absolutely centered over
      the other two and got squeezed between them. */
-  body:not(.landing) .loot-chart-header {
+  body:not(.phone-off) .loot-chart-header {
     flex-wrap: wrap;
     row-gap: 12px;
   }
-  body:not(.landing) .loot-chart-title {
+  body:not(.phone-off) .loot-chart-title {
     position: static;
     transform: none;
     order: 3;
@@ -1121,24 +1121,24 @@
   /* Controls: finger-sized (the desktop ones are 25px tall), and inputs
      at 16px -- anything smaller makes iOS Safari zoom the page in when
      the field is focused. */
-  body:not(.landing) .loot-sort-tab,
-  body:not(.landing) .loot-hide-toggle {
+  body:not(.phone-off) .loot-sort-tab,
+  body:not(.phone-off) .loot-hide-toggle {
     height: 36px;
     font-size: 12px;
   }
-  body:not(.landing) .loot-hide-toggle {
+  body:not(.phone-off) .loot-hide-toggle {
     flex: 0 0 40px;
   }
-  body:not(.landing) .loot-search {
+  body:not(.phone-off) .loot-search {
     height: 40px;
     font-size: 16px;
   }
-  body:not(.landing) .loot-range-custom-field input[type="text"] {
+  body:not(.phone-off) .loot-range-custom-field input[type="text"] {
     font-size: 16px;
     padding: 8px 6px;
   }
-  body:not(.landing) .loot-range-option,
-  body:not(.landing) .loot-range-apply {
+  body:not(.phone-off) .loot-range-option,
+  body:not(.phone-off) .loot-range-apply {
     padding: 10px 8px;
     font-size: 12px;
   }
@@ -1147,23 +1147,23 @@
      which isn't the middle of the page, so on a phone it ran off the
      right edge (and made the whole page wider). Anchor it to the title
      row instead, centered, and never wider than the page. */
-  body:not(.landing) .page-title:has(.loot-share-wrap) {
+  body:not(.phone-off) .page-title:has(.loot-share-wrap) {
     position: relative;
   }
-  body:not(.landing) .loot-share-wrap {
+  body:not(.phone-off) .loot-share-wrap {
     position: static;
   }
-  body:not(.landing) .loot-share-card {
+  body:not(.phone-off) .loot-share-card {
     top: calc(100% + 6px);
     width: min(280px, 100%);
     box-sizing: border-box;
   }
 
   /* Chart axis labels were 9-10px. */
-  body:not(.landing) .loot-bar-x-label {
+  body:not(.phone-off) .loot-bar-x-label {
     font-size: 10px;
   }
-  body:not(.landing) .loot-bar-gridline-label {
+  body:not(.phone-off) .loot-bar-gridline-label {
     font-size: 11px;
   }
 
@@ -1171,17 +1171,17 @@
      text), so the icon, quantity and gp value are legible and each
      tile is a fair tap target. NPC tiles stay 4 to a row but get
      slightly larger text. */
-  body:not(.landing) .loot-item-box-wrap {
+  body:not(.phone-off) .loot-item-box-wrap {
     flex: 0 0 calc((100% - 24px) / 4);
   }
-  body:not(.landing) .loot-item-box-icon {
+  body:not(.phone-off) .loot-item-box-icon {
     width: 30px;
     height: 30px;
   }
-  body:not(.landing) .loot-item-box-qty {
+  body:not(.phone-off) .loot-item-box-qty {
     font-size: 12px;
   }
-  body:not(.landing) .loot-item-box-value {
+  body:not(.phone-off) .loot-item-box-value {
     font-size: 11px;
   }
   /* The 56px NPC icon plus the box padding is wider than a quarter of a
@@ -1189,23 +1189,23 @@
      shrinks below its content -- so the tiles stayed ~74px, only three
      fit, and the row was left ragged. Let the tile and its icon scale
      down with the row instead. */
-  body:not(.landing) .loot-npc-box-wrap,
-  body:not(.landing) .loot-npc-box {
+  body:not(.phone-off) .loot-npc-box-wrap,
+  body:not(.phone-off) .loot-npc-box {
     min-width: 0;
   }
-  body:not(.landing) .loot-npc-box {
+  body:not(.phone-off) .loot-npc-box {
     padding-left: 2px;
     padding-right: 2px;
   }
-  body:not(.landing) .loot-npc-box-icon {
+  body:not(.phone-off) .loot-npc-box-icon {
     width: min(52px, 64%);
     height: auto;
     aspect-ratio: 1 / 1;
   }
-  body:not(.landing) .loot-npc-box-kc {
+  body:not(.phone-off) .loot-npc-box-kc {
     font-size: 12px;
   }
-  body:not(.landing) .loot-npc-box-value {
+  body:not(.phone-off) .loot-npc-box-value {
     font-size: 11px;
   }
 }
@@ -1218,9 +1218,9 @@
    that panel, dimmed and with a bigger tap area. Turning the toggle
    off hides them again. */
 @media (hover: none) {
-  body:not(.landing) .loot-eye-btn,
-  body:not(.landing) .loot-npc-box-wrap:hover .loot-eye-btn,
-  body:not(.landing) .loot-item-box-wrap:hover .loot-eye-btn {
+  body:not(.phone-off) .loot-eye-btn,
+  body:not(.phone-off) .loot-npc-box-wrap:hover .loot-eye-btn,
+  body:not(.phone-off) .loot-item-box-wrap:hover .loot-eye-btn {
     opacity: 0;
     pointer-events: none;
     width: 26px;
@@ -1228,9 +1228,9 @@
     top: 2px;
     right: 2px;
   }
-  body:not(.landing) .loot-panel:has(.loot-hide-toggle.active) .loot-eye-btn,
-  body:not(.landing) .loot-panel:has(.loot-hide-toggle.active) .loot-npc-box-wrap:hover .loot-eye-btn,
-  body:not(.landing) .loot-panel:has(.loot-hide-toggle.active) .loot-item-box-wrap:hover .loot-eye-btn {
+  body:not(.phone-off) .loot-panel:has(.loot-hide-toggle.active) .loot-eye-btn,
+  body:not(.phone-off) .loot-panel:has(.loot-hide-toggle.active) .loot-npc-box-wrap:hover .loot-eye-btn,
+  body:not(.phone-off) .loot-panel:has(.loot-hide-toggle.active) .loot-item-box-wrap:hover .loot-eye-btn {
     opacity: 0.65;
     pointer-events: auto;
   }

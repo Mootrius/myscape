@@ -1262,10 +1262,58 @@ def render_landing(player: Optional[PlayerView]) -> str:
       window.addEventListener('wheel', function (e) {
         // ctrl+wheel is pinch-zoom on a trackpad -- leave that alone.
         if (e.ctrlKey || Math.abs(e.deltaY) < 4) return;
+        // At phone width each preview is its own free-scrolling box
+        // (see the landing block at the end of myscape.css) -- a wheel
+        // over one still has to scroll it rather than jump panels.
+        if (window.matchMedia('(max-width: 700px)').matches && e.target.closest) {
+          var box = e.target.closest('[class^="landing-"][class$="-preview"]');
+          if (box && box.scrollHeight > box.clientHeight) return;
+        }
         e.preventDefault();
         if (locked) return;
         goTo(nearestStop() + (e.deltaY > 0 ? 1 : -1));
       }, { passive: false });
+    })();
+
+    // Phone width: each preview's gold app name stays at its full
+    // (30px) size on a line of its own beside the character, and only
+    // shrinks -- never grows -- when it wouldn't fit in the room the
+    // character leaves it (a longer name on a narrow screen), so no
+    // name ever gets cut off with an ellipsis.
+    (function () {
+      var mq = window.matchMedia('(max-width: 700px)');
+      function fit() {
+        var golds = document.querySelectorAll('[class$="-preview-tagline-gold"]');
+        for (var i = 0; i < golds.length; i++) {
+          var g = golds[i];
+          g.style.fontSize = '';
+          if (!mq.matches) continue;
+          var wrap = g.closest('[class$="-preview-tagline-wrap"]');
+          if (!wrap) continue;
+          var wcs = window.getComputedStyle(wrap);
+          var avail = wrap.clientWidth - (parseFloat(wcs.paddingLeft) || 0) - (parseFloat(wcs.paddingRight) || 0);
+          if (avail <= 0) continue;
+          // Start from a proportional guess, then step down a pixel at
+          // a time until it genuinely fits -- the site's pixel font
+          // doesn't scale its width linearly with font-size, so the
+          // guess alone can land a few px over.
+          var size = 30;
+          if (g.scrollWidth > avail) {
+            size = Math.floor(30 * avail / g.scrollWidth);
+            g.style.fontSize = size + 'px';
+            while (size > 14 && g.scrollWidth > avail) {
+              size -= 1;
+              g.style.fontSize = size + 'px';
+            }
+          }
+        }
+      }
+      fit();
+      window.addEventListener('resize', fit);
+      // The character crops' own widths (and so how much room is left
+      // for the name) aren't known until their images have loaded.
+      window.addEventListener('load', fit);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
     })();
 
     // The intro panel (logo + "explore features" cue) needs to be

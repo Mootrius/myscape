@@ -1233,44 +1233,44 @@ input[type="text"].invalid { border-color: var(--red); }
 
 /* ---- Phone ----------------------------------------------------------
    Same 320px centered column as the other phone pages. Scoped
-   body:not(.landing) so the homepage preview (which reuses these
+   body:not(.phone-off) so the homepage preview (which reuses these
    classes) is untouched. */
 @media (max-width: 700px) {
-  body:not(.landing) .gt-wizard-expanded { max-width: 320px; padding: 26px 14px 20px; }
-  body:not(.landing) .gt-card { max-width: 320px; margin-left: auto; margin-right: auto; padding: 14px; }
-  body:not(.landing) .gt-wizard-row .gt-field-target { flex-basis: 112px; }
+  body:not(.phone-off) .gt-wizard-expanded { max-width: 320px; padding: 26px 14px 20px; }
+  body:not(.phone-off) .gt-card { max-width: 320px; margin-left: auto; margin-right: auto; padding: 14px; }
+  body:not(.phone-off) .gt-wizard-row .gt-field-target { flex-basis: 112px; }
   /* Every wizard button (Back/Cancel/Next/Save, on every step) is the
      same fixed size -- 82px, so three still fit side by side in the
      narrowest wizard (320px column) -- instead of stretching to share
      whatever row they happen to be on (stages with only one or two
      buttons made them far wider than the three-button stages). */
-  body:not(.landing) .gt-wizard-btn,
-  body:not(.landing) .gt-wizard-actions .gt-add-btn { flex: 0 0 auto; width: 82px; min-width: 0; padding: 0 4px; }
-  body:not(.landing) .gt-wizard-expanded input[type="text"]::placeholder { font-size: 12px; }
+  body:not(.phone-off) .gt-wizard-btn,
+  body:not(.phone-off) .gt-wizard-actions .gt-add-btn { flex: 0 0 auto; width: 82px; min-width: 0; padding: 0 4px; }
+  body:not(.phone-off) .gt-wizard-expanded input[type="text"]::placeholder { font-size: 12px; }
 
   /* Name on its own line (full width, ellipsized), progress readout
      below it -- the one-line name+progress pair truncated long names. */
-  body:not(.landing) .gt-goal-row { gap: 12px; padding: 12px 0; }
-  body:not(.landing) .gt-goal-headline {
+  body:not(.phone-off) .gt-goal-row { gap: 12px; padding: 12px 0; }
+  body:not(.phone-off) .gt-goal-headline {
     flex-direction: column; align-items: flex-start; gap: 2px;
     padding-right: 0;
   }
-  body:not(.landing) .gt-goal-name { max-width: 100%; padding-right: 34px; box-sizing: border-box; }
-  body:not(.landing) .gt-goal-row:has(.gt-goal-delete--confirm) .gt-goal-name { padding-right: 96px; }
-  body:not(.landing) .gt-goal-sub { white-space: normal; }
+  body:not(.phone-off) .gt-goal-name { max-width: 100%; padding-right: 34px; box-sizing: border-box; }
+  body:not(.phone-off) .gt-goal-row:has(.gt-goal-delete--confirm) .gt-goal-name { padding-right: 96px; }
+  body:not(.phone-off) .gt-goal-sub { white-space: normal; }
   /* Bigger tap target for the info icon without moving anything. */
-  body:not(.landing) .gt-goal-info-icon { padding: 7px; margin: -7px -7px -7px -4px; }
-  body:not(.landing) .gt-goal-row.draggable { -webkit-touch-callout: none; -webkit-user-drag: none; }
+  body:not(.phone-off) .gt-goal-info-icon { padding: 7px; margin: -7px -7px -7px -4px; }
+  body:not(.phone-off) .gt-goal-row.draggable { -webkit-touch-callout: none; -webkit-user-drag: none; }
 
   /* Sort tabs: five in 290px. */
-  body:not(.landing) .gt-sort-tabs { gap: 4px; }
-  body:not(.landing) .gt-sort-tab { height: 28px; padding: 0 2px; font-size: 9.5px; }
+  body:not(.phone-off) .gt-sort-tabs { gap: 4px; }
+  body:not(.phone-off) .gt-sort-tab { height: 28px; padding: 0 2px; font-size: 9.5px; }
 
   /* The share popup anchors to the title row, not the small icon, so
      it can't run off the screen edge. */
-  body:not(.landing) h2.page-title { position: relative; }
-  body:not(.landing) .gt-share-wrap { position: static; }
-  body:not(.landing) .gt-share-card { top: 100%; margin-top: 6px; width: min(280px, calc(100vw - 32px)); }
+  body:not(.phone-off) h2.page-title { position: relative; }
+  body:not(.phone-off) .gt-share-wrap { position: static; }
+  body:not(.phone-off) .gt-share-card { top: 100%; margin-top: 6px; width: min(280px, calc(100vw - 32px)); }
 }
 
 
@@ -1282,27 +1282,27 @@ input[type="text"].invalid { border-color: var(--red); }
    the tappable cards/buttons instead. Not applied on the homepage
    preview. */
 @media (hover: none) {
-  body:not(.landing) .gt-wizard-add-btn:hover,
-  body:not(.landing) .gt-add-btn:hover { background: var(--gold); }
-  body:not(.landing) .gt-wizard-add-btn:active,
-  body:not(.landing) .gt-add-btn:active { background: #ffab42; }
-  body:not(.landing) .gt-wizard-type-btn:hover { border-color: var(--border); color: var(--text-muted); background: var(--panel-2); }
-  body:not(.landing) .gt-wizard-type-btn:active { border-color: var(--gold); color: var(--text); background: var(--panel); }
-  body:not(.landing) .gt-wizard-btn:hover { border-color: var(--border); color: var(--text-dim); }
-  body:not(.landing) .gt-wizard-btn:active { border-color: var(--gold-dim); color: var(--text); }
-  body:not(.landing) .gt-wizard-actions .gt-add-btn.gt-wizard-btn-next:hover { background: var(--panel-2); border-color: var(--border); color: var(--text-dim); }
-  body:not(.landing) .gt-wizard-actions .gt-add-btn.gt-wizard-btn-next:active { border-color: var(--gold-dim); color: var(--text); }
-  body:not(.landing) .gt-metric-btn:not(.active):hover,
-  body:not(.landing) .gt-target-mode-btn:not(.active):hover,
-  body:not(.landing) .gt-recur-unit-btn:not(.active):hover,
-  body:not(.landing) .gt-recur-start-btn:not(.active):hover { color: var(--text-dim); }
-  body:not(.landing) .gt-suggestion:hover { background: transparent; }
-  body:not(.landing) .gt-suggestion:active { background: var(--panel-2); }
-  body:not(.landing) .gt-sort-tab:not(.active):hover { border-color: var(--border); color: var(--text-dim); }
-  body:not(.landing) .gt-goal-row.draggable:hover { background-color: transparent; }
-  body:not(.landing) .gt-goal-info-icon:hover { color: var(--text-faint); }
-  body:not(.landing) .gt-goal-delete:not(.gt-goal-delete--confirm):hover { color: var(--text-faint); }
-  body:not(.landing) .gt-share-icon-btn:not(.open):hover { color: var(--text-faint); }
-  body:not(.landing) .gt-share-generate-btn:hover,
-  body:not(.landing) .gt-share-link-btn:hover { border-color: var(--border); color: var(--text-dim); }
+  body:not(.phone-off) .gt-wizard-add-btn:hover,
+  body:not(.phone-off) .gt-add-btn:hover { background: var(--gold); }
+  body:not(.phone-off) .gt-wizard-add-btn:active,
+  body:not(.phone-off) .gt-add-btn:active { background: #ffab42; }
+  body:not(.phone-off) .gt-wizard-type-btn:hover { border-color: var(--border); color: var(--text-muted); background: var(--panel-2); }
+  body:not(.phone-off) .gt-wizard-type-btn:active { border-color: var(--gold); color: var(--text); background: var(--panel); }
+  body:not(.phone-off) .gt-wizard-btn:hover { border-color: var(--border); color: var(--text-dim); }
+  body:not(.phone-off) .gt-wizard-btn:active { border-color: var(--gold-dim); color: var(--text); }
+  body:not(.phone-off) .gt-wizard-actions .gt-add-btn.gt-wizard-btn-next:hover { background: var(--panel-2); border-color: var(--border); color: var(--text-dim); }
+  body:not(.phone-off) .gt-wizard-actions .gt-add-btn.gt-wizard-btn-next:active { border-color: var(--gold-dim); color: var(--text); }
+  body:not(.phone-off) .gt-metric-btn:not(.active):hover,
+  body:not(.phone-off) .gt-target-mode-btn:not(.active):hover,
+  body:not(.phone-off) .gt-recur-unit-btn:not(.active):hover,
+  body:not(.phone-off) .gt-recur-start-btn:not(.active):hover { color: var(--text-dim); }
+  body:not(.phone-off) .gt-suggestion:hover { background: transparent; }
+  body:not(.phone-off) .gt-suggestion:active { background: var(--panel-2); }
+  body:not(.phone-off) .gt-sort-tab:not(.active):hover { border-color: var(--border); color: var(--text-dim); }
+  body:not(.phone-off) .gt-goal-row.draggable:hover { background-color: transparent; }
+  body:not(.phone-off) .gt-goal-info-icon:hover { color: var(--text-faint); }
+  body:not(.phone-off) .gt-goal-delete:not(.gt-goal-delete--confirm):hover { color: var(--text-faint); }
+  body:not(.phone-off) .gt-share-icon-btn:not(.open):hover { color: var(--text-faint); }
+  body:not(.phone-off) .gt-share-generate-btn:hover,
+  body:not(.phone-off) .gt-share-link-btn:hover { border-color: var(--border); color: var(--text-dim); }
 }

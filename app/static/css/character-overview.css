@@ -1448,7 +1448,7 @@
 /* The drawn scrollbars (see the phone block) are phone-only too. */
 .co-sb { display: none; }
 @media (max-width: 700px) {
-  body:not(.landing) .co-sb { display: block; }
+  body:not(.phone-off) .co-sb { display: block; }
 }
 
 /* Registered so the tab strip's edge-fade widths can be transitioned
@@ -1468,7 +1468,7 @@
    one column. 700px is this site's phone breakpoint -- keep it the same
    on every page so "mobile" means one thing site-wide.
 
-   Scoped to body:not(.landing) so the homepage's own preview of this
+   Scoped to body:not(.phone-off) so the homepage's own preview of this
    page (same classes, inside a fixed-size frame) is left exactly as is;
    the homepage gets its own phone pass separately. */
 @media (max-width: 700px) {
@@ -1477,9 +1477,9 @@
      leaves a strip of plain page on each side of the scrollable lists
      (Quests, Diaries, Collection Log...) -- somewhere to put a thumb
      to scroll the PAGE past them instead of scrolling the list. */
-  body:not(.landing) .co-summary-row,
-  body:not(.landing) .co-main-row,
-  body:not(.landing) .co-quad-row {
+  body:not(.phone-off) .co-summary-row,
+  body:not(.phone-off) .co-main-row,
+  body:not(.phone-off) .co-quad-row {
     max-width: 320px;
     margin-left: auto;
     margin-right: auto;
@@ -1487,32 +1487,32 @@
   }
 
   /* Summary row: a tidy 4x2 grid instead of a 3-3-2 wrap. */
-  body:not(.landing) .co-summary-row {
+  body:not(.phone-off) .co-summary-row {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px 4px;
     padding: 12px 6px;
   }
-  body:not(.landing) .co-stat {
+  body:not(.phone-off) .co-stat {
     min-width: 0;
     gap: 6px;
   }
-  body:not(.landing) .co-stat-value {
+  body:not(.phone-off) .co-stat-value {
     font-size: 13px;
   }
 
   /* One column: model viewer, Collection Log, then the four cards. */
-  body:not(.landing) .co-main-row,
-  body:not(.landing) .co-quad-row {
+  body:not(.phone-off) .co-main-row,
+  body:not(.phone-off) .co-quad-row {
     flex-direction: column;
     align-items: stretch;
   }
-  body:not(.landing) .co-left-col,
-  body:not(.landing) .clog-card,
-  body:not(.landing) .skills-card,
-  body:not(.landing) .quests-card,
-  body:not(.landing) .diaries-card,
-  body:not(.landing) .ca-card {
+  body:not(.phone-off) .co-left-col,
+  body:not(.phone-off) .clog-card,
+  body:not(.phone-off) .skills-card,
+  body:not(.phone-off) .quests-card,
+  body:not(.phone-off) .diaries-card,
+  body:not(.phone-off) .ca-card {
     flex: none;
     width: 100%;
     box-sizing: border-box;
@@ -1523,53 +1523,53 @@
      (the list, grid or canvas) then fills whatever room is left
      inside it, scrolling if it has more than fits. overflow: hidden
      keeps a section from ever growing past its box. */
-  body:not(.landing) .model-viewer-card,
-  body:not(.landing) .clog-card,
-  body:not(.landing) .skills-card,
-  body:not(.landing) .quests-card,
-  body:not(.landing) .diaries-card,
-  body:not(.landing) .ca-card {
+  body:not(.phone-off) .model-viewer-card,
+  body:not(.phone-off) .clog-card,
+  body:not(.phone-off) .skills-card,
+  body:not(.phone-off) .quests-card,
+  body:not(.phone-off) .diaries-card,
+  body:not(.phone-off) .ca-card {
     aspect-ratio: 2 / 3;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
     overflow: hidden;
   }
-  body:not(.landing) .model-viewer-card {
+  body:not(.phone-off) .model-viewer-card {
     width: 100%;
     box-sizing: border-box;
   }
-  body:not(.landing) .model-viewer-canvas-wrap {
+  body:not(.phone-off) .model-viewer-canvas-wrap {
     aspect-ratio: auto;
     flex: 1 1 0;
     min-height: 0;
   }
-  body:not(.landing) .clog-body {
+  body:not(.phone-off) .clog-body {
     flex: 1 1 0;
     min-height: 0;
     display: flex;
     flex-direction: column;
   }
-  body:not(.landing) .clog-panes {
+  body:not(.phone-off) .clog-panes {
     flex: 1 1 0;
     min-height: 0;
   }
-  body:not(.landing) .clog-items-col {
+  body:not(.phone-off) .clog-items-col {
     flex: 1 1 0;
     min-height: 0;
   }
-  body:not(.landing) .quests-list,
-  body:not(.landing) .diaries-list {
+  body:not(.phone-off) .quests-list,
+  body:not(.phone-off) .diaries-list {
     flex: 1 1 0;
     min-height: 0;
     height: auto;
   }
-  body:not(.landing) .skills-grid {
+  body:not(.phone-off) .skills-grid {
     flex: 1 1 0;
     min-height: 0;
     grid-template-rows: repeat(8, minmax(0, 1fr));
   }
-  body:not(.landing) .ca-list {
+  body:not(.phone-off) .ca-list {
     flex: 1 1 0;
     min-height: 0;
     grid-template-rows: repeat(3, minmax(0, 1fr));
@@ -1585,30 +1585,30 @@
      draggable thumb. It is always on screen while the list can scroll,
      and gone when it can't. Positioned against each list's parent, so
      those parents are position: relative here. */
-  body:not(.landing) .clog-panes,
-  body:not(.landing) .clog-items-col,
-  body:not(.landing) .quests-card,
-  body:not(.landing) .diaries-card {
+  body:not(.phone-off) .clog-panes,
+  body:not(.phone-off) .clog-items-col,
+  body:not(.phone-off) .quests-card,
+  body:not(.phone-off) .diaries-card {
     position: relative;
   }
-  body:not(.landing) .clog-pages,
-  body:not(.landing) .clog-items,
-  body:not(.landing) .quests-list,
-  body:not(.landing) .diaries-list {
+  body:not(.phone-off) .clog-pages,
+  body:not(.phone-off) .clog-items,
+  body:not(.phone-off) .quests-list,
+  body:not(.phone-off) .diaries-list {
     scrollbar-width: none;
     overflow-y: auto;
     padding-right: 16px;
   }
-  body:not(.landing) .clog-pages::-webkit-scrollbar,
-  body:not(.landing) .clog-items::-webkit-scrollbar,
-  body:not(.landing) .quests-list::-webkit-scrollbar,
-  body:not(.landing) .diaries-list::-webkit-scrollbar {
+  body:not(.phone-off) .clog-pages::-webkit-scrollbar,
+  body:not(.phone-off) .clog-items::-webkit-scrollbar,
+  body:not(.phone-off) .quests-list::-webkit-scrollbar,
+  body:not(.phone-off) .diaries-list::-webkit-scrollbar {
     display: none;
   }
   /* The track itself is invisible and 14px wide -- a comfortable
      finger target -- while the thumb inside it is a thin 6px bar
      hugging its right edge. */
-  body:not(.landing) .co-sb {
+  body:not(.phone-off) .co-sb {
     position: absolute;
     width: 14px;
     background: transparent;
@@ -1616,8 +1616,8 @@
     touch-action: none;
     visibility: hidden;
   }
-  body:not(.landing) .co-sb--on { visibility: visible; }
-  body:not(.landing) .co-sb-thumb {
+  body:not(.phone-off) .co-sb--on { visibility: visible; }
+  body:not(.phone-off) .co-sb-thumb {
     width: 6px;
     margin-left: 8px;
     background: var(--gold-dim);
@@ -1625,8 +1625,8 @@
     touch-action: none;
     cursor: grab;
   }
-  body:not(.landing) .co-sb-thumb.dragging { background: var(--gold); }
-  body:not(.landing) .model-viewer-btn {
+  body:not(.phone-off) .co-sb-thumb.dragging { background: var(--gold); }
+  body:not(.phone-off) .model-viewer-btn {
     width: 36px;
     height: 36px;
   }
@@ -1634,11 +1634,11 @@
   /* Collection Log: tabs scroll sideways inside their own strip (the
      sync button stays put beside them), and the page list sits above
      the item grid instead of beside it. */
-  body:not(.landing) .clog-tabs {
+  body:not(.phone-off) .clog-tabs {
     overflow-x: auto;
     scrollbar-width: none;
   }
-  body:not(.landing) .clog-tabs::-webkit-scrollbar { display: none; }
+  body:not(.phone-off) .clog-tabs::-webkit-scrollbar { display: none; }
 
   /* "There's more this way": the strip fades out at whichever edge has
      more tabs past it (can-scroll-left / can-scroll-right on the
@@ -1650,14 +1650,14 @@
      of the scroll. The fade is a mask on the strip itself rather than
      an overlay gradient, so it works over the card's translucent
      background without needing a matching solid color. */
-  body:not(.landing) .clog-tabs {
+  body:not(.phone-off) .clog-tabs {
     -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--clog-fade-l), #000 calc(100% - var(--clog-fade-r)), transparent);
     mask-image: linear-gradient(to right, transparent, #000 var(--clog-fade-l), #000 calc(100% - var(--clog-fade-r)), transparent);
     transition: --clog-fade-l 0.25s ease, --clog-fade-r 0.25s ease;
   }
-  body:not(.landing) .clog-tabs-wrap.can-scroll-left .clog-tabs { --clog-fade-l: 44px; }
-  body:not(.landing) .clog-tabs-wrap.can-scroll-right .clog-tabs { --clog-fade-r: 44px; }
-  body:not(.landing) .clog-tabs-arrow {
+  body:not(.phone-off) .clog-tabs-wrap.can-scroll-left .clog-tabs { --clog-fade-l: 44px; }
+  body:not(.phone-off) .clog-tabs-wrap.can-scroll-right .clog-tabs { --clog-fade-r: 44px; }
+  body:not(.phone-off) .clog-tabs-arrow {
     display: block;
     position: absolute;
     top: 50%;
@@ -1670,40 +1670,40 @@
     opacity: 0;
     transition: opacity 0.25s ease;
   }
-  body:not(.landing) .clog-tabs-arrow--right {
+  body:not(.phone-off) .clog-tabs-arrow--right {
     right: 6px;
     transform: rotate(45deg);
   }
-  body:not(.landing) .clog-tabs-arrow--left {
+  body:not(.phone-off) .clog-tabs-arrow--left {
     left: 6px;
     transform: rotate(-135deg);
   }
-  body:not(.landing) .clog-tabs-wrap.can-scroll-right .clog-tabs-arrow--right,
-  body:not(.landing) .clog-tabs-wrap.can-scroll-left .clog-tabs-arrow--left {
+  body:not(.phone-off) .clog-tabs-wrap.can-scroll-right .clog-tabs-arrow--right,
+  body:not(.phone-off) .clog-tabs-wrap.can-scroll-left .clog-tabs-arrow--left {
     opacity: 1;
   }
-  body:not(.landing) .clog-tab {
+  body:not(.phone-off) .clog-tab {
     flex: 0 0 auto;
     padding: 9px 12px;
     font-size: 14px;
   }
-  body:not(.landing) .clog-sync-btn {
+  body:not(.phone-off) .clog-sync-btn {
     width: 36px;
     height: 36px;
   }
-  body:not(.landing) .clog-panes {
+  body:not(.phone-off) .clog-panes {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
-  body:not(.landing) .clog-pages {
+  body:not(.phone-off) .clog-pages {
     flex: none;
     height: 160px;
   }
-  body:not(.landing) .clog-page-btn {
+  body:not(.phone-off) .clog-page-btn {
     padding: 9px 8px;
   }
-  body:not(.landing) .clog-items {
+  body:not(.phone-off) .clog-items {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     height: auto;
     flex: 1 1 0;
@@ -1715,13 +1715,13 @@
      the cog at its natural ~450px width, which runs off a phone's edge.
      Here it is narrower (two thirds of a section's width, centered
      under the title row rather than the cog) and stacks its controls. */
-  body:not(.landing) .page-title:has(.co-settings-wrap) {
+  body:not(.phone-off) .page-title:has(.co-settings-wrap) {
     position: relative;
   }
-  body:not(.landing) .co-settings-wrap {
+  body:not(.phone-off) .co-settings-wrap {
     position: static;
   }
-  body:not(.landing) .public-profile-card {
+  body:not(.phone-off) .public-profile-card {
     top: calc(100% + 6px);
     /* 2/3 of a page section (320px), centered under the title. */
     width: 213px;
@@ -1734,14 +1734,14 @@
     padding: 8px;
     box-sizing: border-box;
   }
-  body:not(.landing) .public-profile-seg-group {
+  body:not(.phone-off) .public-profile-seg-group {
     width: 100%;
   }
-  body:not(.landing) .public-profile-seg-btn {
+  body:not(.phone-off) .public-profile-seg-btn {
     flex: 1 1 0;
     height: 36px;
   }
-  body:not(.landing) .public-profile-link-btn {
+  body:not(.phone-off) .public-profile-link-btn {
     height: 36px;
     width: 100%;
     font-size: 15px;
@@ -1751,31 +1751,31 @@
      lost in these tall tiles -- 48px is an exact 2x, so they stay
      crisp (image-rendering: pixelated, set on the icon above). 72px
      (3x) was tried and was too big for the tile. */
-  body:not(.landing) .ca-tile {
+  body:not(.phone-off) .ca-tile {
     gap: 6px;
   }
-  body:not(.landing) .ca-tile-icon {
+  body:not(.phone-off) .ca-tile-icon {
     width: 48px;
     height: 48px;
   }
 
   /* Roomier tap targets in the four cards. */
-  body:not(.landing) .skill-cell,
-  body:not(.landing) .skill-cell:hover {
+  body:not(.phone-off) .skill-cell,
+  body:not(.phone-off) .skill-cell:hover {
     padding: 4px;
     gap: 8px;
   }
-  body:not(.landing) .skill-cell-icon {
+  body:not(.phone-off) .skill-cell-icon {
     width: 26px;
     height: 26px;
   }
-  body:not(.landing) .skill-cell-level {
+  body:not(.phone-off) .skill-cell-level {
     font-size: 17px;
   }
-  body:not(.landing) .quest-row {
+  body:not(.phone-off) .quest-row {
     padding: 5px 4px;
   }
-  body:not(.landing) .diary-row {
+  body:not(.phone-off) .diary-row {
     padding: 6px 4px;
   }
 }

@@ -1157,7 +1157,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .pg-share-label { text-align: center; margin: 0 0 4px; text-transform: uppercase; }
 
 /* ---------- Phone layout (the whole site's phone breakpoint, 700px).
-   Scoped with body:not(.landing) so the homepage preview, which reuses
+   Scoped with body:not(.phone-off) so the homepage preview, which reuses
    these classes, is untouched. Every section is max 320px wide and
    centered -- the same gutter Character Overview and Loot Tracker leave
    so there is always page to put a thumb on when scrolling. ---------- */
@@ -1165,7 +1165,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   /* Overview card: coins on the left, target on the right, each with
      its icon above its amount, and the progress bar on its own row
      underneath -- the one-row desktop layout is ~500px wide. */
-  body:not(.landing) .overlay-card {
+  body:not(.phone-off) .overlay-card {
     flex-wrap: wrap;
     align-items: flex-start;
     row-gap: 14px;
@@ -1176,63 +1176,63 @@ button.primary#pgNameSave, .pg-setup-form-save {
     margin-right: auto;
     box-sizing: border-box;
   }
-  body:not(.landing) .overlay-side,
-  body:not(.landing) .overlay-side.overlay-target {
+  body:not(.phone-off) .overlay-side,
+  body:not(.phone-off) .overlay-side.overlay-target {
     flex: 1 1 0;
     min-width: 0;
     flex-direction: column;
     gap: 4px;
   }
-  body:not(.landing) .overlay-amount { font-size: 15px; }
-  body:not(.landing) .overlay-progress { order: 3; flex: 0 0 100%; min-width: 0; }
+  body:not(.phone-off) .overlay-amount { font-size: 15px; }
+  body:not(.phone-off) .overlay-progress { order: 3; flex: 0 0 100%; min-width: 0; }
 
   /* Gear + inventory frame, then the summary: one centered column. The
      doll column's width is pinned in px by JS on desktop (see
      .pg-doll-wrap above), hence !important. */
-  body:not(.landing) .pg-body { align-items: center; gap: 18px; }
-  body:not(.landing) .pg-doll-wrap {
+  body:not(.phone-off) .pg-body { align-items: center; gap: 18px; }
+  body:not(.phone-off) .pg-doll-wrap {
     width: 100% !important;
     max-width: 320px;
   }
-  body:not(.landing) .pg-gear-frame {
+  body:not(.phone-off) .pg-gear-frame {
     width: 100%;
     align-items: center;
     gap: 20px;
     padding: 16px;
   }
-  body:not(.landing) .pg-summary-col {
+  body:not(.phone-off) .pg-summary-col {
     flex: none;
     width: 100%;
     max-width: 320px;
     min-width: 0;
   }
-  body:not(.landing) .gear-summary { padding: 14px 12px; }
+  body:not(.phone-off) .gear-summary { padding: 14px 12px; }
 
   /* The setup-icon picker sits outside .pg-body, so give it the same
      width and centering. */
-  body:not(.landing) .gear-icon-picker,
-  body:not(.landing) #pgIconPicker > * {
+  body:not(.phone-off) .gear-icon-picker,
+  body:not(.phone-off) #pgIconPicker > * {
     max-width: 320px;
     margin-left: auto;
     margin-right: auto;
   }
-  body:not(.landing) .pg-setup-form { max-width: 320px; margin-left: auto; margin-right: auto; }
+  body:not(.phone-off) .pg-setup-form { max-width: 320px; margin-left: auto; margin-right: auto; }
 
   /* 16px inputs so iOS doesn't zoom the page on focus; taller buttons. */
-  body:not(.landing) .search-box input[type="text"],
-  body:not(.landing) .pg-setup-form input[type="text"] { font-size: 16px; height: 40px; }
-  body:not(.landing) .sort-btn { height: 36px; font-size: 11px; }
+  body:not(.phone-off) .search-box input[type="text"],
+  body:not(.phone-off) .pg-setup-form input[type="text"] { font-size: 16px; height: 40px; }
+  body:not(.phone-off) .sort-btn { height: 36px; font-size: 11px; }
 }
 
 @media (max-width: 700px) {
   /* Share / import popups: anchored to the title row (not the small
      icon) and no wider than it, so they can't run off the right edge. */
-  body:not(.landing) .page-title:has(.pg-share-wrap),
-  body:not(.landing) .page-title:has(.pg-import-wrap) { position: relative; }
-  body:not(.landing) .pg-share-wrap,
-  body:not(.landing) .pg-import-wrap { position: static; }
-  body:not(.landing) .pg-share-card,
-  body:not(.landing) .pg-import-card {
+  body:not(.phone-off) .page-title:has(.pg-share-wrap),
+  body:not(.phone-off) .page-title:has(.pg-import-wrap) { position: relative; }
+  body:not(.phone-off) .pg-share-wrap,
+  body:not(.phone-off) .pg-import-wrap { position: static; }
+  body:not(.phone-off) .pg-share-card,
+  body:not(.phone-off) .pg-import-card {
     top: calc(100% + 6px);
     width: min(280px, 100%);
     box-sizing: border-box;
@@ -1242,10 +1242,10 @@ button.primary#pgNameSave, .pg-setup-form-save {
 /* Touch: no hover, so the slot "x" shows only on the slot armed by a
    first tap (see wireSlotClicks), and is a bigger target. */
 @media (hover: none) {
-  body:not(.landing) .gear-slot.filled:hover .gear-slot-remove { display: none; }
-  body:not(.landing) .gear-slot.filled.touch-armed .gear-slot-remove { display: flex; }
-  body:not(.landing) .gear-slot-remove { width: 24px; height: 24px; top: -9px; right: -9px; font-size: 15px; }
-  body:not(.landing) .gear-slot.touch-armed { outline: 2px solid var(--gold); outline-offset: -2px; }
+  body:not(.phone-off) .gear-slot.filled:hover .gear-slot-remove { display: none; }
+  body:not(.phone-off) .gear-slot.filled.touch-armed .gear-slot-remove { display: flex; }
+  body:not(.phone-off) .gear-slot-remove { width: 24px; height: 24px; top: -9px; right: -9px; font-size: 15px; }
+  body:not(.phone-off) .gear-slot.touch-armed { outline: 2px solid var(--gold); outline-offset: -2px; }
 }
 
 /* Setup row: the icons and the menu (hamburger) button are one wrapping
@@ -1265,17 +1265,17 @@ button.primary#pgNameSave, .pg-setup-form-save {
 @media (max-width: 700px) {
   /* Same 320px as every section, so a row holds at most 6 setup icons
      (or 5 plus the menu button) and the rest wrap to the next row. */
-  body:not(.landing) .pg-header { max-width: 320px; margin-left: auto; margin-right: auto; }
+  body:not(.phone-off) .pg-header { max-width: 320px; margin-left: auto; margin-right: auto; }
   /* The 8 small slots sat flush against the paperdoll's bottom row
      (margin-top: auto only helps on desktop, where the column is
      stretched to the inventory's height). */
-  body:not(.landing) .gear-doll-misc { margin-top: 16px; }
+  body:not(.phone-off) .gear-doll-misc { margin-top: 16px; }
 }
 
 @media (hover: none) {
   /* No text selection / callout when long-pressing something draggable. */
-  body:not(.landing) #pgBody [draggable="true"],
-  body:not(.landing) #setupIconRow [draggable="true"] {
+  body:not(.phone-off) #pgBody [draggable="true"],
+  body:not(.phone-off) #setupIconRow [draggable="true"] {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
@@ -1283,8 +1283,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 
 @media (hover: none) {
-  body:not(.landing) #pgBody [draggable],
-  body:not(.landing) #setupIconRow [draggable] { -webkit-user-drag: none; }
+  body:not(.phone-off) #pgBody [draggable],
+  body:not(.phone-off) #setupIconRow [draggable] { -webkit-user-drag: none; }
 }
 
 /* Phone: even 18px between every stacked section. The slot picker's
@@ -1292,23 +1292,23 @@ button.primary#pgNameSave, .pg-setup-form-save {
    18px gap (36px) between the gear card and the summary card, and an
    open picker carried its own 22px bottom margin on top of the gap. */
 @media (max-width: 700px) {
-  body:not(.landing) #pgSlotPicker:empty { display: none; }
-  body:not(.landing) .gear-slot-picker,
-  body:not(.landing) .gear-icon-picker { margin-bottom: 0; }
-  body:not(.landing) #pgIconPicker:not(:empty) { margin-bottom: 18px; }
+  body:not(.phone-off) #pgSlotPicker:empty { display: none; }
+  body:not(.phone-off) .gear-slot-picker,
+  body:not(.phone-off) .gear-icon-picker { margin-bottom: 0; }
+  body:not(.phone-off) #pgIconPicker:not(:empty) { margin-bottom: 18px; }
 }
 
 /* Phone: the coins icon and the setup's chosen icon in the overview card
    are 1.25x their desktop 44px size (55px). */
 @media (max-width: 700px) {
-  body:not(.landing) .overlay-icon,
-  body:not(.landing) .overlay-icon-wrap .overlay-icon { width: 55px; height: 55px; }
-  body:not(.landing) .overlay-icon-wrap { width: 55px; height: 55px; }
-  body:not(.landing) .overlay-icon-placeholder { width: 38px; height: 38px; font-size: 20px; }
+  body:not(.phone-off) .overlay-icon,
+  body:not(.phone-off) .overlay-icon-wrap .overlay-icon { width: 55px; height: 55px; }
+  body:not(.phone-off) .overlay-icon-wrap { width: 55px; height: 55px; }
+  body:not(.phone-off) .overlay-icon-placeholder { width: 38px; height: 38px; font-size: 20px; }
 }
 
 /* Phone: Clear / Cancel in the setup-icon picker sit on their own row
    under the search box, centered. */
 @media (max-width: 700px) {
-  body:not(.landing) .gear-icon-picker-actions { width: 100%; justify-content: center; }
+  body:not(.phone-off) .gear-icon-picker-actions { width: 100%; justify-content: center; }
 }
