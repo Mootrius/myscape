@@ -582,18 +582,27 @@
    override (the bare guess doesn't land on its own detail render),
    but the same 70%-oversized-at-this-box's-shared-56px story applies
    once it does, per explicit instruction. */
-.loot-npc-box-icon-dossier,
-/* Tarnished items -- the nine Tarnished NPCs folded into one tile (see
-   isTarnishedItems in the script below and _NPC_DISPLAY_OVERRIDES in
-   app/loot.py), a bundled battleaxe image at 70% -- same scale-not-
-   resize treatment as everything above, per explicit instruction. */
-.loot-npc-box-icon-tarnished {
+.loot-npc-box-icon-dossier {
   transform: scale(0.7);
 }
-/* A smooth high-res render, not pixel art -- the shared icon rule's
-   image-rendering: pixelated would make it look jagged when scaled
-   down to the box. */
+/* Tarnished items -- the nine Tarnished NPCs folded into one tile (see
+   isTarnishedItems in the script below and _NPC_DISPLAY_OVERRIDES in
+   app/loot.py): a bundled battleaxe image at 70% -- same size as the
+   scaled-down tiles above, but done with padding instead of
+   transform: scale. Padding shrinks just the picture inside the same
+   56x56 slot (object-fit: contain scales it to the padded box), so the
+   tile's layout is untouched like the transform version, but the
+   browser draws the image once at its final size instead of
+   re-sampling it through a scale transform, which came out soft. The
+   bundled file is exactly 2x that final size so a normal or retina
+   screen shows it 1:1 or at an even 2:1. 8px of padding = 40px of
+   picture on the 56px slot (~71%, kept to whole pixels on purpose --
+   a fractional size would blur it again); a phone's fluid-width icon
+   gets 15% a side instead, i.e. exactly 70%. A smooth render rather
+   than pixel art, so the shared rule's image-rendering: pixelated
+   is turned off. */
 .loot-npc-box-icon-tarnished {
+  padding: 8px;
   image-rendering: auto;
 }
 .loot-npc-box-kc {
@@ -1212,6 +1221,9 @@
     width: min(52px, 64%);
     height: auto;
     aspect-ratio: 1 / 1;
+  }
+  body:not(.phone-off) .loot-npc-box-icon-tarnished {
+    padding: 15%;
   }
   body:not(.phone-off) .loot-npc-box-kc {
     font-size: 12px;
