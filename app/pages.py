@@ -12445,6 +12445,21 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
       if (mmCanvasForWheelPatch) {{
         var mmRealAddEventListener = mmCanvasForWheelPatch.addEventListener.bind(mmCanvasForWheelPatch);
         mmCanvasForWheelPatch.addEventListener = function (type, listener, opts) {{
+          // Same idea for touch: on the homepage a finger swiping on the
+          // (non-fullscreen) preview scrolls the page, not the map --
+          // the reused pointer handlers' touch pan/pinch only run once
+          // fullscreen (mouse input is untouched). The first finger
+          // still goes through to pointerdown/up so a plain tap on the
+          // empty canvas keeps deselecting, but its moves are skipped
+          // (no pan) and a second finger is dropped (no pinch).
+          if (type === 'pointerdown' || type === 'pointermove') {{
+            return mmRealAddEventListener(type, function (e) {{
+              if (e.pointerType === 'touch' && !mmCanvasForWheelPatch.classList.contains('mm-fullscreen')) {{
+                if (type === 'pointermove' || !e.isPrimary) return;
+              }}
+              return listener.call(this, e);
+            }}, opts);
+          }}
           if (type !== 'wheel') return mmRealAddEventListener(type, listener, opts);
           return mmRealAddEventListener('wheel', function (e) {{
             if (mmCanvasForWheelPatch.classList.contains('mm-fullscreen')) return listener(e);

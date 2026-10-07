@@ -1423,3 +1423,14 @@ button.primary#mmCreateFirstBtn {
   body:not(.phone-off) .mm-zoom-controls { top: 8px; right: 8px; }
   body:not(.phone-off) .mm-zoom-controls button { width: 34px; height: 34px; }
 }
+
+
+/* Homepage preview, touch screens: outside fullscreen the preview's
+   canvas doesn't take touch drags/pinches (the landing script skips
+   the reused pan/pinch handlers for touch until .mm-fullscreen), so a
+   finger on it scrolls the page instead -- pan-y rather than auto so
+   a two-finger pinch there doesn't zoom the whole page either. The
+   real page and fullscreen keep the canvas's own touch-action: none. */
+.landing-mindmap-preview .mm-canvas:not(.mm-fullscreen) {
+  touch-action: pan-y;
+}
