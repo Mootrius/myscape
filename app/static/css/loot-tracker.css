@@ -582,8 +582,19 @@
    override (the bare guess doesn't land on its own detail render),
    but the same 70%-oversized-at-this-box's-shared-56px story applies
    once it does, per explicit instruction. */
-.loot-npc-box-icon-dossier {
+.loot-npc-box-icon-dossier,
+/* Tarnished items -- the nine Tarnished NPCs folded into one tile (see
+   isTarnishedItems in the script below and _NPC_DISPLAY_OVERRIDES in
+   app/loot.py), a bundled battleaxe image at 70% -- same scale-not-
+   resize treatment as everything above, per explicit instruction. */
+.loot-npc-box-icon-tarnished {
   transform: scale(0.7);
+}
+/* A smooth high-res render, not pixel art -- the shared icon rule's
+   image-rendering: pixelated would make it look jagged when scaled
+   down to the box. */
+.loot-npc-box-icon-tarnished {
+  image-rendering: auto;
 }
 .loot-npc-box-kc {
   font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.15;

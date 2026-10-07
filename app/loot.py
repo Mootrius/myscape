@@ -547,6 +547,21 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     # starting with "/" is a direct URL rather than a wiki filename --
     # see _override_icon_url below), per explicit instruction.
     "duke sucellus": (None, "/static/img/npc-duke-sucellus.png"),
+    # The nine "Tarnished ..." NPCs (2h sword, amulet, battleaxe,
+    # halberd, longsword, necklace, bracelet, ring, spear) all fold
+    # into one "Tarnished items" tile -- their kills, loot and chart
+    # contribution are summed under that one name, since build_loot_state
+    # groups by this display name -- under a bundled battleaxe image
+    # (see _override_icon_url), per explicit instruction.
+    "tarnished 2h sword": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    "tarnished amulet": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    "tarnished battleaxe": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    "tarnished halberd": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    "tarnished longsword": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    "tarnished necklace": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    "tarnished bracelet": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    "tarnished ring": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    "tarnished spear": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
 }
 
 
