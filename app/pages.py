@@ -7028,9 +7028,14 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             if (dy) { window.scrollBy(0, dy); moveGhost(); hover(); }
             st.raf = requestAnimationFrame(scrollLoop);
           }
+          // Undo the temporary draggable=false and the refresh hold.
+          function release(s) {
+            if (s.src && s.wasDraggable != null) s.src.setAttribute('draggable', s.wasDraggable);
+            PG.dragging = false;
+          }
           function begin() {
             if (!st || st.active) return;
-            if (!document.contains(st.src)) { st = null; return; }
+            if (!document.contains(st.src)) { st = null; PG.dragging = false; return; }
             st.active = true;
             fire('dragstart', st.src, st.x, st.y, st.dt);
             var r = st.src.getBoundingClientRect();
@@ -7050,6 +7055,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             if (!st) return;
             var s = st; st = null;
             clearTimeout(s.timer);
+            release(s);
             if (!s.active) return;
             cancelAnimationFrame(s.raf);
             var el = document.elementFromPoint(s.x, s.y);
@@ -7060,6 +7066,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
               fire('dragleave', s.over, s.x, s.y, s.dt);
             }
             fire('dragend', s.src, s.x, s.y, s.dt);
+            PG.dragging = false;
             if (s.ghost && s.ghost.parentNode) s.ghost.parentNode.removeChild(s.ghost);
             // A long press yields no click, so don't leave the
             // "swallow the next click" flag the dragend handlers set.
@@ -7074,6 +7081,17 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             st = { src: src, x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY,
                    active: false, dt: makeDT(), over: null, ghost: null, raf: 0,
                    timer: setTimeout(begin, HOLD_MS) };
+            // Hold off the background refresh for the whole gesture: a
+            // poll landing mid-hold rebuilds the row/grid and detaches
+            // the thing being pressed.
+            PG.dragging = true;
+            // Chrome on Android starts its OWN drag of a draggable
+            // element after a press of roughly half a second, which
+            // cancels this touch sequence (touchcancel) and killed the
+            // drag when the press was held too long before moving. Turn
+            // native dragging off for the length of the touch.
+            st.wasDraggable = src.getAttribute('draggable');
+            src.setAttribute('draggable', 'false');
           }, { passive: true });
           document.addEventListener('touchmove', function (e) {
             if (!st) return;
@@ -7081,7 +7099,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             st.x = t.clientX; st.y = t.clientY;
             if (!st.active) {
               if (Math.abs(st.x - st.x0) > MOVE_TOL || Math.abs(st.y - st.y0) > MOVE_TOL) {
-                clearTimeout(st.timer); st = null;
+                clearTimeout(st.timer); release(st); st = null;
               }
               return;
             }

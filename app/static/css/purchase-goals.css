@@ -1281,3 +1281,19 @@ button.primary#pgNameSave, .pg-setup-form-save {
     user-select: none;
   }
 }
+
+@media (hover: none) {
+  body:not(.landing) #pgBody [draggable],
+  body:not(.landing) #setupIconRow [draggable] { -webkit-user-drag: none; }
+}
+
+/* Phone: even 18px between every stacked section. The slot picker's
+   wrapper is a flex item even when empty, so it was adding a second
+   18px gap (36px) between the gear card and the summary card, and an
+   open picker carried its own 22px bottom margin on top of the gap. */
+@media (max-width: 700px) {
+  body:not(.landing) #pgSlotPicker:empty { display: none; }
+  body:not(.landing) .gear-slot-picker,
+  body:not(.landing) .gear-icon-picker { margin-bottom: 0; }
+  body:not(.landing) #pgIconPicker:not(:empty) { margin-bottom: 18px; }
+}
