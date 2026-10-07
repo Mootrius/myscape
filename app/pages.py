@@ -6538,11 +6538,6 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
           });
         });
         wireSetupIconDrag(row);
-        var limited = atPhoneSetupLimit();
-        ['menuNewSetup', 'menuDuplicateSetup'].forEach(function (id) {
-          var b = document.getElementById(id);
-          if (b) b.classList.toggle('at-limit', limited);
-        });
       }
 
       // Drag-and-drop reordering for the setup icon row itself --
@@ -7933,20 +7928,8 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         if (wrap && !wrap.contains(e.target)) closeSetupMenu();
       });
 
-      // Phones fit 5 setup icons plus the menu button in one 320px row,
-      // so New/Duplicate stop there on a phone-width screen (existing
-      // setups beyond that, made elsewhere, still show and wrap).
-      var PHONE_SETUP_LIMIT = 5;
-      function atPhoneSetupLimit() {
-        return !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches
-          && PG.data && PG.data.gearSetups && PG.data.gearSetups.length >= PHONE_SETUP_LIMIT);
-      }
-      function phoneLimitMessage() {
-        showError('Phones are limited to ' + PHONE_SETUP_LIMIT + ' setups. Delete one, or add more from a computer.');
-      }
       document.getElementById('menuNewSetup').addEventListener('click', function () {
         closeSetupMenu();
-        if (atPhoneSetupLimit()) { phoneLimitMessage(); return; }
         openNameForm('new', '');
       });
       // Copies the active setup straight away (no name prompt) -- the
@@ -7956,7 +7939,6 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         closeSetupMenu();
         var setup = activeSetup();
         if (!setup) { showError('Create a setup first.'); return; }
-        if (atPhoneSetupLimit()) { phoneLimitMessage(); return; }
         const data = await apiCall('/api/gear-setups/' + encodeURIComponent(setup.id) + '/duplicate', { method: 'POST' });
         if (data) {
           PG.stateVersion++;

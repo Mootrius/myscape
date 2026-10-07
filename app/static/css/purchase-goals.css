@@ -1250,6 +1250,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .tracker-icon-row { display: contents; }
 
 @media (max-width: 700px) {
+  /* Same 320px as every section, so a row holds at most 6 setup icons
+     (or 5 plus the menu button) and the rest wrap to the next row. */
   body:not(.landing) .pg-header { max-width: 320px; margin-left: auto; margin-right: auto; }
   /* The 8 small slots sat flush against the paperdoll's bottom row
      (margin-top: auto only helps on desktop, where the column is
@@ -1266,6 +1268,3 @@ button.primary#pgNameSave, .pg-setup-form-save {
     user-select: none;
   }
 }
-
-/* New / Duplicate setup once a phone is at its setup limit. */
-.tracker-menu-item.at-limit { opacity: 0.45; }
