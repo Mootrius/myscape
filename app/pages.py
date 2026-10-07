@@ -13448,12 +13448,11 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
         var canvas = document.getElementById('mmCanvas');
         var viewW = canvas.clientWidth, viewH = canvas.clientHeight;
         var pad = (window.matchMedia && window.matchMedia('(max-width: 700px)').matches) ? 16 : 40; // breathing room inside the viewport edges
-        var rightInset = (window.matchMedia && window.matchMedia('(max-width: 700px)').matches) ? 44 : 0; // phone: the control column covers the right edge
-        var availW = Math.max(1, viewW - rightInset - pad * 2), availH = Math.max(1, viewH - pad * 2);
+        var availW = Math.max(1, viewW - pad * 2), availH = Math.max(1, viewH - pad * 2);
         var z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min(availW / boxW, availH / boxH)));
         MM.zoom = z;
         var boxCenterX = minX + boxW / 2, boxCenterY = minY + boxH / 2;
-        MM.pan.x = (viewW - rightInset) / 2 - boxCenterX * z;
+        MM.pan.x = viewW / 2 - boxCenterX * z;
         MM.pan.y = viewH / 2 - boxCenterY * z;
         applyTransform();
         updateZoomButtons();
