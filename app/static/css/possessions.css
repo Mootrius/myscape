@@ -1002,3 +1002,25 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   body:not(.landing) .pm-row-header .pm-header-cell { gap: 0; }
   body:not(.landing) .pm-row-header .pm-filter-icon-btn { width: 20px; }
 }
+
+
+/* Phone: the pin sits in a left gutter beside the QTY / GE / HA / TRADE?
+   row (the icon + name line above it stays flush left). */
+@media (max-width: 700px) {
+  body:not(.landing) .pm-row:not(.pm-row-header) {
+    grid-template-columns: 28px minmax(0, 0.85fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.75fr);
+    grid-template-areas: "img img img img img" ". qty ge ha trade";
+  }
+  body:not(.landing) .pm-pin-btn {
+    left: 0; right: auto; top: auto; bottom: 8px; transform: none;
+    width: 28px; height: 34px;
+  }
+}
+/* An absurdly large stack's number wraps inside its column instead of
+   running into the next one. */
+@media (max-width: 700px) {
+  body:not(.landing) .pm-value-stack, body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-qty { overflow-wrap: anywhere; }
+}
+@media (hover: none) {
+  body:not(.landing) .pm-pin-btn { left: 0; right: auto; top: auto; bottom: 8px; width: 28px; height: 34px; }
+}
