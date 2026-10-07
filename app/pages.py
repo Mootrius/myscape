@@ -12540,6 +12540,12 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       // connector lines not quite meeting a node's actual edges.
       var NODE_WIDTH = 160;
       var NODE_HEIGHT = 46;
+      // Touch screens (no hover) show no tooltips at all on Mindmaps --
+      // none of them are needed there. Read by the shared tooltip
+      // script in _shell; mouse hover is unaffected.
+      if (!document.body.classList.contains('landing')) {
+        window.myscapeTouchTooltipFilter = function () { return false; };
+      }
       var COL_WIDTH = 190;   // horizontal spacing between sibling leaf columns
       var ROW_HEIGHT = 110;  // vertical spacing between depth levels
       var MARGIN = 60;       // breathing room around the whole tree inside the world
