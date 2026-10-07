@@ -355,6 +355,13 @@
      .model-viewer-bg's own filter below -- it doesn't reach the
      backdrop or the button row either. */
   filter: brightness(1.15);
+  /* three.js's OrbitControls sets touch-action: none on its canvas to
+     claim touch drags for itself -- but this camera takes no pointer
+     input at all (rotate/pan/zoom are all off, see the module script),
+     so on a touch screen that only meant a finger that started on the
+     model could never scroll the page. !important because the library
+     writes it as an inline style. */
+  touch-action: auto !important;
 }
 
 /* Bottom button row (info / shuffle-bg / play-pause / reset),
