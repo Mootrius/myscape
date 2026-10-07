@@ -1312,3 +1312,19 @@ button.primary#pgNameSave, .pg-setup-form-save {
 @media (max-width: 700px) {
   body:not(.phone-off) .gear-icon-picker-actions { width: 100%; justify-content: center; }
 }
+
+
+/* ---- Share page "save to my account" icon: phone ---------------------
+   The popup is centered on its icon, which sits at the right-hand end
+   of the centered "Shared by <name>" title -- so on a phone the 280px
+   card ran off the right edge. Anchoring it to the title (full width,
+   centered) instead keeps it on screen. The 14px icon also gets a
+   thumb-sized tap area (padding + equal negative margin, so the title
+   layout doesn't move). */
+@media (max-width: 700px) {
+  body:not(.phone-off) .page-title:has(.pg-import-wrap) { position: relative; }
+  body:not(.phone-off) .pg-import-wrap { position: static; }
+  body:not(.phone-off) .pg-import-card { top: calc(100% + 6px); }
+  body:not(.phone-off) .pg-import-icon-btn { padding: 10px; margin: -10px; }
+}
+

@@ -1434,3 +1434,19 @@ button.primary#mmCreateFirstBtn {
 .landing-mindmap-preview .mm-canvas:not(.mm-fullscreen) {
   touch-action: pan-y;
 }
+
+
+/* ---- Share page "save to my account" icon: phone ---------------------
+   The popup is centered on its icon, which sits at the right-hand end
+   of the centered "Shared by <name>" title -- so on a phone the 280px
+   card ran off the right edge. Anchoring it to the title (full width,
+   centered) instead keeps it on screen. The 14px icon also gets a
+   thumb-sized tap area (padding + equal negative margin, so the title
+   layout doesn't move). */
+@media (max-width: 700px) {
+  body:not(.phone-off) .page-title:has(.mm-import-wrap) { position: relative; }
+  body:not(.phone-off) .mm-import-wrap { position: static; }
+  body:not(.phone-off) .mm-import-card { top: calc(100% + 6px); }
+  body:not(.phone-off) .mm-import-icon-btn { padding: 10px; margin: -10px; }
+}
+
