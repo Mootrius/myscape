@@ -680,11 +680,23 @@ def _shell(
         el.style.top = top + 'px';
       }
 
+      // On touch screens (no hover), a page can narrow which tooltips
+      // appear on tap by defining window.myscapeTouchTooltipFilter -- a
+      // function taking the tooltip's element and returning false to
+      // suppress it. Pages that don't define one keep every tooltip.
+      // Mouse/trackpad devices ignore it entirely.
+      function tooltipAllowed(target) {
+        if (!window.matchMedia('(hover: none)').matches) return true;
+        var filter = window.myscapeTouchTooltipFilter;
+        return typeof filter !== 'function' || filter(target) !== false;
+      }
+
       function showTooltip(target) {
         // The pointer may have already moved off this target (and
         // onto/off another) before SHOW_DELAY elapsed -- only still-
         // current hovers actually show.
         if (currentTarget !== target) return;
+        if (!tooltipAllowed(target)) return;
         const text = target.getAttribute('data-tooltip');
         if (!text) return;
         const el = ensureTooltipEl();
@@ -762,6 +774,9 @@ def _shell(
           if (!noHover.matches) return;
           const link = e.target.closest ? e.target.closest('a[data-tooltip]') : null;
           if (!link) { armedLink = null; return; }
+          // A link whose tooltip is filtered out just navigates on the
+          // first tap -- there's no tooltip to show first.
+          if (!tooltipAllowed(link)) return;
           if (armedLink === link) { armedLink = null; clearTimeout(armTimer); return; }
           e.preventDefault();
           armedLink = link;
@@ -3840,6 +3855,19 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
       if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(syncClogHeight);
       }
+
+      // On touch screens only these show a tooltip when tapped -- the
+      // summary-row icons, the model viewer's info button, the
+      // Collection Log's refresh button and item tiles, and the Skills
+      // cells. Everything else on this page that carries a tooltip
+      // (settings cog, shuffle/pause/reset buttons, public-profile
+      // controls, ...) stays silent on tap. Read by the shared tooltip
+      // script in _shell (desktop hover is unaffected).
+      window.myscapeTouchTooltipFilter = function (el) {
+        return !!(el.closest && el.closest(
+          '.co-summary-row, #mvInfoBtn, #clogSyncBtn, .clog-item, .skill-cell'
+        ));
+      };
 
       // Drawn scrollbars for the four scrolling lists (Collection Log
       // pages + items, Quests, Achievement Diaries). Only shown at phone
