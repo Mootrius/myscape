@@ -770,8 +770,31 @@ def _shell(
           armedLink = null;
           hideTooltip();
         }, { passive: true });
+        // A page can also define window.myscapeTouchTooltipToggle -- a
+        // function taking the tooltip's element and returning true for
+        // ones where tapping again while the tooltip is up dismisses it
+        // (rather than just leaving it showing until a tap elsewhere).
+        function toggleDismisses(el) {
+          var fn = window.myscapeTouchTooltipToggle;
+          return typeof fn === 'function' && fn(el) === true;
+        }
         document.addEventListener('click', (e) => {
           if (!noHover.matches) return;
+          const tipTarget = e.target.closest ? e.target.closest('[data-tooltip]') : null;
+          if (tipTarget && toggleDismisses(tipTarget)) {
+            if (tipTarget === currentTarget && tooltipEl && tooltipEl.classList.contains('show')) {
+              hideTooltip();
+            } else {
+              // Shown straight from the tap rather than waiting on the
+              // browser's emulated mouseover -- which doesn't fire again
+              // for an element the "pointer" is already sitting on, so
+              // after a dismiss it would never bring the tooltip back.
+              clearTimeout(showTimer);
+              currentTarget = tipTarget;
+              showTooltip(tipTarget);
+            }
+            return;
+          }
           const link = e.target.closest ? e.target.closest('a[data-tooltip]') : null;
           if (!link) { armedLink = null; return; }
           // A link whose tooltip is filtered out just navigates on the
@@ -3869,6 +3892,13 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           '.co-summary-row, #mvInfoBtn, #clogSyncBtn, .clog-item, .skill-cell, ' +
           '#publicProfileSegPrivate, #publicProfileSegPublic'
         ));
+      };
+
+      // Of those, tapping these a second time while their tooltip is up
+      // dismisses it: the summary-row icons and the viewer's info button
+      // (read by the same shared tooltip script as the filter above).
+      window.myscapeTouchTooltipToggle = function (el) {
+        return !!(el.closest && el.closest('.co-summary-row, #mvInfoBtn'));
       };
 
       // Drawn scrollbars for the four scrolling lists (Collection Log
