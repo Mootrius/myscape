@@ -3858,14 +3858,16 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
 
       // On touch screens only these show a tooltip when tapped -- the
       // summary-row icons, the model viewer's info button, the
-      // Collection Log's refresh button and item tiles, and the Skills
-      // cells. Everything else on this page that carries a tooltip
+      // Collection Log's refresh button and item tiles, the Skills
+      // cells, and the PRIVATE/PUBLIC buttons in the public-profile
+      // settings popup. Everything else on this page that carries a tooltip
       // (settings cog, shuffle/pause/reset buttons, public-profile
       // controls, ...) stays silent on tap. Read by the shared tooltip
       // script in _shell (desktop hover is unaffected).
       window.myscapeTouchTooltipFilter = function (el) {
         return !!(el.closest && el.closest(
-          '.co-summary-row, #mvInfoBtn, #clogSyncBtn, .clog-item, .skill-cell'
+          '.co-summary-row, #mvInfoBtn, #clogSyncBtn, .clog-item, .skill-cell, ' +
+          '#publicProfileSegPrivate, #publicProfileSegPublic'
         ));
       };
 
