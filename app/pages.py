@@ -3121,7 +3121,11 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         <div class="clog-empty" id="clogEmpty">No collection log data yet &mdash; open your collection log in-game with the myscape RuneLite plugin running, then refresh this page.</div>
         <div class="clog-body" id="clogBody">
           <div class="clog-toolbar">
-            <div class="clog-tabs" id="clogTabs"></div>
+            <div class="clog-tabs-wrap" id="clogTabsWrap">
+              <div class="clog-tabs" id="clogTabs"></div>
+              <span class="clog-tabs-arrow clog-tabs-arrow--left" aria-hidden="true"></span>
+              <span class="clog-tabs-arrow clog-tabs-arrow--right" aria-hidden="true"></span>
+            </div>
             <button class="clog-sync-btn" id="clogSyncBtn" type="button" data-tooltip="Refresh kill counts from official hiscores"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>
           </div>
           <div class="clog-panes">
@@ -3560,7 +3564,26 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
         return count;
       }
 
+      // Phone width only: the tab strip scrolls sideways, so these
+      // classes on its wrapper drive the edge fade + arrow that say
+      // "there's more this way" (see .clog-tabs-wrap in
+      // character-overview.css). Harmless on desktop -- the strip never
+      // overflows there, so neither class is ever set.
+      var clogTabsWrapEl = document.getElementById('clogTabsWrap');
+      function updateClogTabsFade() {
+        if (!clogTabsWrapEl) return;
+        var max = clogTabsEl.scrollWidth - clogTabsEl.clientWidth;
+        clogTabsWrapEl.classList.toggle('can-scroll-left', clogTabsEl.scrollLeft > 2);
+        clogTabsWrapEl.classList.toggle('can-scroll-right', clogTabsEl.scrollLeft < max - 2);
+      }
+      clogTabsEl.addEventListener('scroll', updateClogTabsFade, { passive: true });
+      window.addEventListener('resize', updateClogTabsFade);
+
       function renderClogTabs() {
+        // Emptying the strip collapses it to zero width, which would
+        // snap it back to the first tab every time a later one (Other,
+        // say) is clicked -- keep the scroll position across the rebuild.
+        var keepScrollLeft = clogTabsEl.scrollLeft;
         clogTabsEl.innerHTML = '';
         clogTabs.forEach(function (tab, tabIndex) {
           var btn = document.createElement('button');
@@ -3588,6 +3611,8 @@ def _character_overview_panel_markup(preview: bool = False, public_code: Optiona
           });
           clogTabsEl.appendChild(btn);
         });
+        clogTabsEl.scrollLeft = keepScrollLeft;
+        updateClogTabsFade();
       }
 
       function renderClogPages() {

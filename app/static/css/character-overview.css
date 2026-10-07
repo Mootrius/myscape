@@ -475,6 +475,12 @@
   margin-bottom: 8px;
 }
 
+.clog-tabs-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
 .clog-tabs {
   display: flex;
   flex: 1;
@@ -1390,6 +1396,11 @@
 .co-friend-btn--done, .co-friend-btn--done:hover { color: var(--gold-dim); cursor: default; }
 
 
+/* Phone-only scroll cue (see the phone block below); hidden everywhere
+   else. */
+.clog-tabs-arrow { display: none; }
+
+
 /* ---- Phone layout ---------------------------------------------------
    The first @media block on this page, on purpose: everything above is
    a desktop layout that deliberately never wraps (the model viewer and
@@ -1472,6 +1483,63 @@
     scrollbar-width: none;
   }
   body:not(.landing) .clog-tabs::-webkit-scrollbar { display: none; }
+
+  /* "There's more this way": the strip fades out at whichever edge has
+     more tabs past it (can-scroll-left / can-scroll-right on the
+     wrapper, set by updateClogTabsFade in this page's script), and a
+     small gold chevron sits in the faded area, nudging gently toward
+     the hidden tabs. All of it goes away on its own at the end of the
+     scroll. The fade is a mask on the strip itself rather than an
+     overlay gradient, so it works over the card's translucent
+     background without needing a matching solid color. */
+  body:not(.landing) .clog-tabs-wrap.can-scroll-right .clog-tabs {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+  }
+  body:not(.landing) .clog-tabs-wrap.can-scroll-left .clog-tabs {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent);
+  }
+  body:not(.landing) .clog-tabs-wrap.can-scroll-left.can-scroll-right .clog-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent);
+  }
+  body:not(.landing) .clog-tabs-arrow {
+    display: none;
+    position: absolute;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    margin-top: -5px;
+    border-top: 2px solid var(--gold);
+    border-right: 2px solid var(--gold);
+    pointer-events: none;
+  }
+  body:not(.landing) .clog-tabs-arrow--right {
+    right: 6px;
+    transform: rotate(45deg);
+    animation: clog-tabs-nudge-right 1.4s ease-in-out infinite;
+  }
+  body:not(.landing) .clog-tabs-arrow--left {
+    left: 6px;
+    transform: rotate(-135deg);
+    animation: clog-tabs-nudge-left 1.4s ease-in-out infinite;
+  }
+  body:not(.landing) .clog-tabs-wrap.can-scroll-right .clog-tabs-arrow--right,
+  body:not(.landing) .clog-tabs-wrap.can-scroll-left .clog-tabs-arrow--left {
+    display: block;
+  }
+  @keyframes clog-tabs-nudge-right {
+    0%, 100% { transform: translateX(0) rotate(45deg); }
+    50% { transform: translateX(3px) rotate(45deg); }
+  }
+  @keyframes clog-tabs-nudge-left {
+    0%, 100% { transform: translateX(0) rotate(-135deg); }
+    50% { transform: translateX(-3px) rotate(-135deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body:not(.landing) .clog-tabs-arrow { animation: none; }
+  }
   body:not(.landing) .clog-tab {
     flex: 0 0 auto;
     padding: 9px 12px;
