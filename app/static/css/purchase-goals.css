@@ -1184,6 +1184,12 @@ button.primary#pgNameSave, .pg-setup-form-save {
     gap: 4px;
   }
   body:not(.phone-off) .overlay-amount { font-size: 15px; }
+
+  /* Shared setups: no coins icon on the phone (there's no GP figure
+     beside it to belong to) -- the setup's icon and total GP take the
+     whole card, centered. */
+  body:not(.phone-off) .purchase-goal-share .overlay-source { display: none; }
+  body:not(.phone-off) .purchase-goal-share .overlay-side.overlay-target { align-items: center; }
   body:not(.phone-off) .overlay-progress { order: 3; flex: 0 0 100%; min-width: 0; }
 
   /* Gear + inventory frame, then the summary: one centered column. The
