@@ -1175,8 +1175,8 @@
     flex: 0 0 calc((100% - 24px) / 4);
   }
   body:not(.landing) .loot-item-box-icon {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
   }
   body:not(.landing) .loot-item-box-qty {
     font-size: 12px;
@@ -1198,7 +1198,7 @@
     padding-right: 2px;
   }
   body:not(.landing) .loot-npc-box-icon {
-    width: min(56px, 70%);
+    width: min(52px, 64%);
     height: auto;
     aspect-ratio: 1 / 1;
   }
