@@ -1668,8 +1668,8 @@
 
   /* Public-profile settings popup: on desktop it floats centered under
      the cog at its natural ~450px width, which runs off a phone's edge.
-     Here it spans the page width instead (anchored to the title row,
-     not the cog) and stacks its controls. */
+     Here it is narrower (two thirds of a section's width, centered
+     under the title row rather than the cog) and stacks its controls. */
   body:not(.landing) .page-title:has(.co-settings-wrap) {
     position: relative;
   }
@@ -1678,9 +1678,11 @@
   }
   body:not(.landing) .public-profile-card {
     top: calc(100% + 6px);
-    left: 0;
-    right: 0;
-    transform: none;
+    /* 2/3 of a page section (320px), centered under the title. */
+    width: 213px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
