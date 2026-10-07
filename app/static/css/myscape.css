@@ -2151,15 +2151,22 @@ body.landing .footer-inner {
 }
 
 
-/* ---- 404 page: phone ------------------------------------------------
+/* ---- Auth pages (sign up, log in, forgot/reset password, verify
+   email) and the 404 page: phone ------------------------------------
    Same 320px centered column as the other phone pages (instead of the
-   card running nearly edge to edge), tighter padding, and the card
-   starting at the same height as Account's does rather than 40px lower.
-   Scoped to render_not_found's own .not-found-shell. */
+   card running nearly edge to edge), tighter padding and field spacing,
+   and the card starting at Account's height rather than 40px lower.
+   Every .auth-shell page but Account (which has its own block above).
+   Inputs are already 16px, so focusing one doesn't zoom the page. */
 @media (max-width: 700px) {
-  body:not(.landing) .not-found-shell { padding-top: 14px; }
-  body:not(.landing) .not-found-shell .auth-card { max-width: 320px; padding: 22px 14px 14px; }
-  body:not(.landing) .not-found-shell .auth-card h2 { margin-bottom: 20px; }
+  body:not(.landing) .auth-shell:not(.account-shell) { padding-top: 14px; }
+  body:not(.landing) .auth-shell:not(.account-shell) .auth-card { max-width: 320px; padding: 22px 14px 18px; }
+  body:not(.landing) .auth-shell:not(.account-shell) .auth-card h2 { margin-bottom: 20px; }
+  body:not(.landing) .auth-shell:not(.account-shell) .field { margin-bottom: 14px; }
+  body:not(.landing) .auth-shell:not(.account-shell) .field label { margin-bottom: 6px; }
+  body:not(.landing) .auth-shell:not(.account-shell) .auth-forgot { margin: -6px 0 14px; }
+  body:not(.landing) .auth-shell:not(.account-shell) .auth-forgot a,
+  body:not(.landing) .auth-shell:not(.account-shell) .auth-switch a { display: inline-block; padding: 6px 0; }
   body:not(.landing) .not-found-code { margin-bottom: 12px; }
   body:not(.landing) .not-found-teleport { margin-bottom: 14px; -webkit-tap-highlight-color: transparent; }
 }
