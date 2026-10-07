@@ -16813,6 +16813,20 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
       // that, same as a spreadsheet's own column-header sort.
       var SORT_DEFAULT_DIR = { alpha: 'asc', qty: 'desc', ge: 'desc', ha: 'desc', tradeable: 'desc' };
 
+      // On touch screens a tap on the sort headers, the column filter
+      // funnels, the storages gear, the save-view button, the export
+      // icon (and its link button) and the pin buttons shows no tooltip
+      // -- the popup/menu each one opens speaks for itself. Every other tooltip on this
+      // page still shows. Read by the shared tooltip script in _shell;
+      // mouse hover is unaffected.
+      if (!document.body.classList.contains('landing')) {
+        window.myscapeTouchTooltipFilter = function (el) {
+          return !(el.closest && el.closest(
+            '.pm-sort-header, .pm-share-icon-btn, .pm-share-link-btn, .pm-pin-btn, .pm-filter-icon-btn, .pm-settings-btn, .pm-view-add-btn'
+          ));
+        };
+      }
+
       // GE VALUE, highest stack first, is the default sort on load.
       //
       // locations/enabledStorages below MUST list every one of

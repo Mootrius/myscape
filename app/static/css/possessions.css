@@ -809,3 +809,101 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   width: auto;
   max-width: none;
 }
+
+
+/* ---------- Phone layout (the whole site's phone breakpoint, 700px).
+   Scoped with body:not(.landing) so the homepage preview, which reuses
+   these classes, is untouched. The one section is max 320px wide and
+   centered -- the same gutter every other phone page leaves for a
+   thumb to scroll the page. The five-column table becomes one compact
+   card per item. ---------- */
+@media (max-width: 700px) {
+  body:not(.landing) .pm-section {
+    max-width: 320px; margin-left: auto; margin-right: auto;
+    padding: 14px 12px; box-sizing: border-box;
+  }
+
+  /* Controls: search on its own full-width row; the location buttons
+     (wrapping) with the settings gear beside them underneath. */
+  body:not(.landing) .pm-controls-row { gap: 10px; align-items: flex-start; margin-bottom: 14px; }
+  body:not(.landing) .pm-control-group + .pm-control-group { padding-left: 0; border-left: none; }
+  body:not(.landing) .pm-search-group { flex: 1 1 100%; min-width: 0; }
+  body:not(.landing) .pm-search-group .loot-search { height: 40px; font-size: 16px; padding-right: 54px; }
+  body:not(.landing) .pm-location-group { flex: 1 1 0; min-width: 0; }
+  body:not(.landing) .pm-filter-btn { height: 32px; }
+  body:not(.landing) .pm-settings-wrap { flex: 0 0 auto; }
+  body:not(.landing) .pm-settings-btn { width: 32px; height: 32px; }
+  body:not(.landing) .pm-settings-menu { top: 38px; right: 0; max-width: calc(100vw - 48px); }
+
+  /* Saved views. */
+  body:not(.landing) .pm-views-row { gap: 8px; }
+  body:not(.landing) .pm-view-chip, body:not(.landing) .pm-view-add-btn { height: 32px; }
+  body:not(.landing) .pm-view-save-popover {
+    left: 0; right: 0; min-width: 0; width: auto; box-sizing: border-box;
+  }
+
+  /* Header: the five sort buttons + filter funnels wrap into three
+     columns; every popover opens under the whole header block, full
+     width, instead of under its own (narrow, off-center) cell. */
+  body:not(.landing) .pm-row.pm-row-header {
+    position: relative;
+    display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between;
+    gap: 2px 6px; padding: 0 0 8px;
+    font-size: 11px;
+  }
+  body:not(.landing) .pm-row-header .pm-header-cell { position: static; justify-content: flex-start; padding-left: 0; text-align: left; min-height: 30px; }
+  body:not(.landing) .pm-row-header .pm-sort-header { font-size: 11px; }
+  body:not(.landing) .pm-row-header .pm-filter-icon-btn { width: 26px; height: 30px; display: inline-flex; align-items: center; justify-content: center; }
+  body:not(.landing) .pm-filter-popover,
+  body:not(.landing) .pm-col-ge .pm-filter-popover,
+  body:not(.landing) .pm-col-ha .pm-filter-popover,
+  body:not(.landing) .pm-col-tradeable .pm-filter-popover {
+    top: 100%; left: 0; right: 0; min-width: 0; width: auto; box-sizing: border-box; margin-top: -6px;
+  }
+
+  /* Operator row of the Quantity/GE/HA filter: six symbols, then BETWEEN
+     on its own row, so it fits the popover instead of running off it. */
+  body:not(.landing) .pm-segment-group[data-role="op"] { flex-wrap: wrap; align-self: stretch; }
+  body:not(.landing) .pm-segment-group[data-role="op"] .pm-segment-btn { flex: 1 1 0; width: auto; padding: 9px 2px; }
+  body:not(.landing) .pm-segment-group[data-role="op"] .pm-segment-btn[data-segment-value="between"] { flex: 1 1 100%; padding: 8px 14px; }
+
+  /* Export popup: anchored to the title row, no wider than it, so it
+     can't run off the right edge. */
+  body:not(.landing) .page-title:has(.pm-share-wrap) { position: relative; }
+  body:not(.landing) .pm-share-wrap { position: static; }
+  body:not(.landing) .pm-share-card { top: calc(100% + 6px); width: min(280px, 100%); box-sizing: border-box; }
+
+  /* Rows: icon + name + TRADEABLE badge on top, QTY / GE / HA beneath
+     with small labels (the column headers are no longer above them). */
+  body:not(.landing) .pm-row:not(.pm-row-header) {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas: "img img trade" "qty ge ha";
+    gap: 6px 8px; align-items: start;
+    padding: 8px 0 8px 28px;
+  }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-image { grid-area: img; align-self: center; }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-tradeable { grid-area: trade; text-align: right; align-self: center; }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-qty { grid-area: qty; text-align: left; }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-ge { grid-area: ge; text-align: left; }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-ha { grid-area: ha; text-align: left; }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-qty::before,
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-ge::before,
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-ha::before {
+    display: block; font-size: 9px; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 1px;
+  }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-qty::before { content: 'QTY'; }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-ge::before { content: 'GE'; }
+  body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-ha::before { content: 'HA'; }
+  body:not(.landing) .pm-row-name { font-size: 13px; }
+  body:not(.landing) .pm-row-wrap { contain-intrinsic-size: auto 76px; }
+  body:not(.landing) .pm-value-stack, body:not(.landing) .pm-row:not(.pm-row-header) > .pm-col-qty { font-size: 12px; }
+}
+
+/* Touch: no hover, so the pin button is always showing (dim until pinned). */
+@media (hover: none) {
+  body:not(.landing) .pm-pin-btn {
+    opacity: 0.5; pointer-events: auto;
+    width: 26px; height: 44px; left: 0; top: 50%;
+  }
+  body:not(.landing) .pm-pin-btn.pinned { opacity: 1; }
+}
