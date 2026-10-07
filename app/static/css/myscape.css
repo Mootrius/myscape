@@ -1955,3 +1955,25 @@ body.landing .footer-inner {
    ACCOUNT button itself. */
 .account-section-hint--center { text-align: center; }
 .account-hint-emphasis { color: var(--red); }
+
+
+/* ---- Dashboard: phone -----------------------------------------------
+   Same 320px centered column as the other phone pages (side gutter for
+   thumb page-scroll), tighter cards. Scoped body:not(.landing). */
+@media (max-width: 700px) {
+  body:not(.landing) .dash-grid { grid-template-columns: minmax(0, 320px); justify-content: center; gap: 14px; }
+  body:not(.landing) .dash-card { gap: 14px; padding: 16px 16px 18px; }
+  body:not(.landing) .dash-card-icon { width: 56px; height: 56px; padding: 6px; }
+  body:not(.landing) .dash-card h3 { font-size: 16px; margin-bottom: 6px; }
+  body:not(.landing) .dash-support-row { margin-top: 14px; }
+  body:not(.landing) .dash-support-row .dash-card-wrap { max-width: 320px; }
+  body:not(.landing) .dash-card--compact { padding: 14px 16px 16px; }
+  body:not(.landing) .dash-card--compact .dash-card-icon { width: 48px; height: 48px; }
+}
+
+/* Touch: no sticky hover highlight on a card after tapping it (it
+   stays lit through the page change and on coming back). */
+@media (hover: none) {
+  body:not(.landing) .dash-card:hover { background-color: var(--panel-translucent); }
+  body:not(.landing) .dash-card:active { background-color: rgb(51, 51, 54); }
+}
