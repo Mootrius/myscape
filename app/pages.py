@@ -6202,7 +6202,7 @@ def render_not_found(player: Optional[PlayerView] = None) -> str:
     everyone else, same as the header's own logo link right above it."""
     teleport_href = "/dashboard" if player else "/"
     body = f"""
-    <div class="auth-shell">
+    <div class="auth-shell not-found-shell">
       <div class="auth-card">
         <h2>PAGE NOT FOUND</h2>
         <div class="not-found-code">404</div>

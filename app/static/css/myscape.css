@@ -2149,3 +2149,26 @@ body.landing .footer-inner {
     margin-bottom: 6px;
   }
 }
+
+
+/* ---- 404 page: phone ------------------------------------------------
+   Same 320px centered column as the other phone pages (instead of the
+   card running nearly edge to edge), tighter padding, and the card
+   starting at the same height as Account's does rather than 40px lower.
+   Scoped to render_not_found's own .not-found-shell. */
+@media (max-width: 700px) {
+  body:not(.landing) .not-found-shell { padding-top: 14px; }
+  body:not(.landing) .not-found-shell .auth-card { max-width: 320px; padding: 22px 14px 14px; }
+  body:not(.landing) .not-found-shell .auth-card h2 { margin-bottom: 20px; }
+  body:not(.landing) .not-found-code { margin-bottom: 12px; }
+  body:not(.landing) .not-found-teleport { margin-bottom: 14px; -webkit-tap-highlight-color: transparent; }
+}
+
+/* Touch: the teleport icon's hover scale-up would stay stuck on after a
+   tap (through the page change and on coming back) -- keep it swaying. */
+@media (hover: none) {
+  .not-found-teleport:hover .not-found-icon {
+    animation-play-state: running;
+    transform: none;
+  }
+}
