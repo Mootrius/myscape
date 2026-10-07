@@ -1701,14 +1701,15 @@
   }
 
   /* Combat Achievements: the tier icons are 24px sprites, which looked
-     lost in these tall tiles -- 72px is an exact 3x, so they stay
-     crisp (image-rendering: pixelated, set on the icon above). */
+     lost in these tall tiles -- 48px is an exact 2x, so they stay
+     crisp (image-rendering: pixelated, set on the icon above). 72px
+     (3x) was tried and was too big for the tile. */
   body:not(.landing) .ca-tile {
     gap: 6px;
   }
   body:not(.landing) .ca-tile-icon {
-    width: 72px;
-    height: 72px;
+    width: 48px;
+    height: 48px;
   }
 
   /* Roomier tap targets in the four cards. */
