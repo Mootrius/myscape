@@ -17588,7 +17588,11 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         state.search = '';
         updateSearchClear();
         renderTable();
-        pmSearchInput.focus();
+        // On a touch screen CLEAR also drops focus, which closes the
+        // on-screen keyboard; with a mouse the box stays focused so
+        // typing can continue.
+        if (window.matchMedia('(hover: none)').matches) pmSearchInput.blur();
+        else pmSearchInput.focus();
       });
 
       // ---- Table --------------------------------------------------------
