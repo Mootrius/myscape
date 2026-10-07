@@ -696,6 +696,10 @@ def _shell(
         // onto/off another) before SHOW_DELAY elapsed -- only still-
         // current hovers actually show.
         if (currentTarget !== target) return;
+        // A target the page re-rendered away in the meantime has no
+        // box (its rect is all zeros), which put the tooltip in the
+        // top-left corner.
+        if (!target.isConnected) return;
         if (!tooltipAllowed(target)) return;
         const text = target.getAttribute('data-tooltip');
         if (!text) return;
@@ -6534,7 +6538,19 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
             // (unrelated) slots of the same type/index would silently
             // apply a future search to the wrong sockets.
             PG.multiSelect = [];
+            var tappedId = btn.getAttribute('data-setup-id');
             render();
+            // render() replaced every button in this row, including
+            // the one the tap's tooltip was waiting on; point the
+            // tooltip at its replacement (touch only -- a mouse
+            // pointer re-targets on its own).
+            if (window.matchMedia && window.matchMedia('(hover: none)').matches) {
+              var fresh = null;
+              document.querySelectorAll('#setupIconRow [data-setup-id]').forEach(function (n) {
+                if (n.getAttribute('data-setup-id') === tappedId) fresh = n;
+              });
+              if (fresh) fresh.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+            }
           });
         });
         wireSetupIconDrag(row);
