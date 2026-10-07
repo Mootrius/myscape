@@ -1420,8 +1420,29 @@ button.primary#mmCreateFirstBtn {
   body:not(.phone-off) .mm-canvas.mm-fullscreen {
     max-width: none; width: auto; height: auto; margin: 0;
   }
-  body:not(.phone-off) .mm-zoom-controls { top: 8px; right: 8px; }
-  body:not(.phone-off) .mm-zoom-controls button { width: 34px; height: 34px; }
+  /* The buttons run along the top edge instead of down the right side
+     (a column there covered part of the map): Undo/Redo at the far
+     left, Edit Mode at the far right, zoom in/out/fit + fullscreen in
+     between -- the two dividers turn into flexible spacers that push
+     the groups apart. The row itself ignores touches (only the buttons
+     take them) so a drag starting in the gaps still pans the map. The
+     share page hides Undo/Redo/Edit and both dividers, so its four
+     remaining buttons are just centered. */
+  body:not(.phone-off) .mm-zoom-controls {
+    top: 8px; left: 8px; right: 8px;
+    flex-direction: row; align-items: center; gap: 4px;
+    pointer-events: none;
+  }
+  body:not(.phone-off) .mm-zoom-controls button { width: 34px; height: 34px; pointer-events: auto; }
+  body:not(.phone-off) .mm-zoom-controls .mm-zoom-divider {
+    flex: 1 1 0; height: 0; margin: 0; background: none;
+  }
+  body:not(.phone-off) .mindmap-share .mm-zoom-controls { justify-content: center; }
+  body:not(.phone-off) .mm-canvas.mm-fullscreen .mm-zoom-controls {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+  }
 }
 
 
