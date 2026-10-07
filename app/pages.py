@@ -1262,13 +1262,6 @@ def render_landing(player: Optional[PlayerView]) -> str:
       window.addEventListener('wheel', function (e) {
         // ctrl+wheel is pinch-zoom on a trackpad -- leave that alone.
         if (e.ctrlKey || Math.abs(e.deltaY) < 4) return;
-        // At phone width each preview is its own free-scrolling box
-        // (see the landing block at the end of myscape.css) -- a wheel
-        // over one still has to scroll it rather than jump panels.
-        if (window.matchMedia('(max-width: 700px)').matches && e.target.closest) {
-          var box = e.target.closest('[class^="landing-"][class$="-preview"]');
-          if (box && box.scrollHeight > box.clientHeight) return;
-        }
         e.preventDefault();
         if (locked) return;
         goTo(nearestStop() + (e.deltaY > 0 ? 1 : -1));
@@ -18575,7 +18568,18 @@ def render_landing_storages_preview() -> Optional[Tuple[str, str, str]]:
     """
     body = hero_markup + body
 
-    items_json = json.dumps(demo.get("items") or [])
+    # Only the 50 most valuable items (the table's own default GE-value
+    # column: price x quantity, descending) -- the full snapshot is a
+    # couple hundred rows, and on a phone this preview is scrolled
+    # through as part of the page itself (see the landing block at the
+    # end of myscape.css), so a few hundred rows would be a very long
+    # way to scroll past it.
+    demo_items = sorted(
+        demo.get("items") or [],
+        key=lambda i: (i.get("gePrice") or 0) * (i.get("total") or 0),
+        reverse=True,
+    )[:50]
+    items_json = json.dumps(demo_items)
     hidden_keys_json = json.dumps(demo.get("hiddenStorageKeys") or [])
     wrapper_script = f"""
     (function () {{

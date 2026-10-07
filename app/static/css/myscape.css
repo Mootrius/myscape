@@ -2089,21 +2089,25 @@ body.landing .footer-inner {
 
 
 /* ---------- Landing page, phones (<= 700px). ----------
-   Every feature panel keeps its own scroll-snap stop (see
-   .landing-anchor above), but each interactive preview is now a
-   free-scrolling box of its own, one screen tall, instead of a clipped
-   screenful with a fade over its bottom edge: swipe inside a preview
-   to explore it, and once you hit its end the next swipe carries on
-   to the next app's snap stop (overscroll-behavior stays at its
-   default "auto" on purpose -- "contain" would trap the page inside
-   the box). The page's own side gutter (20px each side of the box)
-   is still there for a thumb to page-scroll without touching the
-   preview's own content. The other per-preview phone layouts
-   (loot-tracker.css, purchase-goals.css, ...) are shared with the
-   real pages -- see their body:not(.phone-off) rules. */
+   The panels' scroll-snap stops just bridge the apps: the intro
+   (header + characters) snaps to the top of the Character Overview
+   preview, and from there the page scrolls like the real page does
+   -- freely, no stops -- until the next preview's top, where the
+   next scroll snaps. That works because each .landing-anchor is
+   taller than the screen when its preview is: mandatory snap lets
+   the page rest anywhere inside an area bigger than the viewport and
+   only snaps between the areas' tops. A preview shorter than the
+   screen still gets a full screen to itself (min-height above), so
+   it lands cleanly instead of showing the end of the one before.
+   The previews themselves are plain full-height blocks (no clipped
+   box, no bottom fade -- those only existed to hide a cut-off
+   edge). The other per-preview phone layouts (loot-tracker.css,
+   purchase-goals.css, ...) are shared with the real pages -- see
+   their body:not(.phone-off) rules. */
 @media (max-width: 700px) {
   body.landing .landing-anchor:not(.landing-anchor--intro) {
-    padding: 20px;
+    padding: 20px 20px 24px;
+    align-items: flex-start;
   }
   body.landing :is(
     .landing-character-overview-preview,
@@ -2114,14 +2118,8 @@ body.landing .footer-inner {
     .landing-goal-tracking-preview
   ) {
     max-width: 350px;
-    height: calc(100vh - 40px);
-    height: calc(100svh - 40px);
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior-y: auto;
-    -webkit-overflow-scrolling: touch;
-    /* No fade any more -- it only existed to hide the clipped bottom
-       edge of a box that couldn't scroll. */
+    height: auto;
+    overflow: visible;
   }
   body.landing :is(
     .landing-character-overview-preview,
@@ -2134,23 +2132,32 @@ body.landing .footer-inner {
     display: none;
   }
 
-  /* Hero rows: character stays put, but the text beside it is now a
-     left-aligned block -- the gold app name big on a line of its own
-     (landing script's fit pass only ever shrinks it, and only when
-     the name wouldn't otherwise fit beside the character), the rest
-     of the sentence small and wrapping down the side. */
+  /* Hero rows: as wide as the panels under them (320px, centered), so
+     a character on the left edge sits flush with the left edge of the
+     box below it and one on the right with its right edge, instead of
+     poking out past it. */
   body.landing :is(.co-preview-hero, .loot-preview-hero, .purchase-preview-hero, .storages-preview-hero, .mindmap-preview-hero, .gt-preview-hero) {
-    gap: 10px;
+    gap: 8px;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
   }
+  /* About two thirds of the desktop 157px, so the text beside each
+     character has room to breathe. */
   body.landing :is(.co-preview-char, .loot-preview-char, .purchase-preview-char, .storages-preview-char, .mindmap-preview-char, .gt-preview-char) {
-    height: clamp(120px, 40vw, 157px);
+    height: 104px;
   }
+  /* The text beside the character: centered in whatever room the
+     character leaves. The gold app name stays big on a line of its own
+     (the landing script's fit pass only ever shrinks it, and only when
+     it wouldn't otherwise fit), the rest of the sentence is smaller and
+     wraps beneath it. */
   body.landing :is(.co-preview-tagline-wrap, .loot-preview-tagline-wrap, .purchase-preview-tagline-wrap, .storages-preview-tagline-wrap, .mindmap-preview-tagline-wrap, .gt-preview-tagline-wrap) {
-    justify-content: flex-start;
-    padding-right: 8px;
+    justify-content: center;
+    padding: 0 4px;
   }
   body.landing :is(.co-preview-tagline, .loot-preview-tagline, .purchase-preview-tagline, .storages-preview-tagline, .mindmap-preview-tagline, .gt-preview-tagline) {
-    text-align: left;
+    text-align: center;
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
