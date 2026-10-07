@@ -1254,13 +1254,10 @@ button.primary#pgNameSave, .pg-setup-form-save {
    box is dissolved (display: contents) so its buttons and the menu wrap
    are siblings in .pg-header's flex row. */
 .pg-header {
-  /* A grid of 44px columns rather than a wrapping flex row, so setups
-     on every later row sit in the same columns as the rows above
-     (auto-fit collapses unused columns, so a short single row is still
-     centered). */
-  display: grid;
-  grid-template-columns: repeat(auto-fit, 44px);
-  justify-content: center;
+  /* A wrapping, centered flex row: full rows are the same width (every
+     cell is 44px, the menu button's included) so they line up, and the
+     last row is centered under them. */
+  flex-wrap: wrap;
   gap: 8px;
 }
 .tracker-icon-row { display: contents; }
