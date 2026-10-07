@@ -1557,7 +1557,19 @@ footer {
    element + element), so source order is what makes this win over
    the shared rule. */
 .landing-anchor--intro picture img {
-  width: min(450px, 55vw);
+  /* The intro art is the wordmark over the group of characters
+     (anchor-myscape-v2), so it's much taller than the old wordmark-only
+     image: width is capped, and max-height is the room left in the
+     panel (viewport minus everything above it, the scroll cue's ~52px
+     and the media box's 6vh bottom padding above), with width: auto,
+     so it shrinks to fit on short screens instead of spilling into
+     the cue. (A plain max-height: 100% doesn't resolve against that
+     flex box.) */
+  width: auto;
+  max-width: min(640px, 80vw);
+  max-height: calc(100vh - var(--landing-intro-above, 130px) - 52px - 6vh - 12px);
+  max-height: calc(100svh - var(--landing-intro-above, 130px) - 52px - 6vh - 12px);
+  height: auto;
 }
 
 /* The landing page's closing "ARE YOU READY?" pitch (see

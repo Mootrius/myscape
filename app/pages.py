@@ -1084,8 +1084,8 @@ def render_landing(player: Optional[PlayerView]) -> str:
       <section class="landing-anchor landing-anchor--intro">
         <div class="landing-anchor-intro-media">
           <picture>
-            <source srcset="/static/img/anchor-myscape.webp" type="image/webp">
-            <img src="/static/img/anchor-myscape.png" alt="myscape -- a place for gains.">
+            <source srcset="/static/img/anchor-myscape-v2.webp" type="image/webp">
+            <img src="/static/img/anchor-myscape-v2.png" alt="myscape -- a place for gains.">
           </picture>
         </div>
         <p class="landing-scroll-cue">
