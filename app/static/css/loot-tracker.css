@@ -1089,10 +1089,38 @@
     padding: 14px 12px 12px;
   }
 
+  /* Same side cushion as the Character Overview phone page: every
+     section is at most 320px wide, centered, leaving a strip of plain
+     page either side (somewhere to put a thumb to scroll the page). */
+  body:not(.landing) .loot-chart-card,
+  body:not(.landing) .loot-panels {
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+
+  /* Chart header: range button left, kc/gp totals right, and the title
+     ("ALL NPCs", or the date range when drilled into a bar) moved down
+     onto its own centered row -- it used to be absolutely centered over
+     the other two and got squeezed between them. */
+  body:not(.landing) .loot-chart-header {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+  body:not(.landing) .loot-chart-title {
+    position: static;
+    transform: none;
+    order: 3;
+    flex: 0 0 100%;
+    max-width: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+
   /* Controls: finger-sized (the desktop ones are 25px tall), and inputs
      at 16px -- anything smaller makes iOS Safari zoom the page in when
      the field is focused. */
-  body:not(.landing) .loot-range-btn,
   body:not(.landing) .loot-sort-tab,
   body:not(.landing) .loot-hide-toggle {
     height: 36px;
