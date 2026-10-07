@@ -1297,3 +1297,12 @@ button.primary#pgNameSave, .pg-setup-form-save {
   body:not(.landing) .gear-icon-picker { margin-bottom: 0; }
   body:not(.landing) #pgIconPicker:not(:empty) { margin-bottom: 18px; }
 }
+
+/* Phone: the coins icon and the setup's chosen icon in the overview card
+   are 1.5x their desktop 44px size. */
+@media (max-width: 700px) {
+  body:not(.landing) .overlay-icon,
+  body:not(.landing) .overlay-icon-wrap .overlay-icon { width: 66px; height: 66px; }
+  body:not(.landing) .overlay-icon-wrap { width: 66px; height: 66px; }
+  body:not(.landing) .overlay-icon-placeholder { width: 45px; height: 45px; font-size: 24px; }
+}
