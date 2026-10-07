@@ -53,7 +53,14 @@
 .tracker-icon-btn.dragging { opacity: 0.4; cursor: grabbing; }
 .tracker-icon-fallback { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1.15; padding: 0 3px; }
 
-.tracker-menu-wrap { position: relative; }
+.tracker-menu-wrap {
+  position: relative;
+  /* Same 44x44 cell as a setup icon, with the 36px button centered in
+     it, so when the menu button wraps onto a later row the setups on
+     that row line up in columns with the rows above. */
+  width: 44px; height: 44px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+}
 /* Slightly smaller than the setup icons beside it -- it's a secondary
    action (options), not another setup to pick. */
 .icon-menu-btn {
@@ -81,7 +88,7 @@
    nearly that much room, and 160px left it looking unnecessarily wide
    next to a 36px trigger button. */
 .tracker-menu {
-  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 5;
+  position: absolute; top: 48px; left: 50%; transform: translateX(-50%); z-index: 5;
   background: var(--panel); border: 1px solid var(--border); min-width: 128px;
   display: flex; flex-direction: column;
 }
@@ -1246,7 +1253,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
    last setup instead of jumping to the far right. The icon row's own
    box is dissolved (display: contents) so its buttons and the menu wrap
    are siblings in .pg-header's flex row. */
-.pg-header { flex-wrap: wrap; gap: 8px; }
+.pg-header {
+  /* A grid of 44px columns rather than a wrapping flex row, so setups
+     on every later row sit in the same columns as the rows above
+     (auto-fit collapses unused columns, so a short single row is still
+     centered). */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, 44px);
+  justify-content: center;
+  gap: 8px;
+}
 .tracker-icon-row { display: contents; }
 
 @media (max-width: 700px) {
