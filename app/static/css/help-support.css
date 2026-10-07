@@ -59,3 +59,32 @@
 .hs-result-answer[hidden] { display: none; }
 .hs-result-answer a { color: var(--gold-dim); }
 .hs-result-answer a:hover { color: var(--gold); }
+
+
+/* ---- Phone ----------------------------------------------------------
+   Same 320px centered column as the other phone pages (leaves a side
+   gutter for thumb page-scroll). Scoped body:not(.landing). */
+@media (max-width: 700px) {
+  body:not(.landing) .hs-search-group,
+  body:not(.landing) .hs-results,
+  body:not(.landing) .hs-status,
+  body:not(.landing) .hs-note { max-width: 320px; margin-left: auto; margin-right: auto; }
+  body:not(.landing) .hs-search-group { margin-bottom: 14px; }
+  body:not(.landing) .hs-search { font-size: 14px; padding-right: 64px; }
+  /* Bigger tap target for CLEAR without moving it. */
+  body:not(.landing) .hs-search-clear { right: 4px; padding: 12px 10px; font-size: 11px; }
+  body:not(.landing) .hs-results { gap: 12px; }
+  body:not(.landing) .hs-result-q { padding: 14px 14px; gap: 12px; font-size: 14px; line-height: 1.35; }
+  /* Answer lines up under the question text: 14 + 8 + 2 + 12 = 36px. */
+  body:not(.landing) .hs-result-answer { padding: 12px 14px 16px 36px; font-size: 14px; }
+  body:not(.landing) .hs-result-answer,
+  body:not(.landing) .hs-result-qtext { overflow-wrap: anywhere; }
+}
+
+/* Touch: no sticky hover highlight on a question row after tapping it. */
+@media (hover: none) {
+  body:not(.landing) .hs-result-q:hover { background-color: transparent; }
+  body:not(.landing) .hs-result-q:hover .hs-chevron { border-color: var(--gold-dim); }
+  body:not(.landing) .hs-result-q:active { background-color: rgb(51, 51, 54); }
+  body:not(.landing) .hs-search-clear:hover { color: var(--text-faint); }
+}

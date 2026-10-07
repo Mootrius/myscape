@@ -1772,11 +1772,21 @@ _HELP_SUPPORT_SCRIPT = r"""
         setStatus('Loading...');
         typingTimer = setTimeout(renderNow, TYPING_PAUSE_MS);
       });
+      var HS_TOUCH = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+      if (HS_TOUCH) input.setAttribute('enterkeyhint', 'search');
       input.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') { input.value = ''; renderNow(); }
-        else if (e.key === 'Enter') { renderNow(); }
+        else if (e.key === 'Enter') {
+          renderNow();
+          // On a phone, close the keyboard so the results are visible.
+          if (HS_TOUCH) input.blur();
+        }
       });
-      clearBtn.addEventListener('click', function () { input.value = ''; renderNow(); input.focus(); });
+      clearBtn.addEventListener('click', function () {
+        input.value = ''; renderNow();
+        // On a phone, CLEAR also closes the keyboard.
+        if (HS_TOUCH) input.blur(); else input.focus();
+      });
       render();
     })();
 """
