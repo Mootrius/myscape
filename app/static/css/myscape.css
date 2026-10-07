@@ -2089,26 +2089,15 @@ body.landing .footer-inner {
 
 
 /* ---------- Landing page, phones (<= 700px). ----------
-   The panels' scroll-snap stops just bridge the apps: the intro
-   (header + characters) snaps to the top of the Character Overview
-   preview, and from there the page scrolls like the real page does
-   -- freely, no stops -- until the next preview's top, where the
-   next scroll snaps. That works because each .landing-anchor is
-   taller than the screen when its preview is: mandatory snap lets
-   the page rest anywhere inside an area bigger than the viewport and
-   only snaps between the areas' tops. A preview shorter than the
-   screen still gets a full screen to itself (min-height above), so
-   it lands cleanly instead of showing the end of the one before.
-   The previews themselves are plain full-height blocks (no clipped
-   box, no bottom fade -- those only existed to hide a cut-off
-   edge). The other per-preview phone layouts (loot-tracker.css,
-   purchase-goals.css, ...) are shared with the real pages -- see
-   their body:not(.phone-off) rules. */
+   Same structure as desktop: each preview gets exactly one screen
+   (the fixed-height, clipped box with the bottom fade each preview's
+   own stylesheet already sets up), and the panels' scroll-snap stops
+   step from one app to the next. All this block adds is the phone
+   look of the previews themselves: the other per-preview phone
+   layouts (loot-tracker.css, purchase-goals.css, ...) are shared with
+   the real pages -- see their body:not(.phone-off) rules -- and the
+   hero rows below. */
 @media (max-width: 700px) {
-  body.landing .landing-anchor:not(.landing-anchor--intro) {
-    padding: 20px 20px 24px;
-    align-items: flex-start;
-  }
   body.landing :is(
     .landing-character-overview-preview,
     .landing-loot-preview,
@@ -2118,18 +2107,6 @@ body.landing .footer-inner {
     .landing-goal-tracking-preview
   ) {
     max-width: 350px;
-    height: auto;
-    overflow: visible;
-  }
-  body.landing :is(
-    .landing-character-overview-preview,
-    .landing-loot-preview,
-    .landing-purchase-preview,
-    .landing-storages-preview,
-    .landing-mindmap-preview,
-    .landing-goal-tracking-preview
-  )::after {
-    display: none;
   }
 
   /* Hero rows: as wide as the panels under them (320px, centered), so

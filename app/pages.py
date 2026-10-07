@@ -11075,7 +11075,7 @@ def render_landing_purchase_preview() -> Optional[Tuple[str, str, str]]:
     <div class="purchase-preview-hero">
       <div class="purchase-preview-tagline-wrap">
         <p class="purchase-preview-tagline">
-          <span class="purchase-preview-tagline-gold">PURCHASE GOALS</span> <span class="purchase-preview-tagline-white">to prepare for your next big spending spree.</span>
+          <span class="purchase-preview-tagline-gold">PURCHASE GOALS</span> <span class="purchase-preview-tagline-white">to plan your next big spending spree.</span>
         </p>
       </div>
       <picture class="purchase-preview-char purchase-preview-char--flipped">
@@ -11865,7 +11865,7 @@ def render_landing_mindmap_preview() -> Optional[Tuple[str, str, str]]:
     <div class="mindmap-preview-hero">
       <div class="mindmap-preview-tagline-wrap">
         <p class="mindmap-preview-tagline">
-          <span class="mindmap-preview-tagline-gold">MINDMAPS</span> <span class="mindmap-preview-tagline-white">to help you plan every step of your grind.</span>
+          <span class="mindmap-preview-tagline-gold">MINDMAPS</span> <span class="mindmap-preview-tagline-white">to plan every step of your grind.</span>
         </p>
       </div>
       <picture class="mindmap-preview-char">
