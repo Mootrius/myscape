@@ -5896,7 +5896,7 @@ def render_signup_coming_soon() -> str:
     <div class="auth-shell">
       <div class="auth-card">
         <h2>SIGN UP</h2>
-        <p class="verify-email-message">myscape is coming soon.</p>
+        <p class="verify-email-message signup-closed-message">myscape is coming soon.</p>
         <div class="auth-switch">Already have an account? <a href="/login">LOG IN</a></div>
       </div>
     </div>

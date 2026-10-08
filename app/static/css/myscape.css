@@ -600,6 +600,15 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   margin: 0 0 20px;
 }
 
+/* The "myscape is coming soon." line on /signup while sign-ups are
+   switched off (render_signup_coming_soon in app/pages.py) -- the
+   page's one real message, so bigger than the plain body-text size
+   .verify-email-message above gives it. */
+.signup-closed-message {
+  font-size: 22px;
+  margin: 6px 0 26px;
+}
+
 /* render_verify_email's "missing/invalid link" state (app/pages.py) --
    .auth-error itself stays left-aligned everywhere else (it sits above
    left-aligned form fields on every other page that uses it), but this
