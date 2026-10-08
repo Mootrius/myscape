@@ -9,20 +9,19 @@
 @font-face {
   font-family: 'RuneScapePlain11';
   src: url('/static/fonts/RuneScapePlain11.otf') format('opentype');
-  /* swap -- the usual default -- paints text in the fallback system
-     font immediately, then re-paints in RuneScapePlain11 once it's
-     loaded. That re-paint is exactly the flicker on navigation: this
-     is a full server-rendered page nav (not a SPA route change), so
-     every click to a new page repeats the same fallback-then-swap
-     flash. `optional` instead gives the browser a very short window
-     (Chromium: ~100ms) to use the font if it's already available (see
-     the <link rel="preload"> for this file in _shell(), app/pages.py,
-     which kicks off the fetch as early as possible so it's normally
-     done well inside that window) and otherwise just renders with the
-     fallback for that one paint and moves on -- no later swap, so no
-     flicker, at the cost of a rare cold-cache first load falling back
-     to the system font instead of waiting for RuneScapePlain11. */
-  font-display: optional;
+  /* block -- text waits (invisible) for RuneScapePlain11, up to ~3s,
+     instead of painting in a system font. This used to be `optional`,
+     which gives the font only ~100ms to be ready and, if it isn't
+     (a refresh, a cold or slow load, a busy phone), locks the WHOLE
+     page into the fallback system font until the next reload -- the
+     "random Arial-looking page that a refresh fixes" bug. With `block`
+     a late font still shows up, just a beat later, and the page can
+     never get stuck on the fallback. The <link rel="preload"> for this
+     file in _shell() (app/pages.py) keeps that beat as short as
+     possible; the font is a small file that's cached after the first
+     page. `swap` was avoided because it flashes the system font and
+     then re-paints on every full-page navigation. */
+  font-display: block;
 }
 
 :root {
