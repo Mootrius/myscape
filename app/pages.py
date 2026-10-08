@@ -10982,7 +10982,7 @@ def render_loot_tracker_share(share: "SharedContent", game_account: Optional["Ga
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f"{owner_name} shared a snapshot from their Loot Tracker from myscape.",
+        meta_description=f"{owner_name} shared a snapshot from their Loot Tracker on myscape.",
     )
 
 
@@ -11746,7 +11746,7 @@ def render_purchase_goals_share(share: "SharedContent", game_account: Optional["
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f'{owner_name} shared their "{setup_name}" Purchase Goal setup from myscape.',
+        meta_description=f'{owner_name} shared their "{setup_name}" Purchase Goal setup on myscape.',
     )
 
 
@@ -16759,7 +16759,7 @@ def render_mindmap_share(share: "SharedContent", game_account: Optional["GameAcc
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f'{owner_name} shared their "{mindmap_name}" Mindmap from myscape.',
+        meta_description=f'{owner_name} shared their "{mindmap_name}" Mindmap on myscape.',
     )
 
 
@@ -19012,7 +19012,7 @@ def render_storages_share(share: "SharedContent", game_account: Optional["GameAc
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f"{owner_name} shared a snapshot of their Storages Viewer from myscape.",
+        meta_description=f"{owner_name} shared a snapshot of their Storages Viewer on myscape.",
     )
 
 
@@ -22102,5 +22102,5 @@ def render_goal_tracking_share(share: "SharedContent", game_account: Optional["G
         body=body,
         extra_head=extra_head,
         extra_script=wrapper_script,
-        meta_description=f"{owner_name} shared their Goal Tracking list from myscape.",
+        meta_description=f"{owner_name} shared their Goal Tracking list on myscape.",
     )
