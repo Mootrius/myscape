@@ -5887,6 +5887,23 @@ def render_signup() -> str:
     return _shell(title="Sign up — myscape", player=None, body=body, extra_script=script)
 
 
+def render_signup_coming_soon() -> str:
+    """What /signup shows while sign-ups are switched off (see
+    app/site_flags.py) -- stands in for render_signup, which is left
+    exactly as it was so turning sign-ups back on is just flipping the
+    flag. Existing accounts can still log in, hence the link."""
+    body = """
+    <div class="auth-shell">
+      <div class="auth-card">
+        <h2>SIGN UP</h2>
+        <p class="verify-email-message">myscape is coming soon.</p>
+        <div class="auth-switch">Already have an account? <a href="/login">LOG IN</a></div>
+      </div>
+    </div>
+    """
+    return _shell(title="Coming soon — myscape", player=None, body=body)
+
+
 def render_login() -> str:
     body = """
     <div class="auth-shell">

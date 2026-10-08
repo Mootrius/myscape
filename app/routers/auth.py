@@ -19,6 +19,7 @@ from app.auth import (
 from app.database import get_db
 from app.email_client import send_email
 from app.limiter import limiter
+from app import site_flags
 from app.models import (
     EMAIL_VERIFICATION_TOKEN_LIFETIME,
     PASSWORD_RESET_TOKEN_LIFETIME,
@@ -182,6 +183,11 @@ def _send_email_change_notice(old_email: str, new_email: str) -> None:
 @router.post("/signup", response_model=PlayerOut, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_db)):
+    # Sign-ups are switched off for now (see app/site_flags.py for why
+    # and how to turn them back on) -- checked here, not just by hiding
+    # the form on /signup, since anyone can POST to this directly.
+    if not site_flags.SIGNUPS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sign ups are closed for now. myscape is coming soon.")
     existing = db.query(Account).filter(Account.email == payload.email).first()
     if existing is not None:
         # Deliberately vague -- confirming an email is already registered

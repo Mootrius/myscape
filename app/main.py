@@ -42,6 +42,7 @@ from app.auth import (
     get_optional_current_player_view_from_session,
 )
 from app import goals as goals_module
+from app import site_flags
 from app import hiscores as sync_hiscores_module
 from app.database import SessionLocal, get_db
 from app.icon_cache import ensure_cached_icon_path
@@ -122,6 +123,7 @@ from app.pages import (
     render_purchase_goals_share,
     render_reset_password,
     render_signup,
+    render_signup_coming_soon,
     render_storages_share,
     render_verify_email,
     render_verify_email_required,
@@ -598,6 +600,9 @@ def sitemap_xml():
 def signup_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if player:
         return RedirectResponse("/dashboard", status_code=302)
+    if not site_flags.SIGNUPS_ENABLED:
+        # Sign-ups are off for now -- see app/site_flags.py.
+        return render_signup_coming_soon()
     return render_signup()
 
 
