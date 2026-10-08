@@ -1421,21 +1421,21 @@ button.primary#mmCreateFirstBtn {
     max-width: none; width: auto; height: auto; margin: 0;
   }
   /* The buttons run along the top edge instead of down the right side
-     (a column there covered part of the map): Undo/Redo at the far
-     left, Edit Mode at the far right, zoom in/out/fit + fullscreen in
-     between -- the two dividers turn into flexible spacers that push
-     the groups apart. The row itself ignores touches (only the buttons
-     take them) so a drag starting in the gaps still pans the map. The
-     share page hides Undo/Redo/Edit and both dividers, so its four
-     remaining buttons are just centered. */
+     (a column there covered part of the map), all together and centered:
+     Undo/Redo, zoom in/out/fit + fullscreen, Edit Mode -- with the same
+     thin dividers the desktop column has between those groups, turned
+     vertical. The row itself ignores touches (only the buttons take
+     them) so a drag starting beside it still pans the map. The share
+     page hides Undo/Redo/Edit and both dividers, leaving just the four
+     zoom/fullscreen buttons. */
   body:not(.phone-off) .mm-zoom-controls {
     top: 8px; left: 8px; right: 8px;
-    flex-direction: row; align-items: center; gap: 4px;
+    flex-direction: row; align-items: center; justify-content: center; gap: 4px;
     pointer-events: none;
   }
   body:not(.phone-off) .mm-zoom-controls button { width: 34px; height: 34px; pointer-events: auto; }
   body:not(.phone-off) .mm-zoom-controls .mm-zoom-divider {
-    flex: 1 1 0; height: 0; margin: 0; background: none;
+    width: 1px; height: auto; align-self: stretch; margin: 2px 2px;
   }
 
   /* Share/export popup: centered on the title row, not on its small
