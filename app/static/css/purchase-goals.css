@@ -647,6 +647,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 .pg-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 40px 10px; }
 
+/* Between the phone layout and the full two-column one (721px to about
+   880px -- a zoomed-in desktop browser) the summary list no longer fits
+   beside the gear box and wraps underneath it, and it was left stuck to
+   the left edge at the page's full width. Center the gear box and give
+   the list the same width as it so the two read as one stacked column. */
+@media (min-width: 721px) and (max-width: 879px) {
+  .pg-body { justify-content: center; }
+  .pg-summary-col { max-width: 502px; }
+}
+
 @media (max-width: 720px) {
   .pg-body { flex-direction: column; align-items: center; }
   .pg-gear-frame { flex-direction: column; }

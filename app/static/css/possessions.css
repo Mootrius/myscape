@@ -104,7 +104,12 @@
 .pm-control-group + .pm-control-group {
   padding-left: 14px; border-left: 1px solid var(--border);
 }
-.pm-search-group { flex: 1 1 220px; min-width: 180px; position: relative; }
+/* flex-basis is what decides when the row wraps (the box then grows to
+   fill the line): at 220px the settings cog dropped to its own line
+   just above the phone breakpoint (~700px wide, a zoomed-in browser),
+   though the search box could have squeezed a bit and kept everything on
+   one row. 150px keeps the cog on the same row down to the phone layout. */
+.pm-search-group { flex: 1 1 150px; min-width: 150px; position: relative; }
 /* Same 32px height as .pm-filter-btn below, so the search box and the
    location buttons beside it line up exactly. Right padding leaves
    room for the CLEAR button below so typed text never runs under it. */
