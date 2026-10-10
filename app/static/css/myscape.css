@@ -2187,3 +2187,13 @@ body.landing .footer-inner {
     transform: none;
   }
 }
+
+/* Extreme zoom-in (a viewport under ~300px wide, e.g. 500% browser zoom
+   on a small window): the three-part header -- nav, logo, nav -- is
+   wider than the screen at its normal sizes and pushed the whole page
+   sideways. Shrink the three pieces so the header always fits. */
+@media (max-width: 300px) {
+  .header-inner { gap: 8px; }
+  .logo a { font-size: 20px; }
+  .nav-side, .nav-side a, .nav-side button.link { font-size: 12px; letter-spacing: 0; }
+}

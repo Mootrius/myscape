@@ -475,7 +475,7 @@
    this wrap is now .loot-npc-row's actual flex child; .loot-npc-box
    just fills whatever box this reserves. position: relative anchors
    .loot-eye-btn's absolute positioning to this wrap, not the page. */
-.loot-npc-box-wrap { flex: 0 0 calc((100% - 24px) / 4); box-sizing: border-box; position: relative; }
+.loot-npc-box-wrap { flex: 0 0 calc((100% - 24px) / 4); min-width: 0; box-sizing: border-box; position: relative; }
 @supports not (container-type: inline-size) {
   .loot-npc-box-wrap { aspect-ratio: 3 / 4; }
 }
@@ -487,6 +487,7 @@
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 10px 8px; cursor: pointer;
+  min-width: 0; overflow: hidden;
 }
 /* A hidden NPC (or one whose every item is itself hidden -- see
    npcEffectiveHidden in the script below) shown via the panel's own
@@ -507,7 +508,12 @@
    sticky affordance from this transient hover one. */
 .loot-npc-box:hover { background-color: rgb(51, 51, 54); }
 .loot-npc-box.active { border-color: var(--gold); }
-.loot-npc-box-icon { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; }
+/* Scales down with the box instead of staying a fixed 56px: at a
+   narrow desktop width (a zoomed-in browser, just above the phone
+   breakpoint) a quarter of the row is narrower than 56px + padding, and
+   a fixed icon pushed the tile wider than its slot, dropped the fourth
+   tile to the next line and let the icon/text spill out of the box. */
+.loot-npc-box-icon { width: min(56px, 80%); height: auto; aspect-ratio: 1 / 1; object-fit: contain; image-rendering: pixelated; }
 /* A clue tier's own casket tile (see isCasketNpc/loot-npc-box-icon-casket
    in the script below) uses the wiki's much larger, more ornate
    "detail" render (see clue_casket_icon_url in app/loot.py) rather
@@ -602,12 +608,16 @@
    than pixel art, so the shared rule's image-rendering: pixelated
    is turned off. */
 .loot-npc-box-icon-tarnished {
-  padding: 8px;
+  padding: 14%;
   image-rendering: auto;
 }
 .loot-npc-box-kc {
   font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.15;
   font-variant-numeric: tabular-nums;
+}
+@supports (container-type: inline-size) {
+  .loot-npc-box-kc { font-size: clamp(9px, 2.8cqw, 11px); }
+  .loot-npc-box-value { font-size: clamp(8.5px, 2.7cqw, 10.5px); }
 }
 .loot-npc-box.active .loot-npc-box-kc { color: var(--text); }
 .loot-npc-box-value { font-size: 10.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
@@ -782,12 +792,12 @@
    so the per-tile eye-toggle button is this wrap's other child, not
    nested inside the item box itself. Sizing moves here from
    .loot-item-box for the same reason. */
-.loot-item-box-wrap { flex: 0 0 calc((100% - 40px) / 6); aspect-ratio: 1 / 1; box-sizing: border-box; position: relative; }
+.loot-item-box-wrap { flex: 0 0 calc((100% - 40px) / 6); min-width: 0; aspect-ratio: 1 / 1; box-sizing: border-box; position: relative; }
 .loot-item-box {
   width: 100%; height: 100%; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 4px;
+  padding: 4px; min-width: 0; overflow: hidden;
   /* An <a> now (clicking an item opens its OSRS Wiki page in a new tab
      -- see wikiItemUrl in the script below), so the browser's default
      link styling (blue, underlined) needs resetting back to how this
@@ -831,11 +841,22 @@
    so it won't be pixel-perfect for every single item, but it visibly
    fixes the "small and shifted left" look across the board. */
 .loot-item-box-icon {
-  width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated;
+  width: min(28px, 70%); height: auto; aspect-ratio: 1 / 1; object-fit: contain; image-rendering: pixelated;
   transform: translate(5.5%, -1%);
 }
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
+/* When the panel itself gets narrow (a zoomed-in browser just above the
+   phone breakpoint puts two ~280px panels side by side), six item tiles
+   to a row come out ~40px square -- too small for the icon, quantity and
+   gp value to fit inside, so they spilled out of their boxes. Drop to
+   four per row there, with the same sizes the phone layout uses. */
+@container (max-width: 300px) {
+  .loot-item-box-wrap { flex-basis: calc((100% - 24px) / 4); }
+  .loot-item-box-icon { width: 30px; height: 30px; aspect-ratio: auto; }
+  .loot-item-box-qty { font-size: 11px; }
+  .loot-item-box-value { font-size: 10px; }
+}
 
 /* ---------- the per-tile hide/unhide control -- one of these lives in
    every .loot-npc-box-wrap and .loot-item-box-wrap (see both above),

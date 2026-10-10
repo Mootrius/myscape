@@ -693,7 +693,10 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-badge-yes { background: rgba(111, 174, 90, 0.14); border-color: var(--green); color: var(--green); }
 .pm-badge-no { background: rgba(192, 90, 76, 0.14); border-color: var(--red); color: var(--red); }
 
-@media (max-width: 640px) {
+/* Compact column widths from 800px down (was 640px): between 700 and
+   ~800 -- a zoomed-in desktop browser -- the full-size grid is wider than
+   the panel and the last column ("Tradeable?") stuck out past its edge. */
+@media (max-width: 800px) {
   .pm-row {
     grid-template-columns: minmax(140px, 1.6fr) 80px 96px 96px 66px;
     gap: 6px;
