@@ -17,44 +17,29 @@
 - [Mindmaps](https://myscape.io/s/5dc8c49ncb): A feature-rich app that allows you to organize your goals and progress, complete with auto-detecting completion functionality.
 - [Goal Tracking](https://myscape.io/s/nysq229vq7): A personalized and customizable board for you to fill with your various goals for your character, complete with auto-detecting and updating progress bars.
 
-The links for each app above are examples of optionally shareable, public snapshots that you can create, share, and delete at any time. Many of these public snapshots can be imported into others' myscape apps as well.
+## Social
 
-## Getting started
+myscape also has a (completely optional) social component. In the section above, the links that each of the app names redirect to are examples of shareable snapshots of each app's content. You can create, share, and delete these snapshots easily on the site.
 
-1. Create an account and verify your email.
-2. Install **myscape** from the RuneLite Plugin Hub.
-3. Click "Generate code" on the site and paste it into the plugin's sidebar panel.
+You can also add people to your myscape friends list, allowing you to view each other's Character Overview pages even when they're set to private.
 
-## Development
+## Privacy
 
-Requires Python 3.12 and PostgreSQL.
+myscape collects only one piece of personal data you upon account creation, which is your email. As your password is visible to or retrievable by us, your email is saved in the case that you ever need to reset your password.
 
-```bash
-pip install -r requirements.txt
-cp .env.example .env   # set DATABASE_URL and SESSION_SECRET_KEY
-uvicorn app.main:app --reload
-```
+Your OSRS character's data — clogs, skills, diaries, storage contents, etc. — are private by default. They only become public should you explicitly change your Character Overview to public and share your link, or generate shareable links for your others myscape apps and share them. Even then, you can still reset your Character Overview to private or reset the public link, and delete any/all shared links you may have made to the other apps.
 
-The schema is migrated automatically on startup. To change it, edit `app/models.py`, run `alembic revision --autogenerate -m "..."`, review the migration, and commit it with the change. Without `RESEND_API_KEY`, emails are logged to the console instead of sent.
+The only cookie we keep is to keep you logged in to the site, so that you don't have to log in every time you close your browser or tab. We don't have ads and never will, so we don't collect anything from you for ad personalization or anything in that realm.
 
-### Configuration
+## Support
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `DATABASE_URL` | required | Postgres connection string. |
-| `SESSION_SECRET_KEY` | required | Signs session cookies. |
-| `SIGNUPS_ENABLED` | `false` | `true` opens sign-ups; otherwise `/signup` shows "coming soon". |
-| `SESSION_COOKIE_HTTPS_ONLY` | `true` | Set `false` only for local `http://` testing. |
-| `ICON_CACHE_DIR` | next to `app/icon_cache.py` | Icon cache location (a persistent disk in production). |
-| `RESEND_API_KEY` | unset | Enables sending email. |
-| `EMAIL_FROM_ADDRESS` | `myscape <noreply@myscape.io>` | Sender address. |
+myscape is completely free and always will be. If you would like to support the project financially, you can find the Patreon page [here](https://patreon.com/myscape).
 
-## Deployment
+---
 
-Deployed on Render via `render.yaml` (web service, Postgres, persistent disk). Create it with **New +** → **Blueprint**, then set `RESEND_API_KEY`. Runs as a single instance.
-
-## Links
-
-[Discord](https://discord.gg/myscape) · [Plugin](https://github.com/Mootrius/myscape-plugin)
-
-myscape is a fan project, not affiliated with or endorsed by Jagex. Old School RuneScape is a trademark of Jagex Ltd.
+<p align="center">
+  <a href="https://myscape.io"><img src="docs/icon-site.png" alt="myscape.io" width="40"></a>&nbsp;&nbsp;
+  <a href="https://github.com/Mootrius"><img src="docs/icon-github.png" alt="GitHub" width="40"></a>&nbsp;&nbsp;
+  <a href="https://discord.gg/myscape"><img src="docs/icon-discord.png" alt="Discord" width="40"></a>&nbsp;&nbsp;
+  <a href="https://patreon.com/myscape"><img src="docs/icon-patreon.png" alt="Patreon" width="40"></a>
+</p>
