@@ -31,6 +31,10 @@ Your OSRS character's data â€” clogs, skills, diaries, storage contents, etc. â€
 
 The only cookie we keep is to keep you logged in to the site, so that you don't have to log in every time you close your browser or tab. We don't have ads and never will, so we don't collect anything from you for ad personalization or anything in that realm.
 
+## Help
+
+If you find a bug, in either the plugin or the site, please join the [myscape Discord server](https://discord.gg/myscape) and report it there.
+
 ## Support
 
 myscape is completely free and always will be. If you would like to support the project financially, you can find the Patreon page [here](https://patreon.com/myscape).
