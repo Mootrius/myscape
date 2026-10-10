@@ -8862,7 +8862,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         // Quietly hidden on a 404 (a guessed NPC/item wiki filename that
         // doesn't exist) rather than showing a broken-image icon -- same
         // treatment item icons already get elsewhere on the site.
-        return '<img class="' + cls + '" src="' + src + '" alt="" loading="lazy" ' +
+        return '<img class="' + cls + '" src="' + src + '" alt="" ' +
           'onerror="this.style.display=\\'none\\'" />';
       }
 
@@ -8915,6 +8915,54 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       function swapListHtml(el, html) {
         var scrollY = window.scrollY;
         el.innerHTML = html;
+        if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+      }
+
+      // What the NPC row/item list use instead of swapListHtml when the
+      // set or ORDER of boxes changes (a poll bringing a new kill or
+      // drop, a re-sort, a hide/unhide): the new boxes are built off to
+      // the side and any box that was already on screen -- matched by
+      // keyFn -- is KEPT and just moved/updated, so its <img> is never
+      // torn down and re-created. Rebuilding every box (the old
+      // innerHTML swap) made every icon blank for a frame or more
+      // while its fresh <img> decoded, which showed up as the whole
+      // grid of icons flickering out and back in whenever a poll
+      // reshuffled the order. Only genuinely new boxes get a new <img>
+      // (already fetched by preloadIcons by then); a kept box whose
+      // icon is hidden after a failed load gets the new <img> instead,
+      // so a transient failure is retried like it used to be.
+      function reconcileBoxes(el, html, boxSel, keyFn) {
+        var scrollY = window.scrollY;
+        var tpl = document.createElement('template');
+        tpl.innerHTML = html;
+        var oldByKey = {};
+        Array.prototype.forEach.call(el.children, function (w) {
+          var k = keyFn(w);
+          if (k != null) oldByKey[k] = w;
+        });
+        var frag = document.createDocumentFragment();
+        Array.prototype.slice.call(tpl.content.children).forEach(function (nw) {
+          var k = keyFn(nw);
+          var ow = k != null ? oldByKey[k] : null;
+          if (!ow) { frag.appendChild(nw); return; }
+          delete oldByKey[k];
+          ow.className = nw.className;
+          var ob = ow.querySelector(boxSel), nb = nw.querySelector(boxSel);
+          if (!ob || !nb) { frag.appendChild(nw); return; }
+          Array.prototype.slice.call(ob.attributes).forEach(function (a) { ob.removeAttribute(a.name); });
+          Array.prototype.slice.call(nb.attributes).forEach(function (a) { ob.setAttribute(a.name, a.value); });
+          var oImg = ob.querySelector('img'), nImg = nb.querySelector('img');
+          var kids = Array.prototype.slice.call(nb.childNodes);
+          if (oImg && nImg && oImg.getAttribute('src') === nImg.getAttribute('src') &&
+              oImg.className === nImg.className && oImg.style.display !== 'none') {
+            kids[kids.indexOf(nImg)] = oImg;
+          }
+          ob.replaceChildren.apply(ob, kids);
+          var oe = ow.querySelector('.loot-eye-btn'), ne = nw.querySelector('.loot-eye-btn');
+          if (oe && ne) oe.replaceWith(ne);
+          frag.appendChild(ow);
+        });
+        el.replaceChildren(frag);
         if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
       }
 
@@ -9405,7 +9453,10 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           preloadIcons(sorted.map(function (n) { return n.icon; })).then(function () {
             if (token !== npcRowRenderToken) return;
             lastNpcKey = key;
-            swapListHtml(rowEl, html);
+            reconcileBoxes(rowEl, html, '.loot-npc-box', function (w) {
+              var b = w.querySelector('.loot-npc-box');
+              return b ? b.getAttribute('data-npc') : null;
+            });
           });
           return;
         }
@@ -9526,7 +9577,10 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           preloadIcons(sorted.map(function (it) { return it.icon; })).then(function () {
             if (token !== itemListRenderToken) return;
             lastItemKey = key;
-            swapListHtml(listEl, html);
+            reconcileBoxes(listEl, html, '.loot-item-box', function (w) {
+              var e = w.querySelector('.loot-eye-btn');
+              return e ? e.getAttribute('data-hide-item-id') + '|' + e.getAttribute('data-hide-name') : null;
+            });
           });
           return;
         }
