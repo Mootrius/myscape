@@ -25,7 +25,7 @@ You can also add people to your myscape friends list, allowing you to view each 
 
 ## Privacy
 
-myscape collects only one piece of personal data that you enter upon account creation, which is your email. As your password is visible to or retrievable by us, your email is saved in the case that you ever need to reset your password.
+myscape collects only one piece of personal data that you enter upon account creation, which is your email. As your password is not visible to nor retrievable by us, your email is saved in the case that you ever need to reset your password.
 
 Your OSRS character's data — clogs, skills, diaries, storage contents, etc. — are private by default. They only become public should you explicitly change your Character Overview to public and share your link, or generate shareable links for your other myscape apps and share them. Even then, you can still reset your Character Overview to private or reset the public link, and delete any/all shared links you may have made to the other apps.
 
