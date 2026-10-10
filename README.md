@@ -1,8 +1,12 @@
-# myscape
+<p align="center">
+  <img src="docs/myscape-banner.png" alt="myscape" width="600">
+</p>
 
-An Old School RuneScape companion: a [RuneLite plugin](https://github.com/Mootrius/myscape-plugin) that syncs your in-game data, and a website ([myscape.io](https://myscape.io)) that turns it into trackers, planners, and shareable pages. Free, always. This repo is the website and backend.
+---
 
-> **Status:** new sign-ups are closed until the plugin is released (see `SIGNUPS_ENABLED` below). Shared links (`/s/<code>`, `/c/<code>`) are viewable by anyone.
+<p align="center"><a href="https://myscape.io">https://myscape.io</a> is your new favorite OSRS companion site.</p>
+
+myscape is a free, open-source project that was created by an Old School RuneScape player who wanted more functionality than other plugins and websites offered. Comprised of a suite of apps to help you plan, track, and share your OSRS experience, myscape aims to be an integral part of how you play the game.
 
 ## Apps
 
