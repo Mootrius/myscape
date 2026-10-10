@@ -1624,6 +1624,38 @@ class KillCountSyncResponse(BaseModel):
     applied_count: int
 
 
+class RunescapeNameSyncRequest(BaseModel):
+    """POST /api/players/me/runescape-name -- the plugin reports the
+    character's current in-game display name so a name change on the
+    game side shows up on the website without re-linking. account_hash
+    must match the API key's own linked game account (the same stable
+    id the link exchange bound), so a stray request can never rename a
+    different character."""
+
+    account_hash: str
+    runescape_name: str
+
+    @field_validator("runescape_name")
+    @classmethod
+    def check_name(cls, value: str) -> str:
+        # RuneLite hands names back with a non-breaking space where the
+        # game shows a space.
+        value = (value or "").replace("\u00a0", " ").strip()
+        if not value:
+            raise ValueError("runescape_name must not be empty.")
+        if len(value) > 12:
+            raise ValueError("runescape_name must be at most 12 characters.")
+        if not value.isprintable():
+            raise ValueError("runescape_name contains invalid characters.")
+        return value
+
+
+class RunescapeNameSyncResponse(BaseModel):
+    # 1 if the stored name changed, 0 if it was already current (or the
+    # account_hash didn't belong to this key) -- never an error either way.
+    updated: int
+
+
 class HideLootNpcRequest(BaseModel):
     """POST/DELETE /api/players/me/loot/hidden-npcs -- see the eye
     button on each NPC tile in render_loot_tracker, app/pages.py. name

@@ -207,6 +207,8 @@ from app.schemas import (
     ItemSearchResponse,
     KillCountSyncRequest,
     KillCountSyncResponse,
+    RunescapeNameSyncRequest,
+    RunescapeNameSyncResponse,
     LootingBagOut,
     LootingBagItemOut,
     LootingBagSyncRequest,
@@ -2280,6 +2282,27 @@ def sync_kill_counts(
         )
     applied_count = sync_hiscores_module.apply_kill_count_updates(db, game_account, payload.updates)
     return KillCountSyncResponse(applied_count=applied_count)
+
+
+@app.post("/api/players/me/runescape-name", response_model=RunescapeNameSyncResponse)
+def sync_runescape_name(
+    payload: RunescapeNameSyncRequest,
+    db: Session = Depends(get_db),
+    game_account: GameAccount = Depends(get_current_game_account_from_api_key),
+):
+    """Keeps GameAccount.runescape_name current after an in-game name
+    change. The plugin posts the logged-in character's display name
+    (with its account_hash) whenever it differs from what it last
+    reported; the name is only ever written when the account_hash
+    matches this API key's own linked game account, so the stable id
+    -- not the name -- stays the identity."""
+    if game_account.account_hash != payload.account_hash:
+        return RunescapeNameSyncResponse(updated=0)
+    if game_account.runescape_name == payload.runescape_name:
+        return RunescapeNameSyncResponse(updated=0)
+    game_account.runescape_name = payload.runescape_name
+    db.commit()
+    return RunescapeNameSyncResponse(updated=1)
 
 
 @app.post("/api/players/me/loot", response_model=LootSyncResponse)
