@@ -659,7 +659,13 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 @media (max-width: 720px) {
   .pg-body { flex-direction: column; align-items: center; }
-  .pg-gear-frame { flex-direction: column; }
+  /* Stacked: center the paperdoll and the inventory grid in the frame,
+     and keep the 8 small slots off the paperdoll's bottom row (their
+     margin-top: auto only makes room when the column is stretched to the
+     inventory's height beside it). The phone layout below 701px sets the
+     same things with its own rules. */
+  .pg-gear-frame { flex-direction: column; align-items: center; gap: 20px; }
+  .gear-doll-misc { margin-top: 16px; }
 }
 
 /* ---------- Landing page preview (render_landing_purchase_preview,

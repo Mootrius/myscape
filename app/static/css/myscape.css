@@ -1169,6 +1169,13 @@ button.danger--filled:hover { background: #a84a3d; }
    feedback, so hovering a dashboard card matches those. */
 .dash-card:hover { background-color: rgb(51, 51, 54); }
 
+/* When the grid has two columns, two cards on one row are the same height
+   (the grid already stretches each cell; the link and the card inside it
+   just have to fill it). */
+.dash-grid .dash-card-wrap,
+.dash-grid .dash-card-link { height: 100%; }
+.dash-grid .dash-card { height: 100%; box-sizing: border-box; }
+
 /* Medium-sized icon chip anchoring the left side of each card -- a flat
    square (matching the site's sharp-corner identity) rather than a circle,
    so it reads as a slot in the panel instead of a floating badge. */
@@ -1474,7 +1481,11 @@ footer {
 .landing-anchor--intro {
   height: calc(100vh - var(--landing-intro-above, 130px));
   height: calc(100svh - var(--landing-intro-above, 130px));
-  min-height: 0;
+  /* Room for the art's floor height (see .landing-anchor--intro picture
+     img below), the scroll cue (~52px) and the media box's own bottom
+     padding, so a very small viewport (zoomed way in) scrolls instead of
+     squeezing the art. */
+  min-height: calc(min(300px, min(640px, 80vw) * 0.805) + 52px + 6vh + 12px);
   flex-direction: column;
   justify-content: flex-start;
   scroll-snap-align: none;
@@ -1582,8 +1593,16 @@ footer {
      flex box.) */
   width: auto;
   max-width: min(640px, 80vw);
-  max-height: calc(100vh - var(--landing-intro-above, 130px) - 52px - 6vh - 12px);
-  max-height: calc(100svh - var(--landing-intro-above, 130px) - 52px - 6vh - 12px);
+  /* max(): the room left in the panel, but never less than a floor of
+     300px tall (or the width-limited height on a narrow screen, the
+     art being ~0.805 as tall as it is wide). Zooming the browser in
+     shrinks the viewport in CSS pixels while the header and cue stay
+     the same size, so that "room left" went to nothing and the art
+     shrank to a speck; now it stops shrinking at the floor and the
+     panel grows taller than the screen instead (see min-height on
+     .landing-anchor--intro). */
+  max-height: max(calc(100vh - var(--landing-intro-above, 130px) - 52px - 6vh - 12px), min(300px, calc(min(640px, 80vw) * 0.805)));
+  max-height: max(calc(100svh - var(--landing-intro-above, 130px) - 52px - 6vh - 12px), min(300px, calc(min(640px, 80vw) * 0.805)));
   height: auto;
 }
 
