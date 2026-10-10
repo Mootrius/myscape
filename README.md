@@ -4,20 +4,20 @@
 
 ---
 
-<p align="center"><a href="https://myscape.io">https://myscape.io</a> is your new favorite OSRS companion site.</p>
+<p align="center"><a href="https://myscape.io">myscape.io</a> is your new favorite OSRS companion site.</p>
 
-myscape is a free, open-source project that was created by an Old School RuneScape player who wanted more functionality than other plugins and websites offered. Comprised of a suite of apps to help you plan, track, and share your OSRS experience, myscape aims to be an integral part of how you play the game.
+<p align="center">myscape is a free, open-source project that was created by an Old School RuneScape player who wanted more functionality than other plugins and websites offered. Comprised of a suite of apps to help you plan, track, and share your OSRS experience, myscape aims to be an integral part of how you play the game.</p>
 
 ## Apps
 
-- **Character Overview:** combat/total level, quests, diaries, combat achievements, collection log, skills, and a 3D model of your character. Optionally public at a short link.
-- **Loot Tracker:** drops from kills, caskets, and more, with graphs and per-NPC and per-item breakdowns.
-- **Purchase Goals:** equipment and inventory setups priced live against the OSRS Wiki and checked against what you own.
-- **Mindmaps:** goal trees whose nodes detect their own completion.
-- **Storages Viewer:** everything you own across every storage, searchable, with min/max trackers and saved views.
-- **Goal Tracking:** kill count, skill, and item targets with live progress.
+- [Character Overview](https://myscape.io/c/mv7pu): An optionally shareable profile that shows your character's collection log data, skill levels, quest completions, achievement diary tiers, and combat task tiers.
+- [Loot Tracker](https://myscape.io/s/njnku7mnas): An enhanced, feature-rich improvement on loot tracking allowing for historical data, drill-downs, and searching.
+- [Purchase Goals](https://myscape.io/s/k3efa9ewsu): A sandboxed inventory and gear setup tracker, syncing your current bank's content against your desired purchases, with live Grand Exchange pricing.
+- [Storages Viewer](https://myscape.io/s/3fzrz7q5z2): A fully searchable, sortable, and filterable conglomeration of every one of your items, from every storage, across the game.
+- [Mindmaps](https://myscape.io/s/5dc8c49ncb): A feature-rich app that allows you to organize your goals and progress, complete with auto-detecting completion functionality.
+- [Goal Tracking](https://myscape.io/s/nysq229vq7): A personalized and customizable board for you to fill with your various goals for your character, complete with auto-detecting and updating progress bars.
 
-Most apps can share a read-only snapshot link, and one login can link several characters.
+The links for each app above are examples of optionally shareable, public snapshots that you can create, share, and delete at any time. Many of these public snapshots can be imported into others' myscape apps as well.
 
 ## Getting started
 
