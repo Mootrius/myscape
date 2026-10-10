@@ -4,7 +4,7 @@
 
 ---
 
-<p align="center"><a href="https://myscape.io">myscape.io</a> is your new favorite OSRS companion site.</p>
+<p align="center"><a href="https://myscape.io">myscape.io</a> is your new favorite RuneLite plugin and OSRS companion site.</p>
 
 <p align="center">myscape is a free, open-source project that was created by an Old School RuneScape player who wanted more functionality than other plugins and websites offered. Comprised of a suite of apps to help you plan, track, and share your OSRS experience, myscape aims to be an integral part of how you play the game.</p>
 
