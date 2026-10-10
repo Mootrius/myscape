@@ -734,7 +734,13 @@
   scrollbar-gutter: stable;
   padding-right: 8px;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  /* As many columns as fit with each tile at least 40px wide, the
+     columns then stretching to fill the row's full width: six across
+     at the normal width (same ~45px tiles as before), fewer, bigger
+     tiles per row as the card narrows (a zoomed-in browser) instead of
+     six tiles squeezed to a few pixels each. The phone layout sets its
+     own five columns below. */
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
   align-content: flex-start;
   gap: 6px;
 }
