@@ -846,16 +846,22 @@
 }
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
-/* When the panel itself gets narrow (a zoomed-in browser just above the
-   phone breakpoint puts two ~280px panels side by side), six item tiles
-   to a row come out ~40px square -- too small for the icon, quantity and
-   gp value to fit inside, so they spilled out of their boxes. Drop to
-   four per row there, with the same sizes the phone layout uses. */
-@container (max-width: 300px) {
-  .loot-item-box-wrap { flex-basis: calc((100% - 24px) / 4); }
-  .loot-item-box-icon { width: 30px; height: 30px; aspect-ratio: auto; }
-  .loot-item-box-qty { font-size: 11px; }
-  .loot-item-box-value { font-size: 10px; }
+/* Item tiles stay six to a row at every desktop width and everything
+   inside them scales with the tile instead: the tile is one sixth of
+   the panel's width less the gaps, and the icon, quantity, gp value,
+   padding and gap are all the same fixed fractions of that width they are
+   at full size (28px icon in a ~59px tile), capped at the full-size values.
+   Without this a narrow panel (a zoomed-in browser, just above the phone
+   layout) made six ~40px tiles too small for their fixed-size contents,
+   which spilled out of the boxes. The phone layout (four to a row, its own
+   sizes) is untouched. */
+@media (min-width: 701px) {
+  @supports (container-type: inline-size) {
+    .loot-item-box { padding: min(4px, calc((100cqw - 40px) * 0.0113)); gap: min(2px, calc((100cqw - 40px) * 0.0057)); }
+    .loot-item-box-icon { width: min(28px, calc((100cqw - 40px) * 0.0792)); height: auto; aspect-ratio: 1 / 1; }
+    .loot-item-box-qty { font-size: min(9px, calc((100cqw - 40px) * 0.0253)); }
+    .loot-item-box-value { font-size: min(8px, calc((100cqw - 40px) * 0.0225)); }
+  }
 }
 
 /* ---------- the per-tile hide/unhide control -- one of these lives in

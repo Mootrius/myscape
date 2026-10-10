@@ -6743,6 +6743,23 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         });
       }
 
+      // Pins .pg-doll-wrap's width to the gear frame's own rendered width
+      // (see the comment where it's called in renderContent). Also runs
+      // on every window resize: the frame changes shape when the viewport
+      // crosses the phone breakpoint (the doll and the inventory sit side
+      // by side above it and stack below it), and a width pinned for the
+      // other shape left the frame stretched, with its slots stuck to
+      // one side, after zooming in or out without reloading. min-content
+      // lets the frame report its natural width again before it's pinned.
+      function pinDollWrapWidth() {
+        var dollWrapEl = document.querySelector('.pg-doll-wrap');
+        var gearFrameEl = document.getElementById('pgGearFrame');
+        if (!dollWrapEl || !gearFrameEl) return;
+        dollWrapEl.style.width = 'min-content';
+        dollWrapEl.style.width = gearFrameEl.offsetWidth + 'px';
+      }
+      window.addEventListener('resize', pinDollWrapWidth);
+
       function renderContent() {
         var overlayEl = document.getElementById('pgOverlay');
         var bodyEl = document.getElementById('pgBody');
@@ -6801,11 +6818,7 @@ def _purchase_goals_panel_markup() -> Tuple[str, str, str]:
         // stretch the column (and the whole row) wider than the frame,
         // shoving the summary column out of place instead of just
         // wrapping its own contents inside the frame's width.
-        var dollWrapEl = document.querySelector('.pg-doll-wrap');
-        var gearFrameEl = document.getElementById('pgGearFrame');
-        if (dollWrapEl && gearFrameEl) {
-          dollWrapEl.style.width = gearFrameEl.offsetWidth + 'px';
-        }
+        pinDollWrapWidth();
 
         wireSlotClicks();
         renderIconPicker();

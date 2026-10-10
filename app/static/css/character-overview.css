@@ -17,8 +17,12 @@
    rather than breakpoints). */
 
 .co-summary-row {
-  display: flex;
-  flex-wrap: wrap;
+  /* Always all eight stats on one row, or two rows of four -- never a
+     lopsided 7+1 or 6+2 wrap. Eight equal columns while there's room (the
+     widest value, a big total-xp number, is under ~90px), four columns
+     below 840px (see the media query right after this rule). */
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 10px;
   background: var(--panel-translucent);
   border: 1px solid var(--border);
@@ -36,9 +40,12 @@
   margin-bottom: 18px;
 }
 
+@media (max-width: 839px) {
+  .co-summary-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 10px; }
+}
+
 .co-stat {
-  flex: 1 1 0;
-  min-width: 96px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
