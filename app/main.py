@@ -94,6 +94,7 @@ from app.models import (
     RunePouchItem,
     SeedBoxItem,
     SeedVaultItem,
+    PermanentExample,
     SharedContent,
     TackleBoxItem,
     _utcnow,
@@ -154,6 +155,11 @@ from app.purchase_goals import (
     search_items,
 )
 from app.recipes import expand_recipe_components
+from app.permanent_examples import (
+    capture_permanent_examples,
+    find_permanent_profile,
+    frozen_owner,
+)
 from app.sharing import SHARE_DEFAULT_LIFETIME, find_valid_share, generate_share_code
 from app.routers import account, auth, friends, linking
 from app.schemas import (
@@ -513,6 +519,26 @@ def on_startup():
     # "migrated" -- see migrations/versions/5cf359e6d5b1_initial_schema.py.
     alembic_cfg = Config(os.path.join(_REPO_ROOT, "alembic.ini"))
     command.upgrade(alembic_cfg, "head")
+
+    # Copies the README's permanent example links into their own table
+    # the first time they're seen -- see app/permanent_examples.py.
+    # Never allowed to stop the app from booting.
+    db = SessionLocal()
+    try:
+        capture_permanent_examples(
+            db,
+            {
+                "summary": _character_overview_summary_payload,
+                "progress": _character_overview_progress_payload,
+                "skills": _skills_payload,
+                "collection-log": _collection_log_payload,
+            },
+        )
+    except Exception:
+        db.rollback()
+        logging.getLogger(__name__).exception("Could not capture permanent examples.")
+    finally:
+        db.close()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -2038,6 +2064,21 @@ def _get_public_game_account_or_404(
     return game_account
 
 
+def _find_viewable_or_frozen(db: Session, code: str, viewer: Optional[GameAccount] = None):
+    """_get_public_game_account_or_404, except that when the live
+    profile isn't viewable but the code is one of the permanent
+    examples (app/permanent_examples.py), returns its frozen
+    PermanentExample instead -- callers answer from that row's stored
+    payload. Still 404s for every other code."""
+    game_account = find_viewable_game_account(db, code, viewer)
+    if game_account is not None:
+        return game_account
+    frozen = find_permanent_profile(db, code)
+    if frozen is not None:
+        return frozen
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+
+
 @app.get("/api/public/{code}/summary")
 @limiter.limit("30/minute")
 def public_character_overview_summary(
@@ -2046,7 +2087,10 @@ def public_character_overview_summary(
     db: Session = Depends(get_db),
     viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
-    return _character_overview_summary_payload(_get_public_game_account_or_404(db, code, viewer))
+    game_account = _find_viewable_or_frozen(db, code, viewer)
+    if isinstance(game_account, PermanentExample):
+        return game_account.payload["summary"]
+    return _character_overview_summary_payload(game_account)
 
 
 @app.get("/api/public/{code}/progress")
@@ -2057,7 +2101,10 @@ def public_character_overview_progress(
     db: Session = Depends(get_db),
     viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
-    return _character_overview_progress_payload(_get_public_game_account_or_404(db, code, viewer))
+    game_account = _find_viewable_or_frozen(db, code, viewer)
+    if isinstance(game_account, PermanentExample):
+        return game_account.payload["progress"]
+    return _character_overview_progress_payload(game_account)
 
 
 @app.get("/api/public/{code}/skills")
@@ -2068,7 +2115,10 @@ def public_skills(
     db: Session = Depends(get_db),
     viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
-    return _skills_payload(_get_public_game_account_or_404(db, code, viewer))
+    game_account = _find_viewable_or_frozen(db, code, viewer)
+    if isinstance(game_account, PermanentExample):
+        return game_account.payload["skills"]
+    return _skills_payload(game_account)
 
 
 @app.get("/api/public/{code}/collection-log")
@@ -2079,7 +2129,10 @@ def public_collection_log(
     db: Session = Depends(get_db),
     viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
-    return _collection_log_payload(_get_public_game_account_or_404(db, code, viewer))
+    game_account = _find_viewable_or_frozen(db, code, viewer)
+    if isinstance(game_account, PermanentExample):
+        return game_account.payload["collection-log"]
+    return _collection_log_payload(game_account)
 
 
 @app.get("/api/public/{code}/model")
@@ -2090,7 +2143,16 @@ def public_character_overview_model(
     db: Session = Depends(get_db),
     viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
-    return _character_overview_model_response(_get_public_game_account_or_404(db, code, viewer))
+    game_account = _find_viewable_or_frozen(db, code, viewer)
+    if isinstance(game_account, PermanentExample):
+        if not game_account.model_glb:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No character model captured yet.")
+        return Response(
+            content=game_account.model_glb,
+            media_type="model/gltf-binary",
+            headers={"Cache-Control": "private, max-age=0, must-revalidate"},
+        )
+    return _character_overview_model_response(game_account)
 
 
 @app.get("/c/{code}", response_class=HTMLResponse)
@@ -2116,7 +2178,13 @@ def public_character_overview_page(
     # find_viewable_game_account.
     game_account = find_viewable_game_account(db, code, viewer_game_account)
     if game_account is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+        # One of the README's permanent example profiles? Rendered from
+        # its frozen copy -- the page's own fetches are answered the
+        # same way by the /api/public/<code>/* endpoints above.
+        frozen = find_permanent_profile(db, code)
+        if frozen is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+        return render_public_character_overview(frozen_owner(frozen.owner_name, frozen.code), viewer)
     return render_public_character_overview(game_account, viewer)
 
 
@@ -2155,7 +2223,12 @@ def shared_content_page(
     # deleted after sharing (no cascade delete wired up for this FK --
     # see SharedContent's own comment in app/models.py); render_loot_
     # tracker_share's own game_account parameter already handles that.
-    owner = db.query(GameAccount).filter(GameAccount.id == share.game_account_id).first()
+    if share.game_account_id is None:
+        # A permanent example's frozen copy (see app/permanent_examples.py)
+        # -- its owner's name was copied alongside the payload.
+        owner = frozen_owner(getattr(share, "frozen_owner_name", None))
+    else:
+        owner = db.query(GameAccount).filter(GameAccount.id == share.game_account_id).first()
     if share.content_type == "loot_tracker":
         return render_loot_tracker_share(share, owner, viewer)
     if share.content_type == "purchase_goal":

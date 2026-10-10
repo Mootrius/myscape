@@ -1712,6 +1712,36 @@ class SharedContent(Base):
         return _utcnow() < _as_aware_utc(self.expires_at)
 
 
+class PermanentExample(Base):
+    """A frozen copy of one of the example links the README (and the
+    site's own marketing) points at -- a shared snapshot (myscape.io/s/
+    <code>) or a public Character Overview (myscape.io/c/<code>) -- that
+    keeps resolving even after the owner deletes the share, lets it
+    expire, goes private, or deletes the character or account.
+
+    Deliberately has NO foreign key to game_accounts (so no cascade can
+    ever reach it): everything a page needs is copied in by
+    app/permanent_examples.py's capture_permanent_examples, which runs
+    at startup for the codes listed in that module and only copies a
+    code that isn't already stored. kind "share" keeps the original
+    SharedContent.content_type and payload; kind "profile" keeps the
+    four JSON payloads the public Character Overview page fetches
+    (payload = {"summary": ..., "progress": ..., "skills": ...,
+    "collection-log": ...}) plus the .glb in model_glb. owner_name is
+    the character's name at capture time."""
+
+    __tablename__ = "permanent_examples"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String, nullable=False, unique=True)
+    kind = Column(String, nullable=False)
+    content_type = Column(String, nullable=True)
+    owner_name = Column(String, nullable=True)
+    payload = Column(JSONB, nullable=False)
+    model_glb = Column(LargeBinary, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)
+
+
 class Friendship(Base):
     """A friend request (status "pending") or an accepted friendship
     (status "accepted") between two GameAccounts -- friends are per

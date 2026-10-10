@@ -95,5 +95,10 @@ def find_valid_share(db: Session, raw_code: str, content_type: Optional[str] = N
         query = query.filter(SharedContent.content_type == content_type)
     share = query.first()
     if share is None or not share.is_valid:
-        return None
+        # One of README's permanent example links? See
+        # app/permanent_examples.py -- those keep resolving from a
+        # frozen copy once the live row is gone or expired.
+        from app.permanent_examples import find_permanent_share
+
+        return find_permanent_share(db, normalized, content_type)
     return share
