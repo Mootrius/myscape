@@ -90,3 +90,43 @@
   body:not(.landing) .hs-result-q:active { background-color: rgb(51, 51, 54); }
   body:not(.landing) .hs-search-clear:hover { color: var(--text-faint); }
 }
+
+
+/* ---- Landing page "GOT QUESTIONS?" panel -----------------------------
+   The same search box and result rows as the Help & Support page, as the
+   last .landing-anchor before the closing call to action. Anchored to the
+   top (like the app previews) so the panel doesn't jump as results change. */
+.landing-anchor--faq {
+  align-items: flex-start;
+  padding-top: max(40px, 9vh);
+}
+.landing-faq { width: 100%; max-width: 880px; }
+.landing-faq-title {
+  margin: 0 0 28px;
+  color: var(--gold);
+  font-size: 40px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+body.landing .hs-results { gap: 10px; }
+body.landing .hs-result-q { padding: 14px 20px; }
+
+@media (max-width: 700px) {
+  body.landing .landing-faq-title { font-size: 30px; margin-bottom: 20px; }
+  body.landing .hs-search-group { margin-bottom: 14px; }
+  /* 16px: phone browsers zoom in when a text field under 16px is focused. */
+  body.landing .hs-search { font-size: 16px; padding-right: 64px; }
+  body.landing .hs-search-clear { right: 4px; padding: 12px 10px; font-size: 11px; }
+  body.landing .hs-results { gap: 8px; }
+  body.landing .hs-result-q { padding: 12px 14px; gap: 12px; font-size: 14px; line-height: 1.35; }
+  body.landing .hs-result-answer { padding: 12px 14px 16px 36px; font-size: 14px; }
+  body.landing .hs-result-answer,
+  body.landing .hs-result-qtext { overflow-wrap: anywhere; }
+}
+
+@media (hover: none) {
+  body.landing .hs-result-q:hover { background-color: transparent; }
+  body.landing .hs-result-q:hover .hs-chevron { border-color: var(--gold-dim); }
+  body.landing .hs-result-q:active { background-color: rgb(51, 51, 54); }
+  body.landing .hs-search-clear:hover { color: var(--text-faint); }
+}

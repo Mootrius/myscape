@@ -1176,6 +1176,12 @@ def render_landing(player: Optional[PlayerView]) -> str:
       {storages_anchor_section}
       {mindmap_anchor_section}
       {goal_tracking_anchor_section}
+      <section class="landing-anchor landing-anchor--faq">
+        <div class="landing-faq">
+          <h2 class="landing-faq-title">GOT QUESTIONS?</h2>
+          {_HELP_SUPPORT_SEARCH_MARKUP}
+        </div>
+      </section>
     </div>
     """
     # CSS scroll-snap (myscape.css) is the baseline -- it's what
@@ -1262,6 +1268,13 @@ def render_landing(player: Optional[PlayerView]) -> str:
       window.addEventListener('wheel', function (e) {
         // ctrl+wheel is pinch-zoom on a trackpad -- leave that alone.
         if (e.ctrlKey || Math.abs(e.deltaY) < 4) return;
+        // The FAQ panel can grow taller than the screen as questions are
+        // opened -- scroll it normally until its edge is in view.
+        var faq = e.target.closest ? e.target.closest('.landing-anchor--faq') : null;
+        if (faq) {
+          var r = faq.getBoundingClientRect();
+          if ((e.deltaY > 0 && r.bottom > window.innerHeight + 2) || (e.deltaY < 0 && r.top < -2)) return;
+        }
         e.preventDefault();
         if (locked) return;
         goTo(nearestStop() + (e.deltaY > 0 ? 1 : -1));
@@ -1346,6 +1359,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
         + storages_preview_script
         + mindmap_preview_script
         + goal_tracking_preview_script
+        + _help_support_script()
     )
     # body_class="landing" scopes the scroll-snap CSS (see
     # myscape.css's `html:has(body.landing)`) to just this page --
@@ -1362,6 +1376,7 @@ def render_landing(player: Optional[PlayerView]) -> str:
             + storages_preview_head
             + mindmap_preview_head
             + goal_tracking_preview_head
+            + _HELP_SUPPORT_HEAD
         ),
         body_class="landing",
         footer_extra=landing_cta,
@@ -1744,23 +1759,9 @@ _HELP_SUPPORT_SCRIPT = r"""
       function setStatus(html) { statusEl.innerHTML = html; statusEl.style.display = html ? '' : 'none'; }
       function setNote(html) { noteEl.innerHTML = html; noteEl.style.display = html ? '' : 'none'; }
 
-      function render() {
-        var q = input.value.trim();
-        clearBtn.style.display = q ? '' : 'none';
-        resultsEl.textContent = '';
-        setStatus('');
-        if (!q) {
-          setNote('Search above via keyword or question, or visit our ' + DISCORD + '.');
-          return;
-        }
-        var res = search(q);
-        if (!res.hits.length) {
-          setNote('No matching results. Try again, or ask in our ' + DISCORD + '.');
-          return;
-        }
-        setNote('Can\'t find an answer? Try asking in our ' + DISCORD + '.');
-        setStatus(res.partial ? 'No exact matches \u2014 here are the closest ones.' : '');
-        res.hits.forEach(function (f) {
+      // Appends one collapsed row per FAQ in `list`.
+      function showCards(list) {
+        list.forEach(function (f) {
           // One collapsed row per match: a chevron + the question, which
           // expands (click or keyboard) to reveal the answer.
           var card = document.createElement('div');
@@ -1791,6 +1792,27 @@ _HELP_SUPPORT_SCRIPT = r"""
           card.appendChild(ans);
           resultsEl.appendChild(card);
         });
+      }
+
+      function render() {
+        var q = input.value.trim();
+        clearBtn.style.display = q ? '' : 'none';
+        resultsEl.textContent = '';
+        setStatus('');
+        if (!q) {
+          setNote('Search above via keyword or question, or visit our ' + DISCORD + '.');
+          // Nothing typed yet: show the Getting Started questions.
+          showCards(FAQ.filter(function (f) { return f.category === 'Getting Started'; }));
+          return;
+        }
+        var res = search(q);
+        if (!res.hits.length) {
+          setNote('No matching results. Try again, or ask in our ' + DISCORD + '.');
+          return;
+        }
+        setNote('Can\'t find an answer? Try asking in our ' + DISCORD + '.');
+        setStatus(res.partial ? 'No exact matches \u2014 here are the closest ones.' : '');
+        showCards(res.hits);
       }
 
       // Results only appear once the visitor pauses typing (so the list
@@ -1833,6 +1855,27 @@ _HELP_SUPPORT_SCRIPT = r"""
 """
 
 
+_HELP_SUPPORT_HEAD = f'<link rel="stylesheet" href="/static/css/help-support.css?v={_HELP_SUPPORT_CSS_VERSION}" />'
+
+# The FAQ search box, results list and notes -- shared by the Help &
+# Support page and the landing page's "GOT QUESTIONS?" panel.
+_HELP_SUPPORT_SEARCH_MARKUP = """
+    <div class="hs-search-group">
+      <input type="text" class="hs-search" id="hsSearch" placeholder="Search the FAQ" autocomplete="off" />
+      <button type="button" class="hs-search-clear" id="hsSearchClear" style="display:none;">Clear</button>
+    </div>
+    <p class="hs-status" id="hsStatus"></p>
+    <div class="hs-results" id="hsResults"></div>
+    <p class="hs-note" id="hsNote"></p>
+"""
+
+
+def _help_support_script() -> str:
+    """The FAQ search script with the FAQ entries embedded."""
+    faq_json = json.dumps(get_faq_items(), ensure_ascii=False).replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    return _HELP_SUPPORT_SCRIPT.replace("__FAQ_JSON__", faq_json)
+
+
 def render_help_support(player: PlayerView) -> str:
     """The Help & Support page -- a search box over the FAQ (app/faq.py,
     app/data/faq.json). Everything is embedded in the page and searched
@@ -1841,19 +1884,9 @@ def render_help_support(player: PlayerView) -> str:
     question row that expands to its answer; see _HELP_SUPPORT_SCRIPT
     for how matching works. More sections get added below the FAQ search
     later."""
-    extra_head = f'<link rel="stylesheet" href="/static/css/help-support.css?v={_HELP_SUPPORT_CSS_VERSION}" />'
-    faq_json = json.dumps(get_faq_items(), ensure_ascii=False).replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
-    script = _HELP_SUPPORT_SCRIPT.replace("__FAQ_JSON__", faq_json)
-    body = """
-    <h2 class="page-title">Help &amp; Support</h2>
-    <div class="hs-search-group">
-      <input type="text" class="hs-search" id="hsSearch" placeholder="Search the FAQ" autocomplete="off" />
-      <button type="button" class="hs-search-clear" id="hsSearchClear" style="display:none;">Clear</button>
-    </div>
-    <p class="hs-status" id="hsStatus"></p>
-    <div class="hs-results" id="hsResults"></div>
-    <p class="hs-note" id="hsNote"></p>
-    """
+    extra_head = _HELP_SUPPORT_HEAD
+    script = _help_support_script()
+    body = '<h2 class="page-title">Help &amp; Support</h2>' + _HELP_SUPPORT_SEARCH_MARKUP
     return _shell(
         title="Help & Support — myscape",
         player=player,
