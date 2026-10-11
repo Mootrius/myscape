@@ -538,6 +538,11 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     # hand-picked here instead, per explicit instruction (confirmed
     # against the wiki's own File:Dossier detail.png).
     "dossier": (None, "Dossier detail.png"),
+    # Unsired -- offering one to the Font of Consumption is its own loot
+    # source event named after the item (the same shape as Dossier
+    # above), so the bare guess off "Unsired" doesn't reach this item's
+    # bigger "detail" render; per explicit instruction.
+    "unsired": (None, "Unsired detail.png"),
     # The Grotesque Guardians boss fight's loot is recorded under one of
     # its two phase NPCs, "Dusk" -- shown as the fight's own name
     # instead, per explicit instruction, with the same portrait the bare
