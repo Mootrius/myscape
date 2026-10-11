@@ -1787,12 +1787,33 @@ _HELP_SUPPORT_SCRIPT = r"""
             ans.hidden = !open;
             btn.setAttribute('aria-expanded', open ? 'true' : 'false');
             card.classList.toggle('open', open);
+            fitLanding();
           });
           card.appendChild(btn);
           card.appendChild(ans);
           resultsEl.appendChild(card);
         });
+        fitLanding();
       }
+
+      // On the landing page the panel is one scroll-snap screen, so only as
+      // many rows as fit are shown (an opened row always stays). Elsewhere
+      // every row is shown.
+      var landingPanel = document.querySelector('.landing-anchor--faq');
+      function fitLanding() {
+        if (!landingPanel) return;
+        var cards = Array.prototype.slice.call(resultsEl.children);
+        cards.forEach(function (c) { c.style.display = ''; });
+        function overflows() {
+          // The panel is at least one screen tall; it grows past that
+          // only when its content (plus padding) doesn't fit.
+          return landingPanel.getBoundingClientRect().height > window.innerHeight + 1;
+        }
+        for (var i = cards.length - 1; i > 0 && overflows(); i--) {
+          if (!cards[i].classList.contains('open')) cards[i].style.display = 'none';
+        }
+      }
+      window.addEventListener('resize', fitLanding);
 
       function render() {
         var q = input.value.trim();

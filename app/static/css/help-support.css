@@ -105,6 +105,7 @@
   margin: 0 0 28px;
   color: var(--gold);
   font-size: 40px;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-align: center;
 }
