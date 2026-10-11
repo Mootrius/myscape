@@ -588,7 +588,11 @@
    override (the bare guess doesn't land on its own detail render),
    but the same 70%-oversized-at-this-box's-shared-56px story applies
    once it does, per explicit instruction. */
-.loot-npc-box-icon-dossier {
+.loot-npc-box-icon-dossier,
+/* Unsired -- same story as Dossier just above (hand-picked "detail"
+   render, see _NPC_DISPLAY_OVERRIDES in app/loot.py), per explicit
+   instruction. */
+.loot-npc-box-icon-unsired {
   transform: scale(0.7);
 }
 /* Tarnished items -- the nine Tarnished NPCs folded into one tile (see

@@ -9404,6 +9404,14 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
           return /^Dossier$/i.test(n.sourceName);
         }
 
+        // Unsired -- shown under the wiki's bigger "detail" render (see
+        // _NPC_DISPLAY_OVERRIDES in app/loot.py), so it gets the same
+        // 70% treatment as Dossier and every other detail render here,
+        // per explicit instruction.
+        function isUnsired(n) {
+          return /^Unsired$/i.test(n.sourceName);
+        }
+
         // "Tarnished items" -- the nine Tarnished NPCs folded into one
         // tile (see _NPC_DISPLAY_OVERRIDES in app/loot.py), shown under
         // a bundled battleaxe image that, like every other big render
@@ -9502,7 +9510,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
             return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
               '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
                 escapeHtml(n.sourceName) + '" data-tooltip="' + escapeHtml(n.sourceName) + '">' +
-                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '') + (isSpider(n) ? ' loot-npc-box-icon-spider' : '') + (isDeathSpawn(n) ? ' loot-npc-box-icon-death-spawn' : '') + (isGoblin(n) ? ' loot-npc-box-icon-goblin' : '') + (isDossier(n) ? ' loot-npc-box-icon-dossier' : '') + (isTarnishedItems(n) ? ' loot-npc-box-icon-tarnished' : '')) +
+                iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '') + (isSpider(n) ? ' loot-npc-box-icon-spider' : '') + (isDeathSpawn(n) ? ' loot-npc-box-icon-death-spawn' : '') + (isGoblin(n) ? ' loot-npc-box-icon-goblin' : '') + (isDossier(n) ? ' loot-npc-box-icon-dossier' : '') + (isUnsired(n) ? ' loot-npc-box-icon-unsired' : '') + (isTarnishedItems(n) ? ' loot-npc-box-icon-tarnished' : '')) +
                 '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
                 '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
               '</button>' +
