@@ -3968,7 +3968,7 @@ def render_account(player: PlayerView) -> str:
       // Links EXPIRATION column and the Friends SINCE column.
       function fmtLocalDate(iso) {
         if (!iso) return '\u2014';
-        const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso);
+        const hasZone = /[zZ]$|[+-]\\d{2}:?\\d{2}$/.test(iso);
         const d = new Date(hasZone ? iso : iso + 'Z');
         if (isNaN(d.getTime())) return '\u2014';
         const pad = (n) => String(n).padStart(2, '0');
@@ -7330,7 +7330,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
                 // always "Reward casket (<tier>)" (npc_like_name in
                 // build_loot_state), so this can't match a real NPC.
         function isCasketNpc(n) {
-          return /^Reward casket \(/i.test(n.sourceName);
+          return /^Reward casket \\(/i.test(n.sourceName);
         }
 
         // Exact name; Guardians of the Rift's per-round reward.
@@ -7819,7 +7819,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       var DATE_MASK = 'dddd-dd-dd';
 
       function digitsOnly(s) {
-        return (s || '').replace(/\D/g, '').slice(0, 8);
+        return (s || '').replace(/\\D/g, '').slice(0, 8);
       }
 
       function maskValueFromDigits(digits) {
@@ -7856,7 +7856,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
       }
 
       function isValidIsoDate(s) {
-        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+        var m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(s || '');
         if (!m) return false;
         var year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
         if (month < 1 || month > 12) return false;
@@ -10614,7 +10614,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       // passes through.
       function parseMoneySuffix(raw) {
         var s = (raw || '').trim().replace(/,/g, '');
-        var m = /^([0-9]*\.?[0-9]+)\s*([kKmMbB])$/.exec(s);
+        var m = /^([0-9]*\\.?[0-9]+)\\s*([kKmMbB])$/.exec(s);
         if (!m) return s;
         var mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2].toLowerCase()];
         return String(Math.round(parseFloat(m[1]) * mult));
@@ -10644,7 +10644,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       var DATE_MASK = 'dddd-dd-dd';
 
       function digitsOnly(s) {
-        return (s || '').replace(/\D/g, '').slice(0, 8);
+        return (s || '').replace(/\\D/g, '').slice(0, 8);
       }
 
       function maskValueFromDigits(digits) {
@@ -10672,7 +10672,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       }
 
       function isValidIsoDate(s) {
-        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+        var m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(s || '');
         if (!m) return false;
         var year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
         if (month < 1 || month > 12) return false;
@@ -10914,7 +10914,7 @@ def _mindmaps_panel_markup() -> Tuple[str, str, str]:
       // uppercases everything else).
       function renderNodeLabelHtml(goalType, text) {
         if (goalType === 'item') {
-          var m = /^x(\d.*)$/.exec(text);
+          var m = /^x(\\d.*)$/.exec(text);
           if (m) return '<span class="mm-node-x-lower">x</span>' + esc(m[1]);
         }
         return esc(text);
@@ -12441,7 +12441,7 @@ def _possessions_panel_markup() -> Tuple[str, str, str]:
         if (raw === null || raw === undefined) return null;
         var s = String(raw).trim();
         if (!s) return null;
-        var match = /^([0-9]*\.?[0-9]+|[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)\s*([kKmMbB])?$/.exec(s);
+        var match = /^([0-9]*\\.?[0-9]+|[0-9]{1,3}(?:,[0-9]{3})*(?:\\.[0-9]+)?)\\s*([kKmMbB])?$/.exec(s);
         if (!match) return null;
         var numPart = match[1].replace(/,/g, '');
         var n = parseFloat(numPart);
@@ -13626,7 +13626,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
 
       function parseMoneySuffix(raw) {
         var s = (raw || '').trim().replace(/,/g, '');
-        var m = /^([0-9]*\.?[0-9]+)\s*([kKmMbB])$/.exec(s);
+        var m = /^([0-9]*\\.?[0-9]+)\\s*([kKmMbB])$/.exec(s);
         if (!m) return s;
         var mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2].toLowerCase()];
         return String(Math.round(parseFloat(m[1]) * mult));
@@ -14324,7 +14324,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       var RECUR_START_DIGIT_COUNT = (RECUR_START_MASK.match(/d/g) || []).length;
 
       function recurStartDigitsOnly(s) {
-        return (s || '').replace(/\D/g, '').slice(0, RECUR_START_DIGIT_COUNT);
+        return (s || '').replace(/\\D/g, '').slice(0, RECUR_START_DIGIT_COUNT);
       }
 
       function recurStartMaskFromDigits(digits) {
@@ -14356,7 +14356,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // Requires a real calendar date and clock time (rejects "2024-13-40
       // 25:99"); like Loot Tracker's isValidIsoDate plus an hour/minute check.
       function isValidRecurStartDateTime(s) {
-        var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s || '');
+        var m = /^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2})$/.exec(s || '');
         if (!m) return false;
         var year = parseInt(m[1], 10), month = parseInt(m[2], 10), day = parseInt(m[3], 10);
         var hour = parseInt(m[4], 10), minute = parseInt(m[5], 10);
@@ -14387,7 +14387,7 @@ def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
       // new Date(y, m-1, d, h, min) reads local time, toISOString() gives UTC.
       // Call after isValidRecurStartDateTime passes.
       function recurStartIsoFromMasked(s) {
-        var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(s || '');
+        var m = /^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2})$/.exec(s || '');
         if (!m) return null;
         var d = new Date(
           parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10),
