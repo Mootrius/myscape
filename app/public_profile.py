@@ -104,25 +104,11 @@ def format_cooldown_remaining(remaining: timedelta) -> str:
     return f"{hours} hour{'s' if hours != 1 else ''}"
 
 
-def find_public_game_account(db: Session, raw_code: str) -> Optional[GameAccount]:
-    """Resolves a code (any case) to its GameAccount, or None if the code does
-    not exist OR the profile is not public. The result is identical either way
-    (see the 404s in app/main.py), so visitors cannot tell a wrong code from a
-    private profile.
-    """
-    normalized = normalize_public_code(raw_code)
-    return (
-        db.query(GameAccount)
-        .filter(GameAccount.public_code == normalized, GameAccount.is_public_profile.is_(True))
-        .first()
-    )
-
-
 def find_game_account_by_code(db: Session, raw_code: str) -> Optional[GameAccount]:
     """Resolves a code (any case) to its GameAccount whether or not the profile
     is public. For the friends feature, where the code doubles as the friend
     code. NEVER use this to decide who can see a Character Overview; use
-    find_public_game_account / find_viewable_game_account.
+    find_viewable_game_account.
     """
     normalized = normalize_public_code(raw_code)
     if not normalized:
@@ -149,10 +135,10 @@ def are_friends(db: Session, a_id, b_id) -> bool:
 
 
 def find_viewable_game_account(db: Session, raw_code: str, viewer: Optional[GameAccount]) -> Optional[GameAccount]:
-    """find_public_game_account plus the friends exception: a private profile is
-    also viewable by the session's active character if it is the profile's own
-    or an accepted friend. None otherwise, the same result as "no such code",
-    so the 404 leaks nothing.
+    """Resolves a code to a profile the viewer may see: a public profile, or a
+    private one when the session's active character (`viewer`) is its owner or
+    an accepted friend. None otherwise, the same result as "no such code", so
+    the 404 leaks nothing.
     """
     game_account = find_game_account_by_code(db, raw_code)
     if game_account is None:

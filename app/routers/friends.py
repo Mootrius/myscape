@@ -10,7 +10,7 @@ Codes are the GameAccount.public_code also used for myscape.io/c/<code>. Every
 path that sends a request creates a pending row the other side must accept.
 """
 import uuid
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field

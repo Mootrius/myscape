@@ -29,7 +29,6 @@ from sqlalchemy.orm import Session
 
 from app.auth import (
     get_current_game_account_from_api_key,
-    get_current_verified_account_from_session,
     get_current_verified_game_account_from_session,
     get_optional_current_account_from_session,
     get_optional_current_game_account_from_session,
@@ -67,7 +66,6 @@ from app.mindmaps import (
     update_node,
 )
 from app.models import (
-    Account,
     BankItem,
     BoatCargoItem,
     EquipmentItem,
@@ -97,7 +95,6 @@ from app.pages import (
     _MODEL_VIEWER_BACKGROUNDS,
     _SITE_URL,
     PlayerView,
-    build_player_view,
     render_account,
     render_character_overview,
     render_dashboard,
@@ -123,7 +120,7 @@ from app.pages import (
     render_verify_email,
     render_verify_email_required,
 )
-from app.public_profile import find_public_game_account, find_viewable_game_account, format_cooldown_remaining, generate_public_code, regenerate_cooldown_remaining
+from app.public_profile import find_viewable_game_account, format_cooldown_remaining, generate_public_code, regenerate_cooldown_remaining
 from app.possessions import (
     build_possession_views,
     build_possessions_share_snapshot,
@@ -133,7 +130,6 @@ from app.possessions import (
     next_possession_view_sort_order,
     next_sort_order,
     pinned_item_ids,
-    resolve_item_display,
     search_trackable_items,
     set_storage_hidden,
 )
@@ -1639,26 +1635,13 @@ def update_model_viewer_background(
 # Public, unauthenticated reads for myscape.io/c/<code>
 #
 # Each mirrors a session-authenticated endpoint with the same payload builder,
-# resolving by public_code. A missing code and a private profile 404 identically
-# (see find_public_game_account). Rate-limited per IP to bound enumeration of
-# the ~28.6 million possible codes.
-def _get_public_game_account_or_404(
-    db: Session, code: str, viewer: Optional[GameAccount] = None
-) -> GameAccount:
-    """404s unless the profile is public OR the signed-in session's active
-    character (`viewer`) is its owner or an accepted friend
-    (find_viewable_game_account).
-    """
-    game_account = find_viewable_game_account(db, code, viewer)
-    if game_account is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
-    return game_account
-
-
+# resolving by public_code. A missing code and a private profile 404 identically.
+# Rate-limited per IP to bound enumeration of the ~28.6 million possible codes.
 def _find_viewable_or_frozen(db: Session, code: str, viewer: Optional[GameAccount] = None):
-    """Like _get_public_game_account_or_404, but a non-viewable code that is a
-    permanent example (app/permanent_examples.py) returns its frozen
-    PermanentExample.
+    """404s unless the profile is public, or the session's active character
+    (`viewer`) is its owner or an accepted friend (find_viewable_game_account).
+    A non-viewable code that is a permanent example (app/permanent_examples.py)
+    returns its frozen PermanentExample instead.
     """
     game_account = find_viewable_game_account(db, code, viewer)
     if game_account is not None:
