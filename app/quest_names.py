@@ -1,17 +1,12 @@
-"""Quest/miniquest name lookup for the Mindmaps QUEST goal's search
-field.
+"""Quest/miniquest name lookup for the Mindmaps QUEST goal's search field.
 
-Backed by a static JSON snapshot (app/data/quest_names.json) built
-from the OSRS Wiki's Category:Quests and Category:Miniquests
-membership lists -- see scripts/fetch_quest_names.py for how it's
-generated/regenerated. Like item_ids.py's item snapshot, this only
-changes when Jagex releases new quests/miniquests, so a bundled
-snapshot refreshed by manually re-running that script is plenty.
+Backed by a static snapshot (app/data/quest_names.json) from the OSRS Wiki's
+Category:Quests and Category:Miniquests; see scripts/fetch_quest_names.py to
+regenerate. Like item_ids.py, it changes only when quests are released.
 
-This is purely a name list for the search field to offer -- see
-app/mindmaps.py's evaluate_completion for how a quest goal is actually
-scored (a case-insensitive match against the player's own synced
-completed-quests list, not against this snapshot).
+Purely a name list. A quest goal is scored by a case-insensitive match against
+the player's synced completed-quests list (evaluate_completion in
+app/mindmaps.py).
 """
 import json
 import pathlib
@@ -34,9 +29,9 @@ def get_quest_names() -> List[str]:
 
 
 def search_quest_names(query: str, limit: int = 20) -> List[str]:
-    """Fuzzy-searches the quest/miniquest name snapshot, using the same
-    startswith-then-contains scheme as search_item_names in
-    app/item_ids.py."""
+    """Fuzzy name search as in search_item_names (app/item_ids.py): startswith,
+    then contains.
+    """
     q = (query or "").strip().lower()
     if not q:
         return []

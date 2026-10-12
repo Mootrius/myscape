@@ -1,16 +1,12 @@
-"""Code generation and lookup for myscape.io/s/<code> -- the generic,
-many-per-account "share a frozen snapshot of some of my own data" link,
-as distinct from GameAccount.public_code's own one-per-account,
-always-live myscape.io/c/<code> link to Character Overview (see
-app/public_profile.py). See SharedContent's own docstring in
-app/models.py for the row this resolves.
+"""Code generation and lookup for myscape.io/s/<code>: the generic,
+many-per-account link to a frozen snapshot of some of a player's data, as
+distinct from GameAccount.public_code's one-per-account live /c/<code> link
+(app/public_profile.py). See SharedContent in app/models.py for the row this
+resolves.
 
-10 characters (vs. public_code's 5) specifically because there will be
-many more of these created over time than there will ever be public
-Character Overview links -- per explicit instruction. Same alphabet
-and blocklist as app/public_profile.py (imported from there rather
-than duplicated, so updating one updates both), just a longer code:
-31 usable characters ^ 10 is a little under 8 x 10^14 possible codes.
+Codes are 10 characters (many more shares than public profiles will exist),
+using the alphabet and blocklist imported from app/public_profile.py: 31^10 is
+just under 8 x 10^14 codes.
 """
 import secrets
 from datetime import timedelta
@@ -23,30 +19,18 @@ from app.public_profile import CODE_ALPHABET, _contains_blocked_word
 
 CODE_LENGTH = 10
 
-# How long a share link stays resolvable after creation, for every
-# content type -- not configurable per share (yet). A month felt like
-# a reasonable starting point for "share this with a friend" without
-# links piling up forever -- per explicit instruction to have some
-# default expiration, revisit this constant if it turns out to be too
-# short or too long in practice.
+# How long a share link stays resolvable, for every content type (not
+# configurable per share).
 SHARE_DEFAULT_LIFETIME = timedelta(days=30)
 
-# Same reasoning as public_profile.py's own _MAX_ATTEMPTS -- failing
-# loudly here beats spinning forever if something's actually wrong.
+# As in public_profile.py's _MAX_ATTEMPTS: fail loudly rather than spin.
 _MAX_ATTEMPTS = 500
 
-# Display label for the account page's Shared Links section's own
-# TYPE column (see app/routers/account.py's list_shared_links) --
-# every app that ever creates a SharedContent row needs an entry
-# here, keyed by its own content_type string. Short, single-word
-# labels per explicit instruction (not each app's own full feature
-# name -- "Loot", not "Loot Tracker"; "Purchase", not "Purchase
-# Goals") to keep this narrow column from forcing it wider than the
-# Character/Code/Expiration columns around it. Not stored on the row
-# itself since it's pure presentation, not data -- this is the one
-# place that needs updating when a new app's share type is added,
-# alongside that app's own POST .../share endpoint and its
-# SharedContent.content_type value.
+# Display label for the TYPE column of the account page's Shared Links section
+# (list_shared_links in app/routers/account.py), keyed by content_type. Every
+# app that creates a SharedContent row needs an entry, alongside its POST
+# .../share endpoint. Labels are single words ("Loot", "Purchase") to keep the
+# column narrow. Presentation only, so not stored on the row.
 SHARE_CONTENT_TYPE_LABELS = {
     "loot_tracker": "Loot",
     "purchase_goal": "Purchase",
@@ -57,13 +41,11 @@ SHARE_CONTENT_TYPE_LABELS = {
 
 
 def generate_share_code(db: Session) -> str:
-    """Picks a fresh, unused, clean 10-character code -- same
-    blocklist-then-database check order as generate_public_code in
-    app/public_profile.py (cheap in-memory check first, DB round trip
-    only once that passes), see that function's own comment for why.
-    Checked against SharedContent.code, never GameAccount.public_code
-    -- the two code spaces are independent, so the same string could
-    in principle exist in both at once with no conflict."""
+    """Picks a fresh, unused, clean 10-character code, checking the blocklist
+    before the database, as generate_public_code does (app/public_profile.py).
+    Checked against SharedContent.code only; the share and public_code spaces
+    are independent.
+    """
     for _ in range(_MAX_ATTEMPTS):
         candidate = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
         if _contains_blocked_word(candidate):
@@ -80,24 +62,21 @@ def generate_share_code(db: Session) -> str:
 
 
 def find_valid_share(db: Session, raw_code: str, content_type: Optional[str] = None) -> Optional[SharedContent]:
-    """Resolves a code from a URL (lowercased first, same normalize-
-    before-lookup convention as normalize_public_code even though
-    nothing in this alphabet is actually case-ambiguous) to its
-    SharedContent row, or None if the code doesn't exist, has expired
-    (see SharedContent.is_valid), or -- when the caller passes
-    content_type, for a route that's specific to one app's own share
-    kind -- doesn't match it. All three cases return the same None
-    deliberately, so a visitor poking at codes (or an old link to
-    something that's since expired) can't tell them apart."""
+    """Resolves a URL code (lowercased first, as normalize_public_code does) to
+    its SharedContent row, or None if the code does not exist, has expired
+    (SharedContent.is_valid), or does not match `content_type` (for routes
+    specific to one share kind). All three return the same None so visitors
+    cannot tell them apart.
+    """
     normalized = raw_code.strip().lower()
     query = db.query(SharedContent).filter(SharedContent.code == normalized)
     if content_type is not None:
         query = query.filter(SharedContent.content_type == content_type)
     share = query.first()
     if share is None or not share.is_valid:
-        # One of README's permanent example links? See
-        # app/permanent_examples.py -- those keep resolving from a
-        # frozen copy once the live row is gone or expired.
+        # One of README's permanent example links (app/permanent_examples.py)?
+        # Those keep resolving from a frozen copy once the live row is gone or
+        # expired.
         from app.permanent_examples import find_permanent_share
 
         return find_permanent_share(db, normalized, content_type)

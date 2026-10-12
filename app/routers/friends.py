@@ -1,20 +1,13 @@
-"""Friends -- per-character friend requests and friendships (see
-Friendship in app/models.py).
+"""Friends: per-character friend requests and friendships (see Friendship in
+app/models.py).
 
-Everything here is scoped to the signed-in session's *active*
-GameAccount (the same "friends list follows the active character"
-rule the account page's Friends section shows), except the
-notification poll, which is Account-wide on purpose: the header's dot
-next to ACCOUNT needs to know about a request sent to ANY of this
-login's characters, and the account page's character cards each get
-their own dot from the per-character breakdown.
+Everything is scoped to the session's *active* GameAccount, except the
+notification poll, which is Account-wide so the header dot next to ACCOUNT
+reflects requests to any of this login's characters (the account page's
+character cards use the per-character breakdown).
 
-Codes are the same public_code GameAccount already has for
-myscape.io/c/<code> -- one code for both the profile link and
-friending. Adding someone by code never reveals anything about them
-beyond "that code exists" (needed to say so on a typo) and their
-character name once a request goes through, and every path that sends
-a request just creates a pending row the other side has to accept.
+Codes are the GameAccount.public_code also used for myscape.io/c/<code>. Every
+path that sends a request creates a pending row the other side must accept.
 """
 import uuid
 from typing import List, Optional
@@ -39,10 +32,9 @@ router = APIRouter(prefix="/api/friends", tags=["friends"])
 PENDING = "pending"
 ACCEPTED = "accepted"
 
-# Most outgoing, not-yet-answered requests one character can have open
-# at once -- a cheap ceiling on request spam (decline just deletes the
-# row, so without this a declined requester could simply keep
-# re-asking). Plus the per-IP rate limit on POST /requests itself.
+# Most open outgoing requests per character. Declining deletes the row, so
+# without a cap a declined requester could keep re-asking. Complements the
+# per-IP rate limit on POST /requests.
 MAX_PENDING_OUTGOING = 25
 
 
@@ -55,9 +47,10 @@ def _name(game_account: GameAccount) -> str:
 
 
 def _between(db: Session, a_id: uuid.UUID, b_id: uuid.UUID) -> Optional[Friendship]:
-    """The one Friendship row between two characters, whichever of
-    them was the requester (at most one can exist -- a request in the
-    opposite direction auto-accepts instead of creating a second)."""
+    """The one Friendship row between two characters, whichever was the requester
+    (a request in the opposite direction auto-accepts instead of creating a
+    second).
+    """
     return (
         db.query(Friendship)
         .filter(
@@ -71,10 +64,9 @@ def _between(db: Session, a_id: uuid.UUID, b_id: uuid.UUID) -> Optional[Friendsh
 
 
 def _ensure_code(db: Session, game_account: GameAccount) -> str:
-    """Every linked character is supposed to already have a code (set
-    at link time, backfilled by the friendships migration) -- this is
-    just the safety net so the Friends section can never show a
-    character with nothing to share."""
+    """Safety net: every linked character should already have a code (set at link
+    time, backfilled by the friendships migration).
+    """
     if not game_account.public_code:
         game_account.public_code = generate_public_code(db)
         db.commit()
@@ -87,15 +79,13 @@ def list_friends(
     db: Session = Depends(get_db),
     me: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """The account page's Friends section for the active character:
-    its own code, incoming requests (newest first), and accepted
-    friends (A-Z). Each friend's `code` is their *current* public_code
-    (what the NAME link opens), so it follows a reset automatically on
-    the next load."""
+    """The account page's Friends section for the active character: its own code,
+    incoming requests (newest first) and accepted friends (A-Z). Each friend's
+    `code` is their *current* public_code, so it follows a reset.
+    """
     if me.account_hash is None:
-        # An empty, not-yet-linked slot has no character to friend
-        # anyone as -- the account page shows a "link this character"
-        # hint instead of the section.
+        # An empty, unlinked slot has no character to friend as; the account
+        # page shows a link hint instead.
         return {"linked": False, "code": None, "friends": [], "incoming": []}
     code = _ensure_code(db, me)
     rows = (
@@ -113,8 +103,7 @@ def list_friends(
                 "id": str(row.id),
                 "name": _name(other),
                 "code": other.public_code,
-                # When the request was accepted -- the Friends list's
-                # SINCE column shows its date.
+                # Acceptance time, shown in the SINCE column.
                 "since": became_friends.isoformat() if became_friends else None,
             })
         elif row.addressee_id == me.id:
@@ -131,10 +120,10 @@ def friend_notifications(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ):
-    """Polled by every page's header (the little dot next to ACCOUNT)
-    and by the account page's character cards: how many incoming
-    friend requests are waiting, in total and per character. One
-    grouped COUNT query -- cheap enough to poll every few seconds."""
+    """Polled by every page header (the dot next to ACCOUNT) and the account
+    page's character cards: waiting incoming requests, in total and per
+    character. One grouped COUNT query, cheap enough to poll.
+    """
     rows = (
         db.query(Friendship.addressee_id, func.count(Friendship.id))
         .join(GameAccount, GameAccount.id == Friendship.addressee_id)
@@ -154,10 +143,10 @@ def friend_status(
     db: Session = Depends(get_db),
     viewer: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
-    """What the 'send friend request' button on someone's profile page
-    should do for the active character: anonymous / self / own (another
-    character on the viewer's own account) / friends / pending_out /
-    pending_in / none."""
+    """What the 'send friend request' button on a profile page should do for the
+    active character: anonymous / self / own (another character on the
+    viewer's account) / friends / pending_out / pending_in / none.
+    """
     target = find_game_account_by_code(db, code)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
@@ -183,19 +172,17 @@ def send_friend_request(
     db: Session = Depends(get_db),
     me: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Both ways of adding a friend (typing a code on the account page,
-    or the button on a profile page, which just sends that page's own
-    code) land here -- always a *request*, never instant friendship,
-    with one exception: if the other character already asked you, this
-    simply accepts theirs."""
+    """Both ways of adding a friend (code on the account page, or the profile
+    page button) land here. Always a *request*, except that if the other
+    character already asked, this accepts theirs.
+    """
     if me.account_hash is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Link this character first.")
     target = find_game_account_by_code(db, payload.code)
     if target is None or target.account_hash is None:
-        # Deliberately the same answer a real request gets -- the
-        # account page words it "If there is a character with that
-        # code, a friend request has been sent.", so typing codes
-        # can't be used to find out which ones exist.
+        # Same answer as a real request ("If there is a character with that
+        # code, a friend request has been sent."), so codes cannot be probed for
+        # existence.
         return {"status": PENDING, "name": None}
     if target.id == me.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That's your own code.")
@@ -258,8 +245,7 @@ def decline_friend_request(
     db: Session = Depends(get_db),
     me: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Silent decline -- the row is just deleted; the requester is
-    never told (their request simply never gets accepted)."""
+    """Silent decline: the row is deleted and the requester is not told."""
     row = _incoming_or_404(db, me, request_id)
     db.delete(row)
     db.commit()
@@ -272,9 +258,9 @@ def remove_friend(
     db: Session = Depends(get_db),
     me: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Silent, immediate unfriend -- either side can do it, and it
-    takes effect for both at once (the other side just stops seeing a
-    private overview next time they load it)."""
+    """Silent, immediate unfriend by either side; takes effect for both (the
+    other side loses private overview access on next load).
+    """
     row = (
         db.query(Friendship)
         .filter(

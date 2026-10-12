@@ -1,23 +1,11 @@
-"""Mindmaps -- a player's named goal/idea trees. Brand new feature (no
-Maintrius equivalent to port, unlike Purchase Goals/Loot Tracker), so
-this module is the whole of its own server-side logic: the tree-shape
-operations (insert a node as a parent/child/sibling of an existing one,
-delete a node and its whole subtree) plus turning a MindMap row into
-the JSON the client renders from.
-
-A mindmap's `nodes` column (see MindMap's docstring in app/models.py)
-is a flat list of plain dicts, never a nested/recursive structure --
-each node just points at its own parent by id (None for the tree's one
-root), and an `order` float ranks it among that parent's other
-children. Every function below that changes the tree takes the current
-list and returns a brand new one rather than mutating it in place --
-required for the write to actually persist (see GearSetup's docstring
-in app/models.py for why: SQLAlchemy only notices a *new* object
-assigned to a JSONB column, not an existing one mutated after the
-fact), and it also means every mutation is a plain, easily-tested
-list-in-list-out function with no ORM/session concerns of its own --
-those stay in main.py's route handlers, same split as
-app/purchase_goals.py.
+"""Mindmaps: a player's named goal/idea trees. Holds the tree operations (insert
+a node as parent/child/sibling, delete a subtree), goal completion evaluation,
+and conversion of a MindMap row to client JSON.
+`nodes` (see MindMap in app/models.py) is a flat list of dicts: each node has
+a parentId (None for the one root) and an `order` float among its siblings.
+Mutating functions return a new list rather than mutating, since SQLAlchemy
+only detects a new object assigned to a JSONB column (see GearSetup in
+app/models.py). ORM work stays in main.py.
 """
 import math
 import uuid
@@ -29,52 +17,24 @@ from sqlalchemy.orm import Session
 from app.item_ids import find_item_ids
 from app.models import MindMap, GameAccount
 
-# The fixed palette a node's `color` can be -- deliberately a small,
-# named set (not a free-form hex value) so the client can style each
-# one with a real CSS class instead of trusting arbitrary color input,
-# the same reasoning GearSetup's owned/not-owned/affordable border
-# colors already follow. "gray" (panel-2, the site's own default box
-# shade) is what every new node starts as; see mindmaps.css for what
-# each name actually renders as.
-#
-# Every color but "white" also picks a goal TYPE (see GOAL_TYPE_BY_COLOR
-# below) -- this is what turns a mindmap from a plain idea tree into a
-# self-checking goal tree: a node's color says what kind of thing has
-# to happen for it to be considered done, and its `goal` dict (see
-# clean_goal) holds the specific criteria. "white" is the one color a
-# player never picks for themselves -- it's reserved for a mindmap's
-# one root node, the "final" goal/unlock that isn't trackable on its
-# own at all, just marked done once every other node is (see
-# evaluate_completion).
+# Node colors: a small named set (not free-form hex) so the client styles each
+# with a CSS class (mindmaps.css). "gray" is the default. Every color but
+# "white" picks a goal type (GOAL_TYPE_BY_COLOR) whose criteria live in the
+# node's `goal` dict (see clean_goal). "white" is reserved for the root, done
+# once every other node is (see evaluate_completion).
 NODE_COLORS = ["gray", "red", "orange", "yellow", "green", "blue", "purple", "white"]
 DEFAULT_COLOR = "gray"
 DEFAULT_TEXT = "New"
 MAX_NODE_TEXT_LENGTH = 120
 MAX_MINDMAP_NAME_LENGTH = 60
-# A node's own optional note (see update_node/_clean_note below) --
-# free-form "how I'd like to achieve this" text, not a display label.
-# Capped to 2 LINES, not really this many characters -- this value used
-# to be the real cap (1000), but a note long enough to need its own
-# scrollbar (in its popover's textarea, or on the node's own flipped-
-# over back face) turned out to reintroduce the exact GPU-compositing
-# blur bug the search dropdown had (see .mm-suggestions' own comment in
-# mindmaps.css for that whole story). The real, precise 2-line
-# enforcement is client-side now (clampNoteInput in app/pages.py, which
-# measures actual rendered height rather than guessing a character
-# count -- RuneScapePlain11 is a proportional font); this is left
-# generously large as a backstop for a request that bypasses that UI
-# entirely, not tightened down to match it -- see _clean_note's own
-# comment for how the 2-line cap itself gets enforced server-side.
+# Max note length: only a backstop for direct API calls. The real 2-line cap is
+# client-side (clampNoteInput in app/pages.py; the font is proportional),
+# because a scrolling note reintroduces the blur described at .mm-suggestions in
+# mindmaps.css. See _clean_note.
 MAX_NODE_NOTE_LENGTH = 200
 
-# Which goal TYPE each color picks -- see clean_goal/evaluate_completion
-# below for what each type actually checks. "manual" (gray) is the one
-# type with no auto-detection at all: the player just clicks a
-# "Complete" button themselves once they've done whatever the node
-# says, available even outside the canvas's Edit Mode (see
-# render_mindmaps in app/pages.py) since checking it off isn't
-# "editing" the node the way changing its criteria is. None (white) has
-# no goal type -- it's never player-set; see NODE_COLORS' own comment.
+# Goal type per color (see clean_goal/evaluate_completion). "manual" (gray) is
+# checked off by the player, even outside Edit Mode. None (white) is root-only.
 GOAL_TYPE_BY_COLOR = {
     "gray": "manual",
     "red": "kc",
@@ -86,19 +46,12 @@ GOAL_TYPE_BY_COLOR = {
     "white": None,
 }
 
-# What a red (kc) goal's "activity" field can be -- KC-based goals cover
-# anything "trackable"/"lootable" this app's plugin already logs one
-# LootEvent per occurrence of (see LootEvent's docstring in
-# app/models.py and app/loot.py): an NPC/boss kill, a pickpocket, or a
-# clue casket/minigame reward (RuneLite's own LootReceived event lumps
-# every non-NPC, non-pickpocket reward into source_type "event" -- see
-# LootEvent's docstring for why a clue's TIER specifically can't be
-# told apart from this, a real limitation of the event this reads, not
-# something worked around here).
+# Allowed `activity` values for a red (kc) goal: anything the plugin logs a
+# LootEvent for (app/loot.py). Clue tiers cannot be told apart: RuneLite reports
+# all non-NPC, non-pickpocket rewards as source_type "event".
 KC_ACTIVITY_TYPES = ["npc", "pickpocket", "event"]
 
-# The 24 real OSRS skills, lowercase -- what a green (skill) goal's
-# `skill` field must be one of.
+# The 24 OSRS skills, lowercase; a green (skill) goal's `skill` must be one.
 SKILL_NAMES = {
     "attack", "defence", "strength", "hitpoints", "ranged", "prayer", "magic",
     "cooking", "woodcutting", "fletching", "fishing", "firemaking", "crafting",
@@ -106,47 +59,33 @@ SKILL_NAMES = {
     "runecraft", "hunter", "construction", "sailing",
 }
 
-# The 12 real OSRS achievement diary areas, lowercase/slugified -- what
-# a purple (diary) goal's `area` field must be one of.
+# The 12 achievement diary areas, lowercase/slugified; a purple (diary) goal's
+# `area` must be one.
 DIARY_AREAS = {
     "ardougne", "desert", "falador", "fremennik", "kandarin", "karamja",
     "kourend_kebos", "lumbridge_draynor", "morytania", "varrock",
     "western_provinces", "wilderness",
 }
 
-# Ordered low-to-high -- a diary goal asking for "hard" is also
-# satisfied by a player who's actually finished "elite" for that area
-# (see evaluate_completion), the same way the real in-game diary
-# journal only ever shows one current (highest) tier per area, not
-# each one separately.
+# Ordered low to high: a goal for "hard" is also satisfied by "elite" (see
+# evaluate_completion), since only the highest tier per area is stored.
 DIARY_TIERS = ["easy", "medium", "hard", "elite"]
 
 MAX_GOAL_NAME_LENGTH = 80
-# Defensive ceilings, not real OSRS limits -- generous enough that no
-# legitimate goal could ever hit them, so the only way a request would
-# is a malformed/buggy client, same spirit as MAX_BANK_ITEMS etc. in
-# app/main.py.
+# Defensive ceilings, not OSRS limits; only a malformed client would hit them
+# (compare MAX_BANK_ITEMS in app/main.py).
 MAX_KC_TARGET = 1_000_000
 MAX_ITEM_QTY_TARGET = 2_000_000_000
 MAX_GP_TARGET = 100_000_000_000
-# The player's own bounds, given verbatim: a skill LEVEL goal is
-# 1-126 (level 1 through OSRS's "virtual level" cap above the real
-# level-99 one -- both ends allowed even though "reach level 1" is
-# always already true, by request), an XP goal is 0-200,000,000
-# (0 is level 1's own xp requirement -- see app/pages.py's
-# SKILL_XP_TABLE, which mirrors this same level-1-through-126 range
-# -- and 200,000,000 is OSRS's own max skill xp).
+# Goal bounds: skill LEVEL 1-126 (126 is the virtual-level cap), XP
+# 0-200,000,000 (OSRS max).
 MIN_SKILL_LEVEL, MAX_SKILL_LEVEL = 1, 126
 MIN_SKILL_XP, MAX_SKILL_XP = 0, 200_000_000
 
 
 def _build_skill_xp_table() -> List[int]:
-    """The OSRS xp-per-level curve (levels 1-126, including the
-    "virtual" levels above the real level-99 cap) -- mirrors
-    app/pages.py's own SKILL_XP_TABLE exactly (same formula, see its
-    comment for the source), built once at import off MAX_SKILL_LEVEL
-    rather than hardcoded so the two can never drift apart. Index 0 is
-    unused (levels are 1-indexed); index 1 is always 0.
+    """OSRS xp-per-level curve for levels 1-126 (including virtual levels).
+    Mirrors SKILL_XP_TABLE in app/pages.py. Index 0 is unused; index 1 is 0.
     """
     table = [0, 0]
     cumulative = 0
@@ -160,33 +99,18 @@ SKILL_XP_TABLE = _build_skill_xp_table()
 
 
 def _xp_for_level(level: int) -> int:
-    """The xp SKILL_XP_TABLE says `level` needs, clamped into range --
-    used by evaluate_completion below to check a LVL-metric skill goal
-    (including a virtual one above 99) against the player's own xp
-    rather than their reported level, which the client only ever sends
-    real/99-capped (see evaluate_completion's own comment)."""
+    """The xp needed for `level`, clamped into range. Level goals are checked
+    against xp because the client's level is 99-capped.
+    """
     level = max(MIN_SKILL_LEVEL, min(MAX_SKILL_LEVEL, level))
     return SKILL_XP_TABLE[level]
 
 
 def _clean_text(text: Optional[str], allow_empty: bool = False) -> str:
-    """Trims/truncates whatever text a node is given. `allow_empty`
-    lets a brand new node (see add_node/add_shared_child below) actually
-    start with nothing in it -- the canvas immediately queues a focus
-    for a fresh node (see selectNode's own comment in the page script),
-    landing either in the root's own inline-editable label or, for
-    every other new node (always gray), a text box in its popover (see
-    renderGoalFieldsHtml's "manual" branch) -- either way there's no
-    "New" placeholder for the player to notice or have to clear first.
-    Everywhere else (an existing node's text being CHANGED, and a
-    mindmap's own root, whose text comes from the mindmap's own
-    required name) keeps falling back to DEFAULT_TEXT -- update_node's
-    callers already refuse to ever submit an empty edit in the first
-    place (see commitActiveLabelIfEditing for the root's inline rename,
-    and the goal-save click delegation's own manual handling for a gray
-    node's popover rename), so this is purely a defensive floor against
-    a stray/direct API call blanking an existing node out, not
-    something the normal UI can trigger."""
+    """Trims/truncates node text. `allow_empty` lets a new node start blank (the
+    canvas focuses its editor at once). Otherwise blank text falls back to
+    DEFAULT_TEXT, a guard for direct API calls.
+    """
     text = (text or "").strip()[:MAX_NODE_TEXT_LENGTH].strip()
     if allow_empty:
         return text
@@ -194,25 +118,10 @@ def _clean_text(text: Optional[str], allow_empty: bool = False) -> str:
 
 
 def _clean_note(note: Optional[str]) -> str:
-    """Trims/truncates a node's own optional note (see update_node) --
-    unlike _clean_text, always allowed to come out blank and never
-    falls back to a placeholder: a note is optional by design (see
-    app/pages.py's node-popover note field), so "no note" is a normal,
-    common state to end up in, not something to guard against the way
-    a blank node NAME is.
-
-    A note is capped to 2 lines (see MAX_NODE_NOTE_LENGTH's own
-    comment) -- the real, precise enforcement of that lives client-side
-    (clampNoteInput in app/pages.py measures a candidate note's actual
-    rendered height against the node's own flipped-over back face,
-    live as the player types, since RuneScapePlain11 is a proportional
-    font and no fixed character count maps cleanly to "2 rendered
-    lines"). This is only a backstop against a request that bypasses
-    that UI entirely -- a raw API call -- so it doesn't need to be
-    pixel-precise, just bounded: collapse anything past 2 EXPLICIT
-    lines (an extra \\n the player could still paste in) down to 2, then
-    fall back to the flat character cap for the (rarer) case of one
-    long unbroken line with no newline in it at all."""
+    """Trims/truncates a node's optional note; may be blank, with no placeholder.
+    Backstop only (see MAX_NODE_NOTE_LENGTH): collapses anything past 2
+    explicit lines, then applies the character cap.
+    """
     cleaned = (note or "").strip()
     lines = cleaned.split("\n")
     if len(lines) > 2:
@@ -221,14 +130,9 @@ def _clean_note(note: Optional[str]) -> str:
 
 
 def _clean_color(color: Optional[str], is_root: bool = False) -> str:
-    """A root node is always "white", structurally -- never a player's
-    choice (see NODE_COLORS' own comment) -- and, symmetrically, a
-    NON-root node can never actually become white (silently falls back
-    to DEFAULT_COLOR instead of erroring, same spirit as an unrecognized
-    color already falling back rather than rejecting the whole write --
-    the real client never offers "white" as a pickable swatch in the
-    first place, so this only ever matters against a malformed/direct
-    API call, not a normal edit)."""
+    """The root is always "white" and a non-root node never is; an invalid color
+    silently falls back to DEFAULT_COLOR rather than rejecting the write.
+    """
     if is_root:
         return "white"
     cleaned = color if color in NODE_COLORS else DEFAULT_COLOR
@@ -253,15 +157,9 @@ def _clean_int_in_range(value, field_name: str, minimum: int, maximum: int) -> i
 
 
 def _clean_goal_date(value, field_name: str) -> str:
-    """Validates a "YYYY-MM-DD" date string -- same format a native
-    <input type="date"> submits and the same parsing convention
-    app/main.py's read_loot already uses for its own start/end range
-    dates. Stored (and returned) as that plain string, not a datetime
-    -- evaluate_completion below is the only thing that ever parses it
-    further, at read time, the same "store what was submitted, parse
-    it where it's used" split every other goal field already follows
-    (targetCount stays a plain int here too, not pre-validated against
-    live kc_counts)."""
+    """Validates a "YYYY-MM-DD" date string (native <input type="date"> format).
+    Stored as that string; only evaluate_completion parses it.
+    """
     text = (str(value) if value is not None else "").strip()
     try:
         datetime.strptime(text, "%Y-%m-%d")
@@ -271,12 +169,9 @@ def _clean_goal_date(value, field_name: str) -> str:
 
 
 def default_goal(color: str) -> Optional[Dict]:
-    """The blank goal a node gets the instant its color changes to
-    `color` (see update_node) -- a goal shaped for one color's criteria
-    rarely means anything for another, so switching colors always
-    starts the new one from scratch rather than trying to carry old
-    fields across. Returns None for "white" (never player-editable --
-    see GOAL_TYPE_BY_COLOR)."""
+    """The blank goal a node gets when its color changes to `color` (see
+    update_node); old fields are not carried over. None for "white".
+    """
     goal_type = GOAL_TYPE_BY_COLOR.get(color)
     if goal_type == "manual":
         return {"manualComplete": False}
@@ -286,27 +181,12 @@ def default_goal(color: str) -> Optional[Dict]:
 
 
 def clean_goal(color: str, goal, require_complete: bool = True) -> Optional[Dict]:
-    """Validates+cleans a goal payload against whatever shape `color`'s
-    goal type requires. Every field that's PRESENT is validated the
-    same way regardless of `require_complete` -- an out-of-range value
-    or an unrecognized choice is always rejected. What
-    `require_complete` controls is whether a MISSING field is also
-    rejected:
-
-    - True (the default, used by set_node_goal below -- the node
-      canvas's goal-edit form save): every field that color's goal type
-      needs must be present, same as every other write path in this
-      module validating a whole object rather than accepting a partial
-      patch.
-    - False (used only by replace_nodes, restoring an undo/redo
-      snapshot): a missing field is just left out rather than rejected,
-      since the snapshot being restored might have been captured while
-      the player had only partly filled the goal in -- undo/redo needs
-      to be able to restore that same partial state, not force it
-      complete.
-
-    Raises ValueError (safe to show the player as-is) naming whatever's
-    missing or invalid. Returns None for "white" (see GOAL_TYPE_BY_COLOR)."""
+    """Validates a goal payload against the shape `color`'s goal type requires.
+    Present fields are always validated; `require_complete` controls whether
+    missing ones are rejected (False only in replace_nodes, so undo/redo
+    restores partly filled goals). Raises ValueError (safe to show the
+    player). Returns None for "white".
+    """
     goal_type = GOAL_TYPE_BY_COLOR.get(color)
     goal = goal if isinstance(goal, dict) else {}
 
@@ -333,17 +213,8 @@ def clean_goal(color: str, goal, require_complete: bool = True) -> Optional[Dict
         field("activityType", _activity, "Pick what kind of activity this goal tracks.")
         field("sourceName", lambda v: _clean_goal_text(v, "sourceName"), "Pick an NPC.")
         field("targetCount", lambda v: _clean_int_in_range(v, "targetCount", 1, MAX_KC_TARGET), "Set a target kc.")
-        # sinceDate is genuinely optional -- unlike the fields above
-        # (via `field()`, which rejects a MISSING value whenever
-        # require_complete is True), a kc goal with no sinceDate is
-        # already a complete, valid goal on its own (it just means
-        # "count kc all-time", the only behavior this field type had
-        # before sinceDate existed), so a blank/missing value is always
-        # just left out here, never rejected either way. It also
-        # deliberately never shows on the node face (see the kc goal's
-        # summary text in the page script) -- it only narrows what
-        # counts toward the same targetCount, so there's nothing about
-        # it that needs surfacing anywhere require_complete cares about.
+        # sinceDate is optional even when require_complete is True: a kc goal
+        # without it counts kc all-time. Blank or missing values are left out.
         since_date = goal.get("sinceDate")
         if since_date:
             cleaned["sinceDate"] = _clean_goal_date(since_date, "sinceDate")
@@ -400,23 +271,11 @@ def clean_goal(color: str, goal, require_complete: bool = True) -> Optional[Dict
 
 
 def set_node_goal(nodes: List[Dict], node_id: str, goal: Dict) -> List[Dict]:
-    """Returns a NEW node list with the given node's goal criteria
-    replaced -- validated fully (require_complete=True) against its
-    CURRENT color, see clean_goal. This is the only way a goal's
-    criteria change after a node's color first picked its type;
-    changing color itself resets the goal back to blank (see
-    update_node) rather than trying to carry old, now-meaningless
-    fields across, so this never needs to know a node's previous goal
-    shape.
-
-    Also how a gray node's manual "Complete" button works (see
-    clean_goal's "manual" branch) -- and the only mutation in this
-    module a player can trigger without the canvas's Edit Mode toggled
-    on (see app/pages.py), since ticking off a manual goal isn't
-    "editing" the node the way changing its criteria is.
-
-    Raises ValueError if the node doesn't exist or `goal` doesn't fit
-    its color's shape."""
+    """Returns a new node list with the node's goal replaced, fully validated
+    against its current color (see clean_goal). Also how a gray node's manual
+    "Complete" works, the one mutation allowed outside Edit Mode. Raises
+    ValueError if the node does not exist or `goal` does not fit.
+    """
     node = _find(nodes, node_id)
     if node is None:
         raise ValueError("That node no longer exists.")
@@ -425,11 +284,9 @@ def set_node_goal(nodes: List[Dict], node_id: str, goal: Dict) -> List[Dict]:
 
 
 def new_root_node(text: Optional[str] = None) -> Dict:
-    """The single starting node a brand new mindmap is created with --
-    always "white" (see NODE_COLORS' own comment), never gray like
-    every other node: the root is the tree's one non-trackable "final"
-    node from the moment it exists, not something that starts
-    undecided."""
+    """The starting node of a new mindmap: always "white" (see NODE_COLORS),
+    never gray.
+    """
     return {
         "id": str(uuid.uuid4()),
         "parentId": None,
@@ -449,12 +306,9 @@ def _children(nodes: List[Dict], parent_id: Optional[str]) -> List[Dict]:
 
 
 def _depth(nodes: List[Dict], node_id: str) -> int:
-    """How many parentId hops separate `node_id` from the tree's root
-    (root itself is depth 0) -- used by add_shared_child to enforce
-    "same vertical level." Walks the real structural parentId chain
-    only, never a shared child's extraParentIds (those are display-only
-    and don't participate in the tree's actual shape -- see
-    add_shared_child's own docstring)."""
+    """Parent hops from `node_id` to the root (root is 0); structural parentId
+    only, not extraParentIds.
+    """
     depth = 0
     node = _find(nodes, node_id)
     while node is not None and node["parentId"] is not None:
@@ -469,10 +323,9 @@ def _next_child_order(nodes: List[Dict], parent_id: str) -> float:
 
 
 def _order_after(nodes: List[Dict], node: Dict) -> float:
-    """An order value that sorts immediately after `node` among its own
-    siblings -- the midpoint to the next sibling if there is one (so
-    inserting between two existing siblings never needs to renumber
-    anything else), or node's own order + 1 if it's currently last."""
+    """An order value sorting right after `node` among its siblings: the midpoint
+    to the next sibling, or order + 1 if last.
+    """
     siblings = _children(nodes, node["parentId"])
     idx = next(i for i, n in enumerate(siblings) if n["id"] == node["id"])
     if idx + 1 < len(siblings):
@@ -481,11 +334,7 @@ def _order_after(nodes: List[Dict], node: Dict) -> float:
 
 
 def _order_before(nodes: List[Dict], node: Dict) -> float:
-    """The mirror image of _order_after -- an order value that sorts
-    immediately BEFORE `node` among its own siblings, used for the
-    node canvas's left-edge "add sibling" control (right-edge uses
-    _order_after instead). Same midpoint-or-plus/minus-one shape, just
-    walking to the previous sibling instead of the next."""
+    """Mirror of _order_after: sorts right before `node`."""
     siblings = _children(nodes, node["parentId"])
     idx = next(i for i, n in enumerate(siblings) if n["id"] == node["id"])
     if idx > 0:
@@ -501,36 +350,14 @@ def add_node(
     color: Optional[str] = None,
     before: bool = False,
 ) -> "tuple[List[Dict], str]":
-    """Returns a NEW node list with one extra node inserted relative to
-    an existing one (`relative_id`), per `relation`:
-
-      - "child": a new child of the relative node, after its existing
-        children (if any).
-      - "sibling": a new node sharing the relative node's own parent,
-        placed immediately after it (or before it, when `before` is
-        true -- the node canvas's right-edge vs. left-edge "add
-        sibling" hover controls). The relative node can't be the
-        tree's root (a root has no parent to share a sibling under --
-        see the single-root shape MindMap.nodes assumes throughout).
-      - "parent": a new node takes over the relative node's exact spot
-        (same parentId and order) among its current siblings, and the
-        relative node becomes that new node's only child. The relative
-        node can't be the tree's root -- unlike a sibling, this would
-        otherwise actually succeed (the new node just becomes the new
-        root), but it's disallowed anyway: every mindmap needs exactly
-        one node nobody can delete (see delete_node), and letting a
-        parent be added to the root would just create a fresh one of
-        those every time, each burying the last "original" node one
-        level deeper for no real benefit.
-
-    Returns (new_nodes, new_node_id) -- the caller (see
-    add_mindmap_node in app/main.py) hands the id straight back to the
-    client so it can select the just-created node without having to
-    diff the old and new node lists itself.
-
-    Raises ValueError (its message is safe to show the player as-is)
-    on an unknown relation, a missing relative node, a sibling
-    requested for the root, or a parent requested for the root."""
+    """Returns (new_nodes, new_node_id) with a node inserted relative to
+    `relative_id`, per `relation`: "child" (appended after existing children),
+    "sibling" (after the relative node, before it if `before`), or "parent"
+    (takes the relative node's slot, which becomes its only child). Sibling
+    and parent are not allowed for the root, which must stay the one
+    undeletable node (see delete_node). Raises ValueError (safe to show)
+    otherwise.
+    """
     relative = _find(nodes, relative_id)
     if relative is None:
         raise ValueError("That node no longer exists.")
@@ -575,34 +402,12 @@ def add_node(
 def add_shared_child(
     nodes: List[Dict], parent_ids: List[str], text: Optional[str] = None, color: Optional[str] = None
 ) -> "tuple[List[Dict], str]":
-    """Returns a NEW node list with one extra node added as a shared
-    child of two or more existing nodes -- the node canvas's shift-click
-    multi-select ("hold shift and select multiple nodes, then add a
-    child that connects to all of them"), e.g. four separate "blocklist"
-    nodes all feeding into one shared "setup" node below them.
-
-    The single-parent-per-node shape every other function in this file
-    assumes (see the module docstring) still holds for STRUCTURAL
-    purposes: the new node's real `parentId` is `parent_ids[0]` (the
-    first node selected), exactly like any other child, so column
-    layout and delete_node's subtree cascade both treat it as an
-    ordinary child of that one node. The rest of `parent_ids` are
-    recorded as `extraParentIds` -- a purely additional, display-only
-    list the client uses to draw the extra connector lines up to those
-    other nodes and to nudge the shared child's on-screen position to
-    sit centered under the whole group, but which delete_node otherwise
-    leaves alone (deleting one of THOSE nodes just prunes it from this
-    list -- see delete_node -- while deleting the primary parent still
-    cascades away the shared child like any other child of that node).
-
-    Raises ValueError if fewer than two ids are given, any id doesn't
-    exist, or the given nodes aren't all at the same vertical level
-    (the same number of parentId hops from the root -- see _depth).
-    Unlike the old sibling-insertion version this replaced, they don't
-    need to share a parent, just a depth -- a shared child can connect
-    several different branches together as long as they're all the
-    same number of rows down, matching how the canvas actually draws
-    them (one shared child, one row below the whole selected group)."""
+    """Returns a new node list with a node added as a shared child of two or more
+    nodes (the canvas's shift-click multi-select). Structurally it is a child
+    of parent_ids[0]; the other ids go in the display-only `extraParentIds`
+    (extra connectors, centering). Raises ValueError if fewer than two ids, an
+    unknown id, or the nodes are not all at the same depth (see _depth).
+    """
     if len(parent_ids) < 2:
         raise ValueError("Select at least two nodes to add a shared child below them.")
     parents = []
@@ -637,18 +442,10 @@ def update_node(
     color: Optional[str] = None,
     note: Optional[str] = None,
 ) -> List[Dict]:
-    """Returns a NEW node list with the given node's text, color, and/or
-    note replaced -- whichever of the three is not None. Changing color
-    always resets that node's `goal` back to a blank default for the new
-    color (see default_goal) -- criteria shaped for one goal type rarely
-    mean anything for another, so there's nothing worth trying to carry
-    across; use set_node_goal afterward to fill the new goal in. `note`
-    is deliberately left alone by a color change, unlike `goal` -- it's
-    the player's own free-form "how I'd like to achieve this" text (see
-    app/pages.py's node-popover note field), which doesn't stop applying
-    just because the node's tracked-goal TYPE changed underneath it, the
-    way goal criteria shaped for the old type would. Raises ValueError
-    if the node doesn't exist."""
+    """Returns a new node list with the node's text, color, and/or note replaced
+    (whichever is not None). A color change resets `goal` (see default_goal)
+    but keeps `note`. Raises ValueError if the node does not exist.
+    """
     node = _find(nodes, node_id)
     if node is None:
         raise ValueError("That node no longer exists.")
@@ -671,20 +468,11 @@ def update_node(
 
 
 def delete_node(nodes: List[Dict], node_id: str) -> List[Dict]:
-    """Returns a NEW node list with the given node and its entire
-    subtree removed. Raises ValueError if the node doesn't exist, or if
-    it's the tree's root -- a mindmap always needs exactly one root, so
-    removing it is done by deleting the whole mindmap instead (see
-    delete_mindmap in app/main.py), not by deleting just this node.
-
-    A node can also be referenced as an EXTRA (non-structural) parent
-    of some shared child via that child's `extraParentIds` -- see
-    add_shared_child. Removing a node here strips it out of every
-    remaining node's extraParentIds too, so a shared child never keeps
-    a dangling reference to a parent that no longer exists; it just
-    loses that one extra connector line and stays alive through its
-    real (structural) parentId, unless that's ALSO in this subtree, in
-    which case it's swept away like any other descendant."""
+    """Returns a new node list without the node and its subtree. Raises
+    ValueError if the node does not exist or is the root. The node is also
+    stripped from every extraParentIds, so a shared child keeps no dangling
+    reference.
+    """
     target = _find(nodes, node_id)
     if target is None:
         raise ValueError("That node no longer exists.")
@@ -692,11 +480,8 @@ def delete_node(nodes: List[Dict], node_id: str) -> List[Dict]:
         raise ValueError("The root node can't be deleted on its own -- delete the whole mindmap instead.")
 
     to_remove = {node_id}
-    # Repeatedly sweep for any node whose parent is already marked for
-    # removal, until a pass finds nothing new -- a plain flat-list
-    # equivalent of a recursive subtree walk, with no risk of infinite
-    # recursion even in a maliciously/accidentally cyclic list (there
-    # shouldn't be one, but nothing here relies on that being true).
+    # Sweep until no node has a removed parent; terminates even on a cyclic
+    # list.
     changed = True
     while changed:
         changed = False
@@ -720,36 +505,12 @@ def delete_node(nodes: List[Dict], node_id: str) -> List[Dict]:
 
 
 def replace_nodes(nodes: List[Dict]) -> List[Dict]:
-    """Returns a NEW node list built from `nodes` -- a full snapshot
-    the client is restoring. This is what the node canvas's undo/redo
-    buttons use in place of a confirm-before-delete dialog: rather than
-    asking "are you sure?" before every destructive edit, the client
-    keeps its own stack of this same mindmap's past server-returned
-    node lists (see MM.undoStack/MM.redoStack in the Mindmaps script,
-    app/pages.py) and PUTs one straight back to step backward/forward
-    through it -- so a delete (or any other edit) can always just be
-    undone afterward instead of confirmed beforehand.
-
-    Every node's text/color/goal is re-cleaned exactly like any other
-    write path (see _clean_text/_clean_color/clean_goal) even though
-    the snapshot was already valid once, since it's still untrusted
-    input off the wire, not something this function can assume came
-    from a real previous server response just because the client
-    claims it did. A goal is cleaned leniently (require_complete=False)
-    rather than the way set_node_goal cleans a fresh save -- the
-    snapshot being restored might have been captured while the player
-    had only partly filled a goal in, and undo/redo needs to be able to
-    restore that same partial state, not force it complete.
-
-    Raises ValueError if the snapshot isn't a well-formed tree: empty,
-    no root (exactly one node with parentId None), a duplicate id, a
-    parentId/extraParentIds entry that doesn't point at another node
-    in the same snapshot, or a parentId chain that cycles back on
-    itself. None of this should ever actually trip for a legitimate
-    undo/redo step -- it only ever replays a snapshot this same server
-    handed out -- it's a defensive floor against a corrupted or
-    tampered payload, same spirit as add_node/add_shared_child raising
-    on a shape they don't recognize."""
+    """Returns a new node list from a full snapshot `nodes` (undo/redo PUTs back
+    past server responses; see MM.undoStack in app/pages.py). The payload is
+    untrusted, so everything is re-cleaned; goals use require_complete=False.
+    Raises ValueError unless it is a well-formed tree (one root, unique ids,
+    no dangling references, no cycles).
+    """
     if not nodes:
         raise ValueError("A mindmap needs at least one node.")
 
@@ -768,12 +529,8 @@ def replace_nodes(nodes: List[Dict]) -> List[Dict]:
         if parent_id is not None and parent_id not in id_set:
             raise ValueError("A node's parent must exist in the same tree.")
 
-    # Cycle guard for the parentId chain -- _depth and other callers
-    # walk this chain assuming it always terminates at the root; a
-    # tampered payload with e.g. A's parent set to its own descendant
-    # would otherwise hang the server the next time something walks
-    # it. Bounded by the tree's own size, so this can't itself loop
-    # forever even against a maximally adversarial payload.
+    # Cycle guard: _depth and others walk this chain assuming it ends at the
+    # root. Bounded by the tree's size.
     for n in nodes:
         cur = n
         hops = 0
@@ -792,22 +549,13 @@ def replace_nodes(nodes: List[Dict]) -> List[Dict]:
         new_node = {
             "id": n["id"],
             "parentId": n.get("parentId"),
-            # allow_empty=True for the same reason clean_goal above is
-            # leniently require_complete=False -- a snapshot being
-            # restored might capture a freshly-created node the player
-            # hadn't typed a name into yet (see add_node/add_shared_child),
-            # and undo/redo needs to restore that exact state rather than
-            # silently "fixing" it back to DEFAULT_TEXT.
+            # allow_empty=True so a not-yet-named node restores exactly.
             "text": _clean_text(n.get("text"), allow_empty=True),
             "color": new_color,
             "goal": clean_goal(new_color, n.get("goal"), require_complete=False),
             "order": float(n.get("order") or 0.0),
         }
-        # Only carried across if actually present -- an older snapshot
-        # (from before notes existed) or a node that never had one
-        # shouldn't gain an empty "note" key it didn't have before, same
-        # spirit as extraParentIds right below only being set when
-        # there's something to set.
+        # Only carried across if present, so notes-less nodes gain no empty key.
         if n.get("note"):
             new_node["note"] = _clean_note(n.get("note"))
         extra_parent_ids = n.get("extraParentIds")
@@ -819,17 +567,7 @@ def replace_nodes(nodes: List[Dict]) -> List[Dict]:
     return cleaned
 
 
-# ---- Goal completion evaluation ----------------------------------------
-#
-# Everything below is read-only against the tree (no "returns a NEW node
-# list" here -- completion is never stored on the node itself, it's
-# computed fresh every time a mindmap is read, same "compute fresh on
-# every read" philosophy app/purchase_goals.py already follows for
-# affordability/ownership). A GoalContext bundles the player's actual
-# synced game state that every node's goal gets checked against -- built
-# once per request in app/main.py (which is also the only place that can
-# freely import both this module and app/purchase_goals.py -- see that
-# context-building code's own comment for why it isn't built here).
+# Goal completion evaluation
 
 def _normalize_lookup_name(name: Optional[str]) -> str:
     return (name or "").strip().lower()
@@ -839,19 +577,12 @@ _OFFHAND_SUFFIX = " (off-hand)"
 
 
 def _offhand_pair_name(item_name: Optional[str]) -> Optional[str]:
-    """Returns the OTHER name in an "item" goal's off-hand pair, if
-    item_name has one -- OSRS has a small handful of tools with a
-    dedicated "(off-hand)" variant (Imcando hammer, Amy's saw, Bruma
-    torch, as of this writing -- confirmed live against
-    app/data/item_ids.json, which is also where any future addition
-    would show up, so nothing here is a hardcoded item list): worn in
-    the shield slot instead of the weapon slot, but functionally the
-    same tool either way, so a player with either one in their bank has
-    satisfied a goal asking for it regardless which name they typed in.
-    Purely a naming-convention transform, not a lookup of its own --
-    find_item_ids on whatever this returns is what confirms the pair
-    actually exists as a real item before evaluate_completion ever
-    pools its ids in."""
+    """Returns the other name in an "item" goal's off-hand pair, if any. Some
+    tools (Imcando hammer, Amy's saw, Bruma torch; see app/data/item_ids.json)
+    have an "(off-hand)" variant that is equivalent, so owning either
+    satisfies the goal. Naming transform only; find_item_ids confirms the item
+    exists.
+    """
     name = (item_name or "").strip()
     if not name:
         return None
@@ -861,42 +592,20 @@ def _offhand_pair_name(item_name: Optional[str]) -> Optional[str]:
 
 
 def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
-    """Returns {node_id: bool} for every node in `nodes` -- whether that
-    node's goal is currently satisfied. `context` is a plain dict built
-    by app/main.py's _build_goal_context, holding everything a goal
-    might need to check itself against:
-
-      - owned_pool_by_id / owned_pool_by_name: the same bank+inventory+
-        equipment+potion storage+rune pouch+seed vault pools Purchase
-        Goals checks a gear slot against (see build_owned_pools in
-        app/purchase_goals.py) -- what an "item" goal checks its
-        targetQty against.
-      - gp_total: coins plus platinum tokens (at 1k gp each) across
-        that same pool -- what a "gp" goal checks its targetGp against.
-      - skills: {<skill>: {"level": int, "xp": int}} -- what a "skill"
-        goal checks its target against (whichever of level/xp it asked
-        for).
-      - completed_quests: a lowercased set of quest/miniquest names --
-        what a "quest" goal's questName is checked for membership in.
-      - diary_tiers: {<area>: <highest tier>} -- what a "diary" goal's
-        area+tier is checked against (see DIARY_TIERS -- a higher
-        completed tier also satisfies a lower-tier goal).
-      - kc_counts: {(activityType, <lowercased source name>): [occurred_at,
-        ...]} -- every matching occurrence's own timestamp, built from
-        this player's synced LootEvent rows (see app/loot.py). What a
-        "kc" goal's activityType+sourceName+targetCount is checked
-        against -- len(...) of a key's list is the all-time count; a
-        goal that also sets sinceDate only counts the timestamps on or
-        after that date instead of the full list.
-
-    A goal that isn't fully filled in yet (a trackable node the player
-    added but hasn't finished configuring -- see default_goal) is
-    always just "not completed" rather than an error. The tree's root
-    node is handled last, once every other node's own status is known:
-    it's complete iff the tree has at least one other node and every
-    one of them is (see GOAL_TYPE_BY_COLOR's "white" entry) -- an empty
-    mindmap (just the root, nothing under it yet) is never itself
-    "done"."""
+    """Returns {node_id: bool}: whether each node's goal is currently satisfied
+    (computed per read, never stored). `context` comes from
+    _build_goal_context in app/main.py:
+    - owned_pool_by_id / owned_pool_by_name: Purchase Goals' owned pools
+    (build_owned_pools), for "item" goals.
+    - gp_total: coins plus platinum tokens (1k gp each), for "gp" goals.
+    - skills: {<skill>: {"level", "xp"}}; completed_quests: lowercased names.
+    - diary_tiers: {<area>: <highest tier>}; a higher tier satisfies a lower
+    one.
+    - kc_counts: {(activityType, <lowercased source>): [occurred_at, ...]}
+    from LootEvent rows.
+    The root is evaluated last: complete iff it has other nodes and all are
+    complete.
+    """
     completed: Dict[str, bool] = {}
     owned_pool_by_id = context.get("owned_pool_by_id", {})
     owned_pool_by_name = context.get("owned_pool_by_name", {})
@@ -925,15 +634,9 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
                 occurrences = kc_counts.get(key, [])
                 since_date = goal.get("sinceDate")
                 if since_date:
-                    # Already validated as a real "YYYY-MM-DD" string by
-                    # clean_goal's _clean_goal_date at save time -- same
-                    # "trust what was already cleaned" convention every
-                    # other field here follows -- so only occurrences on
-                    # or after midnight UTC of that date count toward
-                    # targetCount; sinceDate never touches targetCount
-                    # itself or anything shown on the node face (see the
-                    # kc summary text in the page script), it only
-                    # narrows which of this key's timestamps get counted.
+                    # sinceDate was validated at save time (_clean_goal_date);
+                    # only occurrences on or after midnight UTC of that date
+                    # count.
                     since_dt = datetime.strptime(since_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
                     count = sum(1 for ts in occurrences if ts and ts >= since_dt)
                 else:
@@ -942,15 +645,8 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
         elif goal_type == "item":
             item_name, target = goal.get("itemName"), goal.get("targetQty")
             if item_name and target:
-                # Either name in an off-hand pair (see
-                # _offhand_pair_name) satisfies the other -- a player
-                # who typed "Imcando hammer" into this node completes
-                # it whether their bank holds the plain weapon, the
-                # off-hand variant, or some of each, so every id EITHER
-                # name resolves to gets pooled into one combined owned
-                # count. Deduped against item_name itself so an item
-                # with no real pair (pair_name guessed but not a real
-                # item) never double-counts the same ids twice.
+                # Either name in an off-hand pair satisfies the other, so ids
+                # from both are pooled, deduped against item_name.
                 names = [item_name]
                 pair_name = _offhand_pair_name(item_name)
                 if pair_name and pair_name.lower() != item_name.strip().lower():
@@ -967,15 +663,9 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
         elif goal_type == "skill":
             skill, metric, target = goal.get("skill"), goal.get("metric"), goal.get("target")
             if skill and metric and target:
-                # Both LVL and XP goals are actually checked against
-                # xp, never the plugin-reported `level` stat -- that's
-                # the player's real, 99-capped in-game level, which a
-                # "virtual" level target (above MAX_SKILL_LEVEL's old
-                # 99 cap -- see its own comment) could never reach no
-                # matter how much xp they have. A level target is
-                # converted to its own xp requirement via
-                # _xp_for_level first, so it's really always an xp
-                # comparison underneath either way.
+                # LVL and XP goals are both checked against xp, since the
+                # plugin's `level` is 99-capped and cannot reach a virtual-level
+                # target.
                 have_xp = (skills.get(skill) or {}).get("xp", 0)
                 need_xp = target if metric == "xp" else _xp_for_level(target)
                 done = have_xp >= need_xp
@@ -1009,81 +699,30 @@ def serialize_mindmap(mindmap: MindMap, context: Optional[Dict] = None) -> Dict:
 
 
 def build_mindmap_share_snapshot(mindmap: MindMap, context: Dict) -> dict:
-    """Freezes ONE of game_account's own mindmaps (already resolved
-    and ownership-checked by the caller -- see _get_owned_mindmap in
-    app/main.py, the same helper every other per-mindmap mutation
-    endpoint already uses) into the payload POST /api/mindmaps/<id>/
-    share (app/main.py) writes into a new SharedContent row, for
-    render_mindmap_share (app/pages.py) to read back later -- same
-    "frozen, point-in-time, never live again" contract SharedContent
-    itself documents, and the same shape Loot Tracker/Purchase Goals'
-    own build_*_share_snapshot functions already establish for their
-    own tables.
-
-    Unlike those two, there's no resolve/freeze step of its own to do
-    here at all -- a mindmap's own node data (text/color/order/
-    parentId/goal criteria) is already just plain data the player
-    themselves fully controls, nothing to re-derive against an empty
-    pool the way a gear setup's own priced items are (see
-    render_landing_mindmap_preview's own docstring in app/pages.py for
-    the fuller version of this same reasoning) -- so this is just
-    serialize_mindmap itself, verbatim, with each node's own
-    `completed` flag baked in at whatever it happened to evaluate to
-    against context at share time (the one piece of a node that IS
-    entangled with live account state -- see evaluate_completion
-    above) and frozen from then on, exactly like every other field
-    here."""
+    """Freezes one of game_account's mindmaps (resolved and ownership-checked by
+    the caller) into the payload for a SharedContent row (see POST
+    /api/mindmaps/<id>/share, render_mindmap_share in app/pages.py). This is
+    serialize_mindmap verbatim, with each node's `completed` flag baked in as
+    evaluated against `context` at share time.
+    """
     return {"mindmap": serialize_mindmap(mindmap, context)}
 
 
 def import_mindmap_from_share_payload(db: Session, game_account: GameAccount, payload: dict) -> MindMap:
-    """The reverse of build_mindmap_share_snapshot above: takes a
-    Mindmap share's own frozen payload (SharedContent.payload -- see
-    POST /api/mindmaps/shares/{code}/import in app/main.py, the SAVE
-    TO MY MYSCAPE button's own endpoint on render_mindmap_share's
-    share page, app/pages.py) and creates a brand new, completely
-    normal, editable MindMap row for game_account out of it --
-    "importing" someone else's shared mindmap into your own Mindmaps
-    list.
-
-    payload['mindmap']['nodes'] are serialize_mindmap's own already-
-    serialized node dicts, each carrying one extra `completed` key
-    (see that function's own docstring) that MindMap.nodes itself
-    never stores -- evaluate_completion recomputes it fresh against
-    THIS account's own synced progress on every future read, the same
-    as for every other mindmap this account has, so it's stripped
-    back out here before this new row is ever written, the same role
-    _raw_slot_item_from_resolved plays for an imported gear setup's
-    own computed-only fields in app/purchase_goals.py.
-
-    The new mindmap's name is the sharer's own mindmap name, verbatim
-    -- per explicit instruction (mirroring import_gear_setup_from_
-    share_payload's own identical choice in app/purchase_goals.py),
-    no "Copy of" prefix. Node ids are carried over unchanged -- nothing
-    else in the database ever references a node id across mindmaps (no
-    child table, no foreign key), only within its own mindmap's nodes
-    list, where this import already preserves every id/parentId
-    pairing exactly as the sharer had it, so there's no collision risk
-    in reusing them here.
-
-    Caller commits (same convention _get_owned_mindmap's own mutation
-    endpoints already follow throughout app/main.py)."""
+    """The reverse of build_mindmap_share_snapshot: creates a new, editable
+    MindMap for game_account from a share payload (POST
+    /api/mindmaps/shares/{code}/import in app/main.py). Strips the serialized
+    `completed` key and keeps the sharer's name and node ids. The caller
+    commits.
+    """
     mindmap_payload = payload["mindmap"]
     nodes = [
         {k: v for k, v in node.items() if k != "completed"}
         for node in (mindmap_payload.get("nodes") or [])
     ]
     mindmap = MindMap(
-        # Explicit id, not just this column's own default=uuid.uuid4 --
-        # the caller (POST /api/mindmaps/shares/{code}/import in
-        # app/main.py) needs to read it back right after this call to
-        # tell the Mindmaps page which mindmap to select once it
-        # redirects there, and a Python-side column default isn't
-        # actually applied until flush/commit, so relying on it here
-        # would mean mindmap.id reads back None until the caller
-        # commits. Setting it here up front sidesteps that entirely --
-        # same convention import_gear_setup_from_share_payload already
-        # uses for its own new GearSetup's id, in app/purchase_goals.py.
+        # Explicit id rather than the column default, which is not applied until
+        # flush; the caller reads mindmap.id right away.
         id=uuid.uuid4(),
         game_account_id=game_account.id,
         name=mindmap_payload.get("name") or "New Mindmap",
@@ -1094,15 +733,10 @@ def import_mindmap_from_share_payload(db: Session, game_account: GameAccount, pa
 
 
 def build_mindmaps_state(db: Session, game_account: GameAccount, context: Optional[Dict] = None) -> Dict:
-    """The combined state the Mindmaps page loads once (see
-    render_mindmaps in app/pages.py) -- every one of the player's
-    mindmaps, each with its full node list, ordered oldest-created
-    first (matching how Purchase Goals orders gear setups). `context`
-    (see evaluate_completion) is optional only so this stays easy to
-    call from a quick script/test without a full goal context on hand
-    -- every real caller in app/main.py always passes one (built by
-    _build_goal_context there) so every node's `completed` flag is
-    always real, not just defaulted false."""
+    """The state the Mindmaps page loads (render_mindmaps in app/pages.py): every
+    mindmap with its nodes, oldest first. `context` is optional for
+    scripts/tests; real callers always pass one so `completed` flags are real.
+    """
     mindmaps = (
         db.query(MindMap)
         .filter(MindMap.game_account_id == game_account.id)

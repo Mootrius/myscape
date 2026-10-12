@@ -1,29 +1,13 @@
-"""One-off script: fetch the OSRS Wiki's Category:Quests and
-Category:Miniquests membership lists and build a sorted
-["Quest Name", ...] JSON index to app/data/quest_names.json for the
-Mindmaps QUEST goal's search field.
+"""One-off script: fetch the wiki's Category:Quests and Category:Miniquests and
+write app/data/quest_names.json, a sorted ["Quest Name", ...] list for the
+Mindmaps QUEST goal's search.
+The Bucket extension has no quest table, so this uses the MediaWiki
+`list=categorymembers` API. Both categories also hold subcategories (namespace
+14), meta/list pages ("Quests", "Quest Difficulties") and "/" subpages
+("Recipe for Disaster/Freeing Pirate Pete"); these are filtered out.
 
-Unlike items (scripts/fetch_item_ids.py) or NPCs
-(scripts/fetch_npc_names.py), the wiki's Bucket data extension has no
-table for quests (`bucket('infobox_quest')` does not exist), so this
-uses the standard MediaWiki `list=categorymembers` API instead, which
-simply lists page titles belonging to a category.
-
-Both categories carry more than just quest/miniquest pages -- namespace
-14 entries are wiki subcategories (e.g. "Category:Quest NPCs"), and a
-handful of namespace-0 pages are meta/list pages about quests rather
-than quests themselves (e.g. "Quests", "Quest Difficulties",
-"Optimal quest guide") or "/"-suffixed subpages of one
-(e.g. "Quests/Novice", "Recipe for Disaster/Freeing Pirate Pete" --
-that last one is a walkthrough subsection of the single quest "Recipe
-for Disaster", not a separate quest). Both are filtered out below.
-
-Run with: python scripts/fetch_quest_names.py (from the repo root).
-
-Re-run this manually (not on a schedule) if new quests/miniquests are
-released and don't show up in search -- like items, this data only
-changes when Jagex adds content, so a bundled snapshot refreshed by
-hand is plenty.
+Usage: python scripts/fetch_quest_names.py (repo root). Re-run by hand when
+quests or miniquests are released.
 """
 import json
 import pathlib
@@ -34,9 +18,7 @@ API = "https://oldschool.runescape.wiki/api.php"
 USER_AGENT = "myscape.io/1.0 (Mindmaps; contact: chandler@myscape.io)"
 OUTPUT_PATH = pathlib.Path(__file__).resolve().parent.parent / "app" / "data" / "quest_names.json"
 
-# Namespace-0 category members that are meta/list pages about quests,
-# not quests themselves -- confirmed by hand against the category's
-# actual membership (see this script's docstring).
+# Namespace-0 members that are meta/list pages, not quests.
 NON_QUEST_TITLES = {
     "Quests",
     "Quest Difficulties",
@@ -47,9 +29,8 @@ NON_QUEST_TITLES = {
     "Quest points",
     "Optimal quest guide",
 }
-# "Category:Miniquests" itself is also returned as a member of
-# Category:Miniquests' own listing in some wiki category setups; drop
-# it defensively alongside the quest meta-pages above.
+# Some category setups list "Category:Miniquests" as its own member; drop it
+# too.
 NON_QUEST_TITLES |= {"Miniquests"}
 
 

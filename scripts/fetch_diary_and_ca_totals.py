@@ -1,26 +1,13 @@
-"""One-off script: builds app/data/diary_area_tier_totals.json and
-app/data/combat_achievement_tier_totals.json -- both are small,
-fixed, every-player-identical "how many tasks exist" numbers, same
-category of static snapshot as app/data/quest_list.json
-(scripts/fetch_quest_list.py's own docstring) and app/item_ids.py's
-item snapshot: this only changes when Jagex adds diary/combat
-achievement tasks, so a bundled snapshot refreshed by hand is plenty.
+"""One-off script: build app/data/diary_area_tier_totals.json and
+app/data/combat_achievement_tier_totals.json, the fixed per-tier task counts
+(same kind of static snapshot as app/data/quest_list.json).
+Diary totals are counted from each area's wiki wikitext (numbered rows under
+data-diary-tier="<Tier>"). Combat achievement totals come from the Tiers table
+of the rendered Combat_Achievements page, since the {{Globals|ca <tier>
+tasks}} values are template-resolved.
 
-Achievement diary tier totals are counted straight off each area's own
-wiki page wikitext (the numbered task rows in its
-data-diary-tier="<Tier>" table, one count per Easy/Medium/Hard/Elite
-section) -- there's no wiki category or Cargo table for these, unlike
-quests. Combat achievement tier totals come from the "Tiers" summary
-table on oldschool.runescape.wiki/w/Combat_Achievements itself (its
-{{Globals|ca <tier> tasks}} values, read off the RENDERED page since
-they're template-resolved, not present in raw wikitext) -- both were
-cross-checked against a live RuneProfile.com profile's own Achievement
-Diary/Combat Achievements tabs (a third-party OSRS profile tracker) at
-the time this was written, which agreed exactly.
-
-Run with: python scripts/fetch_diary_and_ca_totals.py (from the repo
-root). Re-run this manually if new diary/combat achievement tasks are
-released and Character Overview's completed/total counts look off.
+Usage: python scripts/fetch_diary_and_ca_totals.py (repo root). Re-run when
+new diary or combat achievement tasks are released.
 """
 import json
 import pathlib
@@ -52,11 +39,8 @@ TIER_NAMES = ["Easy", "Medium", "Hard", "Elite"]
 
 def _fetch(params: dict) -> dict:
     url = API + "?" + urllib.parse.urlencode(params)
-    # Uses curl, not urllib, deliberately -- this wiki's API 403s
-    # urllib's default request (no User-Agent it accepts) in this
-    # environment; curl's default headers pass fine. Swap for
-    # urllib.request with an explicit User-Agent header if running
-    # this somewhere that isn't true.
+    # Uses curl rather than urllib: the wiki API returns 403 for urllib's
+    # default request. With urllib, set an explicit User-Agent.
     out = subprocess.run(["curl", "-s", url], capture_output=True, text=True, check=True).stdout
     return json.loads(out)
 

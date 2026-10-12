@@ -1,9 +1,6 @@
-"""Website signup/login/logout -- the real thing, replacing the old
-developer-only "create a player by email" placeholder. Also forgot-
-password/reset-password and signup email verification (see
-PasswordResetToken's and EmailVerificationToken's own docstrings in
-app/models.py for why both are the same shape as account-linking's
-LinkCode).
+"""Website signup/login/logout, forgot/reset password and signup email
+verification (see PasswordResetToken and EmailVerificationToken in
+app/models.py).
 """
 from datetime import datetime, timezone
 
@@ -43,28 +40,19 @@ from app.security import generate_token, hash_password, hash_token, verify_passw
 
 router = APIRouter(prefix="/api/auth", tags=["website-auth"])
 
-# Deliberately vague and identical whether or not the email is actually
-# registered -- see forgot_password's own docstring below for why.
+# Vague and identical whether or not the email is registered (see
+# forgot_password).
 _FORGOT_PASSWORD_RESPONSE = {"detail": "If that email has an account, we've sent a password reset link."}
 
 
 def _player_out_for(request: Request, db: Session, account: Account) -> PlayerOut:
-    """PlayerOut mixes identity (id, email) and character
-    (runescape_name, account_hash) fields -- the shape the frontend
-    already expected before the multi-account split (see
-    docs/multi-account-scoping.md). These endpoints only ever deal
-    with the website login (an Account), so this fills in
-    runescape_name/account_hash from whichever GameAccount this
-    session's own active one is (see
-    get_optional_current_game_account_from_session in app/auth.py) --
-    NOT just account.game_accounts[0], which would silently ignore a
-    switch made via the account page's own Linked Accounts list (step
-    7 of docs/multi-account-scoping.md) and always show the first-ever
-    linked character instead of whichever one is actually active.
-    Tolerates a None game_account (zero linked characters, now a real
-    reachable state since that page's own Remove button can delete
-    down to it) the same way every other caller of that dependency
-    does."""
+    """PlayerOut mixes identity (id, email) and character (runescape_name,
+    account_hash) fields. These endpoints deal with the website login (an
+    Account), so the character fields come from the session's active
+    GameAccount (get_optional_current_game_account_from_session in
+    app/auth.py), not account.game_accounts[0]. Tolerates a None game_account
+    (zero linked characters).
+    """
     game_account = get_optional_current_game_account_from_session(request, db, account)
     return PlayerOut(
         id=account.id,
@@ -75,14 +63,11 @@ def _player_out_for(request: Request, db: Session, account: Account) -> PlayerOu
 
 
 def _issue_verification_token(db: Session, account: Account) -> str:
-    """The token bookkeeping shared by every case that needs a fresh
-    verification link (signup, resend, and change-email below) --
-    cleans up any of this account's previous outstanding verification
-    tokens first, same reasoning as forgot_password's own cleanup, so
-    only the most recently sent link is ever valid. Returns the raw
-    (unhashed) token to build the actual verify_url with -- only its
-    hash is ever stored (see hash_token's own docstring in
-    app/security.py)."""
+    """Token bookkeeping shared by signup, resend and change-email: deletes the
+    account's previous outstanding verification tokens so only the latest link
+    is valid. Returns the raw token for the verify_url; only its hash is
+    stored (see hash_token in app/security.py).
+    """
     db.query(EmailVerificationToken).filter(EmailVerificationToken.account_id == account.id).delete()
     raw_token = generate_token()
     expires_at = datetime.now(timezone.utc) + EMAIL_VERIFICATION_TOKEN_LIFETIME
@@ -92,13 +77,10 @@ def _issue_verification_token(db: Session, account: Account) -> str:
 
 
 def _send_verification_email(request: Request, db: Session, account: Account) -> None:
-    """Shared by signup (a brand new, unverified account) and
-    resend_verification_email below (a signed-in account asking for a
-    fresh link because the first one expired or never arrived) -- both
-    genuinely first-time-verification cases, hence the "Welcome"
-    copy. change_email has its own near-identical sibling below
-    (_send_email_change_verification) with copy that fits an existing
-    account moving to a new address instead."""
+    """Welcome email for signup and resend_verification_email (first-time
+    verification). change_email uses _send_email_change_verification, with
+    copy for an existing account.
+    """
     raw_token = _issue_verification_token(db, account)
     verify_url = f"{str(request.base_url).rstrip('/')}/verify-email?token={raw_token}"
     send_email(
@@ -119,11 +101,9 @@ def _send_verification_email(request: Request, db: Session, account: Account) ->
 
 
 def _send_email_change_verification(request: Request, db: Session, account: Account) -> None:
-    """change_email's own version of _send_verification_email above --
-    same token issuing, different copy: this account already has a
-    working login, it's just moving to a new address, so this doesn't
-    talk about "finishing setup" the way signup's welcome email
-    does."""
+    """change_email's variant of _send_verification_email: same token issuing,
+    copy for an account that already has a working login.
+    """
     raw_token = _issue_verification_token(db, account)
     verify_url = f"{str(request.base_url).rstrip('/')}/verify-email?token={raw_token}"
     send_email(
@@ -146,18 +126,11 @@ def _send_email_change_verification(request: Request, db: Session, account: Acco
 
 
 def _send_email_change_notice(old_email: str, new_email: str) -> None:
-    """The heads-up sent to the OLD address the moment change_email
-    succeeds -- the new address already gets its own confirmation link
-    (see _send_email_change_verification above), but nothing would
-    otherwise ever tell whoever the *previous* address belonged to that
-    it happened at all. change_email doesn't bump token_version (an
-    email change alone isn't treated as the same kind of
-    account-compromise signal a password change is -- see that
-    endpoint's own docstring), so if this wasn't authorized, any other
-    session the real owner is still signed in on stays valid -- which
-    is exactly the recovery path this points them at, since this old
-    address can no longer be used with forgot-password once it's off
-    the account."""
+    """Heads-up sent to the OLD address when change_email succeeds. change_email
+    does not bump token_version (an email change is not treated like a
+    password change), so other sessions stay valid; this notice is how the
+    previous owner learns of an unauthorized change and recovers.
+    """
     send_email(
         to=old_email,
         subject="Your myscape email address was changed",
@@ -183,26 +156,21 @@ def _send_email_change_notice(old_email: str, new_email: str) -> None:
 @router.post("/signup", response_model=PlayerOut, status_code=status.HTTP_201_CREATED)
 @limiter.limit("10/minute")
 def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_db)):
-    # Sign-ups are switched off for now (see app/site_flags.py for why
-    # and how to turn them back on) -- checked here, not just by hiding
-    # the form on /signup, since anyone can POST to this directly.
+    # Sign-ups are switched off (see app/site_flags.py). Checked here as well as
+    # on /signup, since anyone can POST directly.
     if not site_flags.SIGNUPS_ENABLED:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sign ups are closed for now. myscape is coming soon.")
     existing = db.query(Account).filter(Account.email == payload.email).first()
     if existing is not None:
-        # Deliberately vague -- confirming an email is already registered
-        # is itself information a website shouldn't hand out for free.
+        # Deliberately vague: confirming an email is registered leaks
+        # information.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not create account.")
 
     account = Account(email=payload.email, password_hash=hash_password(payload.password))
-    # Every Account gets one empty, unlinked GameAccount immediately,
-    # not created later by the link flow -- so "signed up but not yet
-    # linked" is exactly what it's always been: a real row with
-    # account_hash/runescape_name still NULL, never a missing one (see
-    # docs/multi-account-scoping.md's "scope correction" section). The
-    # first link-code exchange fills in this same row; only linking a
-    # *second* character (the actual multi-account feature) ever
-    # creates another one.
+    # Every Account gets one empty, unlinked GameAccount immediately
+    # (account_hash/runescape_name NULL), so "signed up but not linked" is a
+    # real row. The first link-code exchange fills it; only linking a second
+    # character creates another (see docs/multi-account-scoping.md).
     account.game_accounts.append(GameAccount())
     db.add(account)
     db.commit()
@@ -218,10 +186,8 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
 def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
     account = db.query(Account).filter(Account.email == payload.email).first()
 
-    # Run verify_password even on a missing account (against a fixed dummy
-    # hash) so a login attempt for a nonexistent email takes about the same
-    # time as one for a real email with the wrong password -- otherwise the
-    # timing difference itself leaks which emails are registered.
+    # Run verify_password even for a missing account (against a fixed dummy
+    # hash) so response time does not reveal which emails are registered.
     dummy_hash = "scrypt$16384$8$1$00$00"
     password_ok = verify_password(payload.password, account.password_hash if account else dummy_hash)
 
@@ -240,39 +206,22 @@ def logout(request: Request):
 @router.post("/forgot-password")
 @limiter.limit("5/minute")
 def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    """Always returns the same generic message regardless of whether
-    payload.email actually has an account -- same anti-enumeration
-    reasoning as signup's "Could not create account." above, just
-    applied to a 200 instead of a 409 here since there's no failure
-    state a legitimate caller needs to distinguish (unlike signup,
-    where the caller genuinely needs to know their signup didn't go
-    through). Rate-limited tighter than login/signup (5/minute vs
-    10/minute) since a hit here costs a real outbound email rather
-    than just a database lookup -- still plenty for a real player who
-    mistypes their email and wants to retry.
-
-    Silently does nothing (but still returns the same response) for an
-    email with no account, or an account with no password_hash at all
-    -- the latter shouldn't currently exist since linking a game
-    account already requires being logged in first (see
-    app/routers/linking.py's start_link), but password_hash is
-    nullable for admin-created rows (see Account's own docstring), so
-    this stays defensive rather than assuming that invariant forever.
-
-    Also does a bit of opportunistic cleanup on its way through --
-    there's no scheduled job runner in this app to sweep
-    password_reset_tokens on a timer, so instead every call here
-    deletes any tokens (for anyone) that have already expired, plus any
-    other outstanding tokens for this specific account once one is
-    about to be issued -- so only ever the most recently requested link
-    is valid, and expired or superseded ones don't just pile up
-    forever. A used token doesn't need this: reset_password deletes it
-    directly the moment it's consumed."""
+    """Always returns the same generic message whether or not the email has an
+    account (anti-enumeration, as in signup). Rate-limited tighter than
+    login/signup (5/minute) because a hit sends a real email.
+    
+    Silently does nothing for an email with no account or an account with no
+    password_hash (nullable for admin-created rows, see Account in
+    app/models.py).
+    
+    Opportunistic cleanup: there is no scheduled job, so each call deletes all
+    expired tokens and, before issuing a new one, this account's other
+    outstanding tokens, so only the latest link is valid. reset_password
+    deletes a token when it is consumed.
+    """
     db.query(PasswordResetToken).filter(PasswordResetToken.expires_at < datetime.now(timezone.utc)).delete()
-    # Committed on its own since the branch below (no matching account,
-    # or one with no password set) doesn't otherwise commit anything --
-    # without this, that cleanup would just get silently rolled back
-    # when this request's DB session closes.
+    # Committed on its own: the no-account branch below commits nothing, and the
+    # cleanup would be rolled back.
     db.commit()
 
     account = db.query(Account).filter(Account.email == payload.email).first()
@@ -309,21 +258,13 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
 @router.post("/reset-password", response_model=PlayerOut)
 @limiter.limit("10/minute")
 def reset_password(request: Request, payload: ResetPasswordRequest, db: Session = Depends(get_db)):
-    """Consumes a forgot_password token exactly once. Logs the account
-    in immediately on success -- same reasoning as signup's own
-    auto-login: someone who just proved they control the account's
-    email and picked a new password came here to get back into their
-    account, not to separately log in again right after.
-
-    Also bumps the account's token_version, which invalidates every
-    *other* session already logged in as this account (see that
-    column's own docstring in app/models.py) -- if someone else had
-    access to the account before this reset (the actual scenario a
-    password reset exists to recover from), this is what actually logs
-    them back out rather than leaving their existing session valid.
-    log_in_account below runs after the bump, so it stamps *this*
-    request's new session with the fresh version instead of the one
-    that just got invalidated."""
+    """Consumes a forgot_password token exactly once and logs the account in (the
+    user just proved control of the email).
+    
+    Bumps token_version to invalidate every other session (see app/models.py),
+    which is what logs out whoever had access before the reset. log_in_account
+    runs after the bump so the new session carries the fresh version.
+    """
     token_hash = hash_token(payload.token)
     reset_token = db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == token_hash).first()
     if reset_token is None or not reset_token.is_valid:
@@ -332,9 +273,7 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
     account = reset_token.account
     account.password_hash = hash_password(payload.password)
     account.token_version += 1
-    # The token's only purpose was getting the account here once -- no
-    # reason to keep a "used" row around forever (see forgot_password's
-    # own cleanup of expired-but-unused ones above).
+    # Single-use: the token is deleted once consumed.
     db.delete(reset_token)
     db.commit()
 
@@ -345,13 +284,11 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
 @router.post("/verify-email", response_model=PlayerOut)
 @limiter.limit("10/minute")
 def verify_email(request: Request, payload: VerifyEmailRequest, db: Session = Depends(get_db)):
-    """Consumes a signup/resend-verification token exactly once. Logs
-    the account in immediately on success -- same reasoning as
-    reset_password's own auto-login just above: clicking a link from an
-    email isn't necessarily happening in whatever browser/session
-    originally signed up (see render_verify_email's own comment in
-    app/pages.py), so proving control of the token is what grants a
-    session here, not an existing one."""
+    """Consumes a signup/resend-verification token exactly once and logs the
+    account in. The link may be opened in a different browser than the signup
+    (see render_verify_email in app/pages.py), so proving the token grants the
+    session.
+    """
     token_hash = hash_token(payload.token)
     verification_token = (
         db.query(EmailVerificationToken).filter(EmailVerificationToken.token_hash == token_hash).first()
@@ -375,19 +312,14 @@ def resend_verification_email(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ):
-    """For a signed-in but not-yet-verified account that didn't get (or
-    lost) its original confirmation email -- the RESEND EMAIL button
-    on render_verify_email_required in app/pages.py. Requires being
-    logged in (the plain, unverified-allowed dependency -- see its own
-    docstring in app/auth.py) rather than being keyed off an email
-    address like forgot_password is, since the caller is necessarily
-    already this exact account. Rate-limited the same as forgot_password
-    (5/minute) for the same reason: a hit here costs a real outbound
+    """For a signed-in, unverified account that lost its confirmation email
+    (RESEND EMAIL button in render_verify_email_required, app/pages.py). Uses
+    the unverified-allowed login dependency (app/auth.py) rather than an email
+    address. Rate-limited like forgot_password (5/minute) since it sends real
     email.
-
-    A silent no-op (but still a 204, not an error) if it's already
-    verified, e.g. a stale tab -- there's nothing useful left for this
-    button to do at that point."""
+    
+    A silent 204 no-op if already verified (e.g. a stale tab).
+    """
     if not account.email_verified_at:
         _send_verification_email(request, db, account)
 
@@ -400,17 +332,13 @@ def change_password(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ):
-    """Base (unverified-allowed) dependency, not the verified-required
-    one -- there's no reason someone who hasn't verified their email
-    yet should be blocked from changing their password.
-
-    Same token_version bump as reset_password's own (see that
-    endpoint's docstring above) -- proving the *current* password is
-    still exactly as trustworthy a "this is really the account owner"
-    signal as a fresh reset-email token was, so this logs out every
-    *other* session the same way. log_in_account re-runs after the bump
-    so this request's own session picks up the fresh version instead
-    of invalidating itself."""
+    """Uses the unverified-allowed dependency: unverified users may change their
+    password.
+    
+    Bumps token_version like reset_password: proving the current password is
+    as strong a signal as a reset token, so every other session is logged out.
+    log_in_account re-runs after the bump so this session stays valid.
+    """
     if not account.password_hash or not verify_password(payload.current_password, account.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect.")
 
@@ -430,32 +358,22 @@ def change_email(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ):
-    """Also base (unverified-allowed) -- deliberately reachable before
-    verification, since mistyping your own email at signup is exactly
-    the situation where you'd otherwise never be able to receive a
-    verification link at all to unblock yourself any other way.
-
-    Requires the current password (not just an active session) since
-    this is the one change on this page that can hand the account to
-    someone else entirely if a session were ever hijacked without it.
-    Resets email_verified_at back to NULL and sends a fresh
-    verification email to the new address -- same "prove you control
-    it" bar a brand new signup has to clear, not a lesser one just
-    because this account already existed. That does mean this
-    session's own access to the verified-required parts of the site
-    goes back behind /verify-email-required immediately after this
-    succeeds, same as it would for a brand new signup -- see
-    get_current_verified_account_from_session in app/auth.py."""
+    """Unverified-allowed on purpose: a mistyped signup email must be fixable
+    without receiving a verification link.
+    
+    Requires the current password, since this change can hand the account to
+    someone else if a session is hijacked. Resets email_verified_at to NULL
+    and emails a new verification link, so the session goes back behind
+    /verify-email-required (see get_current_verified_account_from_session in
+    app/auth.py).
+    """
     if not account.password_hash or not verify_password(payload.current_password, account.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect.")
 
     existing = db.query(Account).filter(Account.email == payload.new_email, Account.id != account.id).first()
     if existing is not None:
-        # Same vagueness tradeoff as signup's own 409 doesn't apply here
-        # -- signup can't say "that email is taken" without leaking
-        # which emails are registered to *someone*, but this caller is
-        # already a proven, logged-in account owner, so there's no new
-        # information handed to a stranger by being specific.
+        # Unlike signup, this caller is already a logged-in owner, so a specific
+        # error leaks nothing.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That email is already in use.")
 
     old_email = account.email
@@ -464,11 +382,9 @@ def change_email(
     db.commit()
 
     _send_email_change_verification(request, db, account)
-    # Best-effort heads-up to whoever the address belonged to before --
-    # only when there was one (an admin-created row can have no email
-    # at all, see Account's own docstring in app/models.py) and it's
-    # actually different from the new one (a same-email "change" is a
-    # no-op this far down, but harmless to allow).
+    # Best-effort notice to the previous address, only if there was one
+    # (admin-created rows may have no email, see Account in app/models.py) and
+    # it differs from the new one.
     if old_email and old_email != account.email:
         _send_email_change_notice(old_email, account.email)
     return _player_out_for(request, db, account)
@@ -482,16 +398,12 @@ def delete_account(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ):
-    """Base (unverified-allowed) dependency again -- an unverified
-    account should still be able to walk away from a signup it decided
-    not to finish. Requires the current password, same reasoning as
-    change_email above. Every row this account (and each of its linked
-    GameAccounts) owns -- gear setups, mindmaps, loot events, every
-    storage snapshot, the RuneLite link itself, etc. -- cascades on
-    this delete -- see each relationship's cascade="all, delete-orphan"
-    on Account and GameAccount in app/models.py -- so this one
-    db.delete is genuinely everything, not a partial wipe that leaves
-    orphaned rows behind."""
+    """Unverified-allowed, so a signup can be abandoned. Requires the current
+    password, as in change_email. Everything the Account and its GameAccounts
+    own (gear setups, mindmaps, loot events, storage snapshots, the RuneLite
+    link) cascades on this delete (cascade="all, delete-orphan" in
+    app/models.py), so one db.delete removes it all.
+    """
     if not account.password_hash or not verify_password(payload.current_password, account.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect.")
 

@@ -1,27 +1,15 @@
-"""Backend logic for Storages Viewer -- three ways of looking at
-the same synced storage data Purchase Goals already reads (see
-build_owned_pools in app/purchase_goals.py, which this deliberately
-does NOT reuse -- that function collapses everything into one combined
-pool with no memory of which storage an item came from, but section 3's
-per-location toggles need exactly that memory kept around):
+"""Backend logic for Storages Viewer: three views of the synced storage data.
 
-1. MINIMUM trackers (section 1) -- "keep at least N of this" -- a
-   PossessionTracker row with kind="min", read against how many of its
-   item the player currently owns (summed across every storage) and
-   shown as a fill-toward-target progress bar.
-2. MAXIMUM trackers (section 2) -- "flag me once I have more than N of
-   this" -- same PossessionTracker shape, kind="max", shown as a
-   red/green box instead of a bar.
-3. The full raw view (section 3) -- every item currently owned in ANY
-   storage, with a per-location quantity breakdown so the page's own
-   location toggles can recompute each item's shown total client-side
-   without another round trip (see build_possessions_summary below).
+1. MINIMUM trackers (PossessionTracker kind="min"): progress bar toward a
+target.
+2. MAXIMUM trackers (kind="max"): red/green box once the owned count exceeds
+N.
+3. Full raw view: every owned item with a per-location breakdown, so the
+page's location toggles recompute totals client-side.
 
-Every quantity here is always read live off the last-synced snapshot
-tables (BankItem and friends) -- same "no cached amount to go stale"
-approach as build_owned_pools -- a PossessionTracker row only ever
-remembers WHAT to watch and WHAT threshold matters, never a count of
-its own.
+Does not reuse build_owned_pools (app/purchase_goals.py), which merges all
+storages and loses the per-storage breakdown. Quantities are always read live
+from the synced tables; a tracker stores only what to watch and its threshold.
 """
 import re
 from typing import Dict, List, Optional, Tuple
@@ -54,9 +42,8 @@ from app.purchase_goals import COINS_ITEM_ID, derived_price_for, get_latest_pric
 from app.schemas import POSSESSION_STORAGE_KEYS
 
 # Storage key (matches schemas.POSSESSION_STORAGE_KEYS and
-# GameAccount.storage_synced_at's own keys) -> the model table it's read
-# from, in the fixed order every location-breakdown dict and the
-# plugin panel's own Status section list them in.
+# GameAccount.storage_synced_at) -> model table, in the fixed order used by
+# location-breakdown dicts and the plugin's Status section.
 STORAGE_SOURCES = [
     ("bank", BankItem),
     ("equipment", EquipmentItem),
@@ -71,35 +58,26 @@ STORAGE_SOURCES = [
     ("master_scroll_book", MasterScrollBookItem),
     ("seed_box", SeedBoxItem),
     ("huntsmans_kit", HuntsmansKitItem),
-    # BoatCargoItem rows carry a `slot` column the other tables here
-    # don't (see its own docstring in app/models.py), but this loop
-    # only ever reads game_account_id/item_id/quantity/item_name off each
-    # row -- exactly what every other source already has -- so it
-    # plugs into get_owned_breakdown below the same way every other
-    # source does, `slot` simply along for the ride, unread here.
+    # BoatCargoItem has an extra `slot` column (app/models.py); only the shared
+    # columns are read here.
     ("boat_cargo", BoatCargoItem),
 ]
 
 
 def get_owned_breakdown(db: Session, game_account: GameAccount) -> Dict[int, dict]:
-    """Returns {item_id: {"itemName": str|None, "total": int,
-    "byLocation": {storage_key: int}}} across every one of the fourteen
-    synced storages -- the single query this whole module (both the
-    tracker sections and the full raw view) computes owned quantities
-    from. itemName is whichever storage first reported a non-empty one
-    for that id (see BankItem's docstring in app/models.py for why
-    that field exists at all -- purely an untradeable-item display
-    fallback, same role it plays here)."""
+    """Returns {item_id: {"itemName": str|None, "total": int, "byLocation":
+    {storage_key: int}}} across all fourteen storages. itemName is the first
+    non-empty name reported (display fallback for untradeables; see BankItem
+    in app/models.py).
+    """
     breakdown: Dict[int, dict] = {}
     for key, model in STORAGE_SOURCES:
         rows = db.query(model).filter(model.game_account_id == game_account.id).all()
         for row in rows:
             row_item_id = row.item_id
             if key == "master_scroll_book":
-                # Rows synced before the plugin's id was corrected
-                # server-side still hold the Book's untradeable
-                # "default teleport" cosmetic id -- see
-                # canonical_master_scroll_item_id.
+                # Older rows may still hold the Book's untradeable "default
+                # teleport" cosmetic id; see canonical_master_scroll_item_id.
                 row_item_id = canonical_master_scroll_item_id(row_item_id, row.item_name)
             entry = breakdown.setdefault(row_item_id, {"itemName": None, "total": 0, "byLocation": {}})
             entry["total"] += row.quantity
@@ -109,38 +87,17 @@ def get_owned_breakdown(db: Session, game_account: GameAccount) -> Dict[int, dic
     return breakdown
 
 
-# Coins/Abyssal Pearls (art scales with how many are held), Crystal
-# armour and Graceful (both recolorable to any of several cosmetic
-# looks, with every recolor sharing one in-game NAME -- only the real
-# item id actually differs per look) all used to need their own
-# hand-built id->wiki-filename override table here, because
-# item_ids.json's name-keyed snapshot only ever kept ONE icon per name
-# and the wiki's own bare-name redirect didn't reliably land on the
-# biggest/correct denomination either. None of that applies to
-# resolve_item_display's CDN-direct icon below (see item_icon_url in
-# app/purchase_goals.py) -- RuneLite's own per-id icon export already
-# has the exact right artwork for every one of these real, distinct
-# item ids on its own, confirmed live against a handful of them
-# (Coins already shows its biggest pile; every Crystal helm/Graceful
-# hood recolor's id returns its own distinct image) -- so there's
-# nothing left to override by hand any more.
+# Icons come from the CDN-direct per-id export (item_icon_url in
+# app/purchase_goals.py), which has the right art for every distinct id, so no
+# id->icon overrides are needed.
 
 
 def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: dict) -> dict:
-    """Returns {"name", "icon", "tradeable", "highAlch"} for one real
-    item id -- tries the live GE mapping first (real name/high alch and
-    the definitive tradeable=True), then falls back to the
-    item_ids.json snapshot by name (for an untradeable item, whose id
-    never appears in the GE mapping at all) for a corrected/canonical
-    name, then to the bare id/name a storage table itself already had
-    on file.
-
-    The icon itself no longer goes through any of that -- item_id alone
-    is already exactly what item_icon_url (app/purchase_goals.py) needs
-    to build the right CDN URL, tradeable or not, denomination-scaled or
-    not, cosmetic recolor or not (see this file's own comment right
-    above this function for why nothing else has to be special-cased
-    here any more the way it used to be)."""
+    """Returns {"name", "icon", "tradeable", "highAlch"} for one item id: live GE
+    mapping first, then the item_ids.json snapshot by name (untradeables are
+    absent from the GE mapping), then the name already stored. The icon
+    depends only on item_id.
+    """
     meta = mapping.get(str(item_id))
     if meta:
         name = meta.get("name") or fallback_name or f"Item #{item_id}"
@@ -164,28 +121,14 @@ def resolve_item_display(item_id: int, fallback_name: Optional[str], mapping: di
     }
 
 
-# A "dose" item's own display name is always "Base name(N)" -- N being
-# how many doses/sips are left in that particular bottle (1-4 in OSRS,
-# never more) -- and the SAME potion shows up as a completely separate
-# item id per dose count (Prayer potion(4) and Prayer potion(1) are two
-# unrelated GE listings as far as the game's item table is concerned).
-# Left alone, that means the exact same potion the player is carrying
-# splits into up to four rows in the table below purely because some of
-# it has been sipped from. _dose_family below detects that pattern from
-# the name alone (no hardcoded potion list to keep updated as Jagex adds
-# new ones) so build_possessions_summary can fold every dose variant of
-# one potion back into a single row, counted in 1-dose units.
+# Potions are named "Base name(N)" (N = doses, 1-4), with a separate item id per
+# dose count. _dose_family detects this from the name alone so
+# build_possessions_summary can fold variants into one row in 1-dose units.
 _DOSE_NAME_RE = re.compile(r"^(.*\S)\s*\((\d)\)$")
 
-# A handful of non-potion items use this exact same "Name(N)" naming
-# convention for something that ISN'T a fungible quantity -- charges
-# left on one specific physical piece of jewelry (an Amulet of glory
-# with 1 charge left isn't "1/4 of a shared amulet supply" the way a
-# Prayer potion(1) is 1/4 of a shared potion supply). Merging those the
-# same way would misrepresent "one charge left on this ring, plus four
-# on that other ring" as "owning 5 of the same ring". Named here by
-# their base name (lowercase) so _dose_family skips them; add another
-# entry if a new charge-based accessory turns up behaving the same way.
+# Non-potion items using "Name(N)" for charges on one physical item (e.g. Amulet
+# of glory), not a fungible quantity. Keyed by lowercase base name so
+# _dose_family skips them.
 _DOSE_MERGE_EXCLUDE_BASE_NAMES = {
     "amulet of glory",
     "amulet of chemistry",
@@ -204,12 +147,10 @@ _DOSE_MERGE_EXCLUDE_BASE_NAMES = {
 
 
 def _dose_family(name: str) -> Optional[Tuple[str, int]]:
-    """Returns (base_name, dose_count) when `name` is a dose-specific
-    potion name like "Super restore(3)", or None when it isn't one at
-    all (no trailing "(N)"), the parenthesized number isn't a real dose
-    count (outside 1-4 -- OSRS potions never have more than 4 doses),
-    or the base name is one of the non-potion charge items excluded
-    above."""
+    """Returns (base_name, dose_count) for a dose-specific potion name like
+    "Super restore(3)", else None (no trailing "(N)", N outside 1-4, or an
+    excluded charge item).
+    """
     match = _DOSE_NAME_RE.match(name.strip())
     if not match:
         return None
@@ -223,18 +164,11 @@ def _dose_family(name: str) -> Optional[Tuple[str, int]]:
 
 
 def _resolve_dose1_display(base: str, mapping: dict) -> Tuple[str, Optional[str], bool, Optional[int]]:
-    """Returns (name, icon, tradeable, itemId) for `base`'s own 1-dose
-    variant, e.g. "Super attack" -> Super attack(1)'s own name/icon/
-    tradeable/item id -- looked up by name (find_item_ids) and then
-    resolved the normal way (resolve_item_display), same as every
-    other row on this page, rather than assuming a linear icon-naming
-    pattern. `name` is always "{base}(1)" (the in-game convention, no
-    space before the parenthesis) even on the rare miss below, so the
-    merged row's own QUANTITY always reads as "this many 1-dose
-    bottles" regardless of whether the icon/tradeable/itemId lookup
-    itself succeeded. icon/itemId come back None on a miss (no real
-    "(1)" item id on file for this base name at all) -- the caller
-    falls back to an owned variant's own icon/id in that case."""
+    """Returns (name, icon, tradeable, itemId) for `base`'s 1-dose variant,
+    resolved by name (find_item_ids, resolve_item_display). `name` is always
+    "{base}(1)" even on a miss; icon/itemId are None on a miss and the caller
+    falls back to an owned variant's.
+    """
     name = f"{base}(1)"
     ids = find_item_ids(name)
     if not ids:
@@ -244,29 +178,13 @@ def _resolve_dose1_display(base: str, mapping: dict) -> Tuple[str, Optional[str]
 
 
 def _merge_dose_families(items: List[dict], mapping: dict) -> List[dict]:
-    """Folds every dose variant of the same potion (see _dose_family)
-    into one row, counted in 1-dose units -- so "Prayer potion(4)" x5
-    and "Prayer potion(1)" x2 become a single "Prayer potion(1)" row at
-    quantity 22 (5*4 + 2*1), rather than two separate rows for the same
-    potion. GE/high-alch "value" for the merged row is each variant's
-    own stack value added together and divided back out over the total
-    dose count -- a real owned-quantity-weighted average per dose,
-    rather than assuming doses price perfectly linearly (they don't
-    always) -- so the stack value shown (value per dose * total doses)
-    still adds up to exactly what the separate variants were worth.
-
-    The merged row's own name always ends in "(1)" -- same in-game
-    naming convention as every other dose variant, no space before the
-    parenthesis (e.g. "Divine super combat potion(1)") -- and its icon
-    is that same 1-dose bottle's own artwork, resolved by name via
-    resolve_item_display exactly like every other row (see
-    _resolve_dose1_display below), so QUANTITY's x_ number always
-    matches what's actually pictured: however many 1-dose bottles
-    worth of this potion are owned, never a picture of some other dose
-    count. This holds even when the player doesn't happen to own any
-    real 1-dose bottles right now -- the 1-dose item id/icon come from
-    the game's own item data, not from what's in the breakdown. Items
-    that aren't a dose variant at all pass through untouched."""
+    """Folds all dose variants of a potion (see _dose_family) into one row in
+    1-dose units: "Prayer potion(4)" x5 and "(1)" x2 become "Prayer potion(1)"
+    x22. The value per dose is the summed variant stack values over total
+    doses. Name and icon come from the real 1-dose item (see
+    _resolve_dose1_display) even if none is owned. Non-dose items pass
+    through.
+    """
     plain: List[dict] = []
     families: Dict[str, dict] = {}
 
@@ -296,10 +214,8 @@ def _merge_dose_families(items: List[dict], mapping: dict) -> List[dict]:
         if it["highAlch"] is not None:
             family["haValueTotal"] += it["highAlch"] * it["total"]
             family["haKnown"] = True
-        # Fallback only -- used when _resolve_dose1_display can't find a
-        # real "(1)" item id below, which should be rare (every
-        # standard potion has one): whichever owned variant has the
-        # most doses, closest to how the potion normally looks "full".
+        # Fallback when no "(1)" item id is found (rare): the owned variant with
+        # the most doses.
         if dose >= family["bestDose"]:
             family["bestDose"] = dose
             family["icon"] = it["icon"]
@@ -321,11 +237,8 @@ def _merge_dose_families(items: List[dict], mapping: dict) -> List[dict]:
             "tradeable": dose1_tradeable if dose1_item_id is not None else family["tradeable"],
             "highAlch": (family["haValueTotal"] / total_doses) if family["haKnown"] else None,
             "gePrice": (family["geValueTotal"] / total_doses) if family["geKnown"] else None,
-            # Dose-variant potions are always GE-tradeable in OSRS (no
-            # known untradeable one exists), so a merged row's own value
-            # is always a real GE price, never a derived one -- unlike
-            # every other row, geDerived isn't carried through per-
-            # variant here since there's nothing real to average.
+            # Dose potions are always GE-tradeable, so the merged value is a
+            # real GE price; geDerived is not carried over per variant.
             "geDerived": False,
             "total": total_doses,
             "byLocation": family["byLocation"],
@@ -334,23 +247,11 @@ def _merge_dose_families(items: List[dict], mapping: dict) -> List[dict]:
 
 
 def search_trackable_items(query: str, limit: int = 20) -> List[dict]:
-    """Item search for setting up a min/max tracker (sections 1/2) --
-    reuses search_items' own three-tier startswith-then-contains
-    ranking (live GE mapping, then known combination recipes, then the
-    item_ids.json snapshot -- see that function's own comment in
-    app/purchase_goals.py for why a plain scan alone isn't enough to
-    guarantee a short, precise name surfaces first) but, unlike that
-    function, never returns a result with no real item id -- a
-    tracker has nothing to watch without one, whereas Purchase Goals'
-    own search is fine matching an untradeable item by name alone.
-
-    A recipe result (a combined item like "Neitiznot faceguard", which
-    itself has no real item id at all -- see app/recipes.py) is
-    dropped rather than attached to a wrong id, same as an
-    item_ids.json result whose name genuinely isn't in that snapshot
-    either. In practice this rarely trims anything: almost every real,
-    obtainable item -- tradeable or not -- has an entry in the
-    item_ids.json snapshot with a real id attached."""
+    """Item search for setting up a tracker. Uses search_items' three-tier
+    ranking (app/purchase_goals.py) but drops results with no real item id,
+    which a tracker needs, including recipe results (app/recipes.py). Rarely
+    trims anything.
+    """
     raw = search_items(query, limit=limit * 2)  # overfetch -- some may get dropped below
     results = []
     seen_ids = set()
@@ -389,11 +290,10 @@ def _tracker_out(tracker: PossessionTracker, mapping: dict, breakdown: Dict[int,
 
 
 def build_trackers_state(db: Session, game_account: GameAccount) -> dict:
-    """The combined payload the page's min/max sections poll -- both
-    kinds of tracker, each already resolved against a live owned-
-    quantity breakdown and a live GE mapping (icon/name/tradeable),
-    sorted the same way Mindmaps orders sibling nodes (sort_order,
-    lowest first -- see PossessionTracker's own docstring)."""
+    """Combined payload polled by the min/max sections: both tracker kinds
+    resolved against a live owned-quantity breakdown and GE mapping, ordered
+    by sort_order (lowest first, as in Mindmaps).
+    """
     mapping, mapping_error = get_mapping()
     breakdown = get_owned_breakdown(db, game_account)
     trackers = (
@@ -408,12 +308,10 @@ def build_trackers_state(db: Session, game_account: GameAccount) -> dict:
 
 
 def pinned_item_ids(db: Session, game_account: GameAccount) -> set:
-    """Every item id this player currently has pinned (see
-    PinnedPossessionItem's own docstring in app/models.py) -- a plain
-    set, since every caller (build_possessions_summary below, and the
-    pin/unpin endpoints in app/main.py, which just hand this same set
-    straight back to the frontend) only ever needs membership or a
-    flat list, never the rows themselves."""
+    """Item ids this player has pinned (see PinnedPossessionItem in
+    app/models.py), as a set since callers only need membership or a flat
+    list.
+    """
     rows = (
         db.query(PinnedPossessionItem.item_id)
         .filter(PinnedPossessionItem.game_account_id == game_account.id)
@@ -423,13 +321,10 @@ def pinned_item_ids(db: Session, game_account: GameAccount) -> set:
 
 
 def hidden_storage_keys(db: Session, game_account: GameAccount) -> set:
-    """Every storage source key this player has switched off in
-    Storages Viewer's settings menu (see
-    HiddenPossessionStorage's own docstring in app/models.py) -- same
-    plain-set shape as pinned_item_ids above, for the same reason:
-    build_possessions_summary below and the hide/unhide endpoints in
-    app/main.py only ever need membership or a flat list back, never
-    the rows themselves."""
+    """Storage source keys this player has hidden in Storages Viewer's settings
+    menu (see HiddenPossessionStorage in app/models.py), as a set for the same
+    reason as pinned_item_ids.
+    """
     rows = (
         db.query(HiddenPossessionStorage.storage_key)
         .filter(HiddenPossessionStorage.game_account_id == game_account.id)
@@ -439,14 +334,11 @@ def hidden_storage_keys(db: Session, game_account: GameAccount) -> set:
 
 
 def set_storage_hidden(db: Session, game_account: GameAccount, storage_key: str, hidden: bool) -> None:
-    """Flips one storage source on/off for this player -- the gear-icon
-    settings menu next to Storages Viewer's location filter
-    buttons (see render_possessions in app/pages.py). Idempotent both
-    ways, same reasoning as pin/unpin_possession_item in app/main.py:
-    hiding an already-hidden storage (or showing an already-shown one)
-    is a no-op rather than an error, so a checkbox flipped twice in a
-    row -- e.g. a slow request landing after a faster second click --
-    never surfaces an error banner over it."""
+    """Shows or hides one storage source for this player (gear-icon settings
+    menu; see render_possessions in app/pages.py). Idempotent, like
+    pin/unpin_possession_item in app/main.py, so a repeated or out-of-order
+    request never raises.
+    """
     existing = (
         db.query(HiddenPossessionStorage)
         .filter(HiddenPossessionStorage.game_account_id == game_account.id, HiddenPossessionStorage.storage_key == storage_key)
@@ -461,47 +353,24 @@ def set_storage_hidden(db: Session, game_account: GameAccount, storage_key: str,
 
 
 def build_possessions_summary(db: Session, game_account: GameAccount) -> dict:
-    """Section 3's payload -- every item currently owned in any
-    storage, each with its live GE/high-alch value and a per-location
-    quantity breakdown, so the page's own location toggles (and the
-    high-alch/GE-value/tradeable display toggles) can recompute what
-    each box shows entirely client-side rather than re-polling this
-    endpoint for every toggle flip (see renderItemList's own approach
-    in the Loot Tracker page, which this section's box/sort/search UI
-    otherwise mirrors closely -- see render_possessions in
-    app/pages.py). Potion dose variants of the same potion are folded
-    into one row here, counted in 1-dose units (see
-    _merge_dose_families) -- everything downstream of this function
-    just sees one row per potion, never per dose-specific item id.
-
-    An untradeable item still gets a GE value here whenever RuneLite's
-    own ported Item Prices data links it to one (see derived_price_for
-    in app/purchase_goals.py -- the same "GE: 5.47M gp" a Crystal helm
-    shows on hover in-game). TRADEABLE stays NO for these either way --
-    it's a computed stand-in value, not a real GE listing -- geDerived
-    on each item marks which rows that applies to, for the frontend to
-    show the distinction (a leading "~", since it's an estimate rather
-    than a live listing). Coins and Platinum tokens get their own fixed
-    gp-conversion rate instead (see currency_gp_rate below), but NOT
-    geDerived -- unlike a Crystal helm's linked-item estimate, a coin's
-    gp value isn't an approximation of anything; it's exactly 1gp, by
-    definition, every time."""
+    """Section 3's payload: every owned item with its live GE/high-alch value and
+    a per-location quantity breakdown, so toggles recompute client-side (see
+    render_possessions in app/pages.py). Dose variants are folded into one row
+    (see _merge_dose_families).
+    
+    Untradeables with a RuneLite-linked value (derived_price_for in
+    app/purchase_goals.py) get that value with TRADEABLE still NO; geDerived
+    marks it as an estimate (shown with a leading "~"). Coins and Platinum
+    tokens use a fixed rate (currency_gp_rate) and are not geDerived since
+    their value is exact.
+    """
     mapping, mapping_error = get_mapping()
     prices, price_error = get_latest_prices()
     breakdown = get_owned_breakdown(db, game_account)
 
-    # Coins and Platinum tokens are currency, not goods -- neither has a
-    # real Grand Exchange listing (both already show TRADEABLE: NO), but
-    # each has an unambiguous gp-equivalent "value" that's more useful
-    # here than the em dash they'd otherwise get: a coin's value is
-    # just its own face value (1 coin = 1gp), and a platinum token is
-    # worth exactly 1,000 coins -- the fixed rate the GE currency
-    # exchange counter itself converts at. geDerived is left False for
-    # these (see the frontend's valueCell in render_possessions, and
-    # this function's own docstring above) -- that flag exists to warn
-    # the player a number is an ESTIMATE, and a coin's gp value isn't
-    # one: it's exact, by definition, not "close enough" the way a
-    # Crystal helm's linked-item price is.
+    # Coins and Platinum tokens are currency with no GE listing but an exact gp
+    # value (1 coin = 1gp, 1 platinum token = 1,000gp). geDerived stays False
+    # since the value is exact, not an estimate.
     currency_gp_rate = {COINS_ITEM_ID: 1}
     for platinum_id in find_item_ids("Platinum token") or []:
         currency_gp_rate[platinum_id] = 1000
@@ -518,15 +387,10 @@ def build_possessions_summary(db: Session, game_account: GameAccount) -> dict:
             ge_price, _ = unit_price_for(item_id, prices)
             ge_derived = False
         else:
-            # Not Grand Exchange tradeable, but a lot of untradeables
-            # still have a real GE-derived value -- the same "GE: 5.47M
-            # gp" a Crystal helm shows on hover in-game, ported from
-            # RuneLite's own Item Prices plugin data (see
-            # derived_price_for/get_untradeable_mapping in
-            # app/purchase_goals.py). TRADEABLE stays NO either way --
-            # this is a computed stand-in value, not a real GE listing
-            # -- geDerived just lets the frontend mark it as such
-            # (see valueCell in render_possessions).
+            # Untradeables may have a GE-derived value (derived_price_for /
+            # get_untradeable_mapping in app/purchase_goals.py); geDerived lets
+            # the frontend mark it as an estimate (see valueCell in
+            # render_possessions).
             ge_price, _ = derived_price_for(item_id, prices)
             ge_derived = ge_price is not None
         items.append({
@@ -543,10 +407,8 @@ def build_possessions_summary(db: Session, game_account: GameAccount) -> dict:
 
     items = _merge_dose_families(items, mapping)
 
-    # Marked after merging, not on each raw per-dose-variant item above
-    # -- a merged potion row's own itemId (see _merge_dose_families) is
-    # what the frontend actually has and what a pin was made against,
-    # never one of the pre-merge dose variants' ids.
+    # Marked after merging: a pin is made against the merged row's itemId (see
+    # _merge_dose_families), not a pre-merge dose variant's id.
     pinned_ids = pinned_item_ids(db, game_account)
     for item in items:
         item["pinned"] = item["itemId"] in pinned_ids
@@ -560,38 +422,24 @@ def build_possessions_summary(db: Session, game_account: GameAccount) -> dict:
 
 
 def build_possessions_share_snapshot(db: Session, game_account: GameAccount, active_locations: List[str]) -> dict:
-    """Freezes Storages Viewer's section 3 into a myscape.io/s/<code>
-    snapshot (see POST /api/possessions/share in app/main.py and
-    render_storages_share in app/pages.py for the rest of this
-    feature) -- items/mappingError/priceError/hiddenStorageKeys come
-    straight from build_possessions_summary above, verbatim: pinned is
-    already a per-item flag on each of its own items there, and
-    hiddenStorageKeys is already a real per-player persisted setting
-    (HiddenPossessionStorage), so both freeze for free with nothing
-    extra to do for either one here.
-
-    activeLocations is the one piece of this page's state that ISN'T
-    sitting in a persisted table anywhere -- the location filter
-    buttons next to the search field (state.locations client-side,
-    see _possessions_panel_markup's own script in app/pages.py) are
-    purely transient and reset to all-on on every real page load, so
-    whatever the sharer had toggled at the moment they clicked
-    GENERATE SHAREABLE LINK has to be carried over explicitly instead,
-    straight from PossessionShareCreateRequest.locations (see POST
-    /api/possessions/share) -- a plain pass-through, filtered against
-    POSSESSION_STORAGE_KEYS so a stray/unknown key can't end up baked
-    into a share link forever."""
+    """Freezes Storages Viewer's section 3 into a myscape.io/s/<code> snapshot
+    (see POST /api/possessions/share in app/main.py, render_storages_share in
+    app/pages.py). Most fields come verbatim from build_possessions_summary.
+    activeLocations is the one transient piece (the client-side location
+    filter), so it is passed through from
+    PossessionShareCreateRequest.locations, filtered against
+    POSSESSION_STORAGE_KEYS.
+    """
     summary = build_possessions_summary(db, game_account)
     summary["activeLocations"] = [key for key in active_locations if key in POSSESSION_STORAGE_KEYS]
     return summary
 
 
 def next_sort_order(db: Session, game_account: GameAccount, kind: str) -> float:
-    """One past the highest existing sort_order for this player's
-    trackers of this kind -- a new tracker always lands at the end of
-    its own section, same "append past the current max" approach
-    Mindmaps uses for a new sibling node (see add_node in
-    app/mindmaps.py)."""
+    """One past the highest sort_order among this player's trackers of this kind,
+    so a new tracker lands at the end of its section (same approach as
+    add_node in app/mindmaps.py).
+    """
     highest = (
         db.query(PossessionTracker)
         .filter(PossessionTracker.game_account_id == game_account.id, PossessionTracker.kind == kind)
@@ -606,11 +454,10 @@ def _view_out(view: PossessionView) -> dict:
 
 
 def build_possession_views(db: Session, game_account: GameAccount) -> List[dict]:
-    """Every saved Storages Viewer view this player has, in their own
-    reorder-strip order (nulls-last, same convention as GearSetup's
-    own sort_order -- a freshly-created view without one yet, if that
-    ever happens, would otherwise sort unpredictably against Postgres'
-    own NULL ordering)."""
+    """This player's saved Storages Viewer views in reorder-strip order, nulls
+    last (as GearSetup.sort_order) so a view with no sort_order doesn't sort
+    unpredictably under Postgres NULL ordering.
+    """
     views = (
         db.query(PossessionView)
         .filter(PossessionView.game_account_id == game_account.id)
@@ -621,8 +468,7 @@ def build_possession_views(db: Session, game_account: GameAccount) -> List[dict]
 
 
 def next_possession_view_sort_order(db: Session, game_account: GameAccount) -> float:
-    """Same "append past the current max" approach as next_sort_order
-    above, over this player's saved views instead of their trackers."""
+    """Append-past-the-max sort_order, as next_sort_order, over saved views."""
     highest = (
         db.query(PossessionView)
         .filter(PossessionView.game_account_id == game_account.id)

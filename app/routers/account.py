@@ -1,13 +1,9 @@
-"""Account-page endpoints that aren't specifically about linking an
-OSRS character (app/routers/linking.py's own game-account endpoints)
-or the login/password/email credentials flow (app/routers/auth.py).
+"""Account-page endpoints that are neither game-account linking
+(app/routers/linking.py) nor credentials (app/routers/auth.py).
 
-Starts with just the Shared Links section -- every myscape.io/s/<code>
-link (see SharedContent in app/models.py and app/sharing.py) created
-from any of the signed-in Account's own GameAccounts, across every
-app that can create one, with a way to revoke one early. Anything
-else account-wide that doesn't fit either of those two more specific
-routers belongs here too.
+Currently the Shared Links section: every myscape.io/s/<code> link
+(SharedContent in app/models.py, app/sharing.py) created from any of the
+signed-in Account's GameAccounts, with early revocation.
 """
 import uuid
 from typing import List
@@ -30,22 +26,16 @@ def list_shared_links(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ):
-    """Every currently-valid share link created from any of the signed-
-    in Account's own GameAccounts, newest first -- the account page's
-    own Shared Links section, underneath its Linked Accounts list.
-    Joins through GameAccount (rather than filtering SharedContent
-    directly) the same way list_shared_links' own sibling,
-    list_game_accounts in app/routers/linking.py, scopes everything to
-    `account.id` -- a share has no account_id of its own, only a
-    game_account_id, so this is the only way to prove ownership.
-
-    Expired rows are left out entirely rather than shown as "expired"
-    -- nothing useful to revoke once a link's already stopped working
-    on its own (see SharedContent.is_valid), and the account page
-    doesn't need its own row just to say so. is_valid is checked here
-    in Python, after the query, rather than a second expires_at filter
-    written into the query itself -- the same lazy, read-time-only
-    convention find_valid_share in app/sharing.py already uses."""
+    """Every currently-valid share link from any of the signed-in Account's
+    GameAccounts, newest first (the Shared Links section under Linked
+    Accounts). A share has only a game_account_id, so ownership is proven by
+    joining through GameAccount to `account.id`, as list_game_accounts in
+    app/routers/linking.py does.
+    
+    Expired rows are omitted (nothing to revoke). is_valid is checked in
+    Python after the query, the lazy read-time convention of find_valid_share
+    in app/sharing.py.
+    """
     rows = (
         db.query(SharedContent, GameAccount.runescape_name)
         .join(GameAccount, SharedContent.game_account_id == GameAccount.id)
@@ -74,20 +64,14 @@ def delete_shared_link(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ):
-    """Revokes one share link early -- the account page's own
-    "DEACTIVATE" button. A plain delete (same as every other place
-    this app revokes something early rather than waiting on its own
-    expiry -- there's no separate "deactivated" state to land in, just
-    gone, the same as delete_game_account in app/routers/linking.py
-    doesn't leave a tombstone behind either). find_valid_share in
-    app/sharing.py (what GET /s/{code} itself calls) already treats a
-    missing row and an expired one identically, so there's nothing
-    left for a visitor with the old link to see either way.
-
-    Ownership is proven the same join-through-GameAccount way
-    list_shared_links above does -- scoping straight to `account.id`
-    rather than, say, trusting a share_id the client already has,
-    since that alone says nothing about who created it."""
+    """Revokes one share link early (the "DEACTIVATE" button). A plain delete
+    with no tombstone; find_valid_share (app/sharing.py, used by GET
+    /s/{code}) treats a missing and an expired row identically.
+    
+    Ownership is proven by the join through GameAccount, as in
+    list_shared_links; a share_id from the client proves nothing about who
+    created it.
+    """
     share = (
         db.query(SharedContent)
         .join(GameAccount, SharedContent.game_account_id == GameAccount.id)
@@ -105,17 +89,12 @@ def delete_all_shared_links(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ):
-    """Revokes every one of this Account's share links at once -- the
-    account page's own "DELETION" column header, armed the same two-
-    click way as delete_shared_link's own per-row DEACTIVATE button
-    just above (see that endpoint's docstring for why this is a plain
-    delete with no tombstone). Same ownership join as
-    list_shared_links/delete_shared_link, just without the single-id
-    filter -- every SharedContent row reachable through one of this
-    account's own GameAccounts, valid or not, since there's nothing
-    worth keeping once the whole table's being cleared. A subquery
-    rather than a straight join, since Query.delete() can't act
-    through a joined table directly."""
+    """Revokes all of this Account's share links (the "DELETION" column header,
+    armed with the same two clicks as DEACTIVATE; see delete_shared_link).
+    Same ownership join as list_shared_links, without the id filter, and valid
+    or not. Uses a subquery because Query.delete() cannot act through a joined
+    table.
+    """
     (
         db.query(SharedContent)
         .filter(

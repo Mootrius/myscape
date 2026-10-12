@@ -1,23 +1,14 @@
-"""Sends transactional email (right now: just password-reset links) via
-Resend's HTTP API (https://resend.com) -- a single POST per email, no
-SDK, matching the plain urllib.request style already used elsewhere in
-this app (scripts/fetch_item_ids.py, app/icon_cache.py) rather than
-adding a new dependency for what's a two-field JSON request.
+"""Sends transactional email (currently password-reset and verification links)
+via Resend's HTTP API (https://resend.com): one POST per email using
+urllib.request, no SDK.
 
-RESEND_API_KEY isn't set in local dev (see render.yaml, where it's
-deliberately `sync: false` -- Render prompts for it at deploy time
-rather than ever committing a real key to this repo). Rather than
-failing every password-reset request in that environment, send_email
-logs the message it would have sent instead -- good enough to test the
-reset flow end to end locally (the reset link shows up right in the
-server's own console/log output) without needing a real Resend account
-just to run this app at all.
+RESEND_API_KEY is unset in local dev (render.yaml sets it `sync: false` so no
+key is committed). send_email then logs the message instead of sending, so the
+reset flow can be tested locally from the log output.
 
-EMAIL_FROM_ADDRESS defaults to a myscape.io address -- Resend requires
-verifying whichever sending domain is actually used (its dashboard
-walks through adding the DNS records), so this only works in
-production once that's done; until then (or in local dev), every send
-just logs instead, same as the no-API-key case.
+EMAIL_FROM_ADDRESS defaults to a myscape.io address. Resend requires the
+sending domain to be verified; until then, sends are logged as in the no-key
+case.
 """
 import json
 import logging
@@ -34,18 +25,11 @@ _FETCH_TIMEOUT_SECONDS = 15
 
 
 def send_email(to: str, subject: str, html: str, text: str) -> None:
-    """Best-effort -- a failed send (missing/invalid API key, Resend
-    being down, an unverified sending domain) is logged and swallowed
-    rather than raised, the same "never let a side-effect send break
-    the actual request" reasoning app/icon_cache.py's own fetches
-    follow. Concretely for forgot-password (this function's only
-    caller right now): the response is always the same generic "if
-    that email exists, check your inbox" message regardless of whether
-    the send actually worked (see POST /api/auth/forgot-password in
-    app/routers/auth.py) -- there's nothing a raised exception here
-    could usefully change about that response anyway, and the request
-    itself did everything it could (a token really was generated and
-    stored)."""
+    """Best-effort: a failed send (bad key, Resend down, unverified domain) is
+    logged and swallowed so a side effect never breaks the request. The
+    forgot-password response is the same generic message regardless (POST
+    /api/auth/forgot-password in app/routers/auth.py).
+    """
     if not RESEND_API_KEY:
         log.info("RESEND_API_KEY not set -- would have emailed %s (%r):\n%s", to, subject, text)
         return
@@ -64,14 +48,9 @@ def send_email(to: str, subject: str, html: str, text: str) -> None:
         headers={
             "Authorization": f"Bearer {RESEND_API_KEY}",
             "Content-Type": "application/json",
-            # Without an explicit User-Agent, urllib sends its own
-            # default ("Python-urllib/3.x") -- Resend's API sits behind
-            # Cloudflare, and that default signature is exactly the
-            # kind of generic-script fingerprint Cloudflare's bot
-            # protection flags, which is what was causing every send
-            # to get rejected with a Cloudflare "error code: 1010"
-            # (banned browser signature) 403 before Resend's own logic
-            # ever saw the request.
+            # An explicit User-Agent is required: urllib's default
+            # ("Python-urllib/3.x") is flagged by Cloudflare in front of Resend,
+            # which rejects it with a 403 "error code: 1010".
             "User-Agent": "myscape-web/1.0 (+https://myscape.io)",
         },
     )

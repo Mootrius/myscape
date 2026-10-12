@@ -1,41 +1,15 @@
-"""One-off script: build app/data/collection_log_item_names.json, an
-{item id: item name} index covering exactly the item ids in
-app/data/collection_log_schema.json (see CollectionLogSchemaExporter
-in the Mootrius/myscape-plugin repo for how that schema itself was
-built) -- the collection log UI needs a real name to show under each
-item's icon, including for items a player hasn't obtained yet (icons
-alone come for free from RuneLite's own static CDN by numeric id, the
-same way app/purchase_goals.py's item_icon_url already builds every
-other item icon in this app -- see that function's own comment -- but
-there's no id-keyed name source already wired up for this).
+"""One-off script: build app/data/collection_log_item_names.json, an {item id:
+item name} index covering the item ids in app/data/collection_log_schema.json.
+The collection log UI needs a name under each icon, including for items not
+yet obtained. Icons come from RuneLite's CDN by numeric id; no id-keyed name
+source existed.
+Resolved by inverting app/data/item_ids.json (name -> ids, from
+scripts/fetch_item_ids.py). The 17 ids it cannot resolve are named by hand in
+ITEM_NAME_OVERRIDES, taken from osrsbox-db's id-keyed items-complete.json.
 
-app/item_ids.py's own snapshot (app/data/item_ids.json, name -> ids,
-built by scripts/fetch_item_ids.py from the wiki's Bucket data
-extension) is a NAME-keyed index, built for the opposite lookup
-direction (matching an untradeable item's name to a real id -- see
-that module's own docstring). Inverting it here resolves 1704 of the
-collection log's 1721 unique item ids outright.
-
-The 17 that don't resolve are every one that CollectionLogSchemaExporter
-itself remaps away from its "page struct" id to a different "item
-widget" id (see that class's own PAGE_STRUCT_ITEM_ID_TO_WIDGET_ITEM_ID,
-credited there to evansloan/collection-log) plus a handful of older or
-more obscure drops the wiki's Bucket table simply doesn't carry under
-these specific final ids -- ITEM_NAME_OVERRIDES below covers each by
-hand, looked up directly by numeric id (not by trusting any comment
-text in either that remap table or evansloan's own source, which turns
-out to have at least one actual mistake -- see the id 25618 comment
-below) against osrsbox-db's own id-keyed item-complete.json snapshot
-(github.com/osrsbox/osrsbox-db, id-indexed dump of the whole item
-cache), the same kind of authoritative id-keyed source
-scripts/fetch_item_ids.py already leans on elsewhere in this repo.
-
-Run with: python scripts/build_collection_log_item_names.py (from the
-repo root, after app/data/collection_log_schema.json and
-app/data/item_ids.json already exist). Re-run this by hand (not on a
-schedule) whenever the collection log schema itself is re-exported --
-same "only changes when Jagex adds content" cadence as every other
-static snapshot in this repo.
+Usage: python scripts/build_collection_log_item_names.py (repo root; needs the
+schema and item_ids.json). Re-run by hand when the collection log schema is
+re-exported.
 """
 import json
 import pathlib
@@ -45,21 +19,13 @@ ITEM_IDS_PATH = REPO_ROOT / "app" / "data" / "item_ids.json"
 SCHEMA_PATH = REPO_ROOT / "app" / "data" / "collection_log_schema.json"
 OUTPUT_PATH = REPO_ROOT / "app" / "data" / "collection_log_item_names.json"
 
-# Every item id CollectionLogSchemaExporter's own remap sends collection
-# log data through (the OLD "page struct" id -> the NEW "item widget"
-# id -- see that class's PAGE_STRUCT_ITEM_ID_TO_WIDGET_ITEM_ID) never
-# appears under its NEW id in the wiki's Bucket infobox table, which is
-# what app/data/item_ids.json is built from -- so all twelve need a
-# name looked up by hand here. Confirmed against osrsbox-db's
-# items-complete.json by the FINAL id itself, not against either
-# remap table's own comment text: evansloan's own upstream comment
-# labels id 25618 "Red satchel", but osrsbox-db (and the in-game item
-# examine text) says "Plain satchel" -- the comment is simply wrong,
-# which is exactly why this doesn't just copy those comments over.
-#
-# The remaining five (6926, 24868-24871) aren't part of that remap at
-# all -- ordinary collection log item ids the Bucket table just doesn't
-# carry a page for under these ids, resolved the same way.
+# Ids that CollectionLogSchemaExporter remaps from a "page struct" id to an
+# "item widget" id (PAGE_STRUCT_ITEM_ID_TO_WIDGET_ITEM_ID) are missing under the
+# new id in the Bucket table, so they are named by hand. Names are checked
+# against osrsbox-db by final id, not copied from upstream comments (evansloan's
+# comment mislabels 25618 as "Red satchel"; it is "Plain satchel").
+# The remaining five (6926, 24868-24871) are ordinary ids the Bucket table
+# lacks.
 ITEM_NAME_OVERRIDES = {
     6926: "Bones to peaches",
     24868: "Golden armadyl special attack",
@@ -96,20 +62,12 @@ def build_id_to_name_from_item_ids_json() -> dict:
         name_map = json.load(f)
     id_to_name = {}
     for key, info in name_map.items():
-        # info["name"] is the item's real display casing (e.g.
-        # "Tanzanite fang") -- the dict KEY (`key` here) is a
-        # lowercased version of that same name, used elsewhere in this
-        # repo purely for case-insensitive lookup (see app/item_ids.py's
-        # own docstring), and would silently lowercase every name in
-        # this output if used here instead.
+        # info["name"] has the real display casing; `key` is lowercased for
+        # lookups and must not be used here.
         name = info["name"]
         for item_id in info["ids"]:
-            # A handful of ids (puppy colour variants, none of them
-            # collection log items) are listed under more than one
-            # name in this snapshot -- first one wins, arbitrarily;
-            # see this script's own verification step below, which
-            # would catch it if that ever mattered for an id this
-            # actually needs.
+            # A few non-collection-log ids (puppy colour variants) appear under
+            # several names; the first wins.
             id_to_name.setdefault(item_id, name)
     return id_to_name
 
@@ -138,9 +96,7 @@ def main():
           f"({len(needed_ids) - len(ITEM_NAME_OVERRIDES.keys() & needed_ids)} from item_ids.json, "
           f"{len(ITEM_NAME_OVERRIDES.keys() & needed_ids)} from ITEM_NAME_OVERRIDES)")
 
-    # Keys become JSON object keys, which are always strings -- read
-    # back with int(key) on the server side (see app/possessions.py or
-    # wherever this actually gets consumed).
+    # JSON object keys are strings; consumers read them back with int(key).
     output = {str(item_id): resolved[item_id] for item_id in sorted(resolved)}
     with open(OUTPUT_PATH, "w") as f:
         json.dump(output, f, separators=(",", ":"))

@@ -1,67 +1,24 @@
-"""One-off script: builds the curated "day of loot" dataset behind the
-landing page's interactive Loot Tracker preview (see
-render_landing_loot_preview in app/pages.py) and writes it to
-app/data/landing_loot_demo.json.
+"""One-off script: build the curated "day of loot" dataset behind the landing
+page's Loot Tracker preview (render_landing_loot_preview in app/pages.py) and
+write app/data/landing_loot_demo.json.
+The preview is a fixed snapshot, not a live feature: one made-up day of
+killing four NPCs (Goblin, Hill Giant, Turoth, Pyrelord), with drops simulated
+from hand-transcribed wiki drop tables (NPCS), spread over 24 hours with four
+blank hours (BLANK_HOURS/SESSION_PLAN).
+The output comes from the real aggregation (build_loot_state in app/loot.py)
+run against a throwaway demo GameAccount's LootEvent rows, so the data shape
+matches a real player's page at the GE prices current when the script ran.
+Numbers change only when the script is re-run.
+A third key, "hideBreakdown", holds one entry per hour, {npcName: {killCount,
+items: {itemHideKey: value}}}. It lets the preview's hide/unhide buttons
+update the chart and header totals client-side; values go through
+_resolve_loot_items, the same pricing code build_loot_state uses.
+Two independently seeded random.Random instances (`rng`, `loot_rng`) keep the
+day's schedule and the loot rolls separate, so tuning one does not change the
+other.
 
-This is NOT a live feature -- there's no logged-out account for a
-marketing-page visitor to poll real loot from, so the preview instead
-ships a single, fixed ("curated", the person's own word for it when
-this was scoped) snapshot: one made-up "day" of killing four NPCs the
-person picked by name and kill count, with drops simulated from each
-NPC's real OSRS Wiki drop table (weights/rates hand-transcribed into
-NPCS below), spread across a 24-hour schedule with exactly four blank
-hours (see BLANK_HOURS/SESSION_PLAN) rather than either a perfectly
-even distribution or one single sitting.
-
-Originally shipped with eight NPCs (also Green dragon, Frost dragon,
-Venenatis, The Leviathan), but the person asked for those four to come
-back out -- their much higher-value drops (dragon bones, blood runes,
-Fangs of Venenatis and the like) were skewing the whole day's loot
-distribution next to four low/mid-level NPCs' worth of loot. What's
-left is a Goblin/Hill Giant/Turoth/Pyrelord day only.
-
-The output is produced by running the exact same server-side
-aggregation the real Loot Tracker uses (build_loot_state in
-app/loot.py) against a throwaway, immediately-deleted demo
-GameAccount's LootEvent rows -- not a hand-rolled reimplementation of
-that bucketing/pricing/icon-resolution logic -- so the preview's data
-shape is guaranteed byte-identical to what a real player's page would
-produce, at whatever live GE prices were current the moment this
-script last ran. That also means the numbers only ever change by
-re-running this script by hand (same as every other snapshot in
-app/data/ -- see e.g. scripts/fetch_npc_names.py's own docstring),
-never automatically, matching the "fixed, not randomized every page
-load" choice this preview was built around.
-
-Also writes a third top-level key, "hideBreakdown" -- one entry per
-hour, each {npcName: {killCount, items: {itemHideKey: value}}} for
-whichever NPCs actually killed something that hour -- alongside the
-two build_loot_state outputs above. This is what lets the preview's
-own hide/unhide eye buttons (see render_landing_loot_preview's wrapper
-script) actually move the chart bars and header kc/gp totals instead
-of just dimming a tile: build_loot_state's own hidden-NPC/hidden-item
-exclusion math (see its own docstring) is simple enough -- sum values,
-skip a hidden NPC's kills entirely, skip a hidden item's own value --
-that redoing just that part client-side, off data this precise, isn't
-the reimplementation-drift risk avoiding the rest of build_loot_state
-was about; the values folded into it are still resolved through
-_resolve_loot_items below, the same pricing/mapping code build_loot_
-state itself calls, not re-derived by hand.
-
-Two separate random.Random instances, both seeded but independently
-so (see `rng`/`loot_rng` below): one lays out the day's schedule (how
-kills split across hours), the other rolls each kill's own loot --
-kept apart so hand-tuning one never perturbs the other. loot_rng's
-seed here (9) was originally picked by searching across a range of
-seeds offline for a satisfying spread of rare drops from the since-
-removed higher-level NPCs (see above); nothing in the remaining four
-NPCs' own drop tables is rare enough for the specific seed to matter
-much, so it was left as-is rather than re-searched.
-
-Run with: python scripts/gen_landing_loot_demo.py (from the repo
-root, with a real DATABASE_URL in the environment -- it needs a
-working DB connection to run build_loot_state against, same as the
-app itself).
+Usage: python scripts/gen_landing_loot_demo.py (repo root, with a real
+DATABASE_URL set).
 """
 import datetime as dt
 import json
@@ -81,9 +38,8 @@ from app.purchase_goals import get_latest_prices, get_mapping
 OUTPUT_PATH = _REPO_ROOT / "app" / "data" / "landing_loot_demo.json"
 DEMO_MARKER_EMAIL = "landing-demo-internal@myscape.invalid"
 
-# name -> real OSRS item id (RuneLite CDN icons and GE pricing are both
-# keyed off this, same as every other item-source table in this app --
-# see item_icon_url/get_latest_prices in app/purchase_goals.py).
+# name -> OSRS item id, used for RuneLite CDN icons and GE pricing (see
+# item_icon_url/get_latest_prices in app/purchase_goals.py).
 ITEM_ID = {
     "Coins": 995,
     "Bones": 526, "Big bones": 532, "Bronze sq shield": 1173, "Bronze spear": 1237,
@@ -132,14 +88,10 @@ ITEM_ID = {
 
 
 def T(*rows):
-    """rows: (name, qty, weight) -- one row per main-table drop-table
-    entry, weight exactly the numerator the wiki lists it under (out of
-    that table's own denominator, e.g. weight=28 of 128 for a goblin's
-    common 5gp drop). Returns (rows, denom=sum of weights) for
-    roll_table below; any shortfall between the weights' own sum and
-    the table's real wiki-stated denominator is an implicit "nothing"
-    (this main roll adds no extra item beyond whatever's in `always`),
-    same as a real kill often outright not dropping anything notable."""
+    """rows: (name, qty, weight), one per main-table entry, weight being the
+    wiki's numerator. Returns (rows, denom=sum of weights) for roll_table; any
+    gap to the wiki's real denominator is an implicit "nothing" roll.
+    """
     denom = sum(w for _, _, w in rows)
     return rows, denom
 
@@ -154,13 +106,9 @@ def roll_table(rows, denom, rng):
     return None
 
 
-# Each NPC: always=[(name,qty), ...] (unconditional per-kill drops),
-# tables=[(rows, denom), ...] (independently-rolled weighted tables --
-# each of these four NPCs has just the one, matching their wiki page's
-# own single combined table), tertiary=[(name, qty, probability), ...]
-# (independent low-probability per-kill rolls, each item's own
-# absolute rate as the wiki states it -- nothing flashy in this
-# lower-level foursome, just the two NPCs' own ensouled-head drops).
+# Each NPC: always=[(name,qty), ...] (every kill), tables=[(rows, denom), ...]
+# (independently rolled weighted tables), tertiary=[(name, qty, probability),
+# ...] (independent per-kill rolls at the wiki's absolute rate).
 NPCS = {
     "Goblin": {
         "combat_level": 2,
@@ -214,7 +162,6 @@ NPCS = {
     },
 }
 
-# Exactly the four NPCs and kill counts the person asked to keep.
 KC = {
     "Goblin": 238, "Hill Giant": 109, "Turoth": 33, "Pyrelord": 83,
 }
@@ -238,23 +185,16 @@ def simulate_kill(npc_name, rng):
 def build_events():
     rng = random.Random(9)  # schedule timing (session split, per-kill timestamps)
     loot_rng = random.Random(9)  # loot rolls only -- see this file's own module
-    # docstring for why this is a second, independent Random instance
-    # rather than reusing `rng` above.
+    # A second, independent Random instance; see the module docstring.
 
-    # 24 one-hour slots, exactly 4 left blank (spread through the day,
-    # not clustered -- an overnight lull, a mid-morning break, an
-    # afternoon break, a dinner break), the rest carrying one NPC
-    # "session" apiece (a player sticking with one task for a couple
-    # hours before switching, the way a real grinding day actually
-    # looks) with that NPC's kills spread unevenly through its
-    # session's minutes rather than a perfectly even split.
+    # 24 one-hour slots with 4 blank (an overnight lull and three breaks), the
+    # rest each carrying one NPC session, with that NPC's kills spread unevenly
+    # across the session's minutes.
     blank_hours = {3, 4, 9, 20}
     active_hours = [h for h in range(24) if h not in blank_hours]  # 20 hours
 
-    # Roughly proportional to each NPC's own kill count (Goblin 238
-    # down to Turoth 33), same "a player sticks with one task for a
-    # couple hours, at different points across the day" shape as
-    # before, just spread across four NPCs' sessions instead of eight.
+    # Roughly proportional to each NPC's kill count (Goblin 238 down to Turoth
+    # 33).
     session_plan = [
         ("Goblin", 3), ("Hill Giant", 2), ("Turoth", 1), ("Pyrelord", 2),
         ("Goblin", 3), ("Hill Giant", 2), ("Pyrelord", 2),
@@ -329,8 +269,7 @@ def main():
             db.add(ga)
             db.flush()
 
-        # Wipe any previous run's rows first so re-running this script
-        # regenerates cleanly rather than doubling up.
+        # Wipe any previous run's rows so re-running regenerates cleanly.
         db.query(LootEvent).filter(LootEvent.game_account_id == ga.id).delete()
         db.flush()
 
@@ -353,14 +292,11 @@ def main():
         print("windowKills:", full_state["windowKills"], "windowValue:", full_state["windowValue"])
         print("blank buckets:", [i for i, b in enumerate(full_state["buckets"]) if b["killCount"] == 0])
 
-        # One extra build_loot_state call per bucket, scoped to that
-        # bucket's own precise [start, end) -- the exact same call the
-        # real page's own bucketUrl()/loadBucketData() makes when a bar
-        # is clicked (see render_loot_tracker's script in app/pages.py).
-        # Precomputed here, once, rather than on demand, since there's
-        # no live backend behind this preview to answer that request
-        # later -- see render_landing_loot_preview's own fetch shim,
-        # which serves these back out by matching on each bucket's own
+        # One build_loot_state call per bucket over its [start, end) range, the
+        # same call the real page makes when a bar is clicked
+        # (bucketUrl()/loadBucketData() in render_loot_tracker, app/pages.py).
+        # Precomputed because the preview has no backend;
+        # render_landing_loot_preview's fetch shim serves it by each bucket's
         # `start` timestamp.
         bucket_states = []
         for b in full_state["buckets"]:
@@ -368,16 +304,10 @@ def main():
             b_end = dt.datetime.fromisoformat(b["end"]) - dt.timedelta(milliseconds=1)
             bucket_states.append(build_loot_state(db, ga, b_start, b_end))
 
-        # hideBreakdown -- see this module's own docstring for what it's
-        # for. Built straight off `events` (this script's own simulated
-        # kills, still in hand from build_events() above) rather than
-        # querying LootEvent back out of the DB, and resolved through
-        # the exact same _resolve_loot_items build_loot_state itself
-        # calls -- get_mapping()/get_latest_prices() are both cached at
-        # module level (see app/purchase_goals.py), so calling them
-        # again here returns the identical mapping/prices already used
-        # for full_state/bucket_states above, not a second live fetch
-        # that could disagree with them.
+        # hideBreakdown (see the module docstring), built from the in-memory
+        # `events` rather than re-querying the DB.
+        # get_mapping()/get_latest_prices() are cached at module level
+        # (app/purchase_goals.py), so the prices match full_state/bucket_states.
         mapping, _mapping_error = get_mapping()
         prices, _prices_error = get_latest_prices()
         hide_breakdown = [dict() for _ in range(24)]
@@ -404,9 +334,7 @@ def main():
             )
         print(f"wrote {OUTPUT_PATH} ({OUTPUT_PATH.stat().st_size} bytes)")
 
-        # This demo account/game_account/its events only ever existed
-        # to let build_loot_state compute the real payload above --
-        # nothing about it should linger as an actual row afterward.
+        # Remove the demo account and its rows so nothing lingers.
         db.query(LootEvent).filter(LootEvent.game_account_id == ga.id).delete()
         db.delete(ga)
         db.delete(acct)

@@ -1,84 +1,48 @@
-"""Real OSRS item id/icon lookup for items that AREN'T Grand Exchange
-tradeable (see app/purchase_goals.py's `mapping` for tradeable items,
-which already carry a real id from the wiki's price-mapping API).
+"""Real OSRS item id/icon lookup for items that are NOT Grand Exchange tradeable
+(tradeable items already carry an id from the price-mapping API in
+app/purchase_goals.py).
 
-This exists to fix a specific, longstanding gap: an untradeable item
-in a gear setup -- a plain one, a recipe material, or the combined item
-itself -- could previously only be matched against what a player
-already owns by comparing item NAME TEXT (see _take_owned in
-app/purchase_goals.py). That's fragile -- the RuneLite plugin reports
-whatever the game client itself calls the item, and if that text
-differs from what a gear slot or recipe names it in ANY way (an
-apostrophe encoded differently, incidental whitespace, a stray
-capitalization difference) the match silently fails and the item looks
-unowned even when it isn't.
+Matching untradeable items a player owns by NAME TEXT (see _take_owned in
+app/purchase_goals.py) is fragile: apostrophe encoding, whitespace or
+capitalization differences make the match fail silently. Item ids are
+permanent and globally unique, the same ones RuneLite reports.
 
-Every item in the game -- tradeable or not -- has a small number of
-real, permanent, globally-unique numeric ids, the SAME ones RuneLite
-itself reports. Backed by a static JSON snapshot (app/data/item_ids.json)
-built from the OSRS Wiki's "Bucket" data extension's item infobox table
--- see scripts/fetch_item_ids.py for how it's generated/regenerated.
-Like recipes, this data only changes when new items are added to the
-game, so a bundled snapshot (refreshed by manually re-running that
-script) is plenty.
+Backed by a static snapshot (app/data/item_ids.json) built from the OSRS
+Wiki's "Bucket" item infobox table; see scripts/fetch_item_ids.py to
+regenerate. The data changes only when items are added to the game.
 """
 import json
 import pathlib
 from typing import Dict, List, Optional
 
 ITEM_IDS_PATH = pathlib.Path(__file__).resolve().parent / "data" / "item_ids.json"
-# {wiki image filename (lowercase, no "File:" prefix): [item_id, ...]}
-# -- a DIFFERENT snapshot from item_ids.json above, and the reason it
-# exists rather than just reusing that one: item_ids.json merges every
-# cosmetic recolor of one item page under a single shared NAME (e.g.
-# every Crystal helm colour is stored under the one key "crystal
-# helm"), because that's what the wiki's own infobox_item rows share
-# too -- so it has no way to tell "Crystal helm (Ithell)" apart from
-# any other colour by name alone. Those same rows each carry their OWN
-# distinct 'image' field, though (e.g. "File:Crystal helm
-# (Ithell).png") -- exactly the filename app/data/recipes.json already
-# stores per colour variant -- so keying by THAT instead resolves an
-# exact recipe icon filename straight to its real id, letting
-# _untradeable_item_icon (app/purchase_goals.py) reach the RuneLite CDN
-# for a cosmetic-variant name even though item_ids.json's name-merged
-# snapshot can't place it. See scripts/fetch_icon_ids_by_filename.py.
+# {wiki image filename (lowercase, no "File:" prefix): [item_id, ...]}. A
+# separate snapshot because item_ids.json merges every cosmetic recolor under
+# one shared name (e.g. all Crystal helm colours under "crystal helm"), but each
+# recolor has its own image filename, which is what app/data/recipes.json stores
+# per variant. Lets _untradeable_item_icon (app/purchase_goals.py) reach the
+# RuneLite CDN for those names. See scripts/fetch_icon_ids_by_filename.py.
 ICON_IDS_BY_FILENAME_PATH = pathlib.Path(__file__).resolve().parent / "data" / "icon_ids_by_filename.json"
 
 _item_index: Optional[Dict[str, dict]] = None
 _icon_filename_index: Optional[Dict[str, List[int]]] = None
 
-# A small number of item_ids.json entries whose "name" is itself a
-# scrape artifact -- the wiki's own infobox markup leaked straight
-# into the name field instead of being stripped to plain text -- so
-# there's no clean display name to show a player at all, only raw
-# HTML/wikitext. Excluded here (by their exact key in the snapshot,
-# lowercased the same way get_item_index below keys everything) so
-# they never reach find_item_ids/find_item_by_exact_name/
-# search_item_names below, and therefore never surface in a search
-# dropdown anywhere on the site that ultimately calls one of those
-# three (Purchase Goals' search_items, its search_trackable_items
-# reuse in app/possessions.py, and this module's own search_item_names
-# as the final tier of each) -- reported after "Lovley[sic] jubbly
-# bib" (item id 32928) showed up, raw markup and all, in a Purchase
-# Goals item search. Applied at load time rather than edited into the
-# JSON file itself so it survives a future regeneration by
-# scripts/fetch_item_ids.py without silently reappearing -- check this
-# list again after any regeneration in case the wiki's scrape picks up
-# new ones of these.
+# item_ids.json entries whose "name" is a scrape artifact (raw infobox markup
+# instead of plain text). Excluded by exact lowercased key (as keyed in
+# get_item_index) so they never reach find_item_ids, find_item_by_exact_name or
+# search_item_names, or any search dropdown built on them (Purchase Goals'
+# search_items, search_trackable_items in app/possessions.py). Applied at load
+# time so it survives regeneration; recheck the list after running
+# scripts/fetch_item_ids.py.
 _BAD_ITEM_INDEX_KEYS = {
-    # "Lovley[sic] jubbly bib" -- the wiki's "[sic]" citation-note
-    # template (marking a misspelling in the item's real name as
-    # intentional, not a wiki typo) rendered as literal HTML instead of
-    # being resolved to plain text.
+    # "Lovley[sic] jubbly bib": the wiki's "[sic]" template rendered as literal
+    # HTML.
     'lovley<sup class="noprint">&#91;<span class="fact-text" '
     'title="the preceding quoted material has been reproduced '
     'verbatim from the quoted original and is not a transcription '
     'error.">sic</span>&#93;</sup> jubbly bib',
-    # The wiki's own "null name" placeholder template -- rendered for
-    # an entity infobox with no real name on file -- scraped as if it
-    # were the item's actual name. Shares its icon (Exploding vial) and
-    # ids with a real, ordinary item, so hiding this entry loses
-    # nothing except the unusable name.
+    # The wiki's "null name" placeholder template scraped as a name. It shares
+    # icon and ids with a real item, so hiding it loses nothing.
     'null <sup><span style="cursor:help; border-bottom:1px dotted" '
     'title="the name of this entity is not defined in the game.">'
     '[?]</span></sup>[[category:pages with null name]]',
@@ -100,8 +64,8 @@ def get_item_index() -> Dict[str, dict]:
     return _item_index
 
 
-# Master Scroll Book interface text -> real teleport item name, for the
-# few scrolls whose book label isn't simply "<label> teleport".
+# Master Scroll Book interface text -> real teleport item name, for scrolls
+# whose label is not simply "<label> teleport".
 _MASTER_SCROLL_BOOK_ALIASES = {
     "chasm of fire": "chasm teleport scroll",
     "chasm": "chasm teleport scroll",
@@ -127,24 +91,19 @@ def _get_teleport_item_ids() -> set:
 
 
 def canonical_master_scroll_item_id(item_id: int, item_name: Optional[str]) -> int:
-    """The Master Scroll Book's own interface shows the scroll set as
-    the book's DEFAULT teleport with a different, untradeable cosmetic
-    item id (drawn green, labelled with the short interface text such
-    as "Nardah" or "Chasm of fire" instead of the real item name), so
-    reading the icon widget's id verbatim made that one scroll lose its
-    normal icon, its full name, and its Grand Exchange value. The
-    interface text is the only thing that identifies it, so resolve
-    that back to the real teleport scroll's id. An id that already
-    belongs to a real teleport item is returned unchanged, as is
-    anything whose text can't be resolved."""
+    """The Master Scroll Book shows the default-set scroll with an untradeable
+    cosmetic item id and short interface text (e.g. "Nardah"), which loses its
+    normal icon, name and Grand Exchange value. Resolves that text back to the
+    real teleport scroll's id. An id that already belongs to a real teleport
+    item, or text that cannot be resolved, is returned unchanged.
+    """
     if item_id in _get_teleport_item_ids() or not item_name:
         return item_id
     label = " ".join(item_name.replace("\u2019", "'").replace("<br>", "").split()).lower()
     if not label:
         return item_id
-    # The interface wraps long labels with a hyphen ("Arde-" / "aglais"),
-    # which survives once the line break itself is stripped -- so also
-    # try the label with hyphens removed.
+    # The interface wraps long labels with a hyphen ("Arde-" / "aglais"), which
+    # survives line-break stripping, so also try the label without hyphens.
     labels = [label]
     if "-" in label:
         labels.append(label.replace("-", ""))
@@ -175,11 +134,10 @@ def get_icon_filename_index() -> Dict[str, List[int]]:
 
 
 def find_item_ids(item_name: str) -> Optional[List[int]]:
-    """Returns every real game item id documented for item_name
-    (case-insensitive exact match), or None if it isn't in the
-    snapshot. A name can resolve to more than one id -- a quest-reward
-    or minigame-only variant alongside the standard item, for instance
-    -- and owning any one of them counts as owning the item."""
+    """Every game item id documented for item_name (case-insensitive exact
+    match), or None. A name can have several ids (e.g. quest-reward variants);
+    owning any counts as owning the item.
+    """
     if not item_name:
         return None
     entry = get_item_index().get(item_name.strip().lower())
@@ -187,33 +145,23 @@ def find_item_ids(item_name: str) -> Optional[List[int]]:
 
 
 def find_item_by_exact_name(item_name: str) -> Optional[dict]:
-    """Returns the raw {"name": str, "icon": str|None, "ids": [int, ...]}
-    entry for item_name (case-insensitive exact match), or None. Used by
-    search_items in app/purchase_goals.py as the last of three tiers it
-    checks for an EXACT match (after the live tradeable mapping and
-    known recipes) -- see that function's own comment for why a plain
-    startswith/contains scan alone isn't enough to guarantee a short,
-    precise name (e.g. "Dom", the Doom of Mokhaiotl's pet) actually
-    surfaces as a search result at all, let alone first."""
+    """The raw {"name": str, "icon": str|None, "ids": [int, ...]} entry for
+    item_name (case-insensitive exact match), or None. Used by search_items in
+    app/purchase_goals.py as the last exact-match tier, so short precise names
+    (e.g. "Dom") surface in search.
+    """
     if not item_name:
         return None
     return get_item_index().get(item_name.strip().lower())
 
 
 def find_item_id_by_icon_filename(icon_filename: str) -> Optional[int]:
-    """Returns a real item id for a wiki image filename (case-
-    insensitive, "File:" prefix optional) documented in
-    ICON_IDS_BY_FILENAME_PATH's snapshot, or None if it isn't there.
-    Used by _untradeable_item_icon in app/purchase_goals.py to resolve
-    an exact cosmetic-variant name (e.g. "Crystal helm (Ithell)") that
-    find_item_ids above can't place -- item_ids.json merges every
-    recolor of one item page under a single shared name, but each
-    recolor's own icon filename is still distinct, and that's exactly
-    what app/data/recipes.json stores per variant. A filename can list
-    more than one real id (an inventory/worn pair sharing one look,
-    same as find_item_ids' own multi-id case) -- the first is used,
-    since by construction every id sharing a filename shares its icon
-    too, so which one is "as good as any" here."""
+    """A real item id for a wiki image filename (case-insensitive, "File:"
+    optional) from ICON_IDS_BY_FILENAME_PATH's snapshot, or None. Used by
+    _untradeable_item_icon in app/purchase_goals.py for cosmetic variants that
+    find_item_ids cannot place. If a filename lists several ids the first is
+    used, since ids sharing a filename share an icon.
+    """
     if not icon_filename:
         return None
     name = icon_filename.strip()
@@ -224,19 +172,14 @@ def find_item_id_by_icon_filename(icon_filename: str) -> Optional[int]:
 
 
 def search_item_names(query: str, limit: int, exclude: Optional[set] = None) -> List[dict]:
-    """Fuzzy-searches this snapshot by name, using the same
-    startswith-then-contains scheme as search_items in
-    app/purchase_goals.py and search_recipe_names in app/recipes.py --
-    the final fallback tier in search_items, once neither a live
-    Grand Exchange match nor a known combination recipe covers the
-    query, so that a genuinely untradeable, non-combined item (a quest
-    reward, a minigame-only item, anything else this snapshot covers
-    but the other two don't) can still be found by name and shown with
-    its real icon rather than being unfindable. `exclude` is a set of
-    already-used lowercased names to skip, so nothing already matched
-    by an earlier tier is suggested twice. Returns raw entries --
-    {"name": str, "icon": str|None (a wiki image filename, not yet a
-    full URL)}."""
+    """Fuzzy name search over this snapshot (startswith, then contains, as in
+    search_items in app/purchase_goals.py and search_recipe_names in
+    app/recipes.py). The final tier of search_items, so untradeable non-recipe
+    items (quest rewards, minigame items) are findable with a real icon.
+    `exclude` is a set of lowercased names already matched by earlier tiers.
+    Returns raw entries {"name": str, "icon": str|None (a wiki filename, not a
+    URL)}.
+    """
     q = (query or "").strip().lower()
     if not q:
         return []

@@ -1,33 +1,17 @@
-"""One-off script: fetch the OSRS Wiki's Bucket:Recipe table in full,
-keep only entries shaped like a pure item combination -- no uses_skill
-(e.g. Neitiznot faceguard = Helm of Neitiznot + Basilisk jaw -- see the
-research notes in the conversation this was built from), OR the exact
-uses_skill pair ["Magic", "Runecraft"] (see ALSO_ALLOWED_SKILL_SIGNATURE
-below) -- and an output quantity of exactly 1 (excludes batch-crafting
-recipes like "5 poisoned arrows from a batch of unfinished ones", where
-the listed material quantities are for the whole batch, not per unit,
-and dividing them out isn't something this script tries to do) -- and
-write a compact {outputNameLower: {"name":..., "icon":...,
-"materials": [...]}} JSON index to app/data/recipes.json for the app to
-bundle/ship. Keyed by the recipe's OUTPUT name rather than the wiki
-page name, since one page can document several output variants (e.g.
-"Adamant arrow" documents both plain and poisoned arrows as separate
-rows) and it's the output name a player would actually search for.
+"""One-off script: fetch the wiki's Bucket:Recipe table and write
+app/data/recipes.json, a {outputNameLower: {"name", "icon", "materials":
+[...]}} index.
+Only pure item combinations are kept (e.g. Neitiznot faceguard = Helm of
+Neitiznot + Basilisk jaw): no uses_skill, or the exact pair in
+ALSO_ALLOWED_SKILL_SIGNATURE, and an output quantity of exactly 1 (batch
+recipes list whole-batch quantities, which this script does not divide). Keyed
+by output name because one page can document several outputs ("Adamant arrow"
+covers plain and poisoned arrows).
+The snapshot records one level only; app/recipes.py (expand_recipe_components)
+resolves nested combinations at lookup time.
 
-Recipes are resolved recursively at lookup time, not here (see
-expand_recipe_components in app/recipes.py) -- some combination items
-are themselves built from other combination items (e.g. Avernic treads
-(max) is built by combining in Primordial/Pegasian/Eternal boots one at
-a time, each of which is itself a combination of a base boot + an
-elite crystal), so this snapshot only needs to record one level of
-"what this specific output is made of" and let the app walk the chain.
-
-Run with: python scripts/fetch_recipes.py (from the repo root).
-
-Re-run this manually (not on a schedule) if new combination gear is
-added to the game and the app doesn't recognize it yet -- combination
-recipes essentially never change, so this is a cached snapshot, not a
-live query.
+Usage: python scripts/fetch_recipes.py (repo root). Re-run by hand when new
+combination gear is not recognized.
 """
 import json
 import pathlib
@@ -40,50 +24,24 @@ USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 PAGE_SIZE = 5000
 OUTPUT_PATH = pathlib.Path(__file__).resolve().parent.parent / "app" / "data" / "recipes.json"
 
-# A handful of genuine item-combination recipes (combine a base item +
-# an upgrade item at an altar/ritual) also carry this exact skill
-# signature, apparently because the ritual itself grants a small flavor
-# XP reward (200 Magic + 200 Runecraft) -- Eternal/Pegasian/Primordial
-# boots, the full Avernic treads upgrade chain, and the Ecumenical key.
-# Verified against every one of the ~210 Runecraft-tagged rows in the
-# wiki's Recipe table (as of when this was written): this exact pair,
-# in this exact order, appears on exactly those 11 items and nothing
-# else -- no true skilling recipe (runecrafting runes, enchanting,
-# etc.) uses this precise combination, so allowing it through doesn't
-# risk pulling in real skilling content. If the wiki ever reorganizes
-# this data and that stops being true, re-verify before trusting it
-# again -- this is a narrow, checked exception, not a general "ignore
-# uses_skill" rule.
+# A few real combination recipes (Eternal/Pegasian/Primordial boots, the Avernic
+# treads chain, Ecumenical key) carry the skill pair ["Magic", "Runecraft"] from
+# a small ritual XP reward. That exact pair, in that order, appears on those 11
+# items only, so allowing it pulls in no real skilling recipes. Re-verify if the
+# wiki data is reorganized.
 ALSO_ALLOWED_SKILL_SIGNATURE = ["Magic", "Runecraft"]
 
-# The three Doom of Mokhaiotl demonbane weapons are also genuine 1:1
-# item combinations (each is a Tormented synapse combined with one
-# other base item at an anvil/fletching bench), but each carries its
-# own DIFFERENT incidental skill tag instead of one shared signature
-# like ALSO_ALLOWED_SKILL_SIGNATURE above -- Emberlight is tagged
-# Smithing, Scorching bow is tagged Fletching, Purging staff is tagged
-# both Crafting and Smithing (verified individually against the wiki's
-# Recipe bucket when this was added). Allowed through by exact page
-# name instead of by skill tag, since none of those three tags alone is
-# safe to allow in general the way the Runecraft pair is -- each one
-# also covers plenty of real skilling recipes.
+# The three Doom of Mokhaiotl demonbane weapons (Emberlight, Scorching bow,
+# Purging staff) are 1:1 combinations, but each has its own incidental skill tag
+# (Smithing, Fletching, Crafting+Smithing) that cannot be allowed generally.
+# They are allowed by exact page name instead.
 ALSO_ALLOWED_PAGE_NAMES = {"Emberlight", "Scorching bow", "Purging staff"}
 
-# Emberlight's real materials (per the wiki) are a Tormented synapse
-# PLUS an Arclight -- but Arclight is itself untradeable with no recipe
-# of its own, and it's a prerequisite the player necessarily already
-# has the moment they're capable of making Emberlight at all (it's
-# consumed in the exchange, not bought), so including it as a tracked
-# material would only ever add an extra "is this owned?" check that
-# can make the whole combo look incomplete for a reason that has
-# nothing to do with money -- see the Neitiznot faceguard precedent,
-# where an unowned untradeable component (Helm of Neitiznot) already
-# does exactly that, which is correct there because the helm genuinely
-# is a separate acquisition step. Requested explicitly: price
-# Emberlight as just its Tormented synapse cost. Scorching bow and
-# Purging staff don't have this wrinkle -- Magic longbow (u), Iron bar,
-# and Battlestaff are all separately tradeable, so they're priced in
-# for real like any other material.
+# Emberlight's wiki materials include an Arclight, which is untradeable, has no
+# recipe, and is consumed as a prerequisite the player already owns. Tracking it
+# would make the combo look incomplete for non-monetary reasons, so Emberlight
+# is priced as its Tormented synapse alone. Scorching bow and Purging staff have
+# only tradeable extras and are priced normally.
 MANUAL_MATERIAL_OVERRIDES = {
     "emberlight": [{"name": "Tormented synapse", "quantity": 1}],
 }
@@ -147,13 +105,9 @@ def main():
             skipped_no_output += 1
             continue
 
-        # Anything other than a 1-for-1 combination (e.g. "5 poisoned
-        # arrows" from a batch of materials) isn't something we can
-        # price correctly here -- the listed material quantities are
-        # for the whole batch, not per output unit, and this script
-        # doesn't attempt that division. This also naturally excludes
-        # almost everything that isn't gear/equipment, which tends to
-        # be exactly the kind of true 1:1 assembly this feature is for.
+        # Only 1-for-1 combinations are kept: batch recipes list whole-batch
+        # quantities and are not divided here. This also mostly limits results
+        # to gear.
         try:
             out_qty = int(float(output.get("quantity") or 1))
         except (TypeError, ValueError):
@@ -176,16 +130,11 @@ def main():
             continue
 
         key = out_name.lower()
-        # A curated correction beats whatever the wiki's raw materials
-        # list says for the handful of outputs in
-        # MANUAL_MATERIAL_OVERRIDES above (currently just Emberlight) --
-        # see that constant's comment for why.
+        # MANUAL_MATERIAL_OVERRIDES (currently Emberlight) take precedence over
+        # the wiki's materials list.
         parsed_materials = MANUAL_MATERIAL_OVERRIDES.get(key, parsed_materials)
-        # First recipe seen for a given output name wins -- a handful of
-        # items are documented with more than one way to obtain them
-        # (e.g. via a quest reward as well as combining parts); the
-        # first one the wiki returns is as good a pick as any, and
-        # stability matters more than which one here.
+        # The first recipe seen for an output name wins (some items have several
+        # ways to obtain them).
         index.setdefault(key, {
             "name": out_name,
             "icon": output.get("image") or None,

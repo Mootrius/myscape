@@ -1,40 +1,23 @@
-"""The collection log's own static structure (tabs -> pages -> items)
-and item-name lookup, plus validation of a synced item id against it.
+"""The collection log's static structure (tabs -> pages -> items), item-name
+lookup, and validation of synced item ids.
 
-Backed by two static JSON snapshots in app/data/:
+Backed by two snapshots in app/data/:
+- collection_log_schema.json: {<item id>: tab/page structure}, read from the
+RuneLite client's cache data (see CollectionLogSchemaExporter in the
+Mootrius/myscape-plugin repo for the method and the evansloan/collection-log
+credit). It is identical for every player, so it is bundled.
+- collection_log_item_names.json: {<item id>: <item name>} for the schema's
+ids; see scripts/build_collection_log_item_names.py.
 
-- collection_log_schema.json: {<item id>: nothing but the tab/page
-  structure itself} -- read straight out of the RuneLite client's own
-  cache data (struct/enum compositions), not hand-compiled; see
-  CollectionLogSchemaExporter in the Mootrius/myscape-plugin repo for
-  exactly how, and its own doc comment for the evansloan/collection-log
-  credit. Every real OSRS game build has exactly one such structure --
-  it's identical for every player -- so, like item_ids.json/
-  quest_names.json/npc_names.json elsewhere in this app, it only needs
-  exporting once and is bundled here rather than re-derived per sync.
-- collection_log_item_names.json: {<item id>: <item name>} for exactly
-  the item ids the schema above uses -- see
-  scripts/build_collection_log_item_names.py for how it's built.
+A leaf module (no app imports, like app/item_ids.py, app/quest_names.py,
+app/npc_names.py). Icons are left to the caller via item_icon_url(item["id"])
+in app/purchase_goals.py: importing it here would risk a cycle, since
+purchase_goals imports app.schemas, which imports get_valid_item_ids from here
+(CollectionLogItemIn).
 
-Deliberately a leaf module (no imports from elsewhere in this app,
-matching app/item_ids.py/app/quest_names.py/app/npc_names.py), so it
-never has to answer for an icon URL: item_icon_url in
-app/purchase_goals.py is already "the one place every item icon in
-this app is built from now" (see that function's own comment) --
-get_collection_log_tabs below leaves icons to its caller (an item's
-`id` is everything item_icon_url needs) rather than importing that
-function in here and risking a real import cycle for it (purchase_
-goals.py itself imports from app.schemas, which is exactly where this
-module's own get_valid_item_ids gets imported FROM, for the synced-
-item-id validator -- see CollectionLogItemIn there).
-
-What this module is deliberately NOT the source of: which of these
-items a given player has actually obtained, and in what quantity.
-That's per-player state (GameAccount.collection_log_items in
-app/models.py, synced by POST /api/players/me/collection-log in
-app/main.py) -- this module only ever answers "what's the shape of the
-whole collection log" and "what's item <id> called", the same
-structure for every player.
+Per-player obtained items are not here; they live in
+GameAccount.collection_log_items (app/models.py), synced by POST
+/api/players/me/collection-log (app/main.py).
 """
 import json
 import pathlib
@@ -66,11 +49,8 @@ def _load_item_names() -> Dict[int, str]:
         try:
             with open(ITEM_NAMES_PATH, "r", encoding="utf-8") as f:
                 raw = json.load(f)
-            # Keys are strings in the JSON file itself (see that
-            # script's own comment on why) -- converted to real ints
-            # once here so every other function in this module can
-            # just use real item ids throughout, matching every other
-            # id-keyed structure in this app.
+            # JSON keys are strings; converted to ints once so the rest of the
+            # module uses real item ids.
             _item_names = {int(k): v for k, v in raw.items()}
         except (OSError, json.JSONDecodeError, ValueError):
             _item_names = {}
@@ -89,15 +69,13 @@ def _normalize_item_name(name: str) -> str:
 
 
 def find_unique_item_id_by_name(name: Optional[str]) -> Optional[int]:
-    """The collection log item id for a name the game itself printed
-    (the "New item added to your collection log: <name>" chat line --
-    see POST /api/players/me/collection-log/item), or None when the
-    name isn't in the log OR isn't unambiguous. A handful of names
-    belong to several distinct log slots (every Ancient page, each
-    Graceful recolor, Decorative armour, ...), and the chat line says
-    nothing about which one was just unlocked, so those are
-    deliberately NOT guessed at -- they simply show up the next time
-    the player opens the in-game collection log."""
+    """The collection log item id for a name printed by the game ("New item added
+    to your collection log: <name>"; POST
+    /api/players/me/collection-log/item), or None if the name is not in the
+    log or is ambiguous. Names shared by several slots (Ancient pages,
+    Graceful recolors, Decorative armour) are not guessed, since the chat line
+    does not say which unlocked; they appear on the next full sync.
+    """
     global _item_ids_by_name
     if not name:
         return None
@@ -111,10 +89,10 @@ def find_unique_item_id_by_name(name: Optional[str]) -> Optional[int]:
 
 
 def get_valid_item_ids() -> FrozenSet[int]:
-    """Every item id the collection log schema actually uses -- the
-    real ceiling a synced item id is validated against (see
-    CollectionLogItemIn in app/schemas.py), the same way DIARY_AREAS/
-    DIARY_TIERS in app/mindmaps.py validate a synced diary sync."""
+    """Every item id the schema uses; the ceiling synced ids are validated
+    against (CollectionLogItemIn in app/schemas.py), like
+    DIARY_AREAS/DIARY_TIERS in app/mindmaps.py.
+    """
     global _valid_item_ids
     if _valid_item_ids is None:
         ids = set()
@@ -126,26 +104,15 @@ def get_valid_item_ids() -> FrozenSet[int]:
 
 
 def get_collection_log_tabs() -> List[dict]:
-    """The full tab -> page -> item structure, each item enriched with
-    its name (get_item_name above) so the Character Overview page's
-    collection log renderer (render_character_overview in
-    app/pages.py) doesn't need a second lookup for that:
-
-    [{"name": <tab name>, "pages": [{"name": <page name>,
-       "items": [{"id": <item id>, "name": <item name>}, ...]},
-      ...]}, ...]
-
-    No icon URL here -- see this module's own top-of-file comment for
-    why that's left to the caller (item_icon_url(item["id"]) in
-    app/purchase_goals.py).
-
-    An item id with no resolvable name (shouldn't happen --
-    scripts/build_collection_log_item_names.py asserts every schema id
-    resolves before it ever writes that snapshot -- but the schema and
-    the name snapshot are two independently-edited files, so this
-    doesn't assume they can never drift apart) falls back to the id
-    itself as a string, the same "show something rather than nothing"
-    fallback every other never-resolved id in this app gets."""
+    """The full tab -> page -> item structure, each item with its name
+    (get_item_name) for render_character_overview in app/pages.py:
+    [{"name": <tab>, "pages": [{"name": <page>, "items": [{"id": <id>, "name":
+    <name>}, ...]}, ...]}, ...]
+    
+    No icon URL (see module docstring). An id with no resolvable name falls
+    back to the id as a string; the build script asserts every schema id
+    resolves, but the two files are edited independently.
+    """
     tabs = []
     for tab in _load_schema().get("tabs", []):
         pages = []

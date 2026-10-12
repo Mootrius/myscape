@@ -1,24 +1,15 @@
-"""Two separate auth mechanisms, for two separate callers:
+"""Two auth mechanisms for two callers:
 
-- The RuneLite plugin authenticates with the long-lived API key it got
-  from the account-linking exchange, sent as a standard
-  `Authorization: Bearer <key>` header on every request.
-- The website authenticates a browser with a signed session cookie
-  (Starlette's SessionMiddleware, wired up in main.py) set at login.
+- The RuneLite plugin sends the long-lived API key from the link exchange as
+`Authorization: Bearer <key>`; it is looked up by SHA-256 hash.
+- The website uses a signed session cookie (Starlette SessionMiddleware, wired
+in main.py). It is signed, not encrypted, and only holds ids, so nothing
+sensitive belongs in it.
 
-Neither one ever compares a raw secret directly -- the API key is
-looked up by its SHA-256 hash, and the session cookie only ever holds
-an account id (it's signed, not encrypted, so nothing sensitive
-belongs in it).
-
-Since the multi-account split (see docs/multi-account-scoping.md),
-"who's signed in" (an Account) and "which linked OSRS character is
-active right now" (a GameAccount) are two different questions with two
-different dependency families below -- get_current_account_* for the
-former, get_current_game_account_* for the latter. Account management
-(settings, logging out, starting a link) wants the Account; virtually
-every real feature endpoint (bank data, skills, gear setups, ...)
-wants the active GameAccount instead.
+"Who is signed in" (an Account) and "which linked character is active" (a
+GameAccount) are separate questions (see docs/multi-account-scoping.md):
+get_current_account_* for the former (settings, logout, starting a link),
+get_current_game_account_* for the latter (virtually every feature endpoint).
 """
 import uuid
 from datetime import datetime, timezone
@@ -33,17 +24,13 @@ from app.pages import PlayerView, build_player_view
 from app.security import hash_token
 
 SESSION_ACCOUNT_ID_KEY = "account_id"
-# Snapshot of Account.token_version at the moment this session was
-# created (see that column's own docstring in app/models.py) -- lets
-# _load_account_from_session below detect a session that's been
-# invalidated by a password reset elsewhere, since there's no
-# server-side session store to delete rows from otherwise.
+# Snapshot of Account.token_version at session creation (see app/models.py).
+# Lets _load_account_from_session detect sessions invalidated by a password
+# change, since there is no server-side session store.
 SESSION_TOKEN_VERSION_KEY = "token_version"
-# Which of the signed-in Account's linked GameAccounts this session
-# currently treats as "active" -- see set_active_game_account and
-# _resolve_active_game_account below. Absent for a session predating
-# multi-account support entirely; falls back to whichever GameAccount
-# comes first in that case, same as a fresh login does.
+# The linked GameAccount this session treats as active (see
+# set_active_game_account and _resolve_active_game_account). When absent, the
+# first GameAccount is used.
 SESSION_ACTIVE_GAME_ACCOUNT_ID_KEY = "active_game_account_id"
 
 
@@ -51,13 +38,11 @@ def get_current_game_account_from_api_key(
     authorization: str = Header(default=""),
     db: Session = Depends(get_db),
 ) -> GameAccount:
-    """For the RuneLite plugin: validates the `Authorization: Bearer
-    <api key>` header set during account linking. Always resolves to a
-    real, already-linked GameAccount -- a PlayerApiKey only ever gets
-    created by a successful link-code exchange (see
-    app/routers/linking.py), which always has a real GameAccount row
-    to attach to by construction, so there's no "not linked yet" gap
-    to handle here the way there is on the session side below."""
+    """For the RuneLite plugin: validates the `Authorization: Bearer <api key>`
+    header. Always resolves to a linked GameAccount, since a PlayerApiKey is
+    only created by a link-code exchange (app/routers/linking.py) that
+    attaches to a real GameAccount row.
+    """
     if not authorization.lower().startswith("bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -83,22 +68,15 @@ def get_current_game_account_from_api_key(
 
 
 def log_in_account(request: Request, account: Account) -> None:
-    """Call after a successful signup/login to start the browser
-    session. Also stamps the session with the account's *current*
-    token_version -- for a fresh signup/login that's just whatever it
-    already was, but for the login reset_password does on your behalf
-    right after changing a password, this is what makes the new
-    session valid under the just-bumped version while every other
-    session (still carrying the old version) stops working.
-
-    Also picks which linked GameAccount is "active" for this session:
-    whichever one comes first, since there's no switcher UI yet (see
-    docs/multi-account-scoping.md's step 7). Signup always creates one
-    empty GameAccount alongside the Account itself (see
-    app/routers/auth.py's signup endpoint), so there's always at least
-    one to pick here, linked or not -- account.game_accounts empty is
-    kept as a real (if normally unreachable) case anyway, the same way
-    _resolve_active_game_account below does."""
+    """Starts the browser session after signup/login. Stamps it with the
+    account's current token_version, so the login done by reset_password after
+    bumping the version is valid while older sessions stop working.
+    
+    The active GameAccount is the first one (no switcher UI yet). Signup
+    always creates one empty GameAccount (app/routers/auth.py), but an empty
+    account.game_accounts is still handled, as in
+    _resolve_active_game_account.
+    """
     request.session[SESSION_ACCOUNT_ID_KEY] = str(account.id)
     request.session[SESSION_TOKEN_VERSION_KEY] = account.token_version
     if account.game_accounts:
@@ -108,11 +86,10 @@ def log_in_account(request: Request, account: Account) -> None:
 
 
 def set_active_game_account(request: Request, game_account: GameAccount) -> None:
-    """Switches which linked GameAccount this session treats as active.
-    The caller is responsible for checking game_account.account_id
-    actually matches the signed-in Account first (see
-    get_current_account_from_session) -- this itself does no ownership
-    check, same division of responsibility as log_in_account above."""
+    """Switches the session's active GameAccount. The caller must first check
+    game_account.account_id matches the signed-in Account (see
+    get_current_account_from_session); no ownership check here.
+    """
     request.session[SESSION_ACTIVE_GAME_ACCOUNT_ID_KEY] = str(game_account.id)
 
 
@@ -134,17 +111,13 @@ def _load_account_from_session(request: Request, db: Session) -> Optional[Accoun
 
     account = db.query(Account).filter(Account.id == account_id).first()
     if account is None:
-        # The account row was deleted after the session cookie was issued.
         log_out_account(request)
         return None
 
     if request.session.get(SESSION_TOKEN_VERSION_KEY) != account.token_version:
-        # Either this session predates token_version existing at all
-        # (missing key -- treated as stale rather than grandfathered
-        # in, so this only ever costs each browser one extra login),
-        # or the account reset their password since this cookie was
-        # issued and reset_password bumped token_version specifically
-        # to invalidate sessions like this one.
+        # Missing key: the session predates token_version (treated as stale,
+        # costing one extra login). Mismatch: the password changed and bumped
+        # token_version to invalidate old sessions.
         log_out_account(request)
         return None
 
@@ -152,21 +125,13 @@ def _load_account_from_session(request: Request, db: Session) -> Optional[Accoun
 
 
 def _resolve_active_game_account(request: Request, db: Session, account: Account) -> Optional[GameAccount]:
-    """Given an already-resolved, signed-in Account, finds whichever of
-    its linked GameAccounts this session currently treats as active.
-    Falls back to whichever GameAccount comes first -- and persists
-    that pick into the session -- if there's no active-game-account
-    claim yet (a session from before multi-account support), or if the
-    claim doesn't actually belong to this Account anymore (stale after
-    that GameAccount was removed).
-
-    Returns None only if the Account has no linked GameAccount at all
-    to fall back to, which never happens in practice once signup
-    creates one empty GameAccount alongside every new Account (see
-    app/routers/auth.py) -- kept as a real return type rather than
-    assumed away, since a row can still be deleted out from under a
-    live session the same way _load_account_from_session already
-    accounts for above."""
+    """Finds the signed-in Account's active GameAccount. Falls back to the first
+    one, persisting that pick into the session, when there is no claim yet or
+    the claimed GameAccount no longer belongs to the Account.
+    
+    Returns None only if the Account has no GameAccount, which signup
+    prevents; a row can still be deleted under a live session.
+    """
     raw_game_account_id = request.session.get(SESSION_ACTIVE_GAME_ACCOUNT_ID_KEY)
     game_account = None
     if raw_game_account_id:
@@ -198,10 +163,9 @@ def get_current_account_from_session(
     request: Request,
     db: Session = Depends(get_db),
 ) -> Account:
-    """For endpoints that only need to know who's signed in, not which
-    linked character is active right now -- account settings, logging
-    out, starting a link, listing/switching linked characters. 401s if
-    there isn't a signed-in Account."""
+    """For endpoints that need only the signed-in Account (settings, logout,
+    starting a link, listing/switching characters). 401s if not signed in.
+    """
     account = _load_account_from_session(request, db)
     if account is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not signed in.")
@@ -212,23 +176,20 @@ def get_optional_current_account_from_session(
     request: Request,
     db: Session = Depends(get_db),
 ) -> Optional[Account]:
-    """For pages that render differently when logged in but don't
-    require it (the landing page's nav, the 404 page's home-teleport
-    link, mainly) -- never raises."""
+    """For pages that render differently when logged in but do not require it
+    (landing nav, 404 page). Never raises.
+    """
     return _load_account_from_session(request, db)
 
 
 def get_current_verified_account_from_session(
     account: Account = Depends(get_current_account_from_session),
 ) -> Account:
-    """Same as get_current_account_from_session, plus 403s if the
-    account's email hasn't been confirmed yet (see
-    Account.email_verified_at's own docstring in app/models.py). Used
-    by account-management endpoints that should stay reachable before
-    a game-data feature does -- changing password/email, deleting the
-    account -- but not by anything that needs actual game data, which
-    goes through get_current_verified_game_account_from_session below
-    instead."""
+    """get_current_account_from_session plus a 403 if the email is unverified
+    (Account.email_verified_at, app/models.py). Used by account-management
+    endpoints (change password/email, delete account) that stay reachable
+    before game-data features do.
+    """
     if not account.email_verified_at:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -242,16 +203,11 @@ def get_current_game_account_from_session(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_account_from_session),
 ) -> GameAccount:
-    """For endpoints that need actual game data (bank/inventory/etc.,
-    the dashboard's item-backed pages, gear setups, mindmaps, ...) --
-    the direct replacement for the old, single
-    get_current_player_from_session, now split from
-    get_current_account_from_session above since "who's signed in" and
-    "which linked character is active" are different questions
-    post-multi-account. 401s under the same conditions
-    get_current_account_from_session would (not signed in, stale
-    session); see _resolve_active_game_account's own docstring for why
-    GameAccount resolution itself essentially never fails on its own."""
+    """For endpoints needing game data (bank, dashboard pages, gear setups,
+    mindmaps). 401s like get_current_account_from_session; see
+    _resolve_active_game_account for why GameAccount resolution essentially
+    never fails.
+    """
     game_account = _resolve_active_game_account(request, db, account)
     if game_account is None:
         raise HTTPException(
@@ -266,9 +222,9 @@ def get_optional_current_game_account_from_session(
     db: Session = Depends(get_db),
     account: Optional[Account] = Depends(get_optional_current_account_from_session),
 ) -> Optional[GameAccount]:
-    """Optional-Account counterpart to get_current_game_account_from_session
-    above, for the same not-signed-in-is-fine pages that
-    get_optional_current_account_from_session serves."""
+    """Optional counterpart of get_current_game_account_from_session, for pages
+    where not being signed in is fine.
+    """
     if account is None:
         return None
     return _resolve_active_game_account(request, db, account)
@@ -279,15 +235,10 @@ def get_current_verified_game_account_from_session(
     db: Session = Depends(get_db),
     account: Account = Depends(get_current_verified_account_from_session),
 ) -> GameAccount:
-    """Same as get_current_game_account_from_session, plus requires the
-    signed-in Account's email to already be verified (see
-    get_current_verified_account_from_session above). This is the
-    dependency virtually every real feature endpoint in app/main.py
-    uses -- bank/inventory/etc. data, the dashboard pages -- so a
-    not-yet-verified account can log in and reach account-management
-    (get_current_verified_account_from_session's own endpoints) but
-    nothing that needs game data, until they click the link in their
-    confirmation email."""
+    """get_current_game_account_from_session plus a verified email requirement.
+    Used by virtually every feature endpoint in app/main.py, so an unverified
+    account reaches account management but nothing needing game data.
+    """
     game_account = _resolve_active_game_account(request, db, account)
     if game_account is None:
         raise HTTPException(
@@ -301,13 +252,10 @@ def get_optional_current_player_view_from_session(
     db: Session = Depends(get_db),
     account: Optional[Account] = Depends(get_optional_current_account_from_session),
 ) -> Optional[PlayerView]:
-    """Combined identity + active-game-data view for the website's own
-    server-rendered pages (see PlayerView's own docstring in
-    app/pages.py for why those pages need both at once) -- the page-
-    route counterpart to get_optional_current_game_account_from_session
-    above, which serves the website's own JSON-data endpoints instead.
-    Never raises, same as that one and as
-    get_optional_current_account_from_session itself."""
+    """Identity plus active game data for the server-rendered pages (see
+    PlayerView in app/pages.py); the page-route counterpart to
+    get_optional_current_game_account_from_session. Never raises.
+    """
     if account is None:
         return None
     game_account = _resolve_active_game_account(request, db, account)

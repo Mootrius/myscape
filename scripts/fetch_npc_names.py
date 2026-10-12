@@ -1,23 +1,12 @@
-"""One-off script: fetch the OSRS Wiki's Bucket:Infobox_monster table
-in full and build a sorted ["NPC Name", ...] JSON index to
-app/data/npc_names.json, for the Mindmaps KC goal's NPC search field.
+"""One-off script: fetch the wiki's Bucket:Infobox_monster table and write
+app/data/npc_names.json, a sorted ["NPC Name", ...] list for the Mindmaps KC
+goal's NPC search.
+Only fightable NPCs are kept (a missing or zero `combat_level` means
+non-combat). Names are deduped, since one NPC appears once per variant (e.g.
+Zulrah has three phases).
 
-Only NPCs a player can actually fight are kept -- anything with no
-`combat_level` field, or a combat level of 0, is a non-combat NPC
-(a shopkeeper, quest character, etc.) and is dropped, since the KC
-goal search is specifically scoped to "npcs the player can kill" (a
-kill count of a non-combat NPC isn't a meaningful goal). One NPC name
-can appear many times in the table -- once per combat-level variant,
-per quest/instance form, per left/right-hand version, and so on (e.g.
-"Zulrah" appears three times, once per phase) -- so this dedupes by
-name and keeps just the name list; which specific variant a player
-fights isn't something a kill-count goal needs to distinguish.
-
-Run with: python scripts/fetch_npc_names.py (from the repo root).
-
-Re-run this manually (not on a schedule) if a newly-released NPC
-doesn't show up in search -- like items, this data only changes when
-Jagex adds content, so a bundled snapshot refreshed by hand is plenty.
+Usage: python scripts/fetch_npc_names.py (repo root). Re-run by hand when a
+new NPC is missing from search.
 """
 import json
 import pathlib

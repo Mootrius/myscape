@@ -1,50 +1,19 @@
-"""One-off script: fetch the OSRS Wiki's Bucket:Infobox_item table in
-full and build a
-{itemNameLower: {"name": str, "ids": [int, ...], "icon": str|None}}
-JSON index to app/data/item_ids.json for the app to bundle/ship.
+"""One-off script: fetch the wiki's Bucket:Infobox_item table and write
+app/data/item_ids.json, a {itemNameLower: {"name": str, "ids": [int, ...],
+"icon": str|None}} index.
+Untradeable items have no GE id, so owned items were matched by name text
+(_take_owned in app/purchase_goals.py), which fails on encoding or whitespace
+differences. Matching on the numeric ids (the same ones RuneLite uses) avoids
+that; name matching stays as the fallback for items missing from this
+snapshot.
+An item page may list several ids (quest-reward variants, Last Man Standing
+versions); all are kept. The icon comes from the version marked
+`default_version`, else the first seen.
+`name` keeps the wiki's casing (the key is lowercased) so search_item_names
+(app/item_ids.py) can show "Zulrah's scales".
 
-This exists to fix a specific class of bug: an untradeable item (no
-Grand Exchange listing, so no real item id in the wiki's price-mapping
-API) can currently only be matched against what a player already owns
-by comparing item NAME TEXT -- see _take_owned in
-app/purchase_goals.py. That's fragile: the RuneLite plugin reports
-whatever the game client itself calls an item, and if that text
-differs from what a gear slot/recipe names it in any way (an
-apostrophe encoded differently, incidental whitespace, etc.) the match
-silently fails and the item looks unowned even when it isn't.
-
-Every item in the game -- tradeable or not -- has a small number of
-real, permanent, globally-unique numeric ids (the SAME ids RuneLite
-itself uses), and the wiki's item infobox data records them for every
-item page. Matching by id instead of by name text sidesteps the whole
-class of text-formatting mismatches, since an id either is or isn't
-the same physical item -- there's no such thing as "close enough" or
-"differently capitalized" for a numeric id. Name matching remains as a
-fallback in app/purchase_goals.py for anything this snapshot doesn't
-cover (e.g. an item added to the game after this was last generated).
-
-One item page can list more than one id (quest-reward variants,
-Last Man Standing-only versions, etc.) -- all of them are kept, since a
-player owning the item under any of its real ids should count as
-owning it. One item page can also appear more than once with different
-`image` values across those variants; whichever version the wiki marks
-`default_version` (or the first one seen, if none is marked) is used
-for the icon, since that's the one a player would recognize.
-
-`name` keeps the original, properly-cased spelling the wiki uses (the
-dict key itself is lowercased, for case-insensitive lookup) -- needed
-so a search suggestion built from this snapshot (see
-search_item_names in app/item_ids.py, the final fallback tier in
-app/purchase_goals.py's search_items once neither the GE mapping nor a
-known recipe matches) can display "Zulrah's scales" rather than
-"zulrah's scales".
-
-Run with: python scripts/fetch_item_ids.py (from the repo root).
-
-Re-run this manually (not on a schedule) if items keep coming up
-without an icon or without being recognized as owned -- like recipes,
-this data only changes when new items are added to the game, so a
-bundled snapshot refreshed by hand is plenty.
+Usage: python scripts/fetch_item_ids.py (repo root). Re-run by hand when items
+lack icons or are not recognized as owned.
 """
 import json
 import pathlib
@@ -84,9 +53,9 @@ def _parse_ids(raw_ids) -> list:
 
 
 def _parse_icon(raw_images) -> str:
-    """image is a repeated PAGE field shaped like "File:Name.png" --
-    strip the File: namespace prefix to get the plain filename
-    item_icon_url (see app/purchase_goals.py) expects."""
+    """image is a repeated PAGE field like "File:Name.png"; strip the File:
+    prefix to get the filename item_icon_url (app/purchase_goals.py) expects.
+    """
     for raw in raw_images or []:
         name = str(raw)
         if name.lower().startswith("file:"):
@@ -125,20 +94,17 @@ def main():
             index[key] = {"name": name, "ids": list(ids), "icon": icon, "_has_default_icon": is_default and bool(icon)}
             continue
 
-        # Merge in this row's ids (a page can list more than one row,
-        # one per "version" of the item -- e.g. a quest-reward variant
-        # alongside the standard one) without duplicating any.
+        # Merge this row's ids (one row per item version) without duplicates.
         for i in ids:
             if i not in entry["ids"]:
                 entry["ids"].append(i)
-        # Prefer the default version's icon; otherwise keep whatever
-        # was already found rather than overwrite it with a variant's.
+        # Prefer the default version's icon; otherwise keep the one already
+        # found.
         if icon and (not entry["icon"] or (is_default and not entry["_has_default_icon"])):
             entry["icon"] = icon
             entry["_has_default_icon"] = entry["_has_default_icon"] or is_default
 
-    # Drop the bookkeeping-only field and anything with no real ids at
-    # all (nothing useful to match or display).
+    # Drop the bookkeeping field and entries with no ids.
     final_index = {}
     for key, entry in index.items():
         if not entry["ids"]:

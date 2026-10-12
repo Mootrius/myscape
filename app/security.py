@@ -1,13 +1,10 @@
-"""Token/password hashing for the account-linking system and website auth.
+"""Token/password hashing for account linking and website auth.
 
-Both the one-time link code and the long-lived plugin API key are
-high-entropy random strings (not human-chosen passwords), so a plain,
-fast SHA-256 digest is the right tool here -- not bcrypt/scrypt (those
-exist to slow down brute-forcing a *low*-entropy human password, and as
-a side effect their salted output can't be looked up by equality, which
-we need: the plugin sends us the raw code/key and we have to find the
-matching row by it). This is the same approach GitHub, Stripe, and
-most API-key systems use for tokens, for exactly this reason.
+Link codes and plugin API keys are high-entropy random strings, so a fast
+SHA-256 digest is right: bcrypt/scrypt only slow brute-forcing of low-entropy
+human passwords, and their salted output cannot be looked up by equality,
+which is needed here (the plugin sends the raw code/key and the matching row
+is found by hash).
 """
 import hashlib
 import hmac
@@ -15,9 +12,9 @@ import secrets
 
 
 def generate_token(nbytes: int = 24) -> str:
-    """A URL-safe random token. 24 bytes (192 bits) by default -- plenty
-    for both the short-lived link code and the long-lived API key; the
-    difference between them is lifetime/single-use, not length."""
+    """A URL-safe random token, 24 bytes (192 bits) by default for both link
+    codes and API keys; they differ in lifetime and single-use, not length.
+    """
     return secrets.token_urlsafe(nbytes)
 
 
@@ -25,16 +22,13 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-# --- Password hashing -------------------------------------------------
+# Password hashing
 #
-# Passwords are the opposite case from the tokens above: a human picked
-# it, so it's comparatively low-entropy and has to be assumed guessable
-# offline if the database ever leaks. That calls for a *slow*,
-# memory-hard hash, not a fast one -- scrypt (built into Python's
-# stdlib `hashlib` since 3.6, no extra dependency, no C-extension wheel
-# to break on a Render Python-version bump the way psycopg2 did) fits
-# well here. The cost parameters are stored alongside the hash so they
-# can be raised later without invalidating existing passwords.
+# A human-chosen password is low-entropy and must be assumed guessable offline
+# if the database leaks, so it needs a slow, memory-hard hash. scrypt is in the
+# stdlib (`hashlib`): no extra dependency or C-extension wheel to break on a
+# Python bump. Cost parameters are stored with the hash so they can be raised
+# without invalidating existing passwords.
 
 _SCRYPT_N = 2**14  # CPU/memory cost factor (~16 MB, tens of ms per hash)
 _SCRYPT_R = 8

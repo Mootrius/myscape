@@ -1,6 +1,6 @@
-"""myscape's web app: a placeholder landing page, health checks, and the
-early account system (website signup/login, RuneLite plugin account
-linking) -- see README.md for how the pieces fit together.
+"""myscape's web app: landing page, health checks, and the account system
+(website signup/login, RuneLite plugin account linking). See README.md for how
+the pieces fit together.
 """
 import base64
 import logging
@@ -10,14 +10,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-# Without this, the root logger defaults to WARNING-and-up with no
-# handler attached, which silently drops every log.info() call in the
-# app (e.g. app/email_client.py's "RESEND_API_KEY not set -- would have
-# emailed ..." line) -- they'd never reach Render's log viewer at all,
-# regardless of whether that's actually what happened, which makes
-# exactly the kind of "why didn't this email send" question this app
-# needs to answer unanswerable from the logs alone. INFO is still well
-# below DEBUG, so this doesn't turn on noisy per-request debug output.
+# Without this the root logger drops every log.info() call (e.g. email_client's
+# "RESEND_API_KEY not set" line) before it reaches Render's logs.
 logging.basicConfig(level=logging.INFO)
 
 from alembic import command
@@ -281,115 +275,56 @@ from app.schemas import (
     UpdateMindMapNodeRequest,
 )
 
-# A defensive upper bound, not a real OSRS limit -- the largest bank
-# ever seen is nowhere near this, so the only way a sync would hit it is
-# a malformed or buggy client, and rejecting that outright beats quietly
-# accepting and storing whatever it sent.
+# Defensive upper bound, not a real OSRS limit: only a malformed or buggy client
+# would hit it, and rejecting beats storing it.
 MAX_BANK_ITEMS = 2000
-# The inventory and equipment containers are fixed-size (28 slots, 11
-# slots), so unlike the bank there's a real upper bound on distinct
-# items in one sync -- these are that exact size, not a round-number
-# guess, so anything over is definitely malformed.
+# Inventory and equipment are fixed-size containers (28 and 11 slots), so these
+# are exact ceilings.
 MAX_INVENTORY_ITEMS = INVENTORY_SIZE
 MAX_EQUIPMENT_ITEMS = len(EQUIPMENT_SLOTS)
-# Potion Storage supports a few dozen distinct potion types, and the
-# plugin reports at most two rows per type (a full-dose count plus one
-# leftover partial-dose item -- see MyscapePlugin#readPotionStorageItems
-# in the Mootrius/myscape-plugin repo), so this is a generous multiple
-# of the real ceiling, not a round-number guess either.
+# At most two rows per potion type (full-dose count plus one partial-dose item);
+# generous multiple of a few dozen types.
 MAX_POTION_STORAGE_ITEMS = 200
-# A Rune Pouch (regular or Divine) has at most 6 slots (see
-# MyscapePlugin's RUNE_POUCH_TYPE_VARBITS in the Mootrius/myscape-plugin
-# repo, read defensively at 6 even though only 3-4 are used in-game
-# today), each holding a single rune type -- so 6 is the real ceiling,
-# not a round-number guess. Left with a little headroom in case Jagex
-# ever ships a bigger pouch before this constant is revisited.
+# A Rune Pouch has at most 6 slots (one rune type each), with a little headroom
+# in case Jagex ships a bigger one.
 MAX_RUNE_POUCH_ITEMS = 10
-# The Seed Vault holds every tradeable seed in the game (a few dozen
-# distinct types), a generous multiple of the real ceiling, not a
-# round-number guess, same spirit as MAX_POTION_STORAGE_ITEMS.
+# Every tradeable seed (a few dozen types); generous multiple of the real
+# ceiling.
 MAX_SEED_VAULT_ITEMS = 200
-# The Looting Bag holds up to 28 distinct item stacks (the same size as
-# the main inventory, since it's filled the same way), so this mirrors
-# MAX_INVENTORY_ITEMS's own reasoning rather than being a fresh guess.
+# The Looting Bag holds up to 28 stacks, same as the inventory.
 MAX_LOOTING_BAG_ITEMS = INVENTORY_SIZE
-# A Tackle Box only ever stores 35 distinct kinds of item (a fixed,
-# documented ceiling, not a guess) -- a little headroom past that in
-# case a future update raises it, same spirit as MAX_RUNE_POUCH_ITEMS.
+# A Tackle Box stores 35 distinct kinds of item; small headroom past that.
 MAX_TACKLE_BOX_ITEMS = 50
-# The whole PoH Costume Room -- every piece of furniture combined into
-# one sync (see PohItem's docstring in app/models.py for why it's one
-# unified sync rather than six). Sized generously for the sum of what
-# those six used to allow separately: a few dozen set pieces each for
-# Magic Wardrobe/Armour Case/Fancy Dress Box, every non-tradeable
-# holiday reward for the Toy Box (more accumulate every year), the
-# hundreds of distinct clue rewards across all six Treasure Trail tiers
-# for the Treasure Chest, and every cape the game has for the Cape
-# Rack -- generous headroom past that combined real total, not a
-# round-number guess.
+# The whole PoH Costume Room as one sync (see PohItem in app/models.py), sized
+# generously for all six furniture pieces combined.
 MAX_POH_ITEMS = 1500
-# The Forestry Kit holds a handful of Forestry event consumables at
-# most -- generous headroom past that, same spirit as
-# MAX_RUNE_POUCH_ITEMS, not a tight fit.
+# A handful of Forestry event consumables at most; generous headroom.
 MAX_FORESTRY_KIT_ITEMS = 50
-# The Master Scroll Book holds "every type of teleport scroll" (OSRS
-# Wiki) -- dozens of distinct scroll types across every minigame and
-# Treasure Trail reward, not hundreds -- generous headroom past that,
-# same spirit as MAX_SEED_VAULT_ITEMS.
+# Dozens of distinct teleport scroll types; generous headroom.
 MAX_MASTER_SCROLL_BOOK_ITEMS = 150
-# The Seed Box holds seeds of six different types (OSRS Wiki) --
-# generous headroom past that fixed ceiling, same spirit as
-# MAX_RUNE_POUCH_ITEMS, in case a future update raises it.
+# The Seed Box holds six seed types; headroom in case that is raised.
 MAX_SEED_BOX_ITEMS = 20
-# The Huntsman's Kit holds a handful of creature-specific Hunter
-# equipment sets -- generous headroom past that, same spirit as
-# MAX_FORESTRY_KIT_ITEMS, not a tight fit.
+# A handful of creature-specific Hunter equipment sets; generous headroom.
 MAX_HUNTSMANS_KIT_ITEMS = 50
-# One boat's cargo hold capacity scales with its wood tier (Basic
-# through Ironwood -- see the OSRS Wiki's "Cargo hold" article), but
-# even the biggest tier is nowhere near this -- generous headroom past
-# the real ceiling, same spirit as MAX_SEED_VAULT_ITEMS, per sync (this
-# bounds ONE boat slot's own request -- see sync_boat_cargo below,
-# and BoatCargoItem's docstring in app/models.py -- not a combined
-# total across all five of a player's boats).
+# Bounds ONE boat slot's request, not all five boats (see sync_boat_cargo).
 MAX_BOAT_CARGO_ITEMS = 100
-# There are exactly 24 real OSRS skills (see SKILL_NAMES in
-# app/mindmaps.py) -- a real ceiling, not a guess.
+# Exactly 24 OSRS skills (SKILL_NAMES in app/mindmaps.py).
 MAX_SKILLS_PER_SYNC = 24
-# A defensive upper bound on completed quests/miniquests -- OSRS has
-# nowhere near this many, so the only way a sync would hit it is a
-# malformed/buggy client.
+# Defensive upper bound on completed quests/miniquests; OSRS has far fewer.
 MAX_QUESTS_PER_SYNC = 1000
-# There are exactly 12 real OSRS achievement diary areas (see
-# DIARY_AREAS in app/mindmaps.py) -- a real ceiling, not a guess.
+# Exactly 12 achievement diary areas (DIARY_AREAS in app/mindmaps.py).
 MAX_DIARY_AREAS_PER_SYNC = 12
-# There are exactly as many real collection log item ids as
-# app.collectionlog.get_valid_item_ids() knows about (1721 as of this
-# writing) -- a real ceiling, not a guess, same spirit as
-# MAX_SKILLS_PER_SYNC/MAX_DIARY_AREAS_PER_SYNC above. A real sync is
-# always a full replace of every item the player has ever obtained
-# (see CollectionLogItemCapture in the Mootrius/myscape-plugin repo),
-# which only grows monotonically over a session/account lifetime, so
-# this is sized to the true maximum rather than a guessed "typical"
-# count.
+# Number of collection log item ids in app.collectionlog.get_valid_item_ids()
+# (1721 at time of writing); a sync is a full replace, so this is the true
+# maximum.
 MAX_COLLECTION_LOG_ITEMS_PER_SYNC = len(get_valid_item_ids())
-# The plugin syncs one loot event immediately as it happens (see
-# MyscapePlugin#onLootReceived), so a real sync is always exactly 1 --
-# this is a defensive upper bound against a malformed/buggy client
-# trying to batch an unreasonable number into one request, not a real
-# expected size.
+# The plugin syncs one loot event as it happens, so a real sync is exactly 1;
+# this is a defensive bound against batching abuse.
 MAX_LOOT_EVENTS_PER_SYNC = 50
-# Same story as MAX_LOOT_EVENTS_PER_SYNC above -- the plugin syncs one
-# kill-count update immediately as it's parsed out of the chatbox (see
-# MyscapePlugin#onChatMessage), so a real sync is always exactly 1.
+# Same as MAX_LOOT_EVENTS_PER_SYNC: the plugin syncs one kill count at a time.
 MAX_KILL_COUNT_UPDATES_PER_SYNC = 20
-# A real capture is one composited player model -- base mesh plus
-# whatever's equipped -- typically well under a megabyte once encoded
-# as glTF/GLB (see GameAccount.character_model_glb's own docstring in
-# app/models.py). 8MB raw (so ~10.7MB of base64 request body) is
-# generous headroom above that for a heavily-equipped/cosmetic-loaded
-# account, while still catching a genuinely malformed or hostile
-# request rather than trusting client-declared size alone.
+# One composited player model is well under 1 MB as GLB; 8 MB raw (~10.7 MB
+# base64) rejects malformed or hostile requests.
 MAX_CHARACTER_MODEL_BYTES = 8 * 1024 * 1024
 
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY")
@@ -408,40 +343,18 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.exception_handler(StarletteHTTPException)
 async def _styled_not_found_handler(request: Request, exc: StarletteHTTPException):
-    """Swaps in render_not_found's styled page for a 404 hit while
-    browsing the site itself -- everywhere else (every /api/* and
-    /static/* response, and every non-404 status anywhere) keeps
-    FastAPI's normal {"detail": ...} JSON body untouched, since the
-    site's own JS (describeError() in app/pages.py) parses that JSON
-    for every form's error message and would break if it got HTML
-    back instead.
-
-    Registered on Starlette's own HTTPException, not FastAPI's --
-    fastapi.HTTPException is a *subclass* of it, and a genuinely
-    unmatched route (someone hitting a URL that doesn't exist at all)
-    is raised internally by Starlette's router as the base class, not
-    the subclass. A handler registered on the subclass alone silently
-    never catches that case -- it only ever saw the fastapi.HTTPException
-    instances explicitly `raise`d elsewhere in this file. Registering on
-    the base class here still catches both: Starlette looks up handlers
-    by walking the raised exception's MRO, and every fastapi.HTTPException
-    instance's MRO includes this base class too."""
+    """Swaps in render_not_found's styled page for 404s on site pages. /api/*,
+    /static/* and non-404 statuses keep FastAPI's JSON {"detail": ...} body,
+    which the site's JS (describeError() in app/pages.py) parses.
+    
+    Registered on Starlette's HTTPException because unmatched routes raise the
+    base class, which a handler on the fastapi subclass never sees.
+    """
     if exc.status_code == status.HTTP_404_NOT_FOUND and not request.url.path.startswith(("/api/", "/static/")):
-        # Exception handlers aren't routed through FastAPI's dependency
-        # injection, so this can't just take a
-        # player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)
-        # parameter the way every other page route in this file does --
-        # open and close a DB session by hand instead, purely to get the
-        # header nav's Dashboard/Log out state right for a signed-in
-        # visitor who hits a broken link. Calling both dependency
-        # functions directly like this means their own `account`/`db`
-        # *Depends(...)* defaults never fire -- every argument has to be
-        # passed explicitly, account included, or it comes through as
-        # the literal Depends(...) marker object instead of an Account
-        # (or None), and the get_optional_current_player_view_from_session
-        # call below blows up trying to use it (was exactly this bug,
-        # every 404 on the live site 500ing instead, before this got
-        # fixed -- see the multi-account docs for how it was caught).
+        # Exception handlers bypass dependency injection, so the DB session is
+        # opened by hand (for the signed-in nav). Dependencies are called
+        # directly, so every argument must be passed explicitly or the literal
+        # Depends(...) marker leaks through.
         db = SessionLocal()
         try:
             account = get_optional_current_account_from_session(request, db)
@@ -451,9 +364,8 @@ async def _styled_not_found_handler(request: Request, exc: StarletteHTTPExceptio
         return HTMLResponse(render_not_found(player), status_code=status.HTTP_404_NOT_FOUND)
     return await _default_http_exception_handler(request, exc)
 # Session cookies back website login (see app/auth.py). `https_only` is on
-# because myscape.io is HTTPS-only in production; if that ever gets in the
-# way of local http://localhost testing, override it with an env var --
-# don't just delete it.
+# because myscape.io is HTTPS-only in production; for local http://localhost
+# testing override it with an env var rather than deleting it.
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET_KEY,
@@ -472,28 +384,11 @@ app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 @app.get("/icon-cache/{filename}")
 def get_cached_icon(filename: str):
-    """Serves a (possibly not-yet-fetched) wiki-sourced icon -- a
-    dedicated route rather than folding this into the /static mount
-    above so it can set its own long-lived Cache-Control, and so it can
-    do more than a plain static-file lookup: ensure_cached_icon_path
-    (app/icon_cache.py) is what actually fetches-and-caches an icon
-    this is the first request for -- see that module's own top-of-file
-    comment for why that fetch happens here, briefly blocking this one
-    request, rather than falling back to letting the browser hit the
-    wiki directly.
-
-    Every ITEM icon in this app now bypasses this route entirely --
-    item_icon_url (app/purchase_goals.py) hands those out as a direct
-    RuneLite CDN URL instead (see that function's own comment). What's
-    left hitting this route: NPC/event portraits for Loot Tracker
-    (npc_icon_url in app/loot.py, no numeric NPC id for that CDN to
-    serve those from at all) and the rare combination-item name
-    app/item_ids.py's snapshot doesn't cover under its exact stored
-    spelling (_untradeable_item_icon's own last-resort fallback in
-    app/purchase_goals.py).
-
-    Re-validates the filename itself (no path traversal out of the
-    cache directory) rather than trusting the URL alone."""
+    """Serves a wiki-sourced icon via ensure_cached_icon_path (app/icon_cache.py)
+    with a long-lived Cache-Control. Item icons use the RuneLite CDN directly;
+    this serves NPC/event portraits and rare combination items missing from
+    app/item_ids.py. The filename is re-validated against path traversal.
+    """
     path = ensure_cached_icon_path(filename)
     if not path:
         raise HTTPException(status_code=404)
@@ -505,24 +400,15 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 @app.on_event("startup")
 def on_startup():
-    # Brings the database up to the latest schema by applying whichever
-    # of migrations/versions/*.py it hasn't seen yet (see README.md's
-    # "Database schema changes") -- the Alembic equivalent of the old
-    # Base.metadata.create_all() + sync_missing_columns() pair this
-    # replaced, which is also why this still runs unconditionally on
-    # every startup rather than as a separate deploy step: it's the
-    # smallest change from the previous behavior, and safe here since
-    # this service only ever runs as a single instance. The very first
-    # migration is written defensively (skips any table that already
-    # exists) specifically so this needs no one-time manual step to
-    # tell Alembic that production's existing tables are already
-    # "migrated" -- see migrations/versions/5cf359e6d5b1_initial_schema.py.
+    # Applies pending migrations/versions/*.py (see README.md "Database schema
+    # changes"). Runs on every startup, safe because the service is a single
+    # instance; the initial migration skips existing tables, so production needs
+    # no manual stamping.
     alembic_cfg = Config(os.path.join(_REPO_ROOT, "alembic.ini"))
     command.upgrade(alembic_cfg, "head")
 
-    # Copies the README's permanent example links into their own table
-    # the first time they're seen -- see app/permanent_examples.py.
-    # Never allowed to stop the app from booting.
+    # Copies the README's permanent example links into their own table on first
+    # sight (app/permanent_examples.py). Must never stop the app from booting.
     db = SessionLocal()
     try:
         capture_permanent_examples(
@@ -546,41 +432,15 @@ def root(
     home: Optional[str] = None,
     player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
 ):
-    # A logged-in player lands straight on /dashboard, same as every
-    # other logged-out-only page on the site already does (see
-    # signup_page/login_page/forgot_password_page just below) -- they'd
-    # have no reason to want the marketing landing page once they're
-    # already a user, whether they typed myscape.io in fresh or clicked
-    # a stale link back to it. That's everything EXCEPT the header's
-    # own "myscape" logo (see _shell() in pages.py), which is a
-    # deliberate "go home" click, not a stale/accidental one -- a
-    # player who chose that over the "Dashboard" nav link sitting right
-    # next to it clearly wants the actual landing page, so it's the one
-    # entry point this redirect has to be skippable for. ?home=1 is how
-    # it opts out: _shell() only ever puts that on the logo's own href,
-    # and only while player is set (a logged-out request always renders
-    # the landing page here regardless, so there's nothing for it to
-    # skip), which makes this query param a proxy for "this GET came
-    # from that specific link" -- the only signal a stateless page load
-    # like this one has to go on. It sticks to whatever URL a player
-    # copies or bookmarks from there, same trade-off as any other
-    # link-encoded state on the web.
+    # A logged-in player goes straight to /dashboard, except via the header logo
+    # (_shell() in pages.py), which adds ?home=1 while signed in.
     if player and not home:
         return RedirectResponse("/dashboard", status_code=302)
     return render_landing(player)
 
 
-# The disallowed paths here are every page _shell() itself renders
-# noindex by default (see that function's own comment in app/pages.py)
-# -- kept as an explicit list rather than trying to derive one from the
-# route table at import time, since a robots.txt a crawler can't parse
-# is worse than one that's occasionally one route behind if a new page
-# is ever added without updating both places. /dashboard alone covers
-# every /dashboard/* tool page (Purchase Goals, Loot Tracker, Mindmaps,
-# Storages Viewer) as a prefix match, same as the other entries here
-# cover their own sub-paths. /api/ is blocked outright -- none of it is
-# a page a crawler could render anyway, and there's no reason to spend
-# a crawl budget probing it.
+# Every page _shell() renders noindex (app/pages.py); keep in sync when adding a
+# page. /dashboard covers all /dashboard/* by prefix.
 _ROBOTS_TXT = """User-agent: *
 Allow: /
 Disallow: /dashboard
@@ -602,12 +462,7 @@ def robots_txt():
     return _ROBOTS_TXT
 
 
-# One entry -- the landing page is the only URL on the whole site
-# _shell() ever renders indexable (see its own noindex/canonical_path
-# comment), so it's also the only one worth listing here. A sitemap
-# full of noindexed pages wouldn't help those pages get indexed (the
-# noindex tag itself always wins) and would just be one more thing to
-# keep in sync with the route table for no benefit.
+# The landing page is the only indexable URL _shell() renders.
 _SITEMAP_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -629,7 +484,7 @@ def signup_page(player: Optional[PlayerView] = Depends(get_optional_current_play
     if player:
         return RedirectResponse("/dashboard", status_code=302)
     if not site_flags.SIGNUPS_ENABLED:
-        # Sign-ups are off for now -- see app/site_flags.py.
+        # Sign-ups are off for now; see app/site_flags.py.
         return render_signup_coming_soon()
     return render_signup()
 
@@ -650,12 +505,8 @@ def forgot_password_page(player: Optional[PlayerView] = Depends(get_optional_cur
 
 @app.get("/reset-password", response_class=HTMLResponse)
 def reset_password_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
-    # No redirect-if-logged-in here, unlike the other auth pages -- the
-    # token itself is read client-side from the URL's query string (see
-    # render_reset_password's own script), so there's no server-side
-    # reason to gate this on session state, and someone already logged
-    # in in one tab may still be legitimately using a reset link they
-    # requested (or were sent) in another.
+    # No redirect-if-logged-in: the token is read client-side from the query
+    # string, and a reset link may be used in another tab.
     return render_reset_password()
 
 
@@ -670,10 +521,9 @@ def dashboard_page(player: Optional[PlayerView] = Depends(get_optional_current_p
 
 @app.get("/account", response_class=HTMLResponse)
 def account_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
-    # No email_verified_at gate here, unlike dashboard_page above --
-    # render_account's own docstring covers why (log out, and fixing a
-    # mistyped signup email in particular, both need to stay reachable
-    # before verification).
+    # No email_verified_at gate, unlike dashboard_page: log out and fixing a
+    # mistyped signup email must stay reachable before verification (see
+    # render_account's docstring).
     if not player:
         return RedirectResponse("/login", status_code=302)
     return render_account(player)
@@ -684,8 +534,8 @@ def verify_email_required_page(player: Optional[PlayerView] = Depends(get_option
     if not player:
         return RedirectResponse("/login", status_code=302)
     if player.email_verified_at:
-        # Nothing left to do here -- most likely they already verified
-        # in another tab, or followed a bookmarked/stale link.
+        # Nothing to do here; most likely already verified in another tab or a
+        # stale link.
         return RedirectResponse("/dashboard", status_code=302)
     return render_verify_email_required(player)
 
@@ -693,49 +543,34 @@ def verify_email_required_page(player: Optional[PlayerView] = Depends(get_option
 @app.get("/verify-email", response_class=HTMLResponse)
 def verify_email_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     if player and player.email_verified_at:
-        # Already verified in this session -- most likely they followed
-        # a bookmarked/stale link, or already verified in another tab.
-        # Nothing left for this page to do.
+        # Already verified; nothing left for this page to do.
         return RedirectResponse("/dashboard", status_code=302)
-    # No redirect-if-logged-out here, same reasoning as reset_password_page's
-    # own comment -- the token itself is read client-side from the URL's
-    # query string (see render_verify_email's own script), and someone
-    # clicking a confirmation link from their email isn't necessarily still
-    # in the same browser session (or any session at all) that signed up.
-    # `player` is still passed through though (logged-in-but-unverified is
-    # exactly the state this page is usually reached in), so the header nav
-    # shows Dashboard/Log out rather than Log in/Sign up when applicable.
+    # No redirect-if-logged-out: the email link may open in a different browser
+    # session. `player` is still passed so the header nav is correct.
     return render_verify_email(player)
 
 
 @app.get("/api/health")
 def health():
-    """Proves the app itself is up. Doesn't touch the database -- see
-    /api/health/db for that -- so this stays fast and always answers even
-    if the database is briefly unreachable."""
+    """Proves the app is up. Doesn't touch the database (see /api/health/db), so
+    it answers even if the database is briefly unreachable.
+    """
     return {"status": "ok"}
 
 
 @app.get("/api/health/db")
 def health_db(db: Session = Depends(get_db)):
-    """Proves the app can actually reach and query the database -- the
-    real end-to-end check for a first deploy."""
+    """Proves the app can reach and query the database."""
     player_count = db.execute(text("SELECT COUNT(*) FROM players")).scalar()
     return {"status": "ok", "playerCount": player_count}
 
 
 @app.get("/api/players/me", response_model=PlayerOut)
 def read_current_player(game_account: GameAccount = Depends(get_current_game_account_from_api_key)):
-    """First real use of the API key auth: the plugin calls this (with
-    its `Authorization: Bearer <key>` header) to confirm it's linked and
-    see which player it's linked to.
-
-    PlayerOut mixes identity (email) and game-data (runescape_name,
-    account_hash) fields -- same conflation as app/routers/auth.py's own
-    _player_out_for, which has the fuller explanation. Built by hand
-    here (rather than just returning game_account) since email now
-    lives on the separate Account row this GameAccount belongs to, not
-    on GameAccount itself."""
+    """The plugin calls this (`Authorization: Bearer <key>`) to confirm it is
+    linked and to whom. Built by hand because email lives on the Account row
+    (see app/routers/auth.py's _player_out_for).
+    """
     return PlayerOut(
         id=game_account.id,
         email=game_account.account.email,
@@ -746,28 +581,18 @@ def read_current_player(game_account: GameAccount = Depends(get_current_game_acc
 
 @app.post("/api/players/me/unlink", status_code=status.HTTP_204_NO_CONTENT)
 def unlink_player(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_game_account_from_api_key)):
-    """Called by the RuneLite plugin's "Unlink" button (API-key
-    authenticated). See linking.revoke_link() for what this actually
-    does and why POST /api/link/unlink there is this endpoint's
-    session-authenticated counterpart, not a duplicate."""
+    """Called by the plugin's "Unlink" button (API-key authenticated); see
+    linking.revoke_link() for the session-authenticated counterpart.
+    """
     linking.revoke_link(db, game_account)
 
 
 def _stamp_storage_synced(game_account: GameAccount, storage_key: str, now: datetime) -> None:
-    """Records that `storage_key` (one of POSSESSION_STORAGE_KEYS) was
-    just synced -- called from the bottom of every one of the twelve
-    per-storage POST handlers below, right before their own db.commit()
-    (storage_synced_at is a plain column on the same GameAccount row already
-    being flushed, so this never needs a commit of its own). See
-    GameAccount.storage_synced_at's own docstring in app/models.py for why
-    this exists at all rather than just reading the item tables' own
-    updated_at back.
-
-    Reassigns the whole dict rather than mutating the existing one in
-    place -- a JSONB column's SQLAlchemy tracking only notices a
-    brand-new object assigned to it, not an in-place `dict[key] = ...`
-    on the same object, so mutating in place would silently fail to
-    persist."""
+    """Records that `storage_key` (a POSSESSION_STORAGE_KEYS entry) was just
+    synced; called before each handler's db.commit() (see
+    GameAccount.storage_synced_at). Reassigns the dict because SQLAlchemy
+    doesn't track in-place mutation of a JSONB column.
+    """
     game_account.storage_synced_at = {**(game_account.storage_synced_at or {}), storage_key: now.isoformat()}
 
 
@@ -777,15 +602,10 @@ def sync_bank(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Called by the RuneLite plugin (API-key authenticated) whenever
-    the bank interface is open and its contents settle after a change
-    -- see MyscapeClient#syncBank in the Mootrius/myscape-plugin repo.
-    Always a full replace, never a merge: every one of the player's
-    existing bank_items rows is deleted and replaced with exactly what
-    this request says, so an item that's been sold or withdrawn since
-    the last sync disappears here too, the same way it disappeared from
-    the actual bank (see BankItem's docstring in app/models.py for why
-    that's the right model for this)."""
+    """Called by the plugin (API-key authenticated) when the bank contents
+    settle. A full replace, never a merge, so sold or withdrawn items
+    disappear (see BankItem in app/models.py).
+    """
     if len(payload.items) > MAX_BANK_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -807,12 +627,9 @@ def sync_bank(
 
 @app.get("/api/players/me/bank", response_model=BankOut)
 def read_bank(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The website's own read of the last-synced bank snapshot --
-    session-authenticated (unlike the POST above), since it's the
-    website reading this back, not the plugin writing it. Nothing in
-    the UI surfaces this yet (Purchase Goals is still a placeholder
-    card on /dashboard), but this is what that card will eventually
-    read from."""
+    """The website's read of the last-synced bank snapshot
+    (session-authenticated, unlike the POST above).
+    """
     items = db.query(BankItem).filter(BankItem.game_account_id == game_account.id).order_by(BankItem.item_id).all()
     updated_at = items[0].updated_at if items else None
     return BankOut(items=[BankItemOut.model_validate(item) for item in items], updated_at=updated_at)
@@ -824,9 +641,7 @@ def sync_inventory(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for the main
-    28-slot inventory instead -- see MyscapeClient#syncInventory in the
-    Mootrius/myscape-plugin repo. Full replace, never a merge."""
+    """Same contract as POST /api/players/me/bank, for the 28-slot inventory."""
     if len(payload.items) > MAX_INVENTORY_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -848,8 +663,7 @@ def sync_inventory(
 
 @app.get("/api/players/me/inventory", response_model=InventoryOut)
 def read_inventory(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the
-    inventory instead."""
+    """Same contract as GET /api/players/me/bank, for the inventory."""
     items = db.query(InventoryItem).filter(InventoryItem.game_account_id == game_account.id).order_by(InventoryItem.item_id).all()
     updated_at = items[0].updated_at if items else None
     return InventoryOut(items=[InventoryItemOut.model_validate(item) for item in items], updated_at=updated_at)
@@ -861,12 +675,9 @@ def sync_equipment(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for worn
-    equipment instead -- see MyscapeClient#syncEquipment in the
-    Mootrius/myscape-plugin repo. Full replace, never a merge, keyed by
-    slot rather than item id (EquipmentSyncRequest's own validator
-    already rejects a duplicate slot within one sync -- see
-    app/schemas.py)."""
+    """Same contract as POST /api/players/me/bank, for worn equipment, keyed by
+    slot.
+    """
     if len(payload.items) > MAX_EQUIPMENT_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -888,8 +699,7 @@ def sync_equipment(
 
 @app.get("/api/players/me/equipment", response_model=EquipmentOut)
 def read_equipment(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for worn
-    equipment instead."""
+    """Same contract as GET /api/players/me/bank, for worn equipment."""
     items = db.query(EquipmentItem).filter(EquipmentItem.game_account_id == game_account.id).order_by(EquipmentItem.slot).all()
     updated_at = items[0].updated_at if items else None
     return EquipmentOut(items=[EquipmentItemOut.model_validate(item) for item in items], updated_at=updated_at)
@@ -901,17 +711,7 @@ def sync_potion_storage(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for the
-    Player-Owned-House Potion Storage instead -- see
-    MyscapeClient#syncPotionStorage in the Mootrius/myscape-plugin repo.
-    Full replace, never a merge. Unlike bank/inventory/equipment,
-    Potion Storage isn't an ItemContainer the plugin can just read
-    directly -- see MyscapePlugin#readPotionStorageItems there for how
-    it actually reads this -- but the resulting shape and this
-    endpoint's contract are identical, so nothing here needs to know
-    the difference. This is also what replaced the old "supplies"
-    gear-slot flag: see PotionStorageItem's docstring in app/models.py
-    for why that flag existed and why it's gone now."""
+    """Same contract as POST /api/players/me/bank, for Potion Storage."""
     if len(payload.items) > MAX_POTION_STORAGE_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -933,8 +733,7 @@ def sync_potion_storage(
 
 @app.get("/api/players/me/potion-storage", response_model=PotionStorageOut)
 def read_potion_storage(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for potion
-    storage instead."""
+    """Same contract as GET /api/players/me/bank, for potion storage."""
     items = (
         db.query(PotionStorageItem)
         .filter(PotionStorageItem.game_account_id == game_account.id)
@@ -951,18 +750,10 @@ def sync_rune_pouch(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for a Rune
-    Pouch's contents instead -- see MyscapeClient#syncRunePouch in the
-    Mootrius/myscape-plugin repo. Full replace, never a merge. Unlike
-    bank/inventory/equipment, a Rune Pouch's contents aren't part of any
-    ItemContainer the plugin can just read directly -- see
-    MyscapePlugin#readRunePouchItems there for how it actually reads
-    this (the pouch itself is one inventory item; what's stored inside
-    it comes from a separate set of varbits) -- but the resulting shape
-    and this endpoint's contract are identical, so nothing here needs to
-    know the difference. Deliberately its own endpoint rather than
-    folded into /inventory's payload: see RunePouchItem's docstring in
-    app/models.py for why."""
+    """Same contract as POST /api/players/me/bank, for a Rune Pouch. Its own
+    endpoint rather than part of /inventory's payload (see RunePouchItem in
+    app/models.py).
+    """
     if len(payload.items) > MAX_RUNE_POUCH_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -984,8 +775,7 @@ def sync_rune_pouch(
 
 @app.get("/api/players/me/rune-pouch", response_model=RunePouchOut)
 def read_rune_pouch(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the rune
-    pouch instead."""
+    """Same contract as GET /api/players/me/bank, for the rune pouch."""
     items = (
         db.query(RunePouchItem)
         .filter(RunePouchItem.game_account_id == game_account.id)
@@ -1002,11 +792,9 @@ def sync_seed_vault(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for a
-    Player-Owned-House Seed Vault's contents instead -- see
-    MyscapeClient#syncSeedVault in the Mootrius/myscape-plugin repo and
-    SeedVaultItem's docstring in app/models.py. Full replace, never a
-    merge."""
+    """Same contract as POST /api/players/me/bank, for a Seed Vault (see
+    SeedVaultItem in app/models.py).
+    """
     if len(payload.items) > MAX_SEED_VAULT_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1028,8 +816,7 @@ def sync_seed_vault(
 
 @app.get("/api/players/me/seed-vault", response_model=SeedVaultOut)
 def read_seed_vault(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the seed
-    vault instead."""
+    """Same contract as GET /api/players/me/bank, for the seed vault."""
     items = (
         db.query(SeedVaultItem)
         .filter(SeedVaultItem.game_account_id == game_account.id)
@@ -1046,10 +833,9 @@ def sync_looting_bag(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for a Looting
-    Bag's contents instead -- see MyscapeClient#syncLootingBag in the
-    Mootrius/myscape-plugin repo and LootingBagItem's docstring in
-    app/models.py. Full replace, never a merge."""
+    """Same contract as POST /api/players/me/bank, for a Looting Bag (see
+    LootingBagItem in app/models.py).
+    """
     if len(payload.items) > MAX_LOOTING_BAG_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1071,8 +857,7 @@ def sync_looting_bag(
 
 @app.get("/api/players/me/looting-bag", response_model=LootingBagOut)
 def read_looting_bag(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the looting
-    bag instead."""
+    """Same contract as GET /api/players/me/bank, for the looting bag."""
     items = (
         db.query(LootingBagItem)
         .filter(LootingBagItem.game_account_id == game_account.id)
@@ -1089,10 +874,9 @@ def sync_tackle_box(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for a Tackle
-    Box's contents instead -- see MyscapeClient#syncTackleBox in the
-    Mootrius/myscape-plugin repo and TackleBoxItem's docstring in
-    app/models.py. Full replace, never a merge."""
+    """Same contract as POST /api/players/me/bank, for a Tackle Box (see
+    TackleBoxItem in app/models.py).
+    """
     if len(payload.items) > MAX_TACKLE_BOX_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1114,8 +898,7 @@ def sync_tackle_box(
 
 @app.get("/api/players/me/tackle-box", response_model=TackleBoxOut)
 def read_tackle_box(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the Tackle
-    Box instead."""
+    """Same contract as GET /api/players/me/bank, for the Tackle Box."""
     items = (
         db.query(TackleBoxItem)
         .filter(TackleBoxItem.game_account_id == game_account.id)
@@ -1132,12 +915,10 @@ def sync_poh(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for the whole
-    Player-Owned-House Costume Room instead -- see MyscapeClient#syncPoh
-    in the Mootrius/myscape-plugin repo and PohItem's docstring in
-    app/models.py for why this is one endpoint covering all six pieces
-    of furniture rather than six separate ones, and why it's named
-    "poh" rather than "costume-room". Full replace, never a merge."""
+    """Same contract as POST /api/players/me/bank, for the whole PoH Costume
+    Room: one endpoint for all six furniture pieces, named "poh" (see PohItem
+    in app/models.py).
+    """
     if len(payload.items) > MAX_POH_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1159,8 +940,7 @@ def sync_poh(
 
 @app.get("/api/players/me/poh", response_model=PohOut)
 def read_poh(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the whole
-    PoH Costume Room instead."""
+    """Same contract as GET /api/players/me/bank, for the PoH Costume Room."""
     items = (
         db.query(PohItem)
         .filter(PohItem.game_account_id == game_account.id)
@@ -1177,11 +957,9 @@ def sync_forestry_kit(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for the
-    Forestry Kit's contents instead -- see
-    MyscapeClient#syncForestryKit in the Mootrius/myscape-plugin repo
-    and ForestryKitItem's docstring in app/models.py. Full replace,
-    never a merge."""
+    """Same contract as POST /api/players/me/bank, for the Forestry Kit (see
+    ForestryKitItem in app/models.py).
+    """
     if len(payload.items) > MAX_FORESTRY_KIT_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1203,8 +981,7 @@ def sync_forestry_kit(
 
 @app.get("/api/players/me/forestry-kit", response_model=ForestryKitOut)
 def read_forestry_kit(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the
-    Forestry Kit instead."""
+    """Same contract as GET /api/players/me/bank, for the Forestry Kit."""
     items = (
         db.query(ForestryKitItem)
         .filter(ForestryKitItem.game_account_id == game_account.id)
@@ -1221,13 +998,10 @@ def sync_master_scroll_book(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for the
-    Master Scroll Book's stored teleport scrolls instead -- see
-    MyscapeClient#syncMasterScrollBook in the Mootrius/myscape-plugin
-    repo and MasterScrollBookItem's docstring in app/models.py (no
-    confirmed container id yet, so this may not receive real syncs
-    until the plugin's own temporary diagnostic finds one). Full
-    replace, never a merge."""
+    """Same contract as POST /api/players/me/bank, for the Master Scroll Book
+    (see MasterScrollBookItem). The container id is unconfirmed, so real syncs
+    may not arrive yet.
+    """
     if len(payload.items) > MAX_MASTER_SCROLL_BOOK_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1236,10 +1010,9 @@ def sync_master_scroll_book(
 
     db.query(MasterScrollBookItem).filter(MasterScrollBookItem.game_account_id == game_account.id).delete()
     now = datetime.now(timezone.utc)
-    # The Book shows its default teleport under a different untradeable
-    # cosmetic id -- store the real scroll's id instead (see
-    # canonical_master_scroll_item_id), merging if two rows collapse
-    # onto the same id so the unique constraint can't trip.
+    # The Book shows its default teleport under an untradeable cosmetic id;
+    # store the real scroll id (canonical_master_scroll_item_id), merging rows
+    # that collapse together so the unique constraint holds.
     merged_scrolls = {}
     for item in payload.items:
         real_id = canonical_master_scroll_item_id(item.item_id, item.item_name)
@@ -1260,8 +1033,7 @@ def sync_master_scroll_book(
 
 @app.get("/api/players/me/master-scroll-book", response_model=MasterScrollBookOut)
 def read_master_scroll_book(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the
-    Master Scroll Book instead."""
+    """Same contract as GET /api/players/me/bank, for the Master Scroll Book."""
     items = (
         db.query(MasterScrollBookItem)
         .filter(MasterScrollBookItem.game_account_id == game_account.id)
@@ -1278,10 +1050,9 @@ def sync_seed_box(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for the Seed
-    Box's contents instead -- see MyscapeClient#syncSeedBox in the
-    Mootrius/myscape-plugin repo and SeedBoxItem's docstring in
-    app/models.py. Full replace, never a merge."""
+    """Same contract as POST /api/players/me/bank, for the Seed Box (see
+    SeedBoxItem in app/models.py).
+    """
     if len(payload.items) > MAX_SEED_BOX_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1303,8 +1074,7 @@ def sync_seed_box(
 
 @app.get("/api/players/me/seed-box", response_model=SeedBoxOut)
 def read_seed_box(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the Seed
-    Box instead."""
+    """Same contract as GET /api/players/me/bank, for the Seed Box."""
     items = (
         db.query(SeedBoxItem)
         .filter(SeedBoxItem.game_account_id == game_account.id)
@@ -1321,11 +1091,9 @@ def sync_huntsmans_kit(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for a
-    Huntsman's Kit's contents instead -- see
-    MyscapeClient#syncHuntsmansKit in the Mootrius/myscape-plugin repo
-    and HuntsmansKitItem's docstring in app/models.py. Full replace,
-    never a merge."""
+    """Same contract as POST /api/players/me/bank, for a Huntsman's Kit (see
+    HuntsmansKitItem in app/models.py).
+    """
     if len(payload.items) > MAX_HUNTSMANS_KIT_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1347,8 +1115,7 @@ def sync_huntsmans_kit(
 
 @app.get("/api/players/me/huntsmans-kit", response_model=HuntsmansKitOut)
 def read_huntsmans_kit(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for the
-    Huntsman's Kit instead."""
+    """Same contract as GET /api/players/me/bank, for the Huntsman's Kit."""
     items = (
         db.query(HuntsmansKitItem)
         .filter(HuntsmansKitItem.game_account_id == game_account.id)
@@ -1366,14 +1133,10 @@ def sync_boat_cargo(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Same contract as POST /api/players/me/bank above, for ONE of the
-    player's (up to five) boats' cargo hold contents instead -- `slot`
-    (1-5) picks which one. Deletes and replaces only THAT slot's own
-    rows (BoatCargoItem.game_account_id AND .slot both filtered on below,
-    unlike every other per-storage sync here which only ever needs
-    game_account_id) -- see BoatCargoItem's docstring in app/models.py for
-    why a sync of one boat must never touch what's already known about
-    the other four."""
+    """Same contract as POST /api/players/me/bank, for ONE boat's cargo; `slot`
+    (1-5) picks the boat and only that slot's rows are replaced (see
+    BoatCargoItem).
+    """
     if slot < 1 or slot > 5:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slot must be between 1 and 5.")
     if len(payload.items) > MAX_BOAT_CARGO_ITEMS:
@@ -1389,10 +1152,8 @@ def sync_boat_cargo(
             game_account_id=game_account.id, slot=slot, item_id=item.item_id, item_name=item.item_name,
             quantity=item.quantity, updated_at=now,
         ))
-    # One shared "boat_cargo" timestamp across all five slots (see
-    # BoatCargoItem's own docstring for why) -- bumped by whichever
-    # slot happens to sync most recently, same simplification PoH's
-    # single "poh" key already makes for its six furniture pieces.
+    # One shared "boat_cargo" timestamp for all five slots, bumped by the latest
+    # sync.
     _stamp_storage_synced(game_account, "boat_cargo", now)
     db.commit()
 
@@ -1401,13 +1162,9 @@ def sync_boat_cargo(
 
 @app.get("/api/players/me/boat-cargo", response_model=BoatCargoOut)
 def read_boat_cargo(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Same contract as GET /api/players/me/bank above, for every one of
-    the player's boats' cargo combined -- unlike every other single-
-    container GET here, this one has no per-slot equivalent of its own
-    (nothing on the website currently needs just one boat's contents on
-    their own), so it always returns every slot's rows together,
-    ordered by slot then item id, each row's own `slot` still attached
-    (see BoatCargoItemOut's own docstring in app/schemas.py)."""
+    """Same contract as GET /api/players/me/bank, for all boats combined, ordered
+    by slot then item id (see BoatCargoItemOut).
+    """
     items = (
         db.query(BoatCargoItem)
         .filter(BoatCargoItem.game_account_id == game_account.id)
@@ -1420,16 +1177,10 @@ def read_boat_cargo(db: Session = Depends(get_db), game_account: GameAccount = D
 
 @app.get("/api/players/me/sync-status", response_model=SyncStatusOut)
 def read_sync_status(game_account: GameAccount = Depends(get_current_game_account_from_api_key)):
-    """API-key authenticated (unlike the website's own session-
-    authenticated GETs above) -- this is what the RuneLite plugin's
-    side panel Status section actually polls (see MyscapePanel's
-    Status section in the Mootrius/myscape-plugin repo), since the
-    plugin has no browser session to authenticate with, the same
-    reason every other plugin-facing endpoint here is API-key
-    authenticated too. Returns every one of POSSESSION_STORAGE_KEYS,
-    `None` for anything never synced (see GameAccount.storage_synced_at's
-    own docstring in app/models.py for why that's not the same thing
-    as "synced empty")."""
+    """API-key authenticated because the plugin's side panel polls it. Returns
+    every POSSESSION_STORAGE_KEYS entry, `None` if never synced (distinct from
+    "synced empty").
+    """
     stamped = game_account.storage_synced_at or {}
     return SyncStatusOut(storages={key: stamped.get(key) for key in POSSESSION_STORAGE_KEYS})
 
@@ -1440,12 +1191,9 @@ def sync_skills(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Full replace of the player's current level+xp in every skill --
-    see GameAccount.skills' own comment in app/models.py and
-    MyscapeClient#syncSkills in the Mootrius/myscape-plugin repo. Unlike
-    bank/inventory/etc., this isn't many independent rows to delete-and-
-    replace, just one JSONB column to overwrite outright, since a
-    player has exactly one current level+xp per skill."""
+    """Full replace of the player's level+xp per skill (one JSONB column; see
+    GameAccount.skills).
+    """
     if len(payload.skills) > MAX_SKILLS_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1457,15 +1205,15 @@ def sync_skills(
 
 
 def _skills_payload(game_account: GameAccount) -> dict:
-    """Factored out of read_skills below for the same single-source-
-    of-truth reason as _character_overview_summary_payload above."""
+    """Factored out of read_skills so both share one payload builder (like
+    _character_overview_summary_payload).
+    """
     return {"skills": game_account.skills or {}}
 
 
 @app.get("/api/players/me/skills")
 def read_skills(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The website's own read of the last-synced skills snapshot --
-    session-authenticated like every other GET here."""
+    """The website's read of the last-synced skills snapshot."""
     return _skills_payload(game_account)
 
 
@@ -1475,9 +1223,9 @@ def sync_quests(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Full replace of the player's completed quest/miniquest list --
-    see GameAccount.completed_quests' own comment in app/models.py and
-    MyscapeClient#syncQuests in the Mootrius/myscape-plugin repo."""
+    """Full replace of the player's completed quest/miniquest list (see
+    GameAccount.completed_quests in app/models.py).
+    """
     if len(payload.completed_quests) > MAX_QUESTS_PER_SYNC or len(payload.in_progress_quests) > MAX_QUESTS_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1491,9 +1239,7 @@ def sync_quests(
 
 @app.get("/api/players/me/quests")
 def read_quests(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The website's own read of the last-synced completed/in-progress-
-    quests snapshot -- session-authenticated like every other GET
-    here."""
+    """The website's read of the last-synced quests snapshot."""
     return {
         "completedQuests": game_account.completed_quests or [],
         "inProgressQuests": game_account.in_progress_quests or [],
@@ -1506,12 +1252,9 @@ def sync_diaries(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Full replace of the player's highest completed tier per
-    achievement diary area -- see GameAccount.diary_tiers' own comment in
-    app/models.py and MyscapeClient#syncDiaries in the
-    Mootrius/myscape-plugin repo. The plugin sends only each area's
-    HIGHEST completed tier (matching how the in-game diary journal
-    itself only ever shows one), not one row per tier."""
+    """Full replace of the highest completed tier per diary area (see
+    GameAccount.diary_tiers).
+    """
     if len(payload.diary_tiers) > MAX_DIARY_AREAS_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1524,8 +1267,7 @@ def sync_diaries(
 
 @app.get("/api/players/me/diaries")
 def read_diaries(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The website's own read of the last-synced diary-tiers snapshot
-    -- session-authenticated like every other GET here."""
+    """The website's read of the last-synced diary-tiers snapshot."""
     return {"diaryTiers": game_account.diary_tiers or {}}
 
 
@@ -1535,22 +1277,11 @@ def sync_collection_log(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Full replace of every collection log item the player has ever
-    obtained, and its quantity -- see GameAccount.collection_log_items'
-    own comment in app/models.py and CollectionLogItemCapture in the
-    Mootrius/myscape-plugin repo for how the plugin actually captures
-    this at all (unlike skills/quests/diaries above, it isn't cache
-    data -- the collection log widget has to actually be opened
-    in-game). Each item_id is checked against the real collection log
-    structure (get_valid_item_ids in app/collectionlog.py) and each
-    quantity against >= 1 (an obtained item is never sent at 0) --
-    dropped individually rather than failing the whole sync the way a
-    per-item CollectionLogItemIn field_validator would have (see that
-    model's own comment in app/schemas.py for why this check
-    deliberately lives here instead): a single stale id from an
-    outdated plugin build otherwise silently zeroed out every sync a
-    player made, with collection log data never populating and no
-    error visible anywhere to explain why."""
+    """Full replace of every collection log item ever obtained, with quantity
+    (see GameAccount.collection_log_items). Entries with an unknown item_id or
+    quantity < 1 are dropped individually rather than failing the sync, so one
+    stale id from an old plugin build can't zero out every sync.
+    """
     if len(payload.items) > MAX_COLLECTION_LOG_ITEMS_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1560,10 +1291,9 @@ def sync_collection_log(
     collection_log_items = {}
     for item in payload.items:
         item_id = item.item_id
-        # The log announces some slots under their item's placeholder
-        # variant (id + 2) rather than the id its own structure lists --
-        # the Yama Dossier arrives as 30805, structure id 30803 -- so
-        # an unknown id whose placeholder base IS a log id is that slot.
+        # Some slots are announced under their placeholder variant (id + 2),
+        # e.g. Yama Dossier 30805 vs structure id 30803; an unknown id whose
+        # placeholder base is a log id is that slot.
         if item_id not in valid_item_ids and (item_id - 2) in valid_item_ids:
             item_id -= 2
         if item_id in valid_item_ids and item.quantity >= 1:
@@ -1580,27 +1310,20 @@ def add_collection_log_item(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Marks ONE collection log item obtained the moment the game
-    announces it ("New item added to your collection log: <name>" --
-    see MyscapePlugin#onChatMessage in the Mootrius/myscape-plugin
-    repo), so the Character Overview's collection log reflects a fresh
-    unlock without the player having to reopen the in-game log (the
-    full per-item capture only runs then -- see CollectionLogItemCapture).
-    Unlike POST /api/players/me/collection-log above this is an add,
-    never a replace: every other item and its quantity is left exactly
-    as it was, and a new item starts at quantity 1 (an item already
-    marked obtained keeps its recorded quantity). A name that isn't
-    exactly one log slot (see find_unique_item_id_by_name) changes
-    nothing and returns item_id null -- the next full capture picks it
-    up instead."""
+    """Marks ONE collection log item obtained when the game announces it
+    (MyscapePlugin#onChatMessage), without reopening the in-game log. An add,
+    never a replace: other items are untouched and a new item starts at
+    quantity 1. A name that isn't exactly one log slot changes nothing and
+    returns item_id null.
+    """
     item_id = find_unique_item_id_by_name(payload.item_name)
     if item_id is None:
         return CollectionLogItemAddResponse(item_id=None, applied_count=0)
     items = dict(game_account.collection_log_items or {})
     if str(item_id) not in items:
         items[str(item_id)] = 1
-        # Reassigned (not mutated in place) so SQLAlchemy sees the
-        # JSON column change.
+        # Reassigned (not mutated in place) so SQLAlchemy sees the JSON column
+        # change.
         game_account.collection_log_items = items
     game_account.collection_log_synced_at = datetime.now(timezone.utc)
     db.commit()
@@ -1608,22 +1331,13 @@ def add_collection_log_item(
 
 
 def _collection_log_payload(game_account: GameAccount) -> dict:
-    """Factored out of read_collection_log below for the same single-
-    source-of-truth reason as _character_overview_summary_payload
-    above."""
+    """Factored out of read_collection_log so both share one payload builder."""
     return {
         "tabs": get_collection_log_tabs(),
         "obtainedItems": game_account.collection_log_items or {},
         "syncedAt": game_account.collection_log_synced_at.isoformat() if game_account.collection_log_synced_at else None,
-        # Page name -> list of kill/completion counts (one element for a
-        # plain page, more for a combo page like "Callisto and Artio" or
-        # a raid's normal/hard-mode split -- see
-        # app.bosses.collection_log_page_kill_counts's own docstring),
-        # for however many pages that function can confidently match to
-        # this account's already-synced boss_kill_counts/
-        # clue_scroll_counts -- {} for an account that's never
-        # linked/synced hiscores at all, same as everywhere else those
-        # columns are read.
+        # Page name -> kill/completion counts (several for combo pages or raid
+        # modes). {} if hiscores were never synced.
         "killCounts": collection_log_page_kill_counts(
             game_account.boss_kill_counts or {},
             game_account.clue_scroll_counts or {},
@@ -1633,14 +1347,9 @@ def _collection_log_payload(game_account: GameAccount) -> dict:
 
 @app.get("/api/players/me/collection-log")
 def read_collection_log(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The website's own read of the last-synced collection log
-    snapshot -- session-authenticated like every other GET here.
-    Returns the player's own obtained/quantity state alongside the
-    full static tab/page/item structure (get_collection_log_tabs in
-    app/collectionlog.py) in one response, so the Character Overview
-    page's collection log renderer doesn't need a second request just
-    to know what a page's OWN items are before it can mark which of
-    them this player already has."""
+    """The website's read of the collection log: the player's state plus the
+    static tab/page/item structure, in one response.
+    """
     return _collection_log_payload(game_account)
 
 
@@ -1650,20 +1359,10 @@ def sync_character_summary(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Full replace of Character Overview's summary row -- see
-    GameAccount.character_summary_* columns' own comment in
-    app/models.py and MyscapeClient#syncCharacterSummary in the
-    Mootrius/myscape-plugin repo for how these seven stats are actually
-    read (InterfaceID.AccountSummarySidepanel's dynamic children, at
-    fixed indices confirmed with a live widget dump). account_type
-    (optional, see that field's own comment in app/schemas.py) rides
-    along in this same payload for the plugin's own convenience, even
-    though it's actually read off client.getVarbitValue(Varbits.
-    ACCOUNT_TYPE) rather than that same widget. stat_count is always
-    11 on success -- there's only ever one summary to send, so unlike
-    every other sync* endpoint's count this isn't counting anything
-    meaningful, just satisfying MyscapeClient#syncPayload's shared
-    countField contract (see that method's own comment)."""
+    """Full replace of Character Overview's summary row (see
+    GameAccount.character_summary_*). stat_count is always 11; it only
+    satisfies MyscapeClient#syncPayload's countField contract.
+    """
     game_account.character_summary_combat_level = payload.combat_level
     game_account.character_summary_total_level = payload.total_level
     game_account.character_summary_total_xp = payload.total_xp
@@ -1676,11 +1375,8 @@ def sync_character_summary(
     game_account.character_summary_collections_completed = payload.collections_completed
     game_account.character_summary_collections_total = payload.collections_total
     game_account.character_summary_combat_task_tier_completed = payload.combat_task_tier_completed
-    # Optional (see CharacterSummarySyncRequest.account_type's own
-    # comment in app/schemas.py) -- only overwritten when THIS sync
-    # actually sent one, so an older plugin build that doesn't know
-    # about account_type yet doesn't wipe out a value a newer build
-    # already synced.
+    # Optional: only overwritten when this sync sent one, so an older plugin
+    # build doesn't wipe a value a newer build already synced.
     if payload.account_type is not None:
         game_account.account_type = payload.account_type
     game_account.character_summary_synced_at = datetime.now(timezone.utc)
@@ -1689,11 +1385,9 @@ def sync_character_summary(
 
 
 def _diary_progress_rows(game_account: GameAccount) -> list[dict]:
-    """One entry per diary area with completed/total TASK counts and a
-    per-tier state, derived from diary_tiers (highest completed tier
-    per area) plus the static per-tier task totals. Shared by the
-    progress payload's diary rows and the summary payload's Achievement
-    Diaries tile so the two can never disagree."""
+    """One entry per diary area with completed/total TASK counts and per-tier
+    state; shared by the progress payload and the summary tile so they agree.
+    """
     diary_totals = get_diary_tier_totals()
     account_diary_tiers = game_account.diary_tiers or {}
     diaries = []
@@ -1711,14 +1405,10 @@ def _diary_progress_rows(game_account: GameAccount) -> list[dict]:
 
 
 def _achievement_diary_tile_counts(game_account: GameAccount) -> tuple:
-    """(completed, total) for the summary row's Achievement Diaries
-    tile, in TASKS. The in-game Character Summary panel's own figure
-    is not a reliable source: depending on what the plugin read it can
-    be a tier count (e.g. 36/48 = 12 areas x 3 tiers) rather than a
-    task count, so whenever diary_tiers has been synced the tile is
-    computed from it -- the same numbers the per-area diary rows
-    show. Falls back to the plugin-reported values only for an account
-    that has never synced diary tiers."""
+    """(completed, total) in TASKS for the Achievement Diaries tile. The in-game
+    figure can be a tier count (e.g. 36/48), so it is computed from
+    diary_tiers once synced.
+    """
     if game_account.diary_tiers:
         rows = _diary_progress_rows(game_account)
         return sum(r["completed"] for r in rows), sum(r["total"] for r in rows)
@@ -1729,34 +1419,20 @@ def _achievement_diary_tile_counts(game_account: GameAccount) -> tuple:
 
 
 def _combat_tasks_tile_total(game_account: GameAccount):
-    """Total for the summary row's Combat Achievements tile. The
-    in-game panel's own total is not the same for every account (one
-    synced 632 where the full task list is 655), so the tile uses the
-    fixed per-tier totals -- the same ones the per-tier combat
-    achievement rows show -- once this account has synced a completed
-    count at all. An account that never synced keeps the plugin value
-    (null), so the tile still renders as an em dash."""
+    """Total for the Combat Achievements tile. The in-game total varies between
+    accounts (632 vs 655), so fixed per-tier totals are used once a completed
+    count has synced.
+    """
     if game_account.character_summary_combat_tasks_completed is None:
         return game_account.character_summary_combat_tasks_total
     return sum(get_ca_tier_totals().values())
 
 
 def _character_overview_summary_payload(game_account: GameAccount) -> dict:
-    """The actual summary-row payload, factored out of
-    character_overview_summary below so the public, code-scoped
-    counterpart (public_character_overview_summary) can return the
-    exact same shape for someone else's GameAccount without
-    duplicating this dict -- single source of truth for what that row
-    shows, whether the viewer is the account's own owner or a visitor
-    with a public link. modelViewerBackgroundIndex rides along here
-    too (not a Character Summary stat at all) purely so the public
-    page's own fetch of this same endpoint -- see the model-viewer
-    script's applyServerBackground in app/pages.py -- can pick up the
-    owner's current background without a second round trip; the
-    authenticated page applies it too, so the owner's shuffled
-    background follows them across devices (its localStorage pick only
-    covers the first paint -- see MODEL_VIEWER_BG_STORAGE_KEY's own
-    comment there)."""
+    """The summary-row payload, shared with the public counterpart.
+    modelViewerBackgroundIndex rides along so public viewers and other devices
+    pick up the background.
+    """
     achievements_completed, achievements_total = _achievement_diary_tile_counts(game_account)
     return {
         "combatLevel": game_account.character_summary_combat_level,
@@ -1778,51 +1454,20 @@ def _character_overview_summary_payload(game_account: GameAccount) -> dict:
 
 @app.get("/api/character-overview/summary")
 def character_overview_summary(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Character Overview's own summary-row payload -- session-
-    authenticated like /api/possessions/summary below, since only the
-    website UI calls this. The seven Character Summary stats are read
-    straight off GameAccount as last synced by POST
-    /api/players/me/character-summary above; null for any stat (or all
-    seven, on an account that's never opened that in-game tab with the
-    plugin running) renders as an em dash rather than a wrong number --
-    see render_character_overview in app/pages.py."""
+    """Character Overview's summary row (session-authenticated). Null stats
+    render as an em dash (render_character_overview in app/pages.py).
+    """
     return _character_overview_summary_payload(game_account)
 
 
 def _character_overview_progress_payload(game_account: GameAccount) -> dict:
-    """The actual quests/diaries/combat-achievements payload, factored
-    out of character_overview_progress below for the same reason
-    _character_overview_summary_payload above was -- one body shared
-    by the session-scoped endpoint and the public, code-scoped one.
-
-    Quests: {"free": [...], "members": [...], "miniquests": [...]},
-    each a list of {"name", "state"} in the same order
-    get_quest_list() returns -- state is
-    "completed"/"in_progress"/"not_started", matched case-
-    insensitively against completed_quests/in_progress_quests (same
-    normalization goal-node quest matching already uses, see
-    app.mindmaps._normalize_lookup_name) since RuneLite's own quest
-    names and this snapshot's wiki-sourced names don't always agree on
-    case. See get_quest_list's own docstring for what "members" and
-    "miniquests" each deliberately leave out.
-
-    Diaries: one entry per DIARY_AREAS area (app/mindmaps.py) with
-    completed/total task counts and a per-tier "completed"/
-    "not_completed" state -- diary_tiers only ever stores an area's
-    HIGHEST completed tier (see that column's own comment), so every
-    tier at or below it counts as completed and every tier above it
-    as not, with no partial-progress-within-a-tier state: the game
-    itself has no persisted "N of M tasks done in this not-yet-
-    finished tier" value to read (each task is a live-evaluated
-    requirement, not a stored completion flag), and a spot check
-    against RuneProfile.com (a popular third-party OSRS profile
-    tracker) confirmed it shows this same simple per-tier "done" vs.
-    "not done" split rather than any interpolated percentage.
-
-    Combat achievements: one entry per tier with a completed count (or
-    null if this account has never synced a Character Summary panel
-    read since combat_task_tier_completed was added) and that tier's
-    fixed total."""
+    """The quests/diaries/combat-achievements payload, shared by the session and
+    public endpoints. Quest names are matched case-insensitively (RuneLite and
+    wiki names differ in case). diary_tiers stores only the highest completed
+    tier, so lower tiers count as completed and there is no partial progress.
+    Combat achievements give a completed count per tier (null if never synced)
+    and the fixed total.
+    """
     quest_list = get_quest_list()
     completed_lookup = {_normalize_lookup_name(n) for n in (game_account.completed_quests or [])}
     in_progress_lookup = {_normalize_lookup_name(n) for n in (game_account.in_progress_quests or [])}
@@ -1858,9 +1503,7 @@ def _character_overview_progress_payload(game_account: GameAccount) -> dict:
 
 @app.get("/api/character-overview/progress")
 def character_overview_progress(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Session-authenticated wrapper around
-    _character_overview_progress_payload above -- see that function's
-    own docstring (moved there in full) for what each section means."""
+    """Session-authenticated wrapper around _character_overview_progress_payload."""
     return _character_overview_progress_payload(game_account)
 
 
@@ -1870,17 +1513,10 @@ def sync_character_model(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Full replace of the player's current 3D model export -- see
-    GameAccount.character_model_glb's own comment in app/models.py and
-    MyscapeClient#syncCharacterModel in the Mootrius/myscape-plugin
-    repo for how these bytes are actually produced (RuneLite's own
-    Renderable#getModel() for the local player, converted client-side
-    by io.myscape.plugin.modelexport's ModelMeshBuilder+GlbWriter).
-    Unlike every list-shaped sync* endpoint above, there's nothing to
-    count here in the item-list sense -- byte_count in the response is
-    literally len(the decoded file), so the plugin's own callback can
-    use it as a transit-integrity check (see that method's own
-    docstring) rather than anything resembling a row count."""
+    """Full replace of the player's 3D model export (see
+    GameAccount.character_model_glb). byte_count is len(decoded file), a
+    transit-integrity check.
+    """
     try:
         glb_bytes = base64.b64decode(payload.glb_base64, validate=True)
     except Exception:
@@ -1906,10 +1542,7 @@ def sync_character_model(
 
 
 def _character_overview_model_response(game_account: GameAccount) -> Response:
-    """The actual .glb response, factored out of character_overview_model
-    below for the same single-source-of-truth reason as
-    _character_overview_summary_payload above -- shared by the
-    session-scoped endpoint and the public, code-scoped one."""
+    """The .glb response, shared by the session-scoped and public endpoints."""
     if not game_account.character_model_glb:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No character model captured yet.")
     return Response(
@@ -1921,28 +1554,17 @@ def _character_overview_model_response(game_account: GameAccount) -> Response:
 
 @app.get("/api/character-overview/model")
 def character_overview_model(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Character Overview's own 3D-viewer payload -- session-
-    authenticated like character_overview_summary above, since only
-    the website UI calls this. Returns the raw .glb bytes directly
-    (model/gltf-binary), not JSON -- render_character_overview's own
-    script (app/pages.py) hands this response's arrayBuffer straight to
-    three.js's GLTFLoader#parse, so there's no reason to round-trip
-    back through base64 the way the plugin's own upload does (that
-    detour exists client-side only to fit the plugin's existing JSON
-    sync contract -- see CharacterModelSyncRequest's own docstring in
-    app/schemas.py). 404, not a 200 with an empty/null body, when
-    nothing's been captured yet (an account that's never clicked
-    "Export 3D model" in the plugin's side panel) -- the frontend's own
-    fetch treats that as "show the not-captured-yet placeholder"."""
+    """Character Overview's 3D-viewer payload (session-authenticated): raw .glb
+    bytes (model/gltf-binary) for three.js GLTFLoader#parse. 404, not an empty
+    200, when nothing is captured.
+    """
     return _character_overview_model_response(game_account)
 
 
 def _public_profile_payload(game_account: GameAccount) -> dict:
-    """Shared by read_public_profile/update_public_profile/
-    regenerate_public_profile_code below -- always the current
-    is_public/code/url trio, so the settings UI (the public-profile
-    card in render_character_overview's own script, app/pages.py) can
-    treat every one of those three endpoints' responses identically."""
+    """The is_public/code/url trio returned by read/update_public_profile and
+    regenerate_public_profile_code.
+    """
     return {
         "isPublic": game_account.is_public_profile,
         "code": game_account.public_code,
@@ -1952,8 +1574,7 @@ def _public_profile_payload(game_account: GameAccount) -> dict:
 
 @app.get("/api/players/me/public-profile")
 def read_public_profile(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The settings card's own initial-state read -- session-
-    authenticated like every other /api/players/me/* GET here."""
+    """The settings card's initial-state read (session-authenticated)."""
     return _public_profile_payload(game_account)
 
 
@@ -1963,12 +1584,10 @@ def update_public_profile(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Flips GameAccount.is_public_profile. A code is generated here
-    the first time a character ever goes public (see that column's own
-    comment in app/models.py) and kept from then on, even across a
-    later flip back to private -- going public again later reuses the
-    same link rather than silently handing out a different one than
-    whatever might already be shared."""
+    """Flips GameAccount.is_public_profile. A code is generated the first time a
+    character goes public and kept afterwards, so re-publishing reuses the
+    link.
+    """
     game_account.is_public_profile = payload.is_public
     if payload.is_public and not game_account.public_code:
         game_account.public_code = generate_public_code(db)
@@ -1982,18 +1601,9 @@ def regenerate_public_profile_code(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Issues a fresh code, abandoning whatever one this character had
-    before -- the only way to kill an already-shared link short of
-    going private outright (going private and public again would just
-    hand back the SAME code, per update_public_profile's own comment,
-    since it only generates a new one when there wasn't one yet).
-    Throttled to once per day (see PUBLIC_CODE_REGENERATE_COOLDOWN's
-    own comment in app/public_profile.py) -- 429s, not a silent no-op,
-    so a caller actually finds out why nothing changed; the website's
-    own "Generate new link" button just flashes briefly rather than surfacing
-    this detail message anywhere (see that button's own click handler
-    in app/pages.py), but a non-browser caller still gets a real
-    reason."""
+    """Issues a fresh code, abandoning the old one. Throttled to once per day
+    (PUBLIC_CODE_REGENERATE_COOLDOWN in app/public_profile.py) with a 429.
+    """
     remaining = regenerate_cooldown_remaining(game_account)
     if remaining is not None:
         raise HTTPException(
@@ -2012,19 +1622,10 @@ def update_model_viewer_background(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Called by Character Overview's own shuffle button (see
-    shuffleBackground in app/pages.py) each time it actually changes
-    the index, session-authenticated like every other /api/players/
-    me/* website (not plugin) endpoint here. Fire-and-forget from the
-    page's own side -- the browser's localStorage pick is already
-    applied instantly, before this ever lands -- so all this does is
-    let GameAccount.model_viewer_background_index catch up to it,
-    which only matters to someone else loading this player's public
-    profile later (see that column's own comment in app/models.py).
-    index's lower bound (>= 0) is already checked by the schema
-    itself; the upper bound has to live here instead, since it's
-    _MODEL_VIEWER_BACKGROUNDS' own length in app/pages.py, not
-    anything schemas.py knows about."""
+    """Called by the shuffle button (shuffleBackground in app/pages.py),
+    fire-and-forget. The schema checks index >= 0; the upper bound is
+    _MODEL_VIEWER_BACKGROUNDS' length in app/pages.py.
+    """
     if payload.index >= len(_MODEL_VIEWER_BACKGROUNDS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -2035,29 +1636,19 @@ def update_model_viewer_background(
     return {"index": game_account.model_viewer_background_index}
 
 
-# ---- Public, unauthenticated reads for myscape.io/c/<code> ----------
+# Public, unauthenticated reads for myscape.io/c/<code>
 #
-# Each of these mirrors one of the session-authenticated endpoints
-# above exactly (same payload-builder function, so there is never a
-# second, drifting copy of what either one actually returns) but
-# resolves its GameAccount by public_code instead of "whoever's
-# signed in", and 404s with the same message whether the code doesn't
-# exist at all or exists on a profile that's currently private --
-# find_public_game_account's own comment in app/public_profile.py is
-# why those two cases are made to look identical. Rate-limited, unlike
-# their session-authenticated counterparts, since this is the first
-# surface in the app actually reachable by someone who isn't signed in
-# at all -- a generous-enough per-IP limit that a real visitor loading
-# one public profile (one page load, five fetches) never notices it,
-# while still bounding how fast the ~28.6 million possible codes could
-# ever be enumerated from one address.
+# Each mirrors a session-authenticated endpoint with the same payload builder,
+# resolving by public_code. A missing code and a private profile 404 identically
+# (see find_public_game_account). Rate-limited per IP to bound enumeration of
+# the ~28.6 million possible codes.
 def _get_public_game_account_or_404(
     db: Session, code: str, viewer: Optional[GameAccount] = None
 ) -> GameAccount:
-    """404s unless the profile is public OR the signed-in session's
-    active character (`viewer`) is the profile's own character or an
-    accepted friend of it -- see find_viewable_game_account in
-    app/public_profile.py. Same single 404 either way."""
+    """404s unless the profile is public OR the signed-in session's active
+    character (`viewer`) is its owner or an accepted friend
+    (find_viewable_game_account).
+    """
     game_account = find_viewable_game_account(db, code, viewer)
     if game_account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
@@ -2065,11 +1656,10 @@ def _get_public_game_account_or_404(
 
 
 def _find_viewable_or_frozen(db: Session, code: str, viewer: Optional[GameAccount] = None):
-    """_get_public_game_account_or_404, except that when the live
-    profile isn't viewable but the code is one of the permanent
-    examples (app/permanent_examples.py), returns its frozen
-    PermanentExample instead -- callers answer from that row's stored
-    payload. Still 404s for every other code."""
+    """Like _get_public_game_account_or_404, but a non-viewable code that is a
+    permanent example (app/permanent_examples.py) returns its frozen
+    PermanentExample.
+    """
     game_account = find_viewable_game_account(db, code, viewer)
     if game_account is not None:
         return game_account
@@ -2164,23 +1754,16 @@ def public_character_overview_page(
     viewer: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
     viewer_game_account: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
-    """The actual shared-link page -- reuses
-    render_character_overview's own panel markup verbatim (see
-    render_public_character_overview in app/pages.py), wired to this
-    code's real, live data through the public endpoints just above
-    instead of either the authenticated "me" endpoints or a frozen
-    demo snapshot. A missing or currently-private code 404s into the
-    same styled not-found page every other broken link on the site
-    gets (see _styled_not_found_handler above) -- not a special
-    "this profile is private" page, so a guess can't tell a wrong code
-    apart from a real, private one."""
-    # Friends (and the owner) can open a private profile too -- see
-    # find_viewable_game_account.
+    """The shared-link page: render_public_character_overview (app/pages.py)
+    wired to the public endpoints above. Missing and private codes 404 into
+    the styled not-found page.
+    """
+    # Friends and the owner can open a private profile too
+    # (find_viewable_game_account).
     game_account = find_viewable_game_account(db, code, viewer_game_account)
     if game_account is None:
-        # One of the README's permanent example profiles? Rendered from
-        # its frozen copy -- the page's own fetches are answered the
-        # same way by the /api/public/<code>/* endpoints above.
+        # A README permanent example renders from its frozen copy; the page's
+        # fetches are answered the same way by /api/public/<code>/*.
         frozen = find_permanent_profile(db, code)
         if frozen is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
@@ -2196,36 +1779,19 @@ def shared_content_page(
     db: Session = Depends(get_db),
     viewer: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
 ):
-    """The generic landing spot for every myscape.io/s/<code> link --
-    looks the code up once (no content_type filter; this route itself
-    is what figures out which renderer a code's own content_type
-    needs), then dispatches to that content type's own render_*_share
-    function. Just "loot_tracker" (render_loot_tracker_share) for now;
-    a future content type adds a branch here, not a new route -- the
-    code namespace itself is already shared across every content type
-    (see SharedContent's own docstring in app/models.py), so one route
-    dispatching on the looked-up row's own content_type is simpler
-    than a separate /s/ path per app. A missing OR expired code both
-    404 into the same styled not-found page every other broken link on
-    the site gets (see _styled_not_found_handler above and find_valid_
-    share's own comment in app/sharing.py for why those two cases are
-    made to look identical) -- kept this simple for a first content
-    type; a friendlier "this link has expired" message is an easy
-    follow-up once there's reason to tell the two apart."""
+    """Landing spot for every myscape.io/s/<code>: looks the code up once and
+    dispatches on content_type to a render_*_share function. Missing and
+    expired codes 404 identically (see find_valid_share in app/sharing.py).
+    """
     share = find_valid_share(db, code)
     if share is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
-    # The share's own owner -- looked up here (not inside pages.py,
-    # which stays DB-free) rather than via a relationship, same "query
-    # the child row's own FK directly, no ORM relationship needed"
-    # style every other per-account child table in this file already
-    # uses. Can come back None if that account's own row was ever
-    # deleted after sharing (no cascade delete wired up for this FK --
-    # see SharedContent's own comment in app/models.py); render_loot_
-    # tracker_share's own game_account parameter already handles that.
+    # The share's owner, queried by FK (pages.py stays DB-free). May be None if
+    # the account was deleted (no cascade on this FK); render_loot_tracker_share
+    # handles that.
     if share.game_account_id is None:
-        # A permanent example's frozen copy (see app/permanent_examples.py)
-        # -- its owner's name was copied alongside the payload.
+        # A permanent example's frozen copy carries its owner's name alongside
+        # the payload.
         owner = frozen_owner(getattr(share, "frozen_owner_name", None))
     else:
         owner = db.query(GameAccount).filter(GameAccount.id == share.game_account_id).first()
@@ -2239,12 +1805,8 @@ def shared_content_page(
         return render_mindmap_share(share, owner, viewer)
     if share.content_type == "goal_tracking":
         return render_goal_tracking_share(share, owner, viewer)
-    # Shouldn't be reachable -- every row's content_type is set by one
-    # of this file's own create-share endpoints, all of which only
-    # ever write a value this if-chain already knows. Same "something's
-    # actually wrong, fail loudly rather than guess" posture as
-    # generate_share_code's own _MAX_ATTEMPTS exhaustion in
-    # app/sharing.py.
+    # Unreachable: content_type is only set by this file's create-share
+    # endpoints. Fail loudly rather than guess.
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
 
 
@@ -2254,44 +1816,16 @@ def import_shared_purchase_goal(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """The download icon on a Purchase Goal share page (render_
-    purchase_goals_share, app/pages.py, right next to its own "Shared
-    by <name>" heading) -- the counterpart to POST /api/gear-setups/
-    {setup_id}/share above, in the other direction: someone ELSE's
-    myscape.io/s/<code> link in, as a brand new GearSetup of this
-    signed-in player's own, rather than one of this player's own
-    setups out. Session-authenticated (get_current_verified_game_
-    account_from_session, same dependency every other gear-setup
-    mutation endpoint here already uses) -- a signed-out visitor's
-    click never reaches this at all, since render_purchase_goals_
-    share's own script sends it straight to /signup instead (see that
-    function's own docstring).
-
-    content_type="purchase_goal" on the find_valid_share call below
-    means an invalid, expired, or loot_tracker code all 404 exactly
-    alike -- same "a wrong code can't be told apart from a dead one"
-    posture GET /s/{code} above already takes, and loot_tracker shares
-    have no import feature to begin with. See import_gear_setup_from_
-    share_payload in app/purchase_goals.py for the actual reverse-
-    resolution (undoing build_purchase_goal_share_snapshot's own
-    pricing/resolution) that turns the frozen payload back into a
-    normal, editable setup -- including why it lands at the END of
-    this player's own setup list with no special-casing needed here.
-
-    The response is the normal GET /api/gear-setups shape (build_
-    purchase_goals_state) plus one extra top-level importedSetupId --
-    the new setup's own id, read back off the row import_gear_setup_
-    from_share_payload just created (that function sets it explicitly
-    rather than leaning on the column's default=uuid.uuid4, precisely
-    so it's already populated here without needing a post-commit
-    refresh). The share page's own SAVE TO MY MYSCAPE button (render_
-    purchase_goals_share, app/pages.py) stashes this into this
-    player's real myscape:purchaseGoals:activeSetupId localStorage key
-    before redirecting to their own Purchase Goals page -- the same
-    key loadState's own boot logic already prefers over "just open the
-    first setup" -- so the newly imported setup is what they land on,
-    selected and ready to view/edit, with no new client-side selection
-    plumbing needed on that page at all."""
+    """Imports someone else's shared setup as a new GearSetup of the signed-in
+    player (render_purchase_goals_share in app/pages.py); the reverse of POST
+    /api/gear-setups/{setup_id}/share. A signed-out visitor is sent to /signup
+    by the page script.
+    
+    content_type="purchase_goal" makes invalid, expired and other-type codes
+    404 alike. The response adds importedSetupId, which the share page stores
+    under the myscape:purchaseGoals:activeSetupId localStorage key (preferred
+    by Purchase Goals' loadState on boot).
+    """
     share = find_valid_share(db, code, content_type="purchase_goal")
     if share is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
@@ -2307,20 +1841,11 @@ def sync_hiscores(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """A manual resync -- the one deliberate drift-correction escape
-    hatch this design keeps (see app/hiscores.py's own top-of-file
-    comment): every OTHER hiscores pull now only ever fires at
-    link/relink time (see exchange_link_code in
-    app/routers/linking.py), with live kill counts coming from the
-    chatbox the rest of the time (POST /api/players/me/kill-counts,
-    below) rather than any further pulls from here. Session-
-    authenticated, unlike every POST /api/players/me/* endpoint around
-    it, since boss kill counts come from the official OSRS Hiscores
-    rather than anything RuneLite itself reports -- there's nothing for
-    the plugin to push here. See app/hiscores.py for the actual fetch,
-    its rate-limit posture, and why a fetch failure doesn't necessarily
-    become an error response here (a prior snapshot is served
-    instead)."""
+    """A manual resync, the one drift-correction hatch (see app/hiscores.py).
+    Other pulls only happen at link/relink; live counts come from POST
+    /api/players/me/kill-counts. Session-authenticated since the data comes
+    from the official Hiscores.
+    """
     try:
         result = sync_hiscores_module.sync_hiscores(db, game_account)
     except sync_hiscores_module.NotLinkedError as exc:
@@ -2340,14 +1865,10 @@ def sync_kill_counts(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Goal Tracking's live kill-count feed -- one chatbox-parsed
-    reading at a time from the plugin (see MyscapePlugin#onChatMessage
-    in the Mootrius/myscape-plugin repo, which posts here the instant
-    it parses a "Your <boss> kill count is: <n>." style message), API-
-    key-authenticated like every other plugin-pushed sync. Delegates
-    straight to apply_kill_count_updates in app/hiscores.py -- see its
-    own docstring for the case-insensitive name matching and why an
-    unrecognized boss name is silently skipped rather than a 4xx."""
+    """Goal Tracking's live kill-count feed: one chatbox-parsed reading at a
+    time, API-key-authenticated. Delegates to apply_kill_count_updates in
+    app/hiscores.py, which skips unrecognized bosses.
+    """
     if len(payload.updates) > MAX_KILL_COUNT_UPDATES_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -2363,12 +1884,10 @@ def sync_runescape_name(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Keeps GameAccount.runescape_name current after an in-game name
-    change. The plugin posts the logged-in character's display name
-    (with its account_hash) whenever it differs from what it last
-    reported; the name is only ever written when the account_hash
-    matches this API key's own linked game account, so the stable id
-    -- not the name -- stays the identity."""
+    """Keeps GameAccount.runescape_name current after an in-game name change.
+    Written only when account_hash matches this key's linked account: the id,
+    not the name, is the identity.
+    """
     if game_account.account_hash != payload.account_hash:
         return RunescapeNameSyncResponse(updated=0)
     if game_account.runescape_name == payload.runescape_name:
@@ -2384,14 +1903,10 @@ def sync_loot(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
-    """Records one or more loot events (a kill, a clue casket, a
-    pickpocket -- see MyscapePlugin#onLootReceived in the
-    Mootrius/myscape-plugin repo) as they happen. Unlike every sync
-    endpoint above, this is an insert-if-new, not a delete-and-replace
-    -- see LootEvent's docstring in app/models.py for why a historical
-    log needs a different sync shape than a current-state snapshot, and
-    sync_loot_events in app/loot.py for the actual dedup logic (keyed
-    on each event's client-generated event_id)."""
+    """Records loot events as they happen. Insert-if-new, not delete-and-replace;
+    dedup keys on the client-generated event_id (sync_loot_events in
+    app/loot.py).
+    """
     if len(payload.events) > MAX_LOOT_EVENTS_PER_SYNC:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -2409,23 +1924,12 @@ def read_loot(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """The combined state the Loot Tracker page polls -- the bar
-    chart's buckets and a per-NPC breakdown of the same range,
-    computed fresh from this player's synced LootEvent rows. `range`
-    is one of app/loot.py's RANGE_PRESETS keys ("24h", "1w", "1m",
-    "3m", "6m", "1y") or "custom", in which case `start`/`end` are
-    either plain "YYYY-MM-DD" dates (as the range menu's own date
-    inputs send them, naming the first and last calendar day to
-    include, both inclusive) or full ISO-8601 timestamps (as a
-    clicked bar sends instead, naming its own bucket's exact
-    start/end -- see bucketUrl in render_loot_tracker's script) --
-    see parse_loot_range_bound in app/loot.py for how each is told
-    apart and turned into a concrete instant. An unrecognized/missing
-    `range`, or a `custom` missing either date, falls back to
-    resolve_range's own default (the page's original 24-hour window).
-    Not pinned to a Pydantic response_model for the same reason GET
-    /api/gear-setups above isn't -- see LootState's docstring in
-    app/schemas.py. See build_loot_state in app/loot.py."""
+    """The Loot Tracker's polled state (build_loot_state in app/loot.py). `range`
+    is a RANGE_PRESETS key or "custom"; custom `start`/`end` are "YYYY-MM-DD"
+    dates (both inclusive) or ISO-8601 timestamps (a clicked bar's bucket; see
+    parse_loot_range_bound). Unrecognized or incomplete ranges fall back to
+    resolve_range's 24-hour default. No response_model (see LootState).
+    """
     start_dt = None
     end_dt = None
     if range == "custom":
@@ -2449,20 +1953,11 @@ def create_loot_share(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Freezes [range/start/end -- same resolution as GET /api/players/
-    me/loot above, see that endpoint's own docstring] into a new
-    SharedContent row (see build_loot_share_snapshot in app/loot.py for
-    exactly what gets frozen) and returns a myscape.io/s/<code> link to
-    it. Session-authenticated like every other /api/players/me/*
-    website endpoint -- only the real, signed-in owner can ever decide
-    what of their own data gets a link, there's no plugin-side
-    equivalent of this one. Unthrottled (unlike POST /api/players/me/
-    public-profile/regenerate-code's own 24-hour cooldown) -- sharing a
-    few different sessions over time is completely normal usage here,
-    not something worth rate-limiting a signed-in player's own account
-    over; GET /s/{code} below is the one that's rate-limited, since
-    that's the first endpoint here actually reachable by someone who
-    isn't signed in at all."""
+    """Freezes the selected range into a SharedContent row
+    (build_loot_share_snapshot in app/loot.py) and returns a
+    myscape.io/s/<code> link. Unthrottled: GET /s/{code} is the rate-limited
+    surface.
+    """
     start_dt = None
     end_dt = None
     if payload.range == "custom":
@@ -2494,63 +1989,55 @@ def create_loot_share(
 
 @app.post("/api/players/me/loot/hidden-npcs")
 def hide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Hides one NPC from Loot Tracker -- the eye button on an NPC
-    tile's hover corner in render_loot_tracker, app/pages.py. See
-    set_npc_hidden in app/loot.py for what this actually removes from
-    the tracker's own totals."""
+    """Hides one NPC from Loot Tracker (the eye button on an NPC tile); see
+    set_npc_hidden in app/loot.py.
+    """
     set_npc_hidden(db, game_account, payload.name, True)
     return {"ok": True}
 
 
 @app.delete("/api/players/me/loot/hidden-npcs")
 def unhide_loot_npc(payload: HideLootNpcRequest, db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Reverses hide_loot_npc above -- the same eye button, now shown on
-    a dimmed (already-hidden) tile once the panel's own "show hidden"
-    toggle has revealed it."""
+    """Reverses hide_loot_npc."""
     set_npc_hidden(db, game_account, payload.name, False)
     return {"ok": True}
 
 
 @app.post("/api/players/me/loot/hidden-items")
 def hide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Hides one item from Loot Tracker -- same eye-button affordance as
-    hide_loot_npc above, one level down (see set_item_hidden in
-    app/loot.py)."""
+    """Hides one item from Loot Tracker (see set_item_hidden in app/loot.py)."""
     set_item_hidden(db, game_account, payload.item_id, payload.item_name, True)
     return {"ok": True}
 
 
 @app.delete("/api/players/me/loot/hidden-items")
 def unhide_loot_item(payload: HideLootItemRequest, db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Reverses hide_loot_item above -- same relationship as
-    unhide_loot_npc has to hide_loot_npc."""
+    """Reverses hide_loot_item."""
     set_item_hidden(db, game_account, payload.item_id, payload.item_name, False)
     return {"ok": True}
 
 
 @app.get("/api/items/search", response_model=ItemSearchResponse)
 def item_search(q: str = "", game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Backs the gear-setup slot picker's search box (see
-    app/purchase_goals.py's search_items -- ported from Maintrius's own
-    search_items in osrs_tracker.py) -- session-authenticated like every
-    other Purchase Goals endpoint below, since only the website UI calls
-    this, never the plugin."""
+    """Backs the gear-setup slot picker's search (search_items in
+    app/purchase_goals.py); session-authenticated.
+    """
     return ItemSearchResponse(results=search_items(q))
 
 
 @app.get("/api/npcs/search", response_model=NpcSearchResponse)
 def npc_search(q: str = "", game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Backs the Mindmaps KC goal's NPC search field (see
-    app/npc_names.py) -- session-authenticated like item_search above,
-    since only the website UI calls this."""
+    """Backs the Mindmaps KC goal's NPC search field (app/npc_names.py);
+    session-authenticated.
+    """
     return NpcSearchResponse(results=search_npc_names(q))
 
 
 @app.get("/api/quests/search", response_model=QuestSearchResponse)
 def quest_search(q: str = "", game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Backs the Mindmaps QUEST goal's quest/miniquest search field
-    (see app/quest_names.py) -- session-authenticated like
-    item_search above, since only the website UI calls this."""
+    """Backs the Mindmaps QUEST goal's search field (app/quest_names.py);
+    session-authenticated.
+    """
     return QuestSearchResponse(results=search_quest_names(q))
 
 
@@ -2592,17 +2079,9 @@ def possessions_page(player: Optional[PlayerView] = Depends(get_optional_current
 
 @app.get("/dashboard/goal-tracking", response_class=HTMLResponse)
 def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
-    """No sync trigger of any kind on page load any more -- KC data is
-    always already live by the time this renders, seeded once at
-    link/relink time and kept current from then on by the plugin's own
-    chatbox-parsed updates (see exchange_link_code in
-    app/routers/linking.py and POST /api/players/me/kill-counts above).
-    game_account.boss_kill_counts is simply read as-is; there's no
-    separate "display" view to build any more (compare this to the
-    interval-polling design this replaced, which had to top a stale
-    snapshot up with the Loot Tracker on every load -- see the git
-    history on app/hiscores.py's display_boss_kill_counts, now
-    removed, for that prior approach)."""
+    """No sync on page load: KC data is seeded at link time and kept current by
+    chatbox updates, so boss_kill_counts is read as-is.
+    """
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:
@@ -2612,8 +2091,9 @@ def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_curre
 
 @app.get("/dashboard/help-and-support", response_class=HTMLResponse)
 def help_support_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
-    """Same login/verified gate as every other /dashboard/* page above --
-    see render_help_support's own docstring in app/pages.py."""
+    """Same login/verified gate as every other /dashboard/* page (see
+    render_help_support in app/pages.py).
+    """
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:
@@ -2623,9 +2103,9 @@ def help_support_page(player: Optional[PlayerView] = Depends(get_optional_curren
 
 @app.get("/dashboard/character-overview", response_class=HTMLResponse)
 def character_overview_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
-    """Same login/verified gate as every other /dashboard/* page above --
-    see render_character_overview's own docstring in app/pages.py for
-    the summary row this now renders."""
+    """Same login/verified gate as every other /dashboard/* page (see
+    render_character_overview in app/pages.py).
+    """
     if not player:
         return RedirectResponse("/login", status_code=302)
     if not player.email_verified_at:
@@ -2635,32 +2115,26 @@ def character_overview_page(player: Optional[PlayerView] = Depends(get_optional_
 
 @app.get("/api/possessions/search-items", response_model=ItemSearchResponse)
 def possessions_item_search(q: str = "", game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Backs the min/max tracker "add an item" search field on the
-    Storages Viewer page -- session-authenticated like
-    item_search above, since only the website UI calls this. Unlike
-    that endpoint, every result here always carries a real item id
-    (see search_trackable_items in app/possessions.py for why -- a
-    tracker has nothing to watch without one)."""
+    """Backs the tracker "add an item" search; every result has a real item id
+    (search_trackable_items), which a tracker needs.
+    """
     return ItemSearchResponse(results=search_trackable_items(q))
 
 
 @app.get("/api/possessions/summary")
 def possessions_summary(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Section 3's payload -- every item currently owned in any synced
-    storage, priced and broken down by location (see
-    build_possessions_summary in app/possessions.py). Not pinned to a
-    response_model, same reasoning as /api/gear-setups below: a plain
-    list of dicts is simpler than fixing a schema for data this shape-
-    stable in practice but not worth formally modeling."""
+    """Section 3's payload: every owned item, priced and broken down by location
+    (build_possessions_summary). No response_model.
+    """
     return build_possessions_summary(db, game_account)
 
 
 @app.get("/api/possessions/trackers")
 def possessions_trackers(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Sections 1/2's combined payload -- both the minimum and maximum
-    trackers the player has set up, each already resolved against a
-    live owned-quantity count (see build_trackers_state in
-    app/possessions.py)."""
+    """Sections 1/2's payload: the minimum and maximum trackers, each resolved
+    against a live owned quantity (build_trackers_state in
+    app/possessions.py).
+    """
     return build_trackers_state(db, game_account)
 
 
@@ -2670,16 +2144,10 @@ def create_possession_tracker(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Adds one new min or max tracker. item_name is whatever the
-    search result the player picked carried (see
-    possessions_item_search above) -- purely the same untradeable-
-    item-display fallback role documented on BankItem in
-    app/models.py, never consulted for a tradeable item. Re-adding the
-    same (kind, item_id) pair a player already has a tracker for
-    updates its target instead of erroring or duplicating -- the
-    natural behavior when they're just changing their mind about the
-    number, not a state they need to explicitly delete-then-recreate
-    to reach."""
+    """Adds one min or max tracker. item_name is the untradeable-item display
+    fallback (see BankItem). Re-adding an existing (kind, item_id) updates its
+    target.
+    """
     existing = (
         db.query(PossessionTracker)
         .filter(
@@ -2714,10 +2182,9 @@ def update_possession_tracker(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Edits an existing tracker's target quantity in place -- the only
-    thing the page's own UI ever lets a player change about one after
-    creation (swapping the item itself is delete-and-recreate instead,
-    see PossessionTrackerUpdate's own docstring in app/schemas.py)."""
+    """Edits a tracker's target quantity in place; swapping the item is
+    delete-and-recreate (see PossessionTrackerUpdate in app/schemas.py).
+    """
     tracker = (
         db.query(PossessionTracker)
         .filter(PossessionTracker.id == tracker_id, PossessionTracker.game_account_id == game_account.id)
@@ -2753,17 +2220,9 @@ def pin_possession_item(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Pins one item to the top of section 3's list (see
-    PinnedPossessionItem's own docstring in app/models.py, and the pin
-    button on each row in render_possessions). item_id always comes
-    from a row already on screen -- the client only ever calls this
-    with an id lifted straight off /api/possessions/summary's own
-    payload -- so, unlike a tracker, there's no item_name to carry and
-    nothing to validate against a search. Idempotent: pinning an
-    already-pinned item is a no-op rather than an error, the same
-    reasoning as re-adding an existing tracker just updating it instead
-    of failing -- a player clicking an already-filled pin button
-    should never see an error banner over it."""
+    """Pins one item to the top of section 3 (see PinnedPossessionItem).
+    Idempotent.
+    """
     existing = (
         db.query(PinnedPossessionItem)
         .filter(PinnedPossessionItem.game_account_id == game_account.id, PinnedPossessionItem.item_id == item_id)
@@ -2781,8 +2240,7 @@ def unpin_possession_item(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Unpins one item -- same idempotent shape as pin_possession_item
-    above, a no-op rather than a 404 if it wasn't pinned to begin with."""
+    """Unpins one item; idempotent like pin_possession_item."""
     db.query(PinnedPossessionItem).filter(
         PinnedPossessionItem.game_account_id == game_account.id, PinnedPossessionItem.item_id == item_id
     ).delete()
@@ -2796,12 +2254,9 @@ def hide_possession_storage(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Switches one storage source off in Storages Viewer's
-    settings menu (see HiddenPossessionStorage's own docstring in
-    app/models.py, and the gear-icon menu next to the location filter
-    buttons in render_possessions) -- its items stop counting toward
-    section 3's list and every tracker's owned quantity until it's
-    switched back on."""
+    """Switches one storage source off (see HiddenPossessionStorage); its items
+    stop counting toward section 3 and tracker quantities.
+    """
     if storage_key not in POSSESSION_STORAGE_KEYS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown storage.")
     set_storage_hidden(db, game_account, storage_key, True)
@@ -2814,8 +2269,7 @@ def unhide_possession_storage(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Reverses hide_possession_storage above -- same idempotent shape
-    as unpin_possession_item."""
+    """Reverses hide_possession_storage; idempotent like unpin_possession_item."""
     if storage_key not in POSSESSION_STORAGE_KEYS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown storage.")
     set_storage_hidden(db, game_account, storage_key, False)
@@ -2828,16 +2282,9 @@ def create_possessions_share(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Freezes Storages Viewer's section 3 into a new SharedContent
-    row (see build_possessions_share_snapshot in app/possessions.py
-    for exactly what gets frozen) and returns a myscape.io/s/<code>
-    link to it -- same session-authenticated, unthrottled shape as
-    POST /api/players/me/loot/share above (see that endpoint's own
-    docstring for the fuller reasoning, identical here: only the real,
-    signed-in owner can ever decide what of their own data gets a
-    link, and GET /s/{code} below is the one that's rate-limited,
-    since that's the first endpoint here actually reachable by
-    someone who isn't signed in at all)."""
+    """Freezes section 3 into a SharedContent row
+    (build_possessions_share_snapshot) and returns a myscape.io/s/<code> link.
+    """
     snapshot = build_possessions_share_snapshot(db, game_account, payload.locations)
     code = generate_share_code(db)
     share = SharedContent(
@@ -2855,9 +2302,9 @@ def create_possessions_share(
 
 @app.get("/api/possessions/views")
 def list_possession_views(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Every saved Storages Viewer view this player has (see
-    build_possession_views in app/possessions.py), in their own
-    reorder-strip order."""
+    """Every saved Storages Viewer view (build_possession_views in
+    app/possessions.py), in reorder-strip order.
+    """
     return {"views": build_possession_views(db, game_account)}
 
 
@@ -2867,11 +2314,9 @@ def create_possession_view(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Saves the page's current filter/sort setup as a new named view
-    -- always appended past the end of the player's existing views
-    (see next_possession_view_sort_order), never merged into an
-    existing one even if the name matches -- renaming/overwriting an
-    existing view is what PATCH .../{view_id} is for."""
+    """Saves the current filter/sort setup as a new named view, always appended;
+    renaming/overwriting is PATCH .../{view_id}.
+    """
     db.add(PossessionView(
         game_account_id=game_account.id,
         name=payload.name,
@@ -2888,15 +2333,9 @@ def set_possession_view_order(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Saves a drag-and-drop reorder of the saved-views strip -- same
-    full-replacement convention as set_gear_setup_order above:
-    payload.order is the complete list of view ids in their new order,
-    not a delta. Every view this player owns gets a fresh sort_order
-    (its plain 0-based position in payload.order) in one pass; a
-    stale/omitted id keeps its existing sort_order rather than
-    erroring the whole request out, and an id in payload.order that
-    isn't one of the player's own views is silently ignored -- same
-    defensive stance as set_gear_setup_order."""
+    """Saves a reorder of the saved-views strip (payload.order is the complete id
+    list; omitted ids keep their sort_order, unowned ids are ignored).
+    """
     owned_views = {
         str(v.id): v
         for v in db.query(PossessionView).filter(PossessionView.game_account_id == game_account.id).all()
@@ -2931,9 +2370,9 @@ def update_possession_view(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Renames an existing saved view, replaces its stored config with
-    the page's current filter/sort setup, or both at once -- see
-    PossessionViewUpdateRequest's own docstring in app/schemas.py."""
+    """Renames a saved view, replaces its stored config, or both (see
+    PossessionViewUpdateRequest in app/schemas.py).
+    """
     view = _get_owned_possession_view(db, game_account, view_id)
     if payload.name is not None:
         view.name = payload.name
@@ -2957,16 +2396,10 @@ def delete_possession_view(
 
 @app.get("/api/gear-setups")
 def list_gear_setups(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """The combined state the Purchase Goals page polls (see
-    app/purchase_goals.py's build_purchase_goals_state, ported from
-    Maintrius's own build_state in osrs_tracker.py) -- every one of the
-    player's gear setups, fully priced/owned-checked against their
-    synced bank+inventory+equipment+potion storage, plus their current coins and
-    whatever wiki price/mapping errors are in effect. Not pinned to a
-    Pydantic response_model (see GearSetupsState's docstring in
-    app/schemas.py) since the shape is too dynamic/nested to usefully
-    fix -- FastAPI serializes the plain dict build_purchase_goals_state
-    returns as-is."""
+    """The Purchase Goals page's polled state (build_purchase_goals_state in
+    app/purchase_goals.py): every setup priced against synced storage, plus
+    coins and wiki errors. No response_model (see GearSetupsState).
+    """
     return build_purchase_goals_state(db, game_account)
 
 
@@ -2984,9 +2417,9 @@ def create_gear_setup(
 
 
 def _duplicate_name(name: str) -> str:
-    """"<name> (copy)", trimmed so the whole thing still fits the 60
-    characters the name fields allow -- the base is what gets cut, so
-    the "(copy)" marker always survives."""
+    """"<name> (copy)", with the base trimmed to fit the 60-character name limit
+    so the "(copy)" marker always survives.
+    """
     suffix = " (copy)"
     base = (name or "").strip()
     if len(base) + len(suffix) > 60:
@@ -3000,12 +2433,10 @@ def duplicate_gear_setup(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """A full copy of one of the player's own setups (name + " (copy)",
-    icon, equipment, inventory, still-to-purchase sort/custom order),
-    landing at the END of their setup list like any new setup (its
-    sort_order is left NULL, see GearSetup.sort_order). The response is
-    the normal GET /api/gear-setups shape plus newSetupId -- the copy's
-    id, so the page can select it."""
+    """A full copy of one of the player's setups, landing at the END of the list
+    (sort_order NULL). The response is the GET /api/gear-setups shape plus
+    newSetupId.
+    """
     source = _get_owned_gear_setup(db, game_account, setup_id)
     new_setup = GearSetup(
         id=uuid.uuid4(),
@@ -3030,19 +2461,9 @@ def set_gear_setup_order(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Saves a drag-and-drop reorder of the player's gear setup LIST
-    itself (the icon row above the gear frame -- contrast
-    set_still_to_purchase_order below, which reorders rows INSIDE one
-    setup) -- payload.order is the complete list of setup ids in their
-    new order, not a delta, same convention as every other reorder
-    endpoint here. Every setup this player owns gets a fresh sort_order
-    (its plain 0-based position in payload.order) in one pass; any of
-    the player's setup ids payload.order left out (a stale client, or a
-    setup deleted mid-drag) keeps whatever sort_order it already had
-    rather than erroring the whole request out, and any id in
-    payload.order that ISN'T one of the player's own setups is silently
-    ignored -- the same defensive stance _get_owned_gear_setup takes
-    everywhere else, just applied per-id instead of failing the batch."""
+    """Saves a reorder of the gear setup LIST. payload.order is the complete id
+    list; omitted ids keep their sort_order and unowned ids are ignored.
+    """
     owned_setups = {
         str(s.id): s
         for s in db.query(GearSetup).filter(GearSetup.game_account_id == game_account.id).all()
@@ -3102,10 +2523,10 @@ def set_gear_setup_icon(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Sets (or, with icon omitted/null, clears) the display-only icon
-    shown next to a setup's total cost -- purely cosmetic, never affects
-    cost/ownership (see GearSetup's docstring in app/models.py and
-    _handle_set_gear_setup_icon in Maintrius's own osrs_tracker.py)."""
+    """Sets (or, with icon omitted/null, clears) the cosmetic icon next to a
+    setup's total cost; never affects cost or ownership (see GearSetup in
+    app/models.py).
+    """
     setup = _get_owned_gear_setup(db, game_account, setup_id)
     if payload.icon is None:
         setup.icon = None
@@ -3122,21 +2543,11 @@ def set_gear_slot(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Fills (or, with item omitted/null, clears) one equipment or
-    inventory slot of a gear setup -- see SetGearSlotRequest/
-    GearSlotItemIn in app/schemas.py for the validated shape (plain
-    tradeable, plain untradeable, or composed "combo") and
-    _handle_set_gear_slot in Maintrius's own osrs_tracker.py for the
-    original this ports. Stores exactly what was sent, unresolved --
-    pricing/ownership is computed fresh on every read, not here (see
-    app/purchase_goals.py) -- with one addition: a plain untradeable
-    item (no item_id, no components) is checked against the known
-    item-combination recipes (app/recipes.py) and, on a match, is
-    auto-expanded into a "combo" here before it's ever persisted. This
-    is what lets someone search for and select e.g. "Neitiznot
-    faceguard" directly instead of having to know it's built from a
-    Helm of Neitiznot + a Basilisk jaw and build it from parts
-    themselves -- the frontend never has to know the difference."""
+    """Fills (or clears) one equipment or inventory slot. Stores what was sent,
+    since pricing and ownership are computed on read, except that a plain
+    untradeable item matching a recipe (app/recipes.py) is auto-expanded into
+    a "combo" so e.g. "Neitiznot faceguard" can be selected directly.
+    """
     setup = _get_owned_gear_setup(db, game_account, setup_id)
 
     if payload.item is None:
@@ -3154,16 +2565,10 @@ def set_gear_slot(
             and payload.item.item_name
             and not has_derived_price(payload.item.item_name)
         ):
-            # Anything the ported RuneLite table already has a linked GE
-            # value for (has_derived_price/derived_price_by_name in
-            # app/purchase_goals.py -- Crystal helm/body/legs, charged
-            # weapons, Bow of Faerdhinen/Blade of Saeldor, Elidinis'
-            # ward (f), and ~900 more) is skipped here: it's priced
-            # directly off that linked value at read time regardless of
-            # whatever components this would expand into (some of which,
-            # for a few of these specific items, the wiki's own recipe
-            # data gets outright wrong or simply doesn't have at all),
-            # so there's nothing useful to auto-expand into up front.
+            # Skipped for anything with a linked GE value in the ported RuneLite
+            # table (has_derived_price in app/purchase_goals.py): it is priced
+            # from that at read time, and wiki recipe data for some is wrong or
+            # missing.
             mapping, _ = get_mapping()
             auto_components = expand_recipe_components(payload.item.item_name, mapping)
             if auto_components:
@@ -3174,9 +2579,8 @@ def set_gear_slot(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=f"slot must be one of {GEAR_SETUP_EQUIPMENT_SLOTS}"
             )
-        # New dict, not an in-place mutation of the loaded one -- see the
-        # IMPORTANT note on GearSetup in app/models.py for why that
-        # distinction matters for a JSONB column.
+        # New dict, not an in-place mutation; see the IMPORTANT note on
+        # GearSetup in app/models.py (JSONB tracking).
         equipment = dict(setup.equipment or {})
         if stored_item is None:
             equipment.pop(payload.slot, None)
@@ -3202,9 +2606,9 @@ def set_gear_slot(
 
 
 def _check_gear_slot(slot_type: str, slot: Any) -> None:
-    """Same slot-shape validation set_gear_slot applies to the one slot
-    it's writing, factored out so move_gear_slot_item below can apply it
-    to both the source and destination slot of a drag-and-drop."""
+    """Slot-shape validation shared with set_gear_slot, applied by
+    move_gear_slot_item to both source and destination slots.
+    """
     if slot_type == "equipment":
         if slot not in GEAR_SETUP_EQUIPMENT_SLOTS:
             raise HTTPException(
@@ -3241,29 +2645,21 @@ def move_gear_slot_item(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Drag-and-drop: moves whatever's stored in (from_slot_type,
-    from_slot) into (to_slot_type, to_slot), across equipment and
-    inventory alike. If the destination already holds an item, the two
-    simply swap rather than the destination's original item being lost.
-
-    Operates purely on the raw stored shape (exactly what set_gear_slot
-    itself would have stored -- item id/name, or a combo's already-
-    expanded components list), never on the resolved/priced shape the
-    frontend renders -- so a combo's exact stored components move
-    across untouched rather than being reconstructed from (and
-    potentially drifting from) their priced/resolved form."""
+    """Drag-and-drop: moves the item between slots (equipment or inventory),
+    swapping with an occupied destination. Works on the raw stored shape so a
+    combo's components move unchanged.
+    """
     setup = _get_owned_gear_setup(db, game_account, setup_id)
 
     _check_gear_slot(payload.from_slot_type, payload.from_slot)
     _check_gear_slot(payload.to_slot_type, payload.to_slot)
 
     if payload.from_slot_type == payload.to_slot_type and payload.from_slot == payload.to_slot:
-        # Dropped a slot onto itself -- nothing to do.
+        # Dropped a slot onto itself; nothing to do.
         return build_purchase_goals_state(db, game_account)
 
-    # Fresh dict/list, not an in-place mutation of the loaded ones -- see
-    # the IMPORTANT note on GearSetup in app/models.py for why that
-    # distinction matters for a JSONB column.
+    # Fresh dict/list, not in-place mutation; see the IMPORTANT note on
+    # GearSetup in app/models.py.
     equipment = dict(setup.equipment or {})
     inventory = list(setup.inventory or [None] * INVENTORY_SIZE)
     if len(inventory) != INVENTORY_SIZE:
@@ -3288,14 +2684,10 @@ def set_still_to_purchase_sort(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Switches which of the buttons above a setup's "Still to
-    Purchase" list is active -- see STILL_TO_PURCHASE_SORT_MODES in
-    app/schemas.py and _still_to_purchase_summary in
-    app/purchase_goals.py for what each one actually does. Doesn't
-    touch still_to_purchase_custom_order -- switching to "custom" and
-    back doesn't lose a previously-dragged order, and switching away
-    from "custom" doesn't erase it either, it's just not applied while
-    a different mode is active."""
+    """Switches the active "Still to Purchase" sort. Leaves
+    still_to_purchase_custom_order untouched so a dragged order survives mode
+    switches.
+    """
     setup = _get_owned_gear_setup(db, game_account, setup_id)
     setup.still_to_purchase_sort_mode = payload.sort_mode
     db.commit()
@@ -3309,15 +2701,9 @@ def set_still_to_purchase_order(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Saves a drag-and-drop reorder of a setup's "Still to Purchase"
-    list -- payload.order is the complete list as currently displayed
-    (not a delta), one {slot_type, slot} entry per row, exactly mirroring
-    how set_gear_slot/move_gear_slot_item always store a full
-    replacement rather than a patch. Also switches the setup into
-    "custom" sort mode if it wasn't already there -- dragging a row is
-    only ever possible in "custom" mode client-side (see
-    renderSummaryList in app/pages.py), so this is a defensive
-    backstop, not something a well-behaved client should ever rely on."""
+    """Saves a reorder of a setup's "Still to Purchase" list (payload.order is
+    the full displayed list). Also switches to "custom" mode as a backstop.
+    """
     setup = _get_owned_gear_setup(db, game_account, setup_id)
     setup.still_to_purchase_sort_mode = "custom"
     setup.still_to_purchase_custom_order = [
@@ -3333,16 +2719,11 @@ def create_purchase_goal_share(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Freezes one gear setup into a new SharedContent row (see
-    build_purchase_goal_share_snapshot in app/purchase_goals.py for
-    exactly what gets frozen) and returns a myscape.io/s/<code> link to
-    it -- the Purchase Goals equivalent of POST /api/players/me/loot/
-    share above, same unthrottled/session-authenticated/no-cooldown
-    posture for the same reason (this is a signed-in owner choosing to
-    share one of their own setups, nothing GET /s/{code} below's own
-    rate limit doesn't already cover for an actual visitor). No request
-    body needed -- unlike Loot Tracker's own share endpoint, there's no
-    range to pick, the setup_id in the path is the entire choice."""
+    """Freezes one gear setup into a SharedContent row
+    (build_purchase_goal_share_snapshot in app/purchase_goals.py) and returns
+    a myscape.io/s/<code> link; same posture as POST
+    /api/players/me/loot/share.
+    """
     setup = _get_owned_gear_setup(db, game_account, setup_id)
     snapshot = build_purchase_goal_share_snapshot(setup)
     code = generate_share_code(db)
@@ -3360,23 +2741,11 @@ def create_purchase_goal_share(
 
 
 def _build_goal_context(db: Session, game_account: GameAccount) -> dict:
-    """Everything Mindmaps' goal-node auto-completion (see
-    evaluate_completion in app/mindmaps.py) needs to check every node
-    in every one of this player's mindmaps against, gathered once per
-    request rather than once per node. Lives here rather than in
-    app/mindmaps.py because building it means reaching into
-    app/purchase_goals.py (for the same owned-item pool a gear setup
-    already checks itself against) and app/loot.py (for kill counts) --
-    app/mindmaps.py deliberately doesn't import either, to avoid a
-    circular import (app/purchase_goals.py itself imports from
-    app/schemas.py, which imports SKILL_NAMES/DIARY_AREAS/DIARY_TIERS
-    back out of app/mindmaps.py for its own sync-payload validation) --
-    main.py is the one place already importing all three, so it's the
-    natural place to wire them together.
-
-    An item-goal node and a gear-setup slot are checking the literal
-    same "what does this player currently have" question, so this
-    reuses build_owned_pools outright rather than re-deriving it."""
+    """Everything goal-node auto-completion (evaluate_completion in
+    app/mindmaps.py) checks nodes against, gathered once per request. Lives
+    here because it needs app/purchase_goals.py and app/loot.py, which
+    app/mindmaps.py avoids importing to prevent a circular import.
+    """
     owned_pool_by_id, owned_pool_by_name = build_owned_pools(db, game_account)
     platinum_qty = sum(owned_pool_by_id.get(i, 0) for i in (find_item_ids("Platinum token") or []))
     gp_total = owned_pool_by_id.get(COINS_ITEM_ID, 0) + platinum_qty * 1000
@@ -3394,10 +2763,10 @@ def _build_goal_context(db: Session, game_account: GameAccount) -> dict:
 
 @app.get("/api/mindmaps")
 def list_mindmaps(db: Session = Depends(get_db), game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
-    """Every one of the player's mindmaps, each with its full node list
-    -- see build_mindmaps_state in app/mindmaps.py. Not pinned to a
-    Pydantic response_model, same reasoning as GET /api/gear-setups
-    above (see MindMapsState's docstring in app/schemas.py)."""
+    """Every mindmap with its full node list (build_mindmaps_state in
+    app/mindmaps.py). No response_model, like GET /api/gear-setups (see
+    MindMapsState in app/schemas.py).
+    """
     return build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
 
 
@@ -3448,11 +2817,10 @@ def duplicate_mindmap(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """A full copy of one of the player's own mindmaps (name + " (copy)",
-    every node as-is). Node ids are reused unchanged -- they're only
-    ever referenced from within their own mindmap's node list (see
-    import_mindmap_from_share_payload), so there's no collision. The
-    response is the normal GET /api/mindmaps shape plus newMindmapId."""
+    """A full copy of one of the player's mindmaps. Node ids are reused since
+    they're only referenced within their own mindmap. The response adds
+    newMindmapId.
+    """
     source = _get_owned_mindmap(db, game_account, mindmap_id)
     new_mindmap = MindMap(
         id=uuid.uuid4(),
@@ -3496,9 +2864,8 @@ def add_mindmap_node(
     mindmap.nodes = new_nodes
     db.commit()
     state = build_mindmaps_state(db, game_account, _build_goal_context(db, game_account))
-    # See add_node's docstring in app/mindmaps.py -- handed back
-    # alongside the full state so the client can select the new node
-    # without diffing old vs. new node lists itself.
+    # See add_node in app/mindmaps.py; returned with the full state so the
+    # client can select the new node without diffing.
     state["newNodeId"] = new_node_id
     return state
 
@@ -3510,9 +2877,9 @@ def add_mindmap_shared_child(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """The node canvas's shift-click multi-select: adds one new node as
-    a shared child connected below two or more existing ones -- see
-    add_shared_child in app/mindmaps.py."""
+    """The node canvas's shift-click multi-select: adds one shared child below
+    two or more existing nodes (add_shared_child in app/mindmaps.py).
+    """
     mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         new_nodes, new_node_id = add_shared_child(mindmap.nodes, payload.parent_ids, payload.text, payload.color)
@@ -3532,10 +2899,9 @@ def replace_mindmap_nodes(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Restores a mindmap's whole node tree to a previously-seen
-    snapshot -- what the node canvas's undo/redo buttons use (see
-    replace_nodes in app/mindmaps.py) in place of a confirm-before-
-    delete dialog on individual node deletes."""
+    """Restores a mindmap's whole node tree to a prior snapshot, for the canvas's
+    undo/redo buttons (replace_nodes in app/mindmaps.py).
+    """
     mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         mindmap.nodes = replace_nodes([n.model_dump(exclude_none=True) for n in payload.nodes])
@@ -3570,21 +2936,11 @@ def set_mindmap_node_goal(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Saves a node's goal fields -- the per-color forms described in
-    app/mindmaps.py's clean_goal docstring (kc target + activity for
-    red, item + quantity for orange, and so on) -- and is also what
-    the gray-node "Complete" button calls (gray's only field beyond
-    its text is the manual completed flag clean_goal validates).
-    require_complete defaults to True inside set_node_goal itself, so
-    an incomplete submission (a red node with no activity chosen, say)
-    is rejected here with a 400 naming what's missing, rather than
-    silently saved half-filled-in.
-
-    payload.note (see SetMindMapNodeGoalRequest's own docstring) rides
-    along on the same request when given -- applied via the same
-    update_node a plain node-PATCH uses, against the already-updated
-    node list, so a trackable node's popover Save button persists its
-    goal AND its note in one request/one undo step instead of two."""
+    """Saves a node's goal fields (see clean_goal in app/mindmaps.py); also used
+    by the gray node's "Complete" button. Incomplete submissions get a 400.
+    payload.note is applied via update_node, so goal and note persist as one
+    undo step.
+    """
     mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     try:
         nodes = set_node_goal(mindmap.nodes, node_id, payload.goal)
@@ -3619,12 +2975,10 @@ def create_mindmap_share(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Freezes one mindmap into a new SharedContent row (see
-    build_mindmap_share_snapshot in app/mindmaps.py for exactly what
-    gets frozen) and returns a myscape.io/s/<code> link to it -- same
-    session-authenticated, unthrottled shape as POST /api/players/me/
-    loot/share and POST /api/gear-setups/{setup_id}/share above (see
-    either's own docstring for the fuller reasoning, identical here)."""
+    """Freezes one mindmap into a new SharedContent row
+    (build_mindmap_share_snapshot in app/mindmaps.py) and returns a
+    myscape.io/s/<code> link. Same posture as POST /api/players/me/loot/share.
+    """
     mindmap = _get_owned_mindmap(db, game_account, mindmap_id)
     snapshot = build_mindmap_share_snapshot(mindmap, _build_goal_context(db, game_account))
     code = generate_share_code(db)
@@ -3647,46 +3001,16 @@ def import_shared_mindmap(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """The SAVE TO MY MYSCAPE button on a Mindmap share page (render_
-    mindmap_share, app/pages.py) -- the counterpart to POST /api/
-    mindmaps/{mindmap_id}/share above, in the other direction: someone
-    ELSE's myscape.io/s/<code> link in, as a brand new MindMap of this
-    signed-in player's own, rather than one of this player's own
-    mindmaps out. A separate route from POST /api/shares/{code}/import
-    above (not a third content_type branch bolted onto it) -- that one
-    is Purchase Goals' own, and its own docstring already notes other
-    content types "have no import feature to begin with"; giving
-    Mindmaps its own path under /api/mindmaps/ instead keeps each
-    app's import endpoint beside its own share endpoint, same as every
-    other per-app route here, rather than growing one shared endpoint
-    a third, fourth, fifth way. Session-authenticated -- a signed-out
-    visitor's click never reaches this at all, since render_mindmap_
-    share's own script sends it straight to /signup instead (see that
-    function's own docstring), same posture as POST /api/shares/
-    {code}/import's own identical gate.
-
-    content_type="mindmap" on the find_valid_share call below means an
-    invalid, expired, or other-content-type code all 404 exactly
-    alike -- same "a wrong code can't be told apart from a dead one"
-    posture GET /s/{code} above already takes. See import_mindmap_
-    from_share_payload in app/mindmaps.py for the actual reverse-
-    resolution.
-
-    The response is the normal GET /api/mindmaps shape (build_
-    mindmaps_state) plus one extra top-level importedMindmapId -- the
-    new mindmap's own id, read back off the row import_mindmap_from_
-    share_payload just created (that function sets it explicitly
-    rather than leaning on the column's default=uuid.uuid4, precisely
-    so it's already populated here without needing a post-commit
-    refresh). The share page's own SAVE TO MY MYSCAPE button (render_
-    mindmap_share, app/pages.py) stashes this into this player's real
-    myscape:mindmaps:activeMindmapId localStorage key before
-    redirecting to their own Mindmaps page -- the same key that page's
-    own boot logic already prefers over "just open the first mindmap"
-    (see loadState in _mindmaps_panel_markup, app/pages.py) -- so the
-    newly imported mindmap is what they land on, selected and ready to
-    view/edit, with no new client-side selection plumbing needed on
-    that page at all."""
+    """Imports someone else's shared mindmap as a new MindMap of the signed-in
+    player (render_mindmap_share in app/pages.py); the reverse of POST
+    /api/mindmaps/{mindmap_id}/share. A signed-out visitor is sent to /signup
+    by the page script.
+    
+    content_type="mindmap" makes invalid, expired and other-type codes 404
+    alike. The response adds importedMindmapId, which the share page stores
+    under the myscape:mindmaps:activeMindmapId localStorage key (preferred by
+    loadState on boot).
+    """
     share = find_valid_share(db, code, content_type="mindmap")
     if share is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
@@ -3723,32 +3047,12 @@ def list_goals(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Every goal this account has created, oldest first, each with its
-    live progress computed fresh (see app/goals.py) -- nothing here is
-    ever pre-stored or cached, same "always derive it live" stance
-    Mindmaps' own goal nodes already take. This is also what Goal
-    Tracking's own page polls (see render_goal_tracking's script in
-    app/pages.py) so a boss kill/skill xp drop/item pickup shows up in
-    a goal's progress bar without a manual refresh, same pattern as the
-    live KC column before this redesign.
-
-    Always returned in this same created_at order regardless of
-    game_account.goal_sort_mode -- the client re-sorts locally per
-    whichever #gtSortTabs mode is actually active (see sortGoals in
-    app/pages.py), same architecture every one of its nine modes
-    (custom included) already shares, so this endpoint doesn't need to
-    know or care which one that is. sort_mode rides along on the
-    response purely so the page's first paint can select the right tab
-    without a second round-trip.
-
-    Also where a recurring goal's own period actually rolls forward
-    (goals_module.maybe_roll_recurring_period) -- every poll of this
-    same endpoint, before its progress is read, so recur_period_start/
-    baseline_value are never more than one request stale for whichever
-    goals actually crossed a period boundary since the last poll.
-    Committed once for the whole batch, only when at least one goal
-    actually rolled -- the common case (nobody's cadence has elapsed
-    since 5 seconds ago) touches the database not at all."""
+    """Every goal, oldest first, with progress computed live (app/goals.py); Goal
+    Tracking's page polls this. Always in created_at order; the client
+    re-sorts per sort tab, and sort_mode rides along for the first paint. Also
+    where recurring goals roll their period forward
+    (maybe_roll_recurring_period); committed once, only if a goal rolled.
+    """
     goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
     context = goals_module.build_progress_context(db, game_account)
     rolled = False
@@ -3769,15 +3073,10 @@ def set_goal_sort_mode(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Switches which of #gtSortTabs' nine buttons is active, remembered
-    across refreshes/sessions (GameAccount.goal_sort_mode) -- same
-    "persist which sort tab is picked" shape
-    set_still_to_purchase_sort above already gives Purchase Goals'
-    own sort tabs. Doesn't touch Goal.sort_order at all -- switching
-    to "custom" here just replays whatever custom order was already
-    saved from the last time someone dragged a row (see set_goal_order
-    below), the same way switching Purchase Goals back to "custom"
-    doesn't lose a previously-dragged order either."""
+    """Switches the active #gtSortTabs button, persisted in
+    GameAccount.goal_sort_mode. Leaves Goal.sort_order alone, so "custom"
+    replays the last dragged order (see set_goal_order).
+    """
     game_account.goal_sort_mode = payload.sort_mode
     db.commit()
     goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
@@ -3794,24 +3093,9 @@ def set_goal_order(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Saves a drag-and-drop reorder of the goal list in "custom" sort
-    mode -- payload.order is the complete list of goal ids in their new
-    order, not a delta, same convention set_gear_setup_order already
-    follows for reordering a gear setup LIST. Every goal this account
-    owns gets a fresh sort_order (its plain 0-based position in
-    payload.order) in one pass; any of the account's own goal ids
-    payload.order left out (a stale client, or a goal deleted mid-drag)
-    keeps whatever sort_order it already had rather than erroring the
-    whole request out, and any id in payload.order that ISN'T one of
-    this account's own goals is silently ignored -- the same defensive
-    stance set_gear_setup_order already takes, just applied per-goal
-    instead of per-setup.
-
-    Also switches the account into "custom" sort mode if it wasn't
-    already there -- dragging a row is only ever possible in "custom"
-    mode client-side (see renderGoalList in app/pages.py), so this is a
-    defensive backstop, not something a well-behaved client should
-    ever rely on."""
+    """Saves a reorder of the goal list in "custom" mode (same rules as
+    set_gear_setup_order); also switches to "custom" as a backstop.
+    """
     owned_goals = {
         str(g.id): g
         for g in db.query(Goal).filter(Goal.game_account_id == game_account.id).all()
@@ -3836,39 +3120,15 @@ def create_goal(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Adds one goal to this account's list -- see
-    app.goals.clean_new_goal for the real per-type validation (a kc
-    goal's boss must be a real OSRS-hiscores boss, a skill goal's
-    skill/metric/target must be a real skill and a legal level/xp
-    range, an item goal just needs a non-empty name -- see its own
-    docstring for why item names aren't validated against a real item
-    at creation time; a recurring goal's own interval/unit get the same
-    treatment, and is only allowed at all for goal_type "kc"/"skill"),
-    and app.goals.clean_target_mode for the sibling validation of a
-    ONE-TIME goal's own GAIN/REACH choice (payload.target_mode --
-    "gain" only for a one-time kc goal or a one-time xp-metric skill
-    goal). Both run inside the same try block -- either one's
-    GoalValidationError gets the same plain 400.
-
-    A recurring goal's very first period starts right now by default,
-    baselined against its own current absolute_value() (see
-    app/goals.py) so it opens at 0/target_value exactly like a
-    REACH-mode one-time goal does -- unless payload.recur_start_at
-    carries a CUSTOM pick from the wizard's own stage 5 (see
-    GoalCreateRequest's own docstring in app/schemas.py), in which case
-    that timestamp is used instead of "now" for recur_period_start,
-    still baselined against the SAME live absolute_value() regardless
-    of whether that custom moment is in the past or the future -- there's
-    no historical time-series to baseline a past custom start against
-    instead (see maybe_roll_recurring_period's own docstring in
-    app/goals.py), so a custom start's only real effect is which
-    absolute moment this goal's period boundaries end up phase-locked
-    to, not when its progress starts being counted from. A one-time
-    GAIN-mode goal gets that same baseline treatment (just without a
-    recur_period_start alongside it -- there's no period to roll
-    forward again later, see Goal.baseline_value's own docstring in
-    app/models.py) -- both computed from the SAME context this already
-    needs to build the response below, not a second query."""
+    """Adds one goal. Validation is in app.goals.clean_new_goal and
+    clean_target_mode; a GoalValidationError becomes a 400.
+    
+    A recurring goal's first period starts now, baselined against its current
+    absolute_value() so it opens at 0/target_value. payload.recur_start_at
+    replaces "now" but is still baselined against the live value (no history
+    exists for a past start), so it only phase-locks the period boundaries. A
+    one-time GAIN-mode goal gets the same baseline (see Goal.baseline_value).
+    """
     try:
         cleaned = goals_module.clean_new_goal(
             payload.goal_type,
@@ -3889,16 +3149,9 @@ def create_goal(
     goal = Goal(game_account_id=game_account.id, **cleaned)
     if goal.is_recurring:
         recur_start_at = payload.recur_start_at
-        # Assumed UTC if the client somehow sent a bare (tz-naive)
-        # timestamp -- same defensive fallback parse_loot_range_bound
-        # (app/loot.py) already applies to a hand-typed date/time
-        # string, needed here for the same reason: mixing a naive and
-        # an aware datetime in maybe_roll_recurring_period's own
-        # `_utcnow() - goal.recur_period_start` (app/goals.py) raises
-        # TypeError rather than just comparing wrong. The wizard's own
-        # client-side code always sends a real ISO-8601 UTC string (see
-        # recurStartIsoFromMasked in the script), so this only ever
-        # matters for a raw API call that bypassed it.
+        # Assumed UTC if tz-naive: mixing naive and aware datetimes in
+        # maybe_roll_recurring_period (app/goals.py) raises TypeError. The
+        # wizard always sends ISO-8601 UTC, so only raw API calls hit this.
         if recur_start_at is not None and recur_start_at.tzinfo is None:
             recur_start_at = recur_start_at.replace(tzinfo=timezone.utc)
         goal.recur_period_start = recur_start_at or _utcnow()
@@ -3934,44 +3187,13 @@ def delete_goal(
 
 
 def build_goal_tracking_share_snapshot(db: Session, game_account: GameAccount) -> dict:
-    """Freezes EVERY one of game_account's own goals (not just one --
-    unlike a single mindmap or gear setup, Goal Tracking's own page is
-    always the whole flat list, so that's what a share of it freezes
-    too) into the payload POST /api/goals/share below writes into a
-    new SharedContent row, for render_goal_tracking_share (app/
-    pages.py) to read back later -- same "frozen, point-in-time, never
-    live again" contract every other build_*_share_snapshot in this
-    file/app.mindmaps/app.purchase_goals already establishes for its
-    own table.
-
-    Reuses _goal_out verbatim (ordered the same created_at-ascending
-    way list_goals itself returns them) rather than re-deriving a
-    second, share-specific goal shape -- every number it computes
-    (current_value/progress_pct/target_display/item_icon) is exactly
-    what a visitor should see AS OF this moment, the same reasoning
-    build_purchase_goal_share_snapshot's own _build_one_gear_setup
-    reuse already follows for a gear setup's priced slots. model_dump
-    (mode="json") is what turns each GoalOut's own typed fields (a
-    real uuid.UUID for id, real datetimes for created_at/recur_period_
-    start) into the plain str/ISO-string shapes a JSONB column -- and
-    this payload's own eventual re-import, see goals_module.import_
-    goals_from_share_payload -- can actually round-trip; every other
-    build_*_share_snapshot in this codebase reaches for a plain dict
-    from the start instead only because none of THEM already had a
-    Pydantic model this exact shape sitting right there to dump.
-
-    sortMode rides along so render_goal_tracking_share's own reused
-    script can open on the sharer's own last-picked #gtSortTabs choice
-    -- same reasoning GoalsResponse.sort_mode rides along on the live
-    GET /api/goals response for.
-
-    Doesn't roll a recurring goal's period forward first the way
-    list_goals does (goals_module.maybe_roll_recurring_period) -- a
-    share is frozen at whatever moment it's generated, stale period
-    boundaries included, same as every other number here; the next
-    real GET /api/goals from the ACTUAL owner's own account (not this
-    share) is what keeps their own live page's periods current, same
-    as always."""
+    """Freezes EVERY goal of game_account into the payload POST /api/goals/share
+    stores. Frozen as-is, without rolling recurring periods forward as
+    list_goals does. model_dump(mode="json") makes uuid/datetime fields plain
+    strings so the JSONB payload and its re-import
+    (goals_module.import_goals_from_share_payload) round-trip. sortMode rides
+    along for the share page.
+    """
     goals = db.query(Goal).filter(Goal.game_account_id == game_account.id).order_by(Goal.created_at).all()
     context = goals_module.build_progress_context(db, game_account)
     return {
@@ -3985,16 +3207,10 @@ def create_goal_tracking_share(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Freezes this account's own ENTIRE goal list into a new
-    SharedContent row and returns a myscape.io/s/<code> link to it --
-    same session-authenticated, unthrottled, no-request-body shape as
-    POST /api/mindmaps/{mindmap_id}/share above (see its own
-    docstring for the fuller reasoning, identical here) -- just
-    scoped to this whole account rather than one mindmap_id path
-    param, since Goal Tracking's own share button (see
-    _goal_tracking_panel_markup's gt_share_icon_btn in app/pages.py)
-    has nothing else to pick: there's exactly one goal list per
-    account, the same one the export icon always sits next to."""
+    """Freezes this account's ENTIRE goal list into a SharedContent row and
+    returns a myscape.io/s/<code> link; same posture as POST
+    /api/mindmaps/{mindmap_id}/share.
+    """
     snapshot = build_goal_tracking_share_snapshot(db, game_account)
     code = generate_share_code(db)
     share = SharedContent(
@@ -4016,40 +3232,15 @@ def import_shared_goals(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """The SAVE TO MY MYSCAPE button on a Goal Tracking share page
-    (render_goal_tracking_share, app/pages.py) -- the counterpart to
-    POST /api/goals/share above, in the other direction: someone
-    ELSE's myscape.io/s/<code> goal list in, as a batch of brand new
-    Goal rows of this signed-in player's own, appended to whatever
-    goals they already have (see goals_module.import_goals_from_
-    share_payload's own docstring for exactly how each one is
-    rebuilt, including why a GAIN-mode or recurring goal gets a fresh
-    baseline against THIS account's own live progress rather than the
-    sharer's own frozen one). A separate route from POST /api/shares/
-    {code}/import and POST /api/mindmaps/shares/{code}/import above,
-    same reasoning either of their own docstrings already gives for
-    keeping each app's import endpoint beside its own share endpoint
-    rather than growing one shared endpoint another way. Session-
-    authenticated -- a signed-out visitor's click never reaches this
-    at all, since render_goal_tracking_share's own script sends it
-    straight to /signup instead, same posture as those two endpoints'
-    own identical gate.
-
-    content_type="goal_tracking" on the find_valid_share call below
-    means an invalid, expired, or other-content-type code all 404
-    exactly alike, same "a wrong code can't be told apart from a dead
-    one" posture every other share-consuming endpoint here already
-    takes.
-
-    Unlike the Mindmap import's own response, there's no single new
-    row's id to report back and no client-side selection state to set
-    afterward (render_goal_tracking_share's own script just redirects
-    straight to /dashboard/goal-tracking on success, no localStorage
-    write needed -- Goal Tracking has no "active item" concept the way
-    Mindmaps' own activeMindmapId does), so this just returns the
-    normal GET /api/goals shape for the now-larger list, same
-    "respond with the refreshed live state" convention create_goal
-    itself already follows for a single new goal."""
+    """Appends someone else's shared goal list to this player's goals
+    (render_goal_tracking_share in app/pages.py); the reverse of POST
+    /api/goals/share. GAIN-mode and recurring goals get a fresh baseline
+    against THIS account (see goals_module.import_goals_from_share_payload). A
+    signed-out visitor is sent to /signup by the page script.
+    
+    content_type="goal_tracking" makes invalid, expired and other-type codes
+    404 alike.
+    """
     share = find_valid_share(db, code, content_type="goal_tracking")
     if share is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")

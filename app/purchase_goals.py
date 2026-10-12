@@ -1,32 +1,10 @@
-"""Purchase Goals -- named "gear setups" a player plans/saves toward,
-ported from the original single-user Maintrius tool's osrs_tracker.py
-(see build_gear_setups, _resolve_gear_slot_item, _still_to_purchase_summary
-there for the code this is a direct port of). The mechanic is unchanged;
-only where the inputs come from has:
-
-- Character data (bank/inventory/equipment/potion storage) came from
-  JSON files a separate RuneLite Character Exporter plugin wrote to
-  disk; here it comes from the BankItem/InventoryItem/EquipmentItem/
-  PotionStorageItem tables this app's own plugin syncs (see
-  app/main.py's sync endpoints).
-- Item mapping/prices came from local JSON file caches with a
-  last-fetched timestamp; here the exact same OSRS Wiki Real-time Prices
-  API is fetched into in-memory, process-level caches instead (this app
-  has many players sharing one process, not one person's single-user
-  server, and there's nothing about wiki prices that needs to survive a
-  restart -- refetching after one is cheap and harmless).
-- Gear setups themselves came from one JSON file holding every setup;
-  here each is a GearSetup row (see app/models.py), scoped to the
-  player who owns it.
-
-Everything about the actual mechanic -- the three slot-item shapes
-(plain tradeable, plain untradeable, composed "combo"), the owned-pool
-bookkeeping, the affordability/still-to-purchase/next-purchase
-computation -- is unchanged from the original. (A fourth shape,
-"supplies" -- always assumed owned, a manual workaround for potions the
-plugin couldn't yet see in Potion Storage -- existed here too, but is
-gone now that the plugin reads Potion Storage for real; see
-PotionStorageItem's docstring in app/models.py.)
+"""Purchase Goals: named "gear setups" a player plans and saves toward, ported
+from the single-user osrs_tracker.py. The mechanic is unchanged: three
+slot-item shapes (plain tradeable, plain untradeable, composed "combo"),
+owned-pool bookkeeping, and the affordability / still-to-purchase /
+next-purchase computation. Owned items come from the synced storage tables,
+wiki data from in-memory process-level caches, and each setup is a per-player
+GearSetup row (app/models.py).
 """
 import json
 import pathlib
@@ -64,61 +42,28 @@ from app.models import (
 from app.recipes import find_recipe, search_recipe_names
 from app.schemas import GEAR_SETUP_EQUIPMENT_SLOTS, INVENTORY_SIZE
 
-# OSRS's own item id for coins -- used to read "gp in the bank" straight
-# off the synced bank_items rows, the same way the original tool's
-# load_character_snapshot() read it straight off bank.json.
+# OSRS item id for coins; gp is read off the synced bank rows.
 COINS_ITEM_ID = 995
 
-# The OSRS Wiki Real-time Prices API requires a descriptive User-Agent
-# identifying the tool and how to reach whoever runs it -- see
-# https://prices.runescape.wiki/osrs/faqs
+# The OSRS Wiki Real-time Prices API requires a descriptive User-Agent with
+# contact info; see https://prices.runescape.wiki/osrs/faqs
 API_BASE = "https://prices.runescape.wiki/api/v2/osrs"
 USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 
-# Every ITEM icon in this app (Purchase Goals, Storages Viewer, Loot
-# Tracker) now comes from RuneLite's own static icon export instead of
-# the wiki -- a real CDN (GitHub Pages behind Cloudflare, open CORS,
-# genuinely cacheable), one flat PNG per real OSRS item id, refreshed
-# weekly off the live game cache. This replaced icons hotlinked
-# straight to the wiki's Special:FilePath -- which is actually two
-# uncacheable redirects in front of the real image, so every page
-# refresh re-hit the wiki twice per icon, which is what was tripping
-# rate limits (the same problem app/icon_cache.py's disk cache used to
-# paper over for items too) -- and it's simpler in a more basic way:
-# this is addressed by the item's own permanent numeric id, which every
-# call site below either already has (every tradeable item, every
-# plugin-synced possession/loot row) or can resolve via
-# app/item_ids.py's name->id snapshot (see _untradeable_item_id below)
-# or, for a cosmetic-recolor name that snapshot merges away (see
-# find_item_id_by_icon_filename, also in app/item_ids.py, and
-# _untradeable_item_icon's own comment further down), its icon
-# filename -- rather than a wiki page's filename string on its own, so
-# there's no fetch-and-cache-the-bytes-ourselves step left to do for it
-# at all -- item_icon_url below just builds the CDN URL directly, no
-# network round trip, no local cache, nothing to ever go stale.
-#
-# icon_cache.py's own wiki-fetching machinery isn't gone, though -- it's
-# still what NPC portraits in app/loot.py's npc_icon_url use, since
-# there's no numeric NPC id anywhere in this app's data model for this
-# CDN (keyed by item id only) to serve those from at all, and it's also
-# still the genuinely-last-resort fallback _untradeable_item_icon below
-# falls through to for the rare handful of names (event cosmetics,
-# furniture, and the like) that don't resolve to a real id by NAME or
-# by ICON FILENAME either. See that module's own top-of-file comment
-# for the full rationale, which still applies unchanged to both of
-# those.
+# Item icons come from RuneLite's static icon export (cacheable CDN, one PNG per
+# numeric item id); item_icon_url builds the URL directly. Names without a known
+# id resolve via app/item_ids.py (see _untradeable_item_icon).
+# app/icon_cache.py's wiki fetching remains for NPC portraits (app/loot.py) and
+# as the last-resort fallback for names with no id.
 ITEM_ICON_CDN_BASE = "https://static.runelite.net/cache/item/icon/"
 
-# How long cached data is considered fresh before hitting the wiki API
-# again -- same values the original tool used.
+# Cache freshness windows before refetching from the wiki API.
 PRICE_TTL_SECONDS = 60
 MAPPING_TTL_SECONDS = 24 * 60 * 60  # item mapping barely changes; once a day is plenty
 
-# Process-level caches, shared across every player (wiki prices/mapping
-# aren't player-specific) -- {"fetchedAt": float, "byId": {...}, "error": str|None}.
-# Module-level rather than per-request: refetching the ~860KB mapping
-# payload on every single request would be both slow and unnecessary
-# when it changes maybe once a day.
+# Process-level caches shared across players: {"fetchedAt": float, "byId":
+# {...}, "error": str|None}. The ~860KB mapping changes about daily, so it is
+# not refetched per request.
 _mapping_cache: Optional[dict] = None
 _price_cache: Optional[dict] = None
 
@@ -130,8 +75,9 @@ def _fetch_json(url: str):
 
 
 def get_mapping(force: bool = False) -> Tuple[Dict[str, dict], Optional[str]]:
-    """Returns ({itemId: {"name":..., "icon":...}}, error|None), refreshing
-    from the wiki at most once a day (item metadata rarely changes)."""
+    """Returns ({itemId: {"name":..., "icon":...}}, error|None), refreshing from
+    the wiki at most once a day.
+    """
     global _mapping_cache
     fresh = _mapping_cache and (time.time() - _mapping_cache["fetchedAt"]) < MAPPING_TTL_SECONDS
     if _mapping_cache and fresh and not force:
@@ -139,12 +85,8 @@ def get_mapping(force: bool = False) -> Tuple[Dict[str, dict], Optional[str]]:
 
     try:
         raw = _fetch_json(f"{API_BASE}/mapping")
-        # highalch/members ride along unused by every existing caller
-        # here (gear setups only ever needed name/icon), but cost
-        # nothing extra to keep -- see Storages Viewer's
-        # app/possessions.py, which reuses this same mapping for its
-        # High Alch value / Tradeable toggles rather than re-fetching
-        # the ~860KB payload a second time under a different cache.
+        # highalch/members are unused here but kept: app/possessions.py reuses
+        # this mapping for its High Alch / Tradeable toggles.
         by_id = {
             str(entry["id"]): {
                 "name": entry.get("name"),
@@ -191,31 +133,19 @@ _ICON_EXT_RE = re.compile(r"\.(png|gif|jpg|jpeg)$", re.IGNORECASE)
 
 
 def item_icon_url(item_id: Optional[int]) -> Optional[str]:
-    """The one place every item icon in this app is built from now --
-    a direct hit at RuneLite's own static CDN, by real numeric OSRS
-    item id (see ITEM_ICON_CDN_BASE's own comment above). None in,
-    None out, same as every caller already expects for "no icon to
-    show" (the frontend's own onerror handler on every icon <img> tag
-    already hides a 404 gracefully too, for the rare id this CDN
-    doesn't have -- a brand new item before its weekly refresh catches
-    up, most likely)."""
+    """Builds an item icon URL on RuneLite's CDN from a numeric item id. None in,
+    None out; the frontend hides a 404 via the icon's onerror handler.
+    """
     if item_id is None:
         return None
     return ITEM_ICON_CDN_BASE + str(item_id) + ".png"
 
 
 def _wiki_icon_url(icon_filename: Optional[str]) -> Optional[str]:
-    """The OLD item_icon_url, kept private -- routes a wiki image
-    FILENAME (not a numeric id) through our own /icon-cache/<filename>
-    route (app/main.py), which fetches-and-caches it via
-    ensure_cached_icon_path in app/icon_cache.py rather than ever
-    hotlinking the wiki directly (see that module's own top-of-file
-    comment for why -- still just as true for whatever still uses
-    this). The only caller left in this file is
-    _untradeable_item_icon's own last-resort fallback, for the rare
-    combination-item name app/item_ids.py's snapshot doesn't cover
-    under its exact stored spelling -- everything else now goes
-    through the id-based item_icon_url above instead."""
+    """Routes a wiki image FILENAME through our /icon-cache/<filename> route
+    (app/main.py, app/icon_cache.py) instead of hotlinking. Only used by
+    _untradeable_item_icon's last-resort fallback.
+    """
     if not icon_filename:
         return None
     if not _ICON_EXT_RE.search(icon_filename):
@@ -234,40 +164,21 @@ def unit_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[
     return None, None
 
 
-# Ported from RuneLite's own "Item Prices" plugin -- the table behind
-# the "GE: 5.47M gp" tooltip it shows when you hover an untradeable
-# item in-game (e.g. a Crystal helm, priced as 1x Crystal armour seed).
-# The OSRS Wiki's price-mapping API (get_mapping()/get_latest_prices()
-# above) simply doesn't carry this data at all -- an untradeable has no
-# GE listing, so it isn't in that API's item table to begin with -- so
-# this is a genuinely separate data source: {untradeableItemId:
-# [{"itemId": tradeableItemId, "qty": int}, ...]}, built offline by
-# scripts/fetch_untradeable_mapping.py from RuneLite's own
-# net.runelite.client.game.ItemMapping (BSD 2-Clause licensed) and
-# regenerated by hand the same rare way item_ids.json/recipes.json are
-# -- see that script's own docstring for the full provenance and for
-# why a couple of RuneLite's own quirks (chained/recursive mappings,
-# charge-state variant grouping) are already resolved ahead of time in
-# the shipped JSON rather than walked here.
+# Ported from RuneLite's "Item Prices" plugin: the table behind the "GE: 5.47M
+# gp" tooltip on untradeables (e.g. Crystal helm = 1x Crystal armour seed),
+# absent from the wiki price API. Shape: {untradeableItemId: [{"itemId":
+# tradeableItemId, "qty": int}, ...]}. Built offline by
+# scripts/fetch_untradeable_mapping.py from RuneLite's ItemMapping (BSD
+# 2-Clause); see that script for details.
 UNTRADEABLE_MAPPING_PATH = pathlib.Path(__file__).resolve().parent / "data" / "untradeable_mapping.json"
 _untradeable_mapping_index: Optional[Dict[str, list]] = None
 
-# Hand-picked one-off additions on top of the RuneLite-ported table
-# above, for an untradeable<->tradeable price link that table doesn't
-# happen to carry but we've found and want anyway. Kept as its own
-# small dict rather than edited into untradeable_mapping.json itself,
-# so a future re-run of scripts/fetch_untradeable_mapping.py (which
-# fully regenerates that file from RuneLite's own upstream data) can
-# never silently drop one of these -- get_untradeable_mapping merges
-# this in every time, after loading the file fresh. Same entry shape
-# as the JSON file's own: {untradeableItemId: [{"itemId":
-# tradeableItemId, "qty": int}, ...]}. Add more here as they turn up.
+# Hand-picked links missing from the RuneLite table. Kept apart from
+# untradeable_mapping.json so regenerating that file cannot drop them;
+# get_untradeable_mapping merges them in. Same entry shape.
 _MANUAL_UNTRADEABLE_PRICE_LINKS: Dict[str, list] = {
-    # Chugging barrel (the assembled/charged Tempoross reward, item id
-    # 30000) has no GE listing of its own -- only Chugging barrel
-    # (disassembled), id 30002, is actually sold on the Grand Exchange
-    # -- so it prices the same way a charged/degraded item elsewhere in
-    # this table already does: 1:1 off its tradeable counterpart.
+    # The assembled Chugging barrel (id 30000) has no GE listing; only the
+    # disassembled one (id 30002) does, so it prices 1:1 off that.
     "30000": [{"itemId": 30002, "qty": 1}],
 }
 
@@ -285,19 +196,12 @@ def get_untradeable_mapping() -> Dict[str, list]:
 
 
 def derived_price_for(item_id: int, prices: dict) -> Tuple[Optional[int], Optional[str]]:
-    """Same shape as unit_price_for -- (unit_price, price_source), both
-    None if item_id isn't a known untradeable-with-a-linked-value (most
-    untradeables genuinely have no such link) or none of its linked
-    component(s) currently have a live price of their own. Most entries
-    link to a single component at quantity 1 (a straight substitution,
-    like Black mask -> Black mask (10)); a few sum more than one
-    (an "Echo" Barrows piece prices as its plain counterpart PLUS its
-    ornament kit) or multiply a quantity greater than 1 (Crystal legs =
-    2x Crystal armour seed). A component with no live price of its own
-    right now is simply left out of the sum rather than voiding the
-    whole result -- same as RuneLite's own ItemManager does -- so this
-    only returns None outright when EVERY linked component is
-    unpriced."""
+    """Same shape as unit_price_for: (unit_price, price_source), both None if
+    item_id has no linked value or no component has a live price. Entries may
+    sum several components (Echo Barrows piece = piece + ornament kit) or
+    multiply a qty (Crystal legs = 2x seed). Unpriced components are skipped,
+    as in RuneLite's ItemManager.
+    """
     components = get_untradeable_mapping().get(str(item_id))
     if not components:
         return None, None
@@ -319,21 +223,10 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
     if not q:
         return []
 
-    # A player typing a short, precise name -- like "Dom", the Doom of
-    # Mokhaiotl's pet -- almost always means an EXACT match, even when
-    # dozens of longer, unrelated names merely CONTAIN the same letters
-    # ("Saradomin brew", "Saradomin boots", "Saradomin coif", ...).
-    # Those "contains" matches can easily fill up the entire `limit` on
-    # their own from the tradeable-item tier alone, before the tier
-    # that actually holds "Dom" -- an untradeable pet, so only the
-    # item-id snapshot fallback three tiers down even knows about it --
-    # ever gets a chance to run at all. So: look for an exact
-    # (case-insensitive) name match across every tier FIRST, in the
-    # same priority order the three tiers already run in below
-    # (tradeable mapping, then known recipes, then the general item-id
-    # snapshot), and guarantee it as result #1 whenever one exists,
-    # entirely independent of whatever the normal startswith/contains
-    # scan below would have found on its own.
+    # A short name like "Dom" (the Doom of Mokhaiotl pet) usually means an exact
+    # match, but longer "contains" matches can fill `limit` before the tier
+    # holding an untradeable is reached. So an exact case-insensitive match
+    # across all tiers is found first and guaranteed as result #1.
     exact = None
     for item_id, meta in mapping.items():
         name = meta.get("name") or ""
@@ -349,10 +242,7 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
         if entry and entry.get("name"):
             exact = {"id": None, "name": entry["name"], "icon": _untradeable_item_icon(entry["name"]), "tradeable": False}
     exact_name_lower = exact["name"].lower() if exact else None
-    # One slot of `limit` is reserved for `exact` (inserted at the very
-    # end below) so the normal tiers below fill at most limit-1 more --
-    # otherwise a search with an exact match would return limit+1
-    # results instead of just bumping something off the end.
+    # One slot of `limit` is reserved for `exact`, inserted at the end.
     fill_limit = limit - 1 if exact else limit
 
     starts, contains = [], []
@@ -373,13 +263,9 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
         for item_id, meta in combined
     ]
 
-    # Fill any remaining slots with known item-combination recipes (see
-    # app/recipes.py) -- e.g. "Neitiznot faceguard" has no Grand
-    # Exchange listing of its own, so it would never show up above, but
-    # a player should still be able to find it by name and see its icon
-    # rather than being told to type it in blind as an untradeable item.
-    # Names already matched as a real tradeable item above (or as the
-    # exact match) are skipped so nothing appears twice.
+    # Fill remaining slots with combination recipes (app/recipes.py) such as
+    # "Neitiznot faceguard", which has no GE listing. Names already matched are
+    # skipped.
     if len(results) < fill_limit:
         seen_names = {r["name"].lower() for r in results}
         if exact_name_lower is not None:
@@ -387,13 +273,8 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
         for entry in search_recipe_names(q, fill_limit - len(results), exclude=seen_names):
             results.append({"id": None, "name": entry["name"], "icon": _untradeable_item_icon(entry["name"]), "tradeable": False})
 
-    # Still short? Fall back to the broader item-id snapshot (see
-    # app/item_ids.py), which covers every item in the game -- tradeable
-    # or not, recipe output or not (a quest reward, a minigame-only
-    # item, anything else neither of the two tiers above knows about).
-    # This is what lets search find literally any known OSRS item by
-    # name, closing the gap the old "add as an untradeable item"
-    # fallback used to paper over for exactly this case.
+    # Still short: fall back to the item-id snapshot (app/item_ids.py), which
+    # covers every item in the game.
     if len(results) < fill_limit:
         seen_names = {r["name"].lower() for r in results}
         if exact_name_lower is not None:
@@ -408,14 +289,10 @@ def search_items(query: str, limit: int = 20) -> List[dict]:
     return results[:limit]
 
 
-# Crystal armour (helm/body/legs) can be recolored to match any of the
-# eight Iorwerth Clan houses (e.g. worn as "Crystal helm (ithell)" for
-# the default white/silver look) -- purely cosmetic, so what the plugin
-# actually reports off the client's item id never carries that suffix.
-# Typed into a gear-setup slot as "Crystal helm (ithell)", it would
-# otherwise never name-match what's owned -- see Maintrius's own
-# _strip_cosmetic_item_suffix in osrs_tracker.py for the original of
-# this exact rule, ported unchanged.
+# Crystal armour recolors (eight Iorwerth Clan houses, e.g. "Crystal helm
+# (ithell)") are cosmetic and not reported by the plugin, so the suffix is
+# stripped to name-match owned items. Ported from _strip_cosmetic_item_suffix in
+# osrs_tracker.py.
 _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE = re.compile(
     r"\s*\((?:ithell|amlodd|cadarn|crwys|hefin|iorwerth|meilyr|trahaearn)\)\s*$",
     re.IGNORECASE,
@@ -432,19 +309,10 @@ def _normalize_item_name(name: Optional[str]) -> str:
 
 
 def _noted_counterpart_id(item_id: int, mapping: dict) -> Optional[int]:
-    """Given a tradeable item's own (unnoted) item id, returns its noted
-    counterpart's id -- unnoted_id + 1, OSRS's own structural convention
-    for linking every notable item to its note (the same convention
-    _noted_id_fallback in app/loot.py relies on for pricing, confirmed
-    live against the wiki API: e.g. Adamantite ore is 449 unnoted / 450
-    noted). Only returns it when item_id itself is a known tradeable
-    item (mapping confirms it -- true by construction here, since every
-    caller's item_id already came from mapping/search_items) AND
-    item_id + 1 is NOT separately listed in mapping -- a noted item's id
-    is never listed there at all (same fact loot.py's fallback relies
-    on in the other direction), so finding item_id + 1 present as its
-    own distinct mapping entry means it's some other real item, not this
-    one's note, and crediting it toward ownership would be wrong."""
+    """Returns the noted counterpart's id: unnoted_id + 1, as in
+    _noted_id_fallback (app/loot.py). Only when item_id is in mapping and
+    item_id + 1 is not, since noted ids are never listed there.
+    """
     if str(item_id) not in mapping:
         return None
     candidate = item_id + 1
@@ -461,48 +329,22 @@ def _take_owned(
     qty: int,
     mapping: Optional[dict] = None,
 ) -> int:
-    """Claim up to qty units of an item from the shared "already own"
-    pool (built from bank+inventory+equipment+potion storage -- see
-    build_owned_pools below), returning how many were actually
-    available. Pools are mutated in place so a physical item can only
-    satisfy one requirement, not several.
-
-    A tradeable item is matched by its real item id, which is exact by
-    definition. An untradeable item (no id passed in) is matched by its
-    real game item id too when we know one -- see app/item_ids.py,
-    which covers every item in the game, not just GE-tradeable ones --
-    since an id either is or isn't the same physical item, with no room
-    for the kind of near-miss that breaks a name comparison (an
-    apostrophe encoded differently, incidental whitespace, a
-    capitalization difference between however the RuneLite plugin
-    reported it and however a gear slot names it) --
-    _find_item_ids_with_cosmetic_fallback also catches the specific
-    near-miss of a saved colour-suffixed cosmetic name (e.g. "Bow of
-    Faerdhinen (c) (Amlodd)") that the RuneLite plugin itself never
-    reports with any colour suffix at all -- see that function's own
-    comment. Only when an item isn't in that id snapshot under either
-    its exact or colour-stripped name (e.g. something added to the game
-    since it was last generated) does this fall back to the original
-    case-insensitive name match, exactly as before -- once id data IS
-    available for a name, matching sticks to ids alone rather than also
-    dipping into the name pool for whatever's left unmatched, since
-    pool_by_id and pool_by_name are built from the very same physical
-    items (see build_owned_pools) and mixing the two for one call
-    risks claiming the same physical item twice over. An item can have
-    more than one real id (a quest-reward variant, a minigame-only
-    version, a house colour, etc.) -- owning it under any of them
-    counts, and this tries them in order until qty is satisfied or
-    they're exhausted.
-
-    A gear slot's required item id is always the UNNOTED canonical id
-    (it's configured via search_items, which only ever returns that
-    one -- see get_mapping's docstring), but a player's bank can easily
-    hold the same item noted (its own, separate item id --
-    unnoted_id + 1, see _noted_counterpart_id). Without this, a noted
-    copy sitting right there in the bank never counted toward owning
-    the unnoted slot at all -- once the exact id comes up short, and a
-    `mapping` was passed in, this also checks the noted counterpart's
-    id before giving up on that unit."""
+    """Claim up to qty units of an item from the shared "already own" pool (see
+    build_owned_pools), returning how many were available. Pools are mutated
+    in place so one physical item satisfies only one requirement.
+    
+    Tradeable items match by id. Untradeables match by game id when
+    app/item_ids.py knows one (avoiding name near-misses; see
+    _find_item_ids_with_cosmetic_fallback for colour-suffixed cosmetics), else
+    by case-insensitive name. Once ids exist for a name, ids alone are used,
+    since pool_by_id and pool_by_name hold the same physical items and mixing
+    them could claim one twice. An item with several ids counts under any of
+    them.
+    
+    Gear slots store the UNNOTED id, but the bank may hold the item noted (see
+    _noted_counterpart_id); when the exact id falls short and `mapping` is
+    passed, the noted id is checked too.
+    """
     if qty <= 0:
         return 0
     if item_id is not None:
@@ -570,10 +412,9 @@ def _resolve_gear_component(raw_component: dict, mapping: dict, prices: dict, po
 
 
 def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, prices: dict) -> dict:
-    """Resolve a component purely for display (tooltip) purposes, used
-    when the whole combined item is already owned outright -- in that
-    case the individual components are never claimed from the owned
-    pool, since the assembled item itself was."""
+    """Resolve a component for display only, when the whole combined item is
+    owned and its components are never claimed.
+    """
     comp_id = raw_component.get("itemId")
     qty = raw_component.get("quantity") or 1
     if comp_id is None:
@@ -594,34 +435,18 @@ def _resolve_gear_component_display_only(raw_component: dict, mapping: dict, pri
     }
 
 
-# Crystal helm/body/legs, Bow of Faerdhinen (c), and Blade of Saeldor
-# (c) all come in eight house-colour cosmetic variants (e.g. "Crystal
-# helm (ithell)", "Bow of Faerdhinen (c) (Amlodd)") that item_ids.json's
-# exact-name snapshot never recorded under that exact spelling -- the
-# wiki's item infobox (what that snapshot is built from) only has one
-# ROW per base item, not one per colour, with every colour's own real
-# id already bundled together under that single base name (see
-# find_item_ids' own "a name can resolve to more than one id" comment
-# in app/item_ids.py) -- app/data/recipes.json is a DIFFERENT, wider
-# scrape that does carry a separate named entry per colour (a recolor
-# "recipe": the base item plus a clan-specific Crystal shard/dust), and
-# it's THAT list a player's own gear-slot search draws its colour-
-# suffixed options from (see search_recipe_names) -- so a slot saved as
-# "Bow of Faerdhinen (c) (Amlodd)" is exactly what search offered, not
-# a typo. A colour-suffixed name is retried here with that suffix
-# stripped (see _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE -- called directly, not
-# through _strip_cosmetic_item_suffix, since that helper's own "must
-# start with 'crystal '" guard would wrongly block Faerdhinen/Saeldor)
-# -- landing back on the shared base name recovers every real id any
-# colour of it could be, at once.
+# Crystal armour, Bow of Faerdhinen (c) and Blade of Saeldor (c) come in eight
+# house-colour variants (e.g. "Bow of Faerdhinen (c) (Amlodd)") that
+# item_ids.json records only under the base name (see find_item_ids in
+# app/item_ids.py). app/data/recipes.json has an entry per colour and feeds
+# gear-slot search (search_recipe_names), so such names are valid saved slots.
+# The suffix is stripped via _CRYSTAL_ARMOUR_COLOR_SUFFIX_RE (not
+# _strip_cosmetic_item_suffix, whose "crystal " guard would block
+# Faerdhinen/Saeldor) to recover the base name's ids.
 def _find_item_ids_with_cosmetic_fallback(name: Optional[str]) -> Optional[List[int]]:
-    """find_item_ids, retried with a house-colour cosmetic suffix
-    stripped if the exact name isn't in the snapshot (see the module-
-    level comment above). Used by both _derived_item_ids (pricing) and
-    _take_owned (ownership matching) -- the same gap broke both the
-    same way: an item saved by its colour-suffixed name never priced
-    OR matched as owned, since item_ids.json only ever recognizes the
-    colourless base name."""
+    """find_item_ids, retried with the house-colour suffix stripped. Used by
+    _derived_item_ids (pricing) and _take_owned (ownership).
+    """
     ids = find_item_ids(name) if name else None
     if ids or not name:
         return ids
@@ -631,33 +456,13 @@ def _find_item_ids_with_cosmetic_fallback(name: Optional[str]) -> Optional[List[
     return None
 
 
-# Every one of the special cases that used to live here (charged
-# weapons like Scythe of Vitur/Tumeken's Shadow priced off their
-# uncharged counterpart, Crystal helm/body/legs priced off a Crystal
-# armour seed, Bow of Faerdhinen/Blade of Saeldor, Elidinis' ward (f))
-# is now just another entry in the ported RuneLite table
-# (derived_price_for/get_untradeable_mapping above) -- it covers all of
-# them, plus ~900 more untradeable items these hand-rolled formulas
-# never reached (Barrows equipment in every degraded state, dragon
-# ornament kits, god sword hilts, and so on). See that table's own
-# comment for the two places this changes a previously-hand-tuned
-# number: Elidinis' ward (f) no longer adds in the 10,000 Soul runes'
-# cost (RuneLite's own table doesn't either), and Bow of
-# Faerdhinen/Blade of Saeldor now prices off the depleted "(inactive)"
-# bow's own market rate rather than raw material cost -- both a
-# deliberate choice to match RuneLite's own numbers everywhere rather
-# than keep two disagreeing sources of truth.
+# Charged weapons, Crystal armour, Bow of Faerdhinen/Blade of Saeldor, Elidinis'
+# ward (f) and ~900 other untradeables are priced by the ported RuneLite table
+# (derived_price_for), matching RuneLite's numbers.
 def _derived_item_ids(name: Optional[str]) -> List[int]:
-    """Every real item id `name` resolves to (see
-    _find_item_ids_with_cosmetic_fallback) that the ported untradeable
-    mapping actually has an entry for -- i.e. every real, permanent id
-    this name could plausibly be (a name can resolve to more than one,
-    e.g. a colour/charge variant), filtered down to the ones
-    derived_price_for can actually price. Any house colour of the same
-    piece/weapon prices identically anyway (the cosmetic doesn't change
-    the underlying seed/creation cost), so landing on the base item's
-    id instead of the exact colour typed is harmless for pricing
-    purposes."""
+    """Every item id `name` resolves to that the ported untradeable mapping can
+    price. House colours price identically, so the base id is fine.
+    """
     ids = _find_item_ids_with_cosmetic_fallback(name)
     if not ids:
         return []
@@ -666,24 +471,19 @@ def _derived_item_ids(name: Optional[str]) -> List[int]:
 
 
 def has_derived_price(name: Optional[str]) -> bool:
-    """True when `name` names a known untradeable item with a linked GE
-    value available (see derived_price_for) -- independent of whether a
-    live price is resolvable for it right now. Used to skip recipe-
-    based component auto-expansion for it at write time (see
-    set_gear_slot in app/main.py): _resolve_gear_slot_item below always
-    prices (and displays) a covered item via this direct linked value,
-    ignoring any components a setup has stored for it, so there would
-    be nothing to gain from expanding it into components up front."""
+    """True when `name` is a known untradeable with a linked GE value (live price
+    or not). Used to skip recipe-component auto-expansion at write time
+    (set_gear_slot in app/main.py), since _resolve_gear_slot_item prices it by
+    that value and ignores stored components.
+    """
     return bool(_derived_item_ids(name))
 
 
 def derived_price_by_name(name: Optional[str], prices: dict) -> Tuple[Optional[int], Optional[str]]:
-    """derived_price_for, but starting from an item's NAME -- for the
-    many places in Purchase Goals where an untradeable slot is stored
-    with only a name (no real item id was ever resolved/stored for it).
-    Tries every real id `name` could be (see _derived_item_ids) in
-    turn, same shape as unit_price_for, (unit_price, price_source),
-    both None if none of them are covered or priced."""
+    """derived_price_for starting from an item NAME (untradeable slots may be
+    stored without an id). Returns (unit_price, price_source), both None if
+    not covered or priced.
+    """
     for item_id in _derived_item_ids(name):
         price, source = derived_price_for(item_id, prices)
         if price is not None:
@@ -692,50 +492,23 @@ def derived_price_by_name(name: Optional[str], prices: dict) -> Tuple[Optional[i
 
 
 def _untradeable_item_id(name: str) -> Optional[int]:
-    """Best real OSRS item id for a name with no Grand Exchange listing
-    -- the first id app/item_ids.py's snapshot resolves for it. A name
-    can resolve to more than one real id (a colour/charge/quest-reward
-    variant), same as _derived_item_ids above -- owning any one of them
-    already counts as owning it elsewhere in this file (see
-    _take_owned's own docstring), and every variant shares one icon
-    anyway, so the first is as good as any. None if this exact name
-    isn't in the snapshot at all."""
+    """Best item id for a name with no GE listing: the first id app/item_ids.py
+    resolves (variants share one icon). None if not in the snapshot.
+    """
     ids = find_item_ids(name)
     return ids[0] if ids else None
 
 
 def _untradeable_item_icon(name: str) -> Optional[str]:
-    """An untradeable item obviously has no Grand Exchange icon of its
-    own, but it's still almost always a known real OSRS item with a
-    real numeric id (see app/item_ids.py, which covers every item in
-    the game, tradeable or not) -- resolve THAT and build its icon the
-    same CDN-direct way as every tradeable item above, rather than
-    falling back to the frontend's plain text-abbreviation placeholder,
-    which is exactly the gap that made Avernic treads (max) (and
-    friends) look broken once actually placed into a slot despite
-    showing correctly in search.
-
-    When the snapshot doesn't cover this exact name -- ~190 of
-    app/recipes.py's ~1200 known combination items, mostly cosmetic
-    colour variants and disambiguation-suffixed wiki page names
-    item_ids.json's Bucket-extension dump never recorded under this
-    exact spelling -- this doesn't give up on the CDN straight away
-    either: item_ids.json merges every recolor of one item page under
-    a single shared name (every Crystal helm colour is just "crystal
-    helm" there), which is exactly why the name lookup above just
-    failed, but the wiki's own data still has each recolor's own
-    distinct icon FILENAME on file, and app/data/recipes.json already
-    stores that same filename per variant -- so
-    find_item_id_by_icon_filename (app/item_ids.py, backed by its own
-    ICON_IDS_BY_FILENAME_PATH snapshot) is tried next, resolving a
-    name like "Crystal helm (Ithell)" to its real id (27717) via its
-    icon filename instead of its merged name, and reaching the CDN
-    exactly like every other real id in this file. Only when even
-    THAT doesn't cover this filename either -- a genuine handful of
-    recipes with no real infobox id on file at all (event cosmetics,
-    furniture, and the like) -- does this fall through to the one
-    remaining wiki-filename path (_wiki_icon_url, routed through
-    app/icon_cache.py same as an NPC portrait)."""
+    """Icon URL for an untradeable item: resolves its id via app/item_ids.py and
+    builds the CDN icon like a tradeable one.
+    
+    Names missing from the snapshot (~190 colour variants) fall back to
+    find_item_id_by_icon_filename (app/item_ids.py), since recipes.json stores
+    each variant's icon filename (e.g. "Crystal helm (Ithell)" -> 27717). Only
+    recipes with no id at all fall through to _wiki_icon_url
+    (app/icon_cache.py).
+    """
     item_id = _untradeable_item_id(name)
     if item_id is not None:
         return item_icon_url(item_id)
@@ -749,30 +522,18 @@ def _untradeable_item_icon(name: str) -> Optional[str]:
 
 
 def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dict, pool_by_id: dict, pool_by_name: dict) -> Optional[dict]:
-    """Turn a stored slot item (or None, for an empty slot) into the
-    priced/iconed shape the frontend renders. See GearSlotItemIn's
-    docstring in app/schemas.py for the three possible shapes -- this
-    is a direct port of Maintrius's own _resolve_gear_slot_item.
-
-    A stored item may still carry a leftover "supplies" key from before
-    that shape was removed (see PotionStorageItem's docstring in
-    app/models.py) -- there's nothing to do about that here, it's
-    simply ignored, and the item resolves normally based on its actual
-    item id/components exactly as if that key had never been set."""
+    """Turn a stored slot item (or None) into the priced/iconed shape the
+    frontend renders (see GearSlotItemIn in app/schemas.py). Port of
+    _resolve_gear_slot_item. A legacy "supplies" key is ignored.
+    """
     if not raw_item:
         return None
     item_id = raw_item.get("itemId")
     components_raw = raw_item.get("components")
 
-    # Any untradeable item the ported RuneLite table has a linked value
-    # for (derived_price_by_name -- Crystal helm/body/legs, charged
-    # weapons, Bow of Faerdhinen/Blade of Saeldor, Elidinis' ward (f),
-    # and ~900 more) -- checked first, ahead of both the combo and
-    # plain-untradeable branches below, so this takes over regardless of
-    # whatever (possibly stale) components a setup saved earlier may
-    # already have stored for one. Falls through to the normal handling
-    # below only if it isn't a covered item, or is but has no live price
-    # to pin to right now.
+    # Untradeables with a linked value in the ported RuneLite table
+    # (derived_price_by_name) are checked first and override any stale stored
+    # components. Falls through if not covered or no live price.
     if item_id is None:
         name = raw_item.get("itemName") or ""
         special_price, special_price_source = derived_price_by_name(name, prices)
@@ -808,11 +569,8 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
     if item_id is None:
         name = raw_item.get("itemName") or "Untradeable item"
         owned = _take_owned(pool_by_id, pool_by_name, None, name, 1) >= 1
-        # Reaching this branch at all means the derived_price_by_name
-        # check up top already came back empty for this name -- no GE
-        # listing of its own, and no linked value in the ported
-        # RuneLite table either -- so there's genuinely nothing left to
-        # price it against.
+        # derived_price_by_name found nothing: no GE listing and no linked
+        # value.
         unit_price, price_source = None, None
         price = unit_price if unit_price is not None else 0
         return {
@@ -834,15 +592,9 @@ def _resolve_gear_slot_item(raw_item: Optional[dict], mapping: dict, prices: dic
 
 
 def resolve_gear_setup_icon(raw_icon: Optional[dict], mapping: dict) -> Optional[dict]:
-    """Resolve a setup's display-only icon -- just a name + icon URL, no
-    price/ownership attached since it never affects cost. An untradeable
-    icon pick (a pet, a quest reward, anything with no GE listing --
-    "Tumeken's guardian" being the reported case) used to always come
-    back with icon: None here, falling back to the frontend's plain
-    text-abbreviation placeholder even when we know its real wiki icon
-    perfectly well -- the same gap _untradeable_item_icon already closes
-    for gear-slot items (see its docstring), just never wired up here
-    too."""
+    """Resolve a setup's display-only icon (name + URL, no price or ownership).
+    Untradeable picks (pets, quest rewards) use _untradeable_item_icon.
+    """
     if not raw_icon:
         return None
     item_id = raw_icon.get("itemId")
@@ -855,32 +607,16 @@ def resolve_gear_setup_icon(raw_icon: Optional[dict], mapping: dict) -> Optional
     return {"itemId": None, "itemName": name, "icon": _untradeable_item_icon(name), "tradeable": False}
 
 
-# Runes, food, potions, and ammunition are always cheap and trivially
-# re-buyable -- nobody meaningfully tracks "do I own this Lobster yet"
-# as a purchase goal the way they would a Scythe of vitur, so a setup
-# slot holding one of these is always treated as already owned here
-# (green border, never a Still to Purchase/Next Purchase entry),
-# regardless of whether build_owned_pools' own real bank/inventory/
-# equipment/potion-storage pool actually has it or not. Per explicit
-# instruction, sourced from the OSRS Wiki's own "Runes", "Food/All
-# food", "Potions", and "Ammunition" pages (see _ALWAYS_ATTAINABLE_
-# RUNE_NAMES/_ALWAYS_ATTAINABLE_FOOD_NAMES/_ALWAYS_ATTAINABLE_AMMO_
-# NAMES' own comments below, and _is_dose_style_potion_name for how
-# potions are matched instead of a hand-typed list of every dose
-# variant of every potion). Applied once, centrally, inside
-# _mark_slot_affordability below (equipment and inventory both funnel
-# through it -- see _build_one_gear_setup) rather than inside each of
-# _resolve_gear_slot_item's own four return branches, so every caller
-# of _mark_slot_affordability gets this for free. Matched by name,
-# lowercased, same convention app/possessions.py's own _DOSE_MERGE_
-# EXCLUDE_BASE_NAMES/_find_item_ids_with_cosmetic_fallback's blocklists
-# already use for this kind of curated string-matching rule.
+# Runes, food, potions and ammunition are cheap and re-buyable, so slots holding
+# them are always treated as owned (never in Still to Purchase / Next Purchase),
+# regardless of the real pool. Sourced from the OSRS Wiki's Runes, Food/All
+# food, Potions and Ammunition pages; potions are matched by
+# _is_dose_style_potion_name. Applied once in _mark_slot_affordability. Names
+# match lowercased.
 
-# All 24 current rune types (elemental, catalytic, combination, plus
-# Sunfire/Wrath/the elemental-mix runes from Nightmare Zone/Desert
-# Treasure II, and the Cabbage rune joke item) -- see
-# https://oldschool.runescape.wiki/w/Runes. Runecrafting items like
-# talismans/tiaras aren't runes themselves and aren't included.
+# All 24 current rune types (elemental, catalytic, combination, Sunfire, Wrath,
+# the elemental-mix runes, and the Cabbage rune joke item); see
+# https://oldschool.runescape.wiki/w/Runes. Talismans/tiaras are not runes.
 _ALWAYS_ATTAINABLE_RUNE_NAMES = frozenset({
     "air rune", "mind rune", "water rune", "earth rune", "fire rune",
     "body rune", "cosmic rune", "chaos rune", "nature rune", "law rune",
@@ -889,16 +625,8 @@ _ALWAYS_ATTAINABLE_RUNE_NAMES = frozenset({
     "steam rune", "lava rune", "aether rune", "cabbage rune",
 })
 
-# Every realistic cooked/edible/drinkable food item a gear setup might
-# actually hold -- see https://oldschool.runescape.wiki/w/Food/All_food
-# (and its own Category:Food). Deliberately leaves out raw/uncooked
-# ingredients (nobody eats a Raw shark for healing), half-finished pies
-# (a "Part admiral pie (salmon)" isn't something you'd pack to eat),
-# and one-off minigame/quest novelty food with no real GE presence
-# (e.g. the Trouble Brewing/Gnome Restaurant drinks' more obscure
-# variants, "Birthday cake (Mobile Anniversary)") -- none of those are
-# realistic Purchase Goals entries in the first place. Add more here as
-# new food gets added to the game.
+# Realistic edible food; see https://oldschool.runescape.wiki/w/Food/All_food.
+# Excludes raw ingredients, half-finished pies, and novelty minigame/quest food.
 _ALWAYS_ATTAINABLE_FOOD_NAMES = frozenset({
     # Fish
     "shrimps", "anchovies", "sardine", "salmon", "trout", "giant carp",
@@ -944,14 +672,9 @@ _ALWAYS_ATTAINABLE_FOOD_NAMES = frozenset({
     "choc saturday", "short green guy", "fruit blast", "drunk dragon",
 })
 
-# Every ammunition type that actually sits in the ammo slot or an
-# inventory ammo stack -- see
-# https://oldschool.runescape.wiki/w/Ammunition. Crystal bow/Bow of
-# Faerdhinen are mentioned on that page too (they need no separate
-# ammo), but they're weapons, not ammunition, so they're left out here.
-# Chinchompas and throwing knives aren't on that page either (they're
-# wielded in the weapon slot, not worn as ammo) and are left out for
-# the same reason.
+# Ammunition for the ammo slot or inventory stacks; see
+# https://oldschool.runescape.wiki/w/Ammunition. Weapons (Crystal bow,
+# chinchompas, throwing knives) are excluded.
 _ALWAYS_ATTAINABLE_AMMO_NAMES = frozenset({
     "bronze arrow", "iron arrow", "steel arrow", "mithril arrow",
     "adamant arrow", "rune arrow", "amethyst arrow", "dragon arrow",
@@ -979,18 +702,11 @@ _ALWAYS_ATTAINABLE_AMMO_NAMES = frozenset({
     "steel cannonball", "granite cannonball",
 })
 
-# Potions aren't matched by a hand-typed list of every dose variant of
-# every potion (210+ and counting) -- same insight app/possessions.py's
-# own _dose_family already uses for a different purpose (merging dose
-# variants for display): OSRS names every dose-specific potion item
-# "<base name>(<dose>)", 1-4, and nothing else in the game uses that
-# exact pattern except a handful of charge-based jewelry/accessories
-# (an Amulet of glory(1) isn't "1/4 of a shared potion"). Duplicated
-# here rather than imported from app/possessions.py -- that module
-# already imports FROM this one (app/possessions.py:53), so importing
-# the reverse direction would be a circular import; same "duplicate,
-# cross-reference, never share" convention this codebase's own CSS
-# files already follow for cross-file overlap.
+# Potions match the "<base name>(<dose>)" pattern (dose 1-4) instead of a list
+# of 210+ variants, as in app/possessions.py's _dose_family; charge-based
+# accessories sharing it (Amulet of glory(1)) are excluded. Duplicated rather
+# than imported because app/possessions.py already imports from this module
+# (circular otherwise).
 _POTION_DOSE_NAME_RE = re.compile(r"^(.*\S)\s*\((\d)\)$")
 _POTION_DOSE_EXCLUDE_BASE_NAMES = frozenset({
     "amulet of glory", "amulet of chemistry", "ring of wealth",
@@ -1002,12 +718,9 @@ _POTION_DOSE_EXCLUDE_BASE_NAMES = frozenset({
 
 
 def _is_dose_style_potion_name(name: str) -> bool:
-    """True for a dose-specific potion name like "Super restore(3)" or
-    "Saradomin brew(4)" -- see _POTION_DOSE_NAME_RE's own comment above
-    for why this covers every potion in the game (current and future)
-    without a hardcoded list, and _POTION_DOSE_EXCLUDE_BASE_NAMES for
-    the handful of non-potion items this same "(N)" naming pattern
-    would otherwise also match."""
+    """True for a dose-specific potion name like "Super restore(3)"; see
+    _POTION_DOSE_NAME_RE and _POTION_DOSE_EXCLUDE_BASE_NAMES.
+    """
     match = _POTION_DOSE_NAME_RE.match(name.strip())
     if not match:
         return False
@@ -1018,10 +731,7 @@ def _is_dose_style_potion_name(name: str) -> bool:
 
 
 def _is_always_attainable_item(name: Optional[str]) -> bool:
-    """True for any rune, food, potion, or ammunition item -- see the
-    constants/comments above for exactly what each category covers and
-    why. Case-insensitive, same convention every other curated name-set
-    in this codebase already matches by."""
+    """True for any rune, food, potion or ammunition item (case-insensitive)."""
     if not name:
         return False
     lowered = name.strip().lower()
@@ -1033,31 +743,18 @@ def _is_always_attainable_item(name: Optional[str]) -> bool:
     )
 
 
-# Ava's devices are a DIFFERENT kind of special case from the
-# always-attainable items above -- these are genuinely tradeable
-# items with a real GE price (not cheap ones either), so there's no
-# reason to pretend every player already owns one. The ask here is
-# narrower: per explicit instruction, don't price them and don't let
-# them show up as a Still to Purchase/Next Purchase target -- treat
-# them exactly like one of _resolve_gear_slot_item's own plain-
-# untradeable-with-no-price items (the "nothing left to price it
-# against" branch) -- but still color the slot by REAL ownership
-# (green if the player's own pool actually has one, red otherwise),
-# never forced green the way runes/food/potions/ammunition are.
-# Applied in _mark_slot_affordability below, after _resolve_gear_
-# slot_item has already resolved "owned" normally from the real
-# pool -- this only overrides tradeable/unitPrice/cost/fullCost,
-# never owned.
+# Ava's devices have a real, non-trivial GE price, so they are not forced owned,
+# but they are unpriced and never a Still to Purchase / Next Purchase target.
+# The slot is still colored by real ownership. Applied in
+# _mark_slot_affordability; only tradeable/unitPrice/cost/fullCost are
+# overridden, never owned.
 _NO_PRICE_ITEM_NAMES = frozenset({
     "ava's attractor", "ava's accumulator", "ava's assembler",
 })
 
 
 def _is_no_price_item(name: Optional[str]) -> bool:
-    """True for one of Ava's devices -- see _NO_PRICE_ITEM_NAMES' own
-    comment above for why these are priced at 0 (and excluded from
-    Still to Purchase/Next Purchase) without also being forced to
-    read as owned the way runes/food/potions/ammunition are."""
+    """True for one of Ava's devices; see _NO_PRICE_ITEM_NAMES."""
     if not name:
         return False
     return name.strip().lower() in _NO_PRICE_ITEM_NAMES
@@ -1066,49 +763,25 @@ def _is_no_price_item(name: Optional[str]) -> bool:
 def _mark_slot_affordability(resolved: Optional[dict], coins: int) -> Optional[dict]:
     if resolved is None:
         return None
-    # Runes/food/potions/ammunition are always treated as already
-    # owned -- see _is_always_attainable_item's own docstring above.
-    # Forcing cost to 0 alongside owned keeps the two fields consistent
-    # with what "owned" means everywhere else in this dict shape (cost
-    # is "what's left to buy"; fullCost, untouched below, stays the
-    # item's real price if anything ever needs it). This runs before
-    # purchasable/affordable are computed, so both naturally follow
-    # from owned=True the same way they would for anything genuinely
-    # owned.
+    # Always-attainable items are owned with cost 0 (fullCost keeps the real
+    # price). Runs before purchasable/affordable are computed.
     if _is_always_attainable_item(resolved.get("itemName")):
         resolved["owned"] = True
         resolved["cost"] = 0
-    # Ava's devices -- see _is_no_price_item's own comment above.
-    # owned is deliberately left untouched here (unlike the
-    # always-attainable override above): a real GE-tradeable item's
-    # ownership should still reflect the player's actual bank/
-    # inventory/equipment pool, only its price and purchasability are
-    # being zeroed out.
+    # Ava's devices (see _is_no_price_item): owned stays as resolved from the
+    # real pool; only price and purchasability are zeroed.
     if _is_no_price_item(resolved.get("itemName")):
         resolved["tradeable"] = False
         resolved["unitPrice"] = None
         resolved["priceSource"] = None
         resolved["cost"] = 0
         resolved["fullCost"] = 0
-    # A plain-untradeable item can still carry a real unitPrice -- any
-    # item the ported RuneLite table has a linked value for (see
-    # derived_price_by_name) -- and that's just as much a real,
-    # actionable savings target as anything actually GE-buyable, even
-    # though there's no direct "buy this exact item" GE listing behind
-    # it. Without this, those slots priced fine (fullCost/cost were
-    # already correct) but still showed "n/a" in the Still to Purchase
-    # list and could never become the highlighted next-purchase target.
+    # A plain-untradeable item can carry a real unitPrice via
+    # derived_price_by_name, making it a valid savings target.
     #
-    # A combo (components is not None) used to count as purchasable just
-    # for HAVING a components list, regardless of whether any of them
-    # actually had a real price -- so a combo built entirely from other
-    # untradeable items with no special-case price of their own (Keris
-    # partisan of the sun: itself untradeable, made from Keris partisan
-    # + Jewel of the Sun, both *also* untradeable) summed to a fullCost
-    # of 0 and was still marked purchasable, making it sort as the
-    # cheapest possible item and win Next Purchase outright at "0 gp".
-    # fullCost > 0 means at least one component actually resolved to a
-    # real price, which is what "purchasable" is meant to capture here.
+    # A combo is purchasable only when fullCost > 0 (some component has a real
+    # price); otherwise a combo of untradeables (e.g. Keris partisan of the sun)
+    # would sum to 0 gp and win Next Purchase.
     purchasable = (
         resolved["tradeable"]
         or resolved.get("unitPrice") is not None
@@ -1128,21 +801,12 @@ def _still_to_purchase_summary(
     sort_mode: str = "low_to_high",
     custom_order: Optional[list] = None,
 ) -> Tuple[List[dict], Optional[dict]]:
-    # Every pending row also carries the exact slot it came from
-    # (slotType/slot) -- a "still to purchase" row IS a specific
-    # equipment/inventory slot, and that identity is what "custom" sort
-    # mode's drag-and-drop reordering is keyed on (see
-    # StillToPurchaseOrderEntryIn in app/schemas.py) -- the same
-    # slot-identity shape move_gear_slot_item's from/to already use.
+    # Each row carries its slot identity (slotType/slot), the key for "custom"
+    # sort drag-and-drop (see StillToPurchaseOrderEntryIn in app/schemas.py).
     pending = [(r, "equipment", slot) for slot, r in equipment.items() if r and not r["owned"]]
     pending += [(r, "inventory", idx) for idx, r in enumerate(inventory) if r and not r["owned"]]
-    # Fully untradeable -- itself has no GE listing, and (for a combo)
-    # none of its components do either, so purchasable is False and
-    # there's no live price to ever pin this to (see the fullCost > 0
-    # check in _mark_slot_affordability). That's not a "still need to
-    # buy this for n/a" line, it's just not a real purchase target at
-    # all, so it's left out of the list entirely rather than shown with
-    # a "n/a" cost -- Keris partisan of the sun is the reported case.
+    # Fully untradeable (no purchasable components): no price to pin, so it is
+    # not a purchase target and is left out rather than shown as "n/a".
     pending = [entry for entry in pending if entry[0]["purchasable"]]
 
     if sort_mode == "high_to_low":
@@ -1152,13 +816,8 @@ def _still_to_purchase_summary(
     elif sort_mode == "reverse_alphabetical":
         pending.sort(key=lambda entry: entry[0]["itemName"].casefold(), reverse=True)
     elif sort_mode == "custom":
-        # Anything not in the player's own saved order (new since they
-        # last dragged something, or they've simply never reordered at
-        # all yet) falls back to cost-ascending, same as
-        # "low_to_high" -- both so a first-time switch to "custom"
-        # starts from a sensible order rather than an arbitrary one, and
-        # so a freshly-added item doesn't get silently lost at whatever
-        # position Python happens to iterate equipment/inventory in.
+        # Items missing from the saved order fall back to cost-ascending, so
+        # "custom" starts sensibly and new items are not lost.
         order_index = {
             (entry.get("slotType"), str(entry.get("slot"))): i for i, entry in enumerate(custom_order or [])
         }
@@ -1180,15 +839,8 @@ def _still_to_purchase_summary(
         for r, slot_type, slot in pending
     ]
 
-    # Whatever sits at the top of the list above -- cheapest first in
-    # "low_to_high", priciest first in "high_to_low", first alphabetically
-    # in "alphabetical", last alphabetically in "reverse_alphabetical", or
-    # whatever the player last dragged to the top in "custom" -- is what's
-    # shown as the next thing to buy. This is
-    # deliberately just still_to_purchase[0] rather than a
-    # separately-computed cheapest item, so rearranging the list
-    # (switching sort mode, or dragging a row to the front in custom mode)
-    # always moves the highlighted next purchase along with it.
+    # The next purchase is still_to_purchase[0] under the current sort mode, so
+    # reordering the list moves the highlighted purchase with it.
     next_purchase = still_to_purchase[0] if still_to_purchase else None
     if next_purchase:
         cost = next_purchase["cost"]
@@ -1201,41 +853,17 @@ def _still_to_purchase_summary(
 
 
 def build_owned_pools(db: Session, game_account: GameAccount) -> Tuple[Dict[int, int], Dict[str, int]]:
-    """Combines bank+inventory+equipment+potion storage+rune pouch+seed
-    vault+tackle box+the whole PoH Costume Room+Forestry Kit+Master
-    Scroll Book+Seed Box into the same shape Maintrius's own
-    load_character_snapshot() produced (totalsById/totalsByName) -- the
-    "everything currently owned" pool every gear setup checks itself
-    against independently (see build_gear_setups, which takes a fresh
-    copy of this per setup), and also what an item-goal Mindmap node
-    checks its target item's count against (see evaluate_completion in
-    app/mindmaps.py).
-
-    Potion storage, the rune pouch, the seed vault, the tackle box, the
-    PoH Costume Room, the Forestry Kit, the Master Scroll Book, and the
-    Seed Box (added alongside PotionStorageItem/RunePouchItem/
-    SeedVaultItem/TackleBoxItem/PohItem/ForestryKitItem/
-    MasterScrollBookItem/SeedBoxItem in app/models.py) slot in here
-    with zero special-casing: the plugin already reports each in the
-    exact same item-id/quantity shape as bank/inventory/equipment (see
-    MyscapePlugin#readPotionStorageItems/#readRunePouchItems/
-    #readSeedVaultItems/#readTackleBoxItems/#readPohItems/
-    #readForestryKitItems/#readMasterScrollBookItems/#readSeedBoxItems
-    in the Mootrius/myscape-plugin repo), so each just needs its own
-    query added, same as the others. Runes owned only inside a pouch
-    (or seeds only inside the vault or the seed box, a costume piece
-    only in the Costume Room, gear only in a tackle box, or a scroll
-    only in the Master Scroll Book) would otherwise never show up here
-    at all -- RuneLite's normal inventory scan reports the pouch/kit/
-    book/box itself as a single item, not what's stored inside it; the
-    seed vault isn't part of any ItemContainer at all; and the rest,
-    though genuine ItemContainers same as the bank, are their own
-    separate ones this function's usual bank/inventory/equipment sweep
-    never touches -- so without this, a setup (or goal node) needing,
-    say, fire runes, ranarr seeds, a stored cape, a barbed rod, an
-    insect repellent, a teleport scroll, or a boxed seed would keep
-    listing them as missing even while a full pouch, vault, Costume
-    Room, tackle box, kit, book, or box of them sat right there."""
+    """Combines bank, inventory, equipment, potion storage, rune pouch, seed
+    vault, tackle box, PoH Costume Room, Forestry Kit, Master Scroll Book and
+    Seed Box into the "everything owned" pool (totalsById/totalsByName). Each
+    gear setup checks a fresh copy (see build_gear_setups), as do item-goal
+    Mindmap nodes (evaluate_completion in app/mindmaps.py).
+    
+    The plugin reports each extra storage in the same item-id/quantity shape
+    (MyscapePlugin#read*Items in the Mootrius/myscape-plugin repo). They are
+    separate containers that RuneLite's inventory scan does not see into, so
+    each needs its own query or its items would read as missing.
+    """
     pool_by_id: Dict[int, int] = {}
     pool_by_name: Dict[str, int] = {}
 
@@ -1272,12 +900,9 @@ def build_owned_pools(db: Session, game_account: GameAccount) -> Tuple[Dict[int,
 
 
 def _player_coins(db: Session, game_account: GameAccount) -> int:
-    """GP in possession, summed across every storage build_owned_pools
-    sweeps (bank+inventory+equipment+potion storage+rune pouch+seed
-    vault+tackle box+PoH Costume Room+Forestry Kit+Master Scroll Book+
-    Seed Box) rather than bank-only, so coins carried in the inventory
-    or tucked away in any of those other storages count toward the
-    Purchase Goals GP total the same as coins already banked."""
+    """GP in possession, summed across every storage build_owned_pools sweeps,
+    not just the bank.
+    """
     total = 0
     for model in (
         BankItem,
@@ -1310,20 +935,11 @@ def _build_one_gear_setup(
     base_pool_by_id: Dict[int, int],
     base_pool_by_name: Dict[str, int],
 ) -> dict:
-    """Resolves ONE GearSetup row into the full dict shape GET /api/
-    gear-setups hands back for it -- split out of build_gear_setups'
-    own former per-setup loop body so build_purchase_goal_share_
-    snapshot below (which only ever needs this for a single setup, not
-    every setup on the account) can call exactly the same resolution
-    logic rather than a second, drifting copy of it. base_pool_by_id/
-    base_pool_by_name are build_gear_setups' own base_pool_by_id/
-    base_pool_by_name (or an equivalent from build_owned_pools for a
-    single-setup caller) -- copied fresh here, not mutated in place,
-    for the same "setups are alternate goals, not simultaneous
-    requirements" reason the original inline comment gave: the same
-    owned Basilisk jaw can cover more than one setup's need for it, so
-    each setup's own resolution has to start from the same untouched
-    pool rather than one a sibling setup has already drawn down."""
+    """Resolves ONE GearSetup row into the dict shape GET /api/gear-setups
+    returns; shared with build_purchase_goal_share_snapshot.
+    base_pool_by_id/base_pool_by_name are copied, not mutated: setups are
+    alternate goals, so each starts from the same untouched pool.
+    """
     total_cost = 0
     total_full_cost = 0
     pool_by_id = dict(base_pool_by_id)
@@ -1376,16 +992,10 @@ def _build_one_gear_setup(
 
 
 def build_gear_setups(db: Session, game_account: GameAccount, mapping: dict, prices: dict, coins: int) -> List[dict]:
-    # sort_order first, created_at second -- see GearSetup's own
-    # docstring in app/models.py. Postgres already sorts NULLs last on
-    # an ascending order by default, but that's not something to lean
-    # on silently -- every setup's sort_order is NULL until a player
-    # actually drags one, at which point created_at (itself always
-    # oldest-first) is the ENTIRE order, landing new setups at the end
-    # exactly where "newest last" wants them; once any reordering has
-    # happened, sort_order alone decides it (every setup gets a fresh
-    # one on any reorder -- see set_gear_setup_order in app/main.py --
-    # so ties needing the created_at tiebreaker again shouldn't occur).
+    # Ordered by sort_order, then created_at (see GearSetup in app/models.py).
+    # sort_order is NULL until a player drags a setup, so created_at alone
+    # orders new setups last; NULLs are sorted last explicitly rather than
+    # relying on the Postgres default.
     setups = (
         db.query(GearSetup)
         .filter(GearSetup.game_account_id == game_account.id)
@@ -1397,12 +1007,9 @@ def build_gear_setups(db: Session, game_account: GameAccount, mapping: dict, pri
 
 
 def build_purchase_goals_state(db: Session, game_account: GameAccount) -> dict:
-    """The Purchase Goals page's own poll payload -- coins, every gear
-    setup (fully priced/owned-checked), the owned-items pool (for any
-    future UI that wants to show it), and whatever wiki fetch errors are
-    currently in effect. A slimmed-down build_state(): Maintrius's own
-    version also folded in Loot Tracker data, which has no equivalent
-    here yet."""
+    """The Purchase Goals page's poll payload: coins, every priced/owned-checked
+    gear setup, the owned pool, and current wiki fetch errors.
+    """
     mapping, mapping_err = get_mapping()
     prices, prices_err = get_latest_prices()
     coins = _player_coins(db, game_account)
@@ -1412,93 +1019,38 @@ def build_purchase_goals_state(db: Session, game_account: GameAccount) -> dict:
         "coins": coins,
         "pricesError": prices_err,
         "mappingError": mapping_err,
-        # Used to always be most-expensive-full-cost-first here (same as
-        # Maintrius's own build_state) -- that was fine back when setup
-        # order was never anything the player controlled, but it silently
-        # survived the drag-and-drop setup reorder feature (see
-        # set_gear_setup_order in app/main.py and wireSetupIconDrag in
-        # this page's own script) getting added on top of it: this
-        # re-sort ran on every fetch of this state, including the
-        # reorder PUT's own response, so a drag would persist its new
-        # sort_order to the DB correctly and then get immediately
-        # overridden back to cost order the instant the client re-
-        # rendered from what this endpoint just handed back -- exactly
-        # what read as "it sticks for a second, then snaps back". Gear
-        # setups now come through in whatever order build_gear_setups
-        # already queried them in (GearSetup.sort_order.asc(), its own
-        # docstring above has the full ordering story), unchanged here.
+        # Setups keep build_gear_setups' order (GearSetup.sort_order).
+        # Re-sorting by cost here would snap a dragged setup back on every fetch
+        # (set_gear_setup_order in app/main.py).
         "gearSetups": build_gear_setups(db, game_account, mapping, prices, coins),
         "ownedItems": pool_by_name,
     }
 
 
 def build_purchase_goal_share_snapshot(setup: GearSetup) -> dict:
-    """Freezes ONE of game_account's own gear setups (already resolved
-    and ownership-checked by the caller -- see _get_owned_gear_setup in
-    app/main.py, the same helper every other per-setup mutation
-    endpoint already uses) into the payload POST /api/gear-setups/
-    <id>/share (app/main.py) writes into a new SharedContent row, for
-    render_purchase_goals_share (app/pages.py) to read back later --
-    same "frozen, point-in-time, never live again" contract
-    SharedContent itself documents, and the same shape Loot Tracker's
-    own build_loot_share_snapshot already established for this table.
-    Only takes the already-ownership-checked setup row itself (no db/
-    game_account) -- see the empty pools below for why this no longer
-    needs either.
-
-    Resolved against EMPTY owned-items pools -- not game_account's own
-    real ones build_gear_setups itself resolves against -- so every
-    item in _resolve_gear_slot_item comes back owned: False, cost ==
-    fullCost, regardless of what the sharer's own bank actually held
-    at share time, EXCEPT whatever _mark_slot_affordability's own
-    _is_always_attainable_item check force-owns regardless of any
-    pool -- a rune/food/potion/ammunition item still reads owned:
-    True/cost: 0 here exactly as it does everywhere else (see that
-    function's own comment for why this rule applies globally, not
-    just on the share page). Per explicit instruction: a visitor isn't
-    shown this setup net of the sharer's own belongings, they're shown
-    the setup itself -- every item that's a genuine purchase goal, at
-    its full undiscounted price. Concretely, that means:
-    _still_to_purchase_summary's own "pending = [... if not owned]"
-    filter now keeps every item except the always-attainable ones (it
-    excluded every already-owned item before), so Still to Purchase/
-    Next Purchase cover the whole setup minus runes/food/potions/
-    ammunition, not just whatever was left to buy; and totalCost
-    (which .purchase-goal-share's own #pgCostAmount reads) becomes the
-    sum of every item's price minus those same always-attainable ones
-    -- same value as totalFullCost minus their fullCost, rather than
-    totalCost's own usual "net of what's already owned" meaning
-    everywhere else this dict shape is built. The gear doll/inventory
-    grid's own green/amber/red ownership border colors are all
-    neutralized back to gray by .purchase-goal-share's own override in
-    purchase-goals.css (nothing about this account's real bank should
-    be implied either way) -- including green: even though "owned" can
-    now only ever mean "always-attainable item" on this page, the real
-    page's own green treatment for those items is a LIVE-setup-only
-    affordance per explicit instruction, so it doesn't carry over to a
-    shared link either.
-
-    coins is also frozen at 0 here, never the account's real current
-    GP -- per explicit instruction, the shared page's own summary box
-    never shows a current-GP figure at all; freezing coins at 0 is
-    what makes the untouched Next Purchase widget read as
-    "0 / <cost> gp" with an empty fill bar, for free, through
-    _purchase_goals_panel_markup's own unmodified rendering code,
-    rather than needing a second, share-specific rendering path for it.
-
-    still_to_purchase/next_purchase here are frozen in the setup's own
-    CURRENT sort mode (whatever still_to_purchase_sort_mode was at
-    share time) purely as a starting array to resort from -- the share
-    page always OPENS on "low_to_high" regardless (see
-    render_purchase_goals_share), and every other sort mode (including
-    "custom") is re-derived client-side from this same frozen list by
-    a JS port of _still_to_purchase_summary's own sort branches, the
-    exact technique render_landing_purchase_preview's own
-    sortStillToPurchase already uses for its own frozen demo list. The
-    setup's real still_to_purchase_custom_order is frozen alongside it
-    (customOrder below) so a visitor who clicks CUSTOM sees the actual
-    order the sharer last dragged it into, not whatever this falls
-    back to with no order at all."""
+    """Freezes ONE gear setup (already resolved and ownership-checked by the
+    caller, see _get_owned_gear_setup in app/main.py) into the payload POST
+    /api/gear-setups/<id>/share stores in a SharedContent row for
+    render_purchase_goals_share (app/pages.py). Point-in-time, never live.
+    
+    Resolved against EMPTY owned pools so a visitor sees the setup at full
+    price, not net of the sharer's bank: everything is owned: False with cost
+    == fullCost, except always-attainable items
+    (runes/food/potions/ammunition) force-owned by _mark_slot_affordability.
+    Hence totalCost here is totalFullCost minus those items' fullCost, not its
+    usual "net of owned" meaning. .purchase-goal-share (purchase-goals.css)
+    greys all ownership borders so nothing about the sharer's account is
+    implied.
+    
+    coins is frozen at 0 so the Next Purchase widget reads "0 / <cost> gp"
+    without a share-specific render path.
+    
+    still_to_purchase/next_purchase are frozen in the setup's current sort
+    mode as a starting array only. The share page opens on "low_to_high" and
+    re-sorts client-side with a JS port of _still_to_purchase_summary's sort
+    branches; still_to_purchase_custom_order is frozen as customOrder so
+    CUSTOM shows the sharer's order.
+    """
     mapping, _ = get_mapping()
     prices, _ = get_latest_prices()
     resolved = _build_one_gear_setup(setup, mapping, prices, 0, {}, {})
@@ -1511,23 +1063,13 @@ def build_purchase_goal_share_snapshot(setup: GearSetup) -> dict:
 
 
 def _raw_slot_item_from_resolved(resolved: Optional[dict]) -> Optional[dict]:
-    """Reverses _resolve_gear_slot_item above: turns one of the
-    already-priced/iconed slot dicts GET /api/gear-setups (and a
-    Purchase Goal share's own frozen payload -- see
-    build_purchase_goal_share_snapshot just above) hands back into the
-    plain {"itemId", "itemName", "components"} shape GearSetup.
-    equipment/inventory actually stores (see set_gear_slot's own
-    identical construction in app/main.py, and GearSlotItemIn's
-    docstring in app/schemas.py for the three shapes this produces).
-
-    Used only by import_gear_setup_from_share_payload below, to rebuild
-    a real, editable GearSetup row out of a share link's own frozen,
-    already-resolved snapshot -- itemId/itemName/quantity are the only
-    fields a resolved dict carries that a raw stored one needs;
-    everything else (icon URL, unit price, owned/cost) is dropped here
-    the same way it's recomputed fresh on every future read, not
-    stored. A combo item's own components round-trip the same way,
-    one level down."""
+    """Reverses _resolve_gear_slot_item: turns a resolved slot dict (GET
+    /api/gear-setups or a share payload) into the raw {"itemId", "itemName",
+    "components"} shape GearSetup.equipment/inventory stores (see
+    GearSlotItemIn in app/schemas.py). Used by
+    import_gear_setup_from_share_payload. Icon, price and owned/cost are
+    dropped since they are recomputed on read.
+    """
     if resolved is None:
         return None
     components = resolved.get("components")
@@ -1548,41 +1090,16 @@ def _raw_slot_item_from_resolved(resolved: Optional[dict]) -> Optional[dict]:
 
 
 def import_gear_setup_from_share_payload(db: Session, game_account: GameAccount, payload: dict) -> GearSetup:
-    """The reverse of build_purchase_goal_share_snapshot above: takes a
-    Purchase Goal share's own frozen payload (SharedContent.payload --
-    see POST /api/shares/{code}/import in app/main.py, the download
-    icon's own endpoint on render_purchase_goals_share's share page)
-    and creates a brand new, completely normal, editable GearSetup row
-    for game_account out of it -- "importing" someone else's shared
-    setup into your own Purchase Goals list.
-
-    payload['gearSetup']['equipment']/['inventory'] are already-
-    resolved slot dicts (priced, iconed, owned/cost-marked against the
-    EMPTY pools build_purchase_goal_share_snapshot resolves a share
-    against -- see its own docstring), not the plain raw shape
-    GearSetup.equipment/inventory actually stores, so each slot is run
-    back through _raw_slot_item_from_resolved above before being
-    assigned here. equipment is rebuilt sparse (only a slot
-    _raw_slot_item_from_resolved didn't come back None for is ever
-    given a key), matching GearSetup's own docstring ("only filled
-    slots are present") -- unlike the resolved dict this reads from,
-    which _build_one_gear_setup always fills with a None entry for
-    every one of GEAR_SETUP_EQUIPMENT_SLOTS whether or not the setup
-    actually had anything in it. inventory stays a plain positional
-    list (filled-or-None for each of its 28 entries, same shape either
-    way), since that's the convention for that column regardless.
-
-    The new setup's name is the sharer's own setup name, verbatim --
-    per explicit instruction, no "Copy of" prefix. sort_order is left
-    at its column default (NULL), the same as every other freshly
-    created setup (see create_gear_setup in app/main.py) -- build_gear_
-    setups' own ordering (sort_order asc, created_at asc, NULLs sorting
-    last) is exactly what lands a plain, never-reordered new setup at
-    the END of the player's own setup list, which is exactly where an
-    imported setup belongs, with no special-casing needed here at all.
-
-    Caller commits (same convention _get_owned_gear_setup's own
-    mutation endpoints already follow throughout app/main.py)."""
+    """Reverse of build_purchase_goal_share_snapshot: creates a new, editable
+    GearSetup for game_account from a share's frozen payload (see POST
+    /api/shares/{code}/import in app/main.py).
+    
+    Payload slots are resolved dicts, so each goes through
+    _raw_slot_item_from_resolved. equipment is rebuilt sparse (only filled
+    slots), while inventory stays a positional list of 28 filled-or-None
+    entries. The name is the sharer's, verbatim. sort_order stays NULL so the
+    setup lands at the end of the list. The caller commits.
+    """
     gear_setup = payload["gearSetup"]
 
     equipment = {}
@@ -1599,16 +1116,9 @@ def import_gear_setup_from_share_payload(db: Session, game_account: GameAccount,
         raw_icon = {"itemId": icon.get("itemId"), "itemName": icon.get("itemName")}
 
     setup = GearSetup(
-        # Explicit id, not just this column's own default=uuid.uuid4 --
-        # the caller (POST /api/shares/{code}/import in app/main.py)
-        # needs to read it back right after this call to tell the
-        # Purchase Goals page which setup to select once it redirects
-        # there, and a Python-side column default isn't actually
-        # applied until flush/commit, so relying on it here would mean
-        # setup.id reads back None until the caller commits. Setting it
-        # here up front sidesteps that entirely -- same convention
-        # create_loot_share/create_purchase_goal_share already use for
-        # SharedContent's own id, in app/main.py.
+        # Explicit id: the caller (POST /api/shares/{code}/import in
+        # app/main.py) reads setup.id before commit, and the column default is
+        # not applied until flush.
         id=uuid.uuid4(),
         game_account_id=game_account.id,
         name=gear_setup.get("name") or "New Setup",

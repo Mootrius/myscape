@@ -1,42 +1,14 @@
-"""Goal Tracking's own goal list -- a flat set of targets (a boss kill
-count, a skill level/xp, or an item quantity), each with live progress
-computed fresh on every read, never stored. Deliberately NOT built on
-app/mindmaps.py's tree-shaped goal nodes, even though mindmaps.py
-already implements six goal types (kc/item/gp/skill/quest/diary, plus
-a manual one): those live inside a mind map's own tree, one node among
-possibly many unrelated ones, when what this page wants is a plain,
-purpose-built list of exactly the targets a player is actively working
-toward -- and only the three goal types this page actually offers;
-gp/quest/diary/manual goals stay a Mindmaps-only feature for now.
-
-Where the underlying logic already exists correctly elsewhere, this
-reuses it rather than re-deriving it:
-- skill goals: app.mindmaps' own xp-conversion machinery (SKILL_NAMES,
-  SKILL_XP_TABLE/_xp_for_level/_clean_int_in_range) -- a level target
-  and an xp target need to stay comparable the exact same way
-  Mindmaps' own skill goals already do.
-- item goals: app.purchase_goals.build_owned_pools (the same "how much
-  of this item does this account actually own, summed across every
-  storage" helper Purchase Goals and Mindmaps' own item goals both
-  already use) plus app.item_ids.find_item_ids and
-  app.mindmaps._offhand_pair_name for name -> id resolution, including
-  the same off-hand-pair handling Mindmaps' item goals already give
-  (an "Imcando hammer" goal is satisfied by either the plain or
-  off-hand variant).
-
-kc (boss kill count) goals are the one type NOT borrowed from
-app.mindmaps: Mindmaps' own "kc" goal type counts raw LootEvent
-occurrences (kc_counts_by_player in app/loot.py) -- "kills the loot
-tracker has actually witnessed," not a real lifetime total, which
-undercounts anyone who had real kills before ever installing the
-plugin or turning loot tracking on. A boss goal here tracks toward the
-REAL lifetime number instead, so it reads game_account.boss_kill_counts
-directly -- the same hiscores-seeded, chatbox-kept-live column Goal
-Tracking already displayed before this redesign (see app/hiscores.py).
-That's also why this only offers the ~70 real OSRS-hiscores bosses
-(app.bosses.HISCORE_BOSSES) rather than any NPC name a player could
-type the way Mindmaps' own kc goal allows -- boss_kill_counts only
-ever has an entry for those.
+"""Goal Tracking's own goal list: a flat set of targets (boss kill count, skill
+level/xp, item quantity) with progress computed live on each read, never
+stored. Not built on app/mindmaps.py's tree-shaped goals;
+gp/quest/diary/manual goals stay Mindmaps-only.
+Skill goals reuse app.mindmaps' xp machinery so level and xp targets stay
+comparable; item goals reuse app.purchase_goals.build_owned_pools plus
+app.item_ids.find_item_ids and app.mindmaps._offhand_pair_name.
+kc goals read game_account.boss_kill_counts (hiscores-seeded, kept live from
+chat; app/hiscores.py), not Mindmaps' LootEvent-based count, which misses
+kills made before the plugin. Hence only app.bosses.HISCORE_BOSSES are
+offered.
 """
 import uuid
 from datetime import timedelta
@@ -67,75 +39,35 @@ if TYPE_CHECKING:
 GOAL_TYPES = ("kc", "skill", "item")
 SKILL_METRICS = ("level", "xp")
 MAX_ITEM_NAME_LENGTH = 80
-# Goal Tracking's own kc/item target ceiling -- INT32_MAX, the widest
-# a signed 32-bit integer column can hold. Deliberately NOT
-# app.mindmaps' own MAX_KC_TARGET/MAX_ITEM_QTY_TARGET: Mindmaps' kc
-# goal counts a completely different, much smaller number (loot-
-# tracker-witnessed kills -- see this file's own top docstring on why
-# Goal Tracking's kc goal was never borrowed from Mindmaps to begin
-# with), so tying Goal Tracking's own ceiling to a constant that
-# exists for that unrelated purpose would just be an accident waiting
-# to diverge later.
+# kc/item target ceiling (INT32_MAX), separate from app.mindmaps' limits, which
+# bound a different number.
 MAX_KC_TARGET = 2_147_483_647
 MAX_ITEM_QTY_TARGET = 2_147_483_647
 
-# A recurring goal's own cadence -- "every recur_interval recur_unit"
-# (e.g. every 2 WEEK). Fixed-duration units, not calendar-exact ones:
-# MONTH is always 30 days and YEAR always 365, the same "fixed
-# lookback" convention app/loot.py's own range presets already use,
-# rather than pulling in real calendar month/year arithmetic for a
-# cadence that's already just an approximate repeat interval. Order
-# here is display order too -- the wizard's own segmented control
-# (see wizardStageCadenceHtml in app/pages.py) renders these in this
-# exact sequence.
+# Recurring cadence units ("every recur_interval recur_unit"): fixed durations
+# (MONTH = 30 days, YEAR = 365). Order is the display order in the wizard
+# (wizardStageCadenceHtml, app/pages.py).
 RECUR_UNITS = ("hour", "day", "week", "month", "year")
 _RECUR_UNIT_SECONDS = {"hour": 3600, "day": 86400, "week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
-# A generous cap on "every how many" -- "every 999 YEAR" is already
-# absurd, this just keeps the field (and the column) bounded rather
-# than genuinely limiting anyone's real use of it.
 MAX_RECUR_INTERVAL = 999
-# Recurring is only offered for "kc"/"skill" in the wizard (see
-# wizardStageTypeHtml) -- an "item" goal's own progress is a live owned
-# quantity, not a monotonic lifetime total, so "gained since the last
-# period" (see maybe_roll_recurring_period) wouldn't mean the same
-# thing for it the way it does for a kc/xp/level count that only ever
-# goes up.
+# Recurring is offered only for kc/skill: an item goal's progress is a live
+# quantity, not a monotonic total, so "gained since the last period" is
+# meaningless for it.
 RECURRING_GOAL_TYPES = ("kc", "skill")
 
-# A ONE-TIME goal's own choice of what target_value means -- see
-# Goal.baseline_value's own docstring in app/models.py for the shared
-# mechanism this rides on. "reach" is every one-time goal's only
-# reading before this existed (target_value is a lifetime total to
-# reach) and stays the default whenever target_mode is omitted (see
-# clean_target_mode below); "gain" instead baselines the goal against
-# its own current absolute_value() at creation (see create_goal in
-# app/main.py), so target_value reads as "how much MORE" instead.
-# Recurring goals don't get a choice here at all -- they already have
-# their own always-on period-relative baseline (recur_period_start),
-# which is exactly the "gain" reading applied automatically every
-# period; a second, independent one-time baseline on top of that would
-# just be redundant, not a real third option.
+# What a one-time goal's target_value means (see Goal.baseline_value in
+# app/models.py): "reach" (default) is a lifetime total; "gain" baselines at
+# creation, so target_value is "how much MORE". Recurring goals have no choice;
+# their period baseline is already "gain".
 GOAL_TARGET_MODES = ("reach", "gain")
 
 
 def target_mode_allows_gain(goal_type: str, metric: Optional[str], is_recurring: bool) -> bool:
-    """Whether a ONE-TIME goal of this shape can be put in "gain" mode
-    at all -- kc, or an xp-metric skill goal, and only when it's not
-    also recurring (see GOAL_TARGET_MODES' own comment for why
-    recurring goals don't need a second baseline). Two cases are
-    excluded on purpose, not just left unimplemented:
-      - a LEVEL-metric skill goal has no "gain" reading to offer in the
-        first place -- a target LEVEL (e.g. "reach level 80") is
-        already the only way to express a level target at all; there's
-        no separate "gain N levels" phrasing the way "gain N kc"/"gain
-        N xp" both read naturally, since OSRS's own xp-per-level curve
-        (SKILL_XP_TABLE) means "N levels" isn't a fixed amount of
-        anything current_value()'s plain baseline-subtraction could
-        measure the same way a raw kc/xp count can.
-      - an "item" goal's own owned quantity isn't a monotonic lifetime
-        total (you can sell/lose items, not just gain them), the exact
-        same reasoning RECURRING_GOAL_TYPES already excludes "item"
-        for -- see its own comment."""
+    """Whether a one-time goal can use "gain" mode: kc or an xp-metric skill
+    goal, not recurring. Level-metric skill goals have no "gain N levels"
+    reading (xp per level is nonlinear), and item goals are not monotonic (see
+    RECURRING_GOAL_TYPES).
+    """
     if is_recurring:
         return False
     if goal_type == "kc":
@@ -146,26 +78,12 @@ def target_mode_allows_gain(goal_type: str, metric: Optional[str], is_recurring:
 
 
 def clean_target_mode(goal_type: str, metric: Optional[str], is_recurring: bool, target_mode) -> str:
-    """Validates a new goal's own GAIN/REACH choice (#gtTargetModeToggle
-    in app/pages.py) against the ALREADY-cleaned goal_type/metric/
-    is_recurring clean_new_goal returned -- called separately from that
-    function (not folded into it) because target_mode isn't a Goal
-    column itself and so has no place in the {"goal_type": ..., ...}
-    dict clean_new_goal hands straight to Goal(**cleaned); see
-    create_goal in app/main.py for how the two calls fit together.
-
-    None/omitted defaults to "reach" -- the wizard itself always sends
-    one of the two explicitly whenever GT.targetMode's own toggle is
-    offered at all (defaulting that toggle to "gain" -- see
-    app/pages.py), so a request that leaves this out entirely is only
-    ever a raw API call, which should keep getting today's only-ever-
-    existed absolute reading rather than quietly switching to a
-    relative one it never asked for. "gain" itself still raises
-    GoalValidationError for a goal shape target_mode_allows_gain
-    doesn't cover (an item goal, a level-metric skill goal, or a
-    recurring one) -- same "validate strictly, don't silently coerce"
-    stance _clean_new_goal's own is_recurring check already takes for
-    the parallel "recurring, but not kc/skill" case."""
+    """Validates a new goal's gain/reach choice against the already-cleaned
+    goal_type/metric/is_recurring (target_mode is not a Goal column; see
+    create_goal in app/main.py). None defaults to "reach" so raw API calls
+    keep the absolute reading. "gain" raises GoalValidationError where
+    target_mode_allows_gain is False.
+    """
     mode = target_mode or "reach"
     if mode not in GOAL_TARGET_MODES:
         raise GoalValidationError(f"target_mode must be one of {GOAL_TARGET_MODES}.")
@@ -174,18 +92,12 @@ def clean_target_mode(goal_type: str, metric: Optional[str], is_recurring: bool,
     return mode
 
 
-# app.bosses.HISCORE_BOSSES' display names, keyed lowercase, so a goal
-# submitted with any casing still resolves -- the real UI always
-# submits one of these names verbatim (see the <select> in
-# render_goal_tracking), so this leniency only ever matters against a
-# raw/direct API call, same spirit as HISCORES_NAME_TO_DISPLAY_NAME's
-# own case handling in app/bosses.py.
+# HISCORE_BOSSES display names keyed lowercase, so any casing resolves.
 _BOSS_NAME_BY_LOWER = {name.lower(): name for _slug, name, _has_icon in HISCORE_BOSSES}
 
 
 class GoalValidationError(ValueError):
-    """Raised with a message safe to show the player as-is -- same
-    convention app.mindmaps' own clean_goal already follows."""
+    """Raised with a message safe to show the player as-is."""
 
 
 def clean_new_goal(
@@ -198,30 +110,11 @@ def clean_new_goal(
     recur_interval=None,
     recur_unit: Optional[str] = None,
 ) -> dict:
-    """Validates and normalizes a goal-creation request into
-    {"goal_type", "target_name", "metric", "target_value", "item_id",
-    "is_recurring", "recur_interval", "recur_unit"}, ready to write
-    straight onto a new Goal row (recur_period_start/baseline_value
-    aren't part of this -- see create_goal in app/main.py, which sets
-    both from live progress context this function has no access to;
-    clean_target_mode below is the sibling validator for whether
-    baseline_value gets set at all on a one-time goal). Raises
-    GoalValidationError naming
-    whatever's wrong -- mirrors app.mindmaps.clean_goal's own per-field
-    validation, just flattened to one goal per call (no node/color
-    dispatch, since this feature has no tree of its own).
-
-    Thin wrapper around _clean_new_goal below: _clean_int_in_range
-    (borrowed from app.mindmaps for the target_value bound-check every
-    branch does) raises a plain ValueError, not GoalValidationError --
-    every OTHER validation failure below already raises
-    GoalValidationError directly, so without this the API layer's own
-    `except GoalValidationError` (app/main.py's create_goal) would let
-    an out-of-range target_value fall through uncaught into a bare 500
-    instead of the same clean 400 every other bad field already gets.
-    str(exc) is just as safe to show the player either way --
-    _clean_int_in_range's own messages never include anything but the
-    field name and the bound that failed."""
+    """Validates a goal-creation request into the Goal(**cleaned) fields.
+    recur_period_start/baseline_value are set by create_goal in app/main.py.
+    Raises GoalValidationError. Wraps _clean_new_goal so _clean_int_in_range's
+    ValueError becomes a 400 instead of a 500.
+    """
     try:
         return _clean_new_goal(goal_type, target_name, metric, target_value, item_id, is_recurring, recur_interval, recur_unit)
     except GoalValidationError:
@@ -269,38 +162,23 @@ def _clean_new_goal(
             raise GoalValidationError(f"skill must be one of {sorted(SKILL_NAMES)}.")
         if metric not in SKILL_METRICS:
             raise GoalValidationError("metric must be 'level' or 'xp'.")
-        # A recurring skill goal only ever tracks xp -- a level is a
-        # capped, non-repeating ceiling (99 either way, xp or not) so
-        # "gain N levels every W" doesn't keep meaning the same thing
-        # past that ceiling the way "gain N xp every W" always does.
-        # The wizard's own stage-3 metric toggle is hidden for this
-        # exact combination (see wizardStageTargetHtml/wizardPickType
-        # in app/pages.py), so this only ever actually fires against a
-        # request that bypassed the UI.
+        # A recurring skill goal tracks xp only (a level is a capped ceiling);
+        # the wizard hides the metric toggle for it, so this only fires for
+        # requests bypassing the UI.
         if is_recurring and metric != "xp":
             raise GoalValidationError("Recurring skill goals only track experience.")
         bounds = (MIN_SKILL_XP, MAX_SKILL_XP) if metric == "xp" else (MIN_SKILL_LEVEL, MAX_SKILL_LEVEL)
         value = _clean_int_in_range(target_value, "target_value", *bounds)
         return {"goal_type": "skill", "target_name": skill, "metric": metric, "target_value": value, "item_id": None, **recurrence}
 
-    # item -- free text, not pre-validated against a real item the way
-    # kc/skill are against their own closed vocabularies, same
-    # tolerance app.mindmaps' own item goal gives: a name that doesn't
-    # resolve to a real item id can still match
-    # build_owned_pools' name-keyed pool at read time (see
-    # absolute_value below), so rejecting an unresolved name here would
-    # just be wrong in some real cases, not merely over-cautious.
+    # item: free text, since an unresolved name can still match
+    # build_owned_pools' name-keyed pool (see absolute_value).
     name = (target_name or "").strip()[:MAX_ITEM_NAME_LENGTH]
     if not name:
         raise GoalValidationError("Pick an item.")
     value = _clean_int_in_range(target_value, "target_value", 1, MAX_ITEM_QTY_TARGET)
-    # item_id is purely a display hint (see Goal.item_id's own
-    # docstring in app/models.py) -- whatever the search suggestion the
-    # player actually clicked carried, or None for free-typed text that
-    # never matched a result. Loosely sanity-checked (a real OSRS item
-    # id, not the free-text name's own bound), never required -- a bad
-    # or missing value just means the goal list falls back to the
-    # generic item badge, nothing about progress tracking depends on it.
+    # item_id is only a display hint (Goal.item_id in app/models.py); loosely
+    # checked, never required.
     clean_item_id = None
     if item_id is not None:
         try:
@@ -313,11 +191,9 @@ def _clean_new_goal(
 
 
 def build_progress_context(db, game_account) -> dict:
-    """Everything current_value below needs, fetched once per request
-    rather than once per goal -- same "build shared context once,
-    reuse per-goal" split app.mindmaps._build_goal_context (app/main.py)
-    already uses for its own tree, just scoped to only the three
-    sources this feature's three goal types actually need."""
+    """Everything current_value needs, fetched once per request rather than per
+    goal.
+    """
     owned_pool_by_id, owned_pool_by_name = build_owned_pools(db, game_account)
     return {
         "boss_kill_counts": game_account.boss_kill_counts or {},
@@ -328,30 +204,12 @@ def build_progress_context(db, game_account) -> dict:
 
 
 def current_value(goal, context: dict) -> int:
-    """This goal's live progress number toward target_value, in
-    whatever unit target_value is in. Whenever goal.baseline_value is
-    null -- a REACH-mode one-time goal, an item goal (never offered a
-    baseline at all -- see target_mode_allows_gain), or a recurring
-    goal that somehow hasn't been baselined yet -- this IS
-    absolute_value() below, a lifetime total, exactly as every goal
-    read before baseline_value existed. Otherwise it's absolute_value()
-    minus goal.baseline_value instead -- how much has changed since
-    whatever moment that baseline was captured (a recurring goal's own
-    current period start, kept current by maybe_roll_recurring_period
-    -- this function only ever reads it, never rolls a period over
-    itself, so call that first on every goal this is used against, the
-    same way list_goals in app/main.py does; or a one-time GAIN goal's
-    own creation time, captured once and never touched again -- see
-    create_goal in app/main.py). Deliberately keyed off "does this goal
-    have a baseline" rather than goal.is_recurring -- see
-    Goal.baseline_value's own docstring in app/models.py for why a
-    one-time goal can end up with one too.
-
-    Clamped at 0 purely as a defensive floor -- absolute_value() should
-    never legitimately drop below a baseline captured from that same
-    reading (kc/xp/level all only ever go up), but a hiscores glitch or
-    a manually-edited account shouldn't be able to show a negative
-    progress bar."""
+    """Live progress toward target_value, in its unit: absolute_value(), minus
+    goal.baseline_value when one exists (recurring period start, or a one-time
+    gain goal's creation; see Goal.baseline_value in app/models.py). Call
+    maybe_roll_recurring_period first, as list_goals does. Clamped at 0
+    against hiscores glitches.
+    """
     absolute = absolute_value(goal, context)
     if goal.baseline_value is None:
         return absolute
@@ -359,32 +217,11 @@ def current_value(goal, context: dict) -> int:
 
 
 def progress_pct(goal, context: dict) -> float:
-    """How full this goal's progress bar should read, 0-100 -- current
-    current_value()/target_value directly for every goal type except a
-    LEVEL-metric skill goal, where that's the wrong ratio: a level
-    number is a badly nonlinear stand-in for how much play it actually
-    takes (SKILL_XP_TABLE's own xp-per-level curve is exponential, so
-    the xp gap from level 20 to level 40 is nowhere near the gap from
-    level 60 to level 80 -- going from level 1 to 2 might be a single
-    kill, going from level 98 to 99 can be a hundred hours), so
-    current_value/target_value (both plain level numbers there -- see
-    absolute_value's own comment on why) would show a level 20 goal
-    with a target of 40 as "50% done" even though it's actually taken
-    a tiny fraction of the xp the goal really represents.
-
-    That one case is scored in xp instead: how much of the target
-    level's own xp requirement (_xp_for_level(goal.target_value),
-    OSRS's real xp-per-level curve) the player's live xp in that skill
-    has already reached -- the same underlying number a level goal's
-    completion already turns on (see absolute_value's own level
-    branch), just read as a fraction here instead of floored to a
-    level. Skill+xp goals need none of this -- current_value/
-    target_value are already both real xp there, already linear in
-    exactly the sense this function exists to restore for the level
-    case. Level-metric skill goals are never recurring (see
-    _clean_new_goal's own check), so there's no period-relative
-    baseline to account for here the way current_value() has to for
-    everything else."""
+    """Progress bar fill, 0-100: current_value()/target_value, except for
+    level-metric skill goals, where levels are a nonlinear stand-in for
+    effort; those are scored as live xp over _xp_for_level(target_value).
+    Level-metric goals are never recurring, so no baseline applies.
+    """
     if goal.goal_type == "skill" and goal.metric == "level":
         have_xp = (context["skills"].get(goal.target_name) or {}).get("xp", 0)
         need_xp = _xp_for_level(goal.target_value)
@@ -397,17 +234,11 @@ def progress_pct(goal, context: dict) -> float:
 
 
 def absolute_value(goal, context: dict) -> int:
-    """This goal's live LIFETIME number, in whatever unit its own
-    target_value is in (a real kill count; xp, or a level for a
-    level-metric goal -- see the skill branch; an owned item quantity)
-    -- computed fresh from `context` every call rather than ever stored
-    on the Goal row itself, the same "always derive it live" stance
-    app.mindmaps.evaluate_completion already takes for its own goal
-    nodes. Never itself baseline-relative -- see current_value above for
-    the number a goal's progress bar actually compares against
-    target_value once a baseline is involved, and
-    create_goal/maybe_roll_recurring_period (this function is also what
-    each of those calls to capture a fresh baseline_value)."""
+    """The goal's live lifetime number in target_value's unit (kills; xp, or
+    level for level-metric skill goals; owned quantity), derived from
+    `context` and never stored. current_value applies any baseline;
+    create_goal and maybe_roll_recurring_period use this to capture one.
+    """
     if goal.goal_type == "kc":
         kc = context["boss_kill_counts"].get(goal.target_name)
         return kc if isinstance(kc, int) else 0
@@ -416,12 +247,8 @@ def absolute_value(goal, context: dict) -> int:
         have_xp = (context["skills"].get(goal.target_name) or {}).get("xp", 0)
         if goal.metric == "xp":
             return have_xp
-        # A level-metric goal is still compared as xp under the hood
-        # (see app.mindmaps._xp_for_level's own comment -- a virtual
-        # level target above 99 needs this), but xp isn't what a level
-        # goal should ever show the player: report the level that xp
-        # actually reaches instead, so a "get to level 80" goal's
-        # progress reads as a level, not a seven-digit xp number.
+        # Level goals compare as xp internally (virtual levels above 99) but
+        # report the level that xp reaches.
         return _level_for_xp(have_xp)
 
     # item
@@ -433,28 +260,12 @@ def absolute_value(goal, context: dict) -> int:
 
 
 def maybe_roll_recurring_period(goal, context: dict) -> bool:
-    """Advances a recurring goal's own current period forward to
-    whichever one `now` actually falls in, re-baselining it as it goes
-    -- called against every goal on every GET /api/goals (see list_goals
-    in app/main.py) before current_value reads recur_period_start/
-    baseline_value off it, so those two columns are never more than one
-    request stale. Returns whether it actually changed
-    anything, so the caller knows whether there's something new to
-    commit; a no-op (not recurring, or still inside the current period)
-    touches nothing and returns False.
-
-    There's no historical time-series of kc/xp/level to roll through
-    period by period -- only ever a live snapshot (`context`) of
-    wherever the account's real numbers stand RIGHT NOW. So a rollover
-    doesn't try to reconstruct what the goal would have read at each
-    period boundary it skipped (e.g. every night at midnight for a
-    daily goal the player hasn't opened the site in a week); it just
-    fast-forwards recur_period_start to the start of the period `now`
-    falls in and re-baselines against the current live value, same as
-    a brand new period always does at creation (see create_goal in
-    app/main.py). A goal that's revisited well within its own cadence
-    -- the common case -- never notices any of this; it only matters
-    once a real period boundary has actually passed."""
+    """Advances a recurring goal to the period containing `now` and re-baselines
+    it; list_goals (app/main.py) calls this before current_value. Returns True
+    if anything changed. Only a live snapshot exists, so skipped periods are
+    not reconstructed: the period start fast-forwards and the baseline is the
+    current value.
+    """
     if not goal.is_recurring or not goal.recur_period_start or not goal.recur_interval or not goal.recur_unit:
         return False
     period_seconds = goal.recur_interval * _RECUR_UNIT_SECONDS[goal.recur_unit]
@@ -470,10 +281,9 @@ def maybe_roll_recurring_period(goal, context: dict) -> bool:
 
 
 def _item_name_variants(item_name: str) -> List[str]:
-    """item_name plus its off-hand pair (if it has a real one) --
-    identical to the name list app.mindmaps' own item-goal branch of
-    evaluate_completion builds, see its comment for why both names
-    pool together into one combined owned count."""
+    """item_name plus its off-hand pair, matching evaluate_completion's item
+    branch in app.mindmaps.
+    """
     names = [item_name]
     pair_name = _offhand_pair_name(item_name)
     if pair_name and pair_name.lower() != item_name.strip().lower():
@@ -482,11 +292,9 @@ def _item_name_variants(item_name: str) -> List[str]:
 
 
 def _level_for_xp(xp: int) -> int:
-    """The inverse of app.mindmaps._xp_for_level -- the highest level
-    (1-126, including virtual levels past the real 99 cap) this much xp
-    already reaches. SKILL_XP_TABLE is small (126 entries) and this
-    only ever runs once per skill goal per request, so a plain linear
-    scan is simpler than bisecting for no real cost."""
+    """Inverse of app.mindmaps._xp_for_level: the highest level (1-126) this xp
+    reaches. Linear scan over the small table.
+    """
     level = MIN_SKILL_LEVEL
     for candidate in range(MIN_SKILL_LEVEL, MAX_SKILL_LEVEL + 1):
         if SKILL_XP_TABLE[candidate] <= xp:
@@ -497,12 +305,9 @@ def _level_for_xp(xp: int) -> int:
 
 
 def target_display(goal) -> str:
-    """A human-readable target label in this goal's own unit, for the
-    UI to show next to its progress number -- "80" for a level goal,
-    "13,034,431 xp" for an xp goal, so the same numeric
-    current_value()/target_value pairing reads correctly regardless of
-    which metric a skill goal picked (kc/item targets need no unit
-    suffix of their own)."""
+    """Target label with unit for the UI: "80" for a level goal, "13,034,431 xp"
+    for xp; kc/item need no suffix.
+    """
     if goal.goal_type == "skill" and goal.metric == "xp":
         return f"{goal.target_value:,} xp"
     return f"{goal.target_value:,}"
@@ -510,71 +315,21 @@ def target_display(goal) -> str:
 
 
 def import_goals_from_share_payload(db: Session, game_account: "GameAccount", payload: dict) -> List[Goal]:
-    """The reverse of build_goal_tracking_share_snapshot (app/main.py):
-    takes a Goal Tracking share's own frozen payload (SharedContent.
-    payload -- see POST /api/goals/shares/{code}/import in app/main.py,
-    the SAVE TO MY MYSCAPE button's own endpoint on render_goal_
-    tracking_share, app/pages.py) and creates a brand new, completely
-    normal, editable Goal row for EVERY goal in payload["goals"] --
-    "importing" someone else's whole shared goal list into your own,
-    same "add every one of these to your list" shape the instruction
-    this was built from asks for, mirroring import_mindmap_from_share_
-    payload/import_gear_setup_from_share_payload's own single-item
-    version of this same reverse-resolution for their own apps.
-
-    payload["goals"] entries are already-computed GoalOut.model_dump()
-    dicts (see build_goal_tracking_share_snapshot's own docstring) --
-    current_value/progress_pct/target_display/item_icon are all
-    derived, never stored on a real Goal row, so only the plain
-    definition fields (goal_type/target_name/metric/target_value/
-    item_id/is_recurring/recur_interval/recur_unit) are actually read
-    back out here; everything else is the SHARER's own frozen reading
-    at share time and plays no part in the importer's new goal.
-
-    baseline_value is the one field needing special handling rather
-    than a blanket "drop everything but the definition" rule: current_
-    value (Goal.baseline_value's own docstring in app/models.py) keys
-    off "does this goal have a baseline" to decide whether to read a
-    lifetime total or a since-baseline delta, so losing that bit
-    entirely would silently turn a one-time GAIN-mode goal back into a
-    REACH-mode one on import. The frozen NUMBER itself is meaningless
-    here regardless (it's the sharer's own lifetime kc/xp/item reading,
-    not this importer's), so only whether it was present at all is
-    read -- a fresh baseline is then captured against THIS account's
-    own live absolute_value(), exactly the same call create_goal
-    itself makes for a brand new GAIN-mode or recurring goal (see its
-    own docstring in app/main.py), rather than copying a number that
-    belongs to someone else's account. A recurring goal always gets
-    this same fresh-baseline treatment regardless of what baseline_
-    value says (is_recurring alone is enough to know it needs one),
-    with its own first period starting right now -- there's no
-    "custom start" concept to carry over from a share the way create_
-    goal's own wizard-driven recur_start_at offers, so "now" is this
-    function's only real choice, the same default create_goal itself
-    falls back to without one.
-
-    context (goal-progress inputs: boss_kill_counts/skills/owned-item
-    pools) is built once up front, same "once per request, not once
-    per goal" reasoning build_progress_context's own docstring already
-    gives, now amortized across however many goals this one import is
-    creating rather than just one.
-
-    Caller commits (same convention import_mindmap_from_share_payload/
-    import_gear_setup_from_share_payload's own callers already
-    follow)."""
+    """The reverse of build_goal_tracking_share_snapshot (app/main.py): creates
+    an editable Goal for every goal in a Goal Tracking share's frozen payload
+    (POST /api/goals/shares/{code}/import). Only the definition fields of each
+    payload["goals"] entry are read; the rest is the sharer's frozen reading.
+    Only the presence of baseline_value is used (the number is the sharer's);
+    dropping it would turn a gain goal into reach. A fresh baseline is
+    captured from this account's absolute_value(), as create_goal does.
+    Recurring goals always get one, starting now. The caller commits.
+    """
     context = build_progress_context(db, game_account)
     new_goals: List[Goal] = []
     for entry in payload.get("goals") or []:
         goal = Goal(
-            # Explicit id, not just this column's own default=uuid.uuid4
-            # -- same reasoning import_mindmap_from_share_payload's own
-            # identical choice gives for MindMap.id: a Python-side
-            # column default isn't applied until flush/commit, and
-            # nothing here needs to read these ids back before that
-            # happens regardless, but staying consistent with every
-            # other import_*_from_share_payload in this codebase is
-            # simpler than re-deriving whether this one actually needs
-            # it.
+            # Explicit id, as in import_mindmap_from_share_payload, since the
+            # column default applies only at flush.
             id=uuid.uuid4(),
             game_account_id=game_account.id,
             goal_type=entry["goal_type"],
@@ -590,9 +345,8 @@ def import_goals_from_share_payload(db: Session, game_account: "GameAccount", pa
             goal.recur_period_start = _utcnow()
             goal.baseline_value = absolute_value(goal, context)
         elif entry.get("baseline_value") is not None:
-            # A one-time GAIN-mode goal in the sharer's own list (see
-            # this function's own docstring on why the frozen NUMBER
-            # itself is never read here, just its presence).
+            # A one-time gain-mode goal in the sharer's list (only baseline
+            # presence is used).
             goal.baseline_value = absolute_value(goal, context)
         db.add(goal)
         new_goals.append(goal)

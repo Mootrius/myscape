@@ -1,28 +1,16 @@
-"""Item-combination recipe lookup -- lets a player search for a
-non-tradeable combination item (e.g. "Neitiznot faceguard") the same
-way they'd search for any other item, and have the app automatically
-know it's made of a Helm of Neitiznot + a Basilisk jaw, without them
-having to say so or already know its exact spelling.
+"""Item-combination recipe lookup: lets a player search for a non-tradeable
+combination item (e.g. "Neitiznot faceguard") like any other item and have the
+app know its components (Helm of Neitiznot + Basilisk jaw).
 
-Backed by a static JSON snapshot (app/data/recipes.json) built from the
-OSRS Wiki's "Bucket" data extension -- see scripts/fetch_recipes.py for
-how it's generated/regenerated. The wiki stores this in the same
-`Recipe` bucket table as ordinary skilling recipes (fletching a bow,
-cooking a meal, etc); what distinguishes a pure item-combination like
-this one is that it names no `uses_skill` at all and produces exactly
-1 of its output per recipe (excluding batch-crafted things like
-arrows), so that's exactly what scripts/fetch_recipes.py filters on
-when building the snapshot. Recipes essentially never change once a
-game update ships them, so a bundled snapshot (refreshed by manually
-re-running that script) is plenty -- there's no need for a live fetch
-or a background refresh job.
+Backed by a static snapshot (app/data/recipes.json) from the OSRS Wiki's
+"Bucket" `Recipe` table; see scripts/fetch_recipes.py to regenerate. Pure item
+combinations are the recipes that name no `uses_skill` and produce exactly 1
+of their output (excluding batch-crafted items like arrows), which is what
+that script filters on. Recipes rarely change, so no live fetch is needed.
 
-Each entry in the index is keyed by the *output* item's name
-(lowercased) -- {"name": str, "icon": str|None, "materials": [{"name":
-str, "quantity": int}, ...]} -- since that's what a player would
-actually search for, not the wiki's own page title (which can cover
-several output variants at once, e.g. "Adamant arrow" documenting both
-plain and poisoned arrows).
+The index is keyed by the lowercased *output* item name: {"name": str, "icon":
+str|None, "materials": [{"name": str, "quantity": int}, ...]}, not the wiki
+page title (which can cover several outputs).
 """
 import json
 import pathlib
@@ -45,27 +33,22 @@ def get_recipe_index() -> Dict[str, dict]:
 
 
 def find_recipe(item_name: str) -> Optional[dict]:
-    """Returns the full recipe entry for item_name (case-insensitive
-    exact match against the recipe's own output name), or None if it
-    isn't a known combination item."""
+    """The full recipe entry for item_name (case-insensitive match on output
+    name), or None if it is not a known combination item.
+    """
     if not item_name:
         return None
     return get_recipe_index().get(item_name.strip().lower())
 
 
 def search_recipe_names(query: str, limit: int, exclude: Optional[set] = None) -> List[dict]:
-    """Fuzzy-searches known combination-item recipes by name, using the
-    same startswith-then-contains scheme as search_items in
-    app/purchase_goals.py -- lets combination gear like "Neitiznot
-    faceguard" show up as a normal, icon-bearing search suggestion even
-    though it has no Grand Exchange listing of its own to search
-    against. `exclude` is a set of already-used lowercased names (e.g.
-    ones already matched as a real tradeable item) to skip, so nothing
-    is suggested twice. Returns raw entries -- {"name": str, "icon":
-    str|None (a wiki image filename, not yet a full URL)} -- since
-    turning that filename into a URL is the caller's job (see
-    item_icon_url in app/purchase_goals.py); this module has no reason
-    to know about the wiki's icon-hosting convention itself."""
+    """Fuzzy name search over combination recipes (startswith, then contains, as
+    in search_items in app/purchase_goals.py), so items with no Grand Exchange
+    listing appear as normal suggestions. `exclude` is a set of lowercased
+    names already matched. Returns raw entries {"name": str, "icon": str|None
+    (a wiki filename, not a URL)}; building the URL is the caller's job
+    (item_icon_url in app/purchase_goals.py).
+    """
     q = (query or "").strip().lower()
     if not q:
         return []
@@ -85,11 +68,10 @@ def search_recipe_names(query: str, limit: int, exclude: Optional[set] = None) -
 
 
 def _build_name_to_id(mapping: dict) -> Dict[str, int]:
-    """Exact-match index of every GE-tradeable item's lowercased name to
-    its item id -- built fresh from the already-cached wiki mapping
-    (see get_mapping() in app/purchase_goals.py) each time it's needed,
-    since the mapping itself only refreshes at most once a day and this
-    is a cheap pass over it either way."""
+    """Exact-match index of every GE-tradeable item's lowercased name -> item id,
+    built from the cached wiki mapping (get_mapping() in
+    app/purchase_goals.py), which refreshes at most daily.
+    """
     by_name: Dict[str, int] = {}
     for item_id, meta in mapping.items():
         name = meta.get("name")
@@ -98,39 +80,23 @@ def _build_name_to_id(mapping: dict) -> Dict[str, int]:
     return by_name
 
 
-# Some combination items are themselves built from other combination
-# items rather than straight from the Grand Exchange -- e.g. Avernic
-# treads (max) is built by combining in Primordial, Pegasian, and
-# Eternal boots one at a time, and the intermediate "partway combined"
-# treads at each step (e.g. "Avernic treads (pr)(pe)") have no GE
-# listing of their own, so pricing the finished item correctly means
-# walking all the way down to real, purchasable materials. This caps
-# how many such untradeable-and-itself-a-recipe hops _expand_materials
-# will follow before giving up and leaving whatever's left as a bare
-# named component -- real recipe chains in the game are at most 2-3
-# deep, so this is a generous safety margin against a data glitch
-# (or, in principle, a cycle) causing runaway recursion, not a limit
-# anything legitimate should ever hit.
+# Some combination items are built from other combination items (e.g. Avernic
+# treads (max) from Primordial, Pegasian and Eternal boots one at a time), and
+# the intermediate items have no GE listing, so pricing means walking down to
+# purchasable materials. Caps how many such hops _expand_materials follows. Real
+# chains are 2-3 deep, so this guards against data glitches or cycles.
 MAX_RECIPE_DEPTH = 8
 
 
 def _expand_materials(materials: List[dict], name_to_id: Dict[str, int], depth: int, seen: set) -> List[dict]:
-    """Recursively resolves a raw materials list into a flat list of
-    components in the shape a gear slot expects -- {"itemId": int|None,
-    "itemName": str, "quantity": int}. A material that's itself
-    GE-tradeable resolves directly to that item id and is left there
-    (even if it also happens to have its own recipe -- if you can just
-    buy the finished item, there's no reason to price it as if it were
-    built from scratch). A material that ISN'T tradeable but does have
-    its own known recipe gets walked one level deeper instead, with its
-    sub-materials' quantities scaled by how many of it this level
-    needed. Anything left over (untradeable with no recipe of its own)
-    is kept as a bare named component, exactly like a manually-built
-    combo already supports for a plain untradeable item. Same-name
-    results are merged/summed so a material needed at more than one
-    level (e.g. Demon tear, consumed at every step of the Avernic
-    treads upgrade chain) shows up as one combined line instead of
-    several duplicates."""
+    """Recursively resolves a materials list into flat components in the gear
+    slot shape {"itemId": int|None, "itemName": str, "quantity": int}. A
+    GE-tradeable material resolves to its id and stops, even if it has its own
+    recipe. An untradeable material with a recipe is expanded one level
+    deeper, with quantities scaled. Anything else stays a bare named
+    component. Same-name results are summed (e.g. Demon tear across the
+    Avernic treads chain).
+    """
     merged: Dict[str, dict] = {}
 
     def add(item_id: Optional[int], item_name: str, quantity: int):
@@ -162,16 +128,12 @@ def _expand_materials(materials: List[dict], name_to_id: Dict[str, int], depth: 
 
 
 def expand_recipe_components(item_name: str, mapping: dict) -> Optional[List[dict]]:
-    """If item_name matches a known combination recipe, returns the
-    fully-resolved components list in the raw storage shape a gear slot
-    expects (see GearComponentIn in app/schemas.py) -- {"itemId":
-    int|None, "itemName": str, "quantity": int} per material -- walking
-    down through any untradeable intermediate combinations along the
-    way (see _expand_materials) until everything left is either a real,
-    priceable Grand Exchange item or a plain named (untradeable) one,
-    exactly like a manually-built combo already supports. Returns None
-    when item_name isn't a recognized recipe at all, so the caller can
-    fall back to storing it as a plain untradeable item."""
+    """If item_name is a known combination recipe, returns its fully resolved
+    components in the gear slot storage shape (GearComponentIn in
+    app/schemas.py), expanding untradeable intermediates via
+    _expand_materials. Returns None for an unknown recipe, so the caller can
+    store a plain untradeable item.
+    """
     recipe = find_recipe(item_name)
     if not recipe:
         return None
