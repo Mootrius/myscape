@@ -230,7 +230,7 @@ def npc_icon_url(name: Optional[str]) -> Optional[str]:
 # Keyed by lowercased raw source_name, for both "npc" and "event" sources.
 # {key: (display name override or None, portrait filename or "/static/..." URL)}
 # - Tombs of Amascut, Intricate pouch, Hallowed Sepulchre Coffin, Golem
-# Crafting: events with no creature portrait of their own.
+# Crafting, Barrows: events with no creature portrait of their own.
 # - Guardians of the Rift: renamed to the NPC who hands out its reward.
 # - Skeleton Hellhound: no single infobox portrait; the Vet'ion reskin is used.
 _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
@@ -240,6 +240,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "skeleton hellhound": (None, "Skeleton Hellhound (Vet'ion).png"),
     "hallowed sepulchre coffin": (None, "Coffin (Hallowed Sepulchre).png"),
     "golem crafting": (None, "Golem (sunstone).png"),
+    "barrows": (None, "Chest (Barrows).png"),
     # Reward events named after an item (seed pack, bird nest, salvage, dossier,
     # unsired, forgotten lockbox) show the wiki "detail" render in the NPC/source panel; the item
     # panel uses the small CDN icon (see _resolve_loot_items).
