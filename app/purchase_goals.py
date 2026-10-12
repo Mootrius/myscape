@@ -1031,7 +1031,7 @@ def build_purchase_goal_share_snapshot(setup: GearSetup) -> dict:
     """Freezes ONE gear setup (already resolved and ownership-checked by the
     caller, see _get_owned_gear_setup in app/main.py) into the payload POST
     /api/gear-setups/<id>/share stores in a SharedContent row for
-    render_purchase_goals_share (app/pages.py). Point-in-time, never live.
+    render_purchase_goals_share (app/pages/). Point-in-time, never live.
     
     Resolved against EMPTY owned pools so a visitor sees the setup at full
     price, not net of the sharer's bank: everything is owned: False with cost

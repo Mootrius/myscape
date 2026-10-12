@@ -46,7 +46,7 @@ MAX_ITEM_QTY_TARGET = 2_147_483_647
 
 # Recurring cadence units ("every recur_interval recur_unit"): fixed durations
 # (MONTH = 30 days, YEAR = 365). Order is the display order in the wizard
-# (wizardStageCadenceHtml, app/pages.py).
+# (wizardStageCadenceHtml, app/pages/).
 RECUR_UNITS = ("hour", "day", "week", "month", "year")
 _RECUR_UNIT_SECONDS = {"hour": 3600, "day": 86400, "week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
 MAX_RECUR_INTERVAL = 999

@@ -1,5 +1,5 @@
 /* Storages Viewer: one table of everything owned across synced storages (columns
-   described in render_possessions, app/pages.py). Self-contained per-page
+   described in render_possessions, app/pages/). Self-contained per-page
    stylesheet; rules that look identical to loot-tracker.css/purchase-goals.css
    are intentionally duplicated. */
 
@@ -8,7 +8,7 @@
   padding: 18px 20px; margin-bottom: 22px;
 }
 
-/* Export icon and its popup (pm_share_icon_btn in app/pages.py; toggle script
+/* Export icon and its popup (pm_share_icon_btn in app/pages/; toggle script
    below it), duplicated from .loot-share-* in loot-tracker.css. top: 32px and no
    `transform` on .pm-share-wrap: a transform creates a stacking context that
    walls off the card's z-index, and the wrap inherits .page-title's 22px/1.5
@@ -119,7 +119,7 @@
 .pm-filter-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .pm-filter-btn.active { border-color: var(--gold); color: var(--gold); }
 /* Opts out of .pm-filter-btn's uppercase transform so "PoH" keeps its mixed case
-   (_POSSESSION_LOCATION_GROUPS in app/pages.py). */
+   (_POSSESSION_LOCATION_GROUPS in app/pages/). */
 .pm-filter-btn-cased { text-transform: none; }
 
 /* Settings cog and checkbox dropdown; same relationship as
@@ -355,7 +355,7 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-filter-input-pair .pm-filter-input { flex: 1 1 0; min-width: 0; }
 .pm-filter-input-pair-sep { color: var(--text-faint); font-size: 11px; flex: 0 0 auto; }
 /* The Between Min/Max pair is a flex child of .pm-filter-value-row like the
-   Value input it swaps with (filterPopoverHtml in app/pages.py), sharing the row
+   Value input it swaps with (filterPopoverHtml in app/pages/), sharing the row
    with the Stack/Single toggle and keeping the popover height constant. flex: 1
    1 auto matches the Value input's rule. */
 .pm-filter-value-row .pm-filter-input-pair { flex: 1 1 auto; min-width: 0; }
@@ -392,7 +392,7 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .possessions-share #pmViewsRow { display: none; }
 
 /* "SNAPSHOT AS OF: <date> <time> (LOCAL)" line above "Shared by <name>"
-   (banner_markup in render_storages_share, app/pages.py); same as
+   (banner_markup in render_storages_share, app/pages/); same as
    .loot-share-range in loot-tracker.css. */
 .pm-share-asof { text-align: center; margin: 0 0 4px; }
 
@@ -490,7 +490,7 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   .pm-row-name { font-size: 12px; }
 }
 
-/* Landing page preview (render_landing_storages_preview, app/pages.py). Same
+/* Landing page preview (render_landing_storages_preview, app/pages/). Same
    container treatment as the other previews (.landing-loot-preview in
    loot-tracker.css): viewport-capped, clipped, bottom feather. max-width 900px
    matches them. */

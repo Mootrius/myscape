@@ -253,7 +253,7 @@ def get_optional_current_player_view_from_session(
     account: Optional[Account] = Depends(get_optional_current_account_from_session),
 ) -> Optional[PlayerView]:
     """Identity plus active game data for the server-rendered pages (see
-    PlayerView in app/pages.py); the page-route counterpart to
+    PlayerView in app/pages/); the page-route counterpart to
     get_optional_current_game_account_from_session. Never raises.
     """
     if account is None:

@@ -516,7 +516,7 @@ button.primary#mmCreateFirstBtn {
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
 }
 
-/* Landing page preview (render_landing_mindmap_preview, app/pages.py)
+/* Landing page preview (render_landing_mindmap_preview, app/pages/)
    Same container as .landing-loot-preview (loot-tracker.css) and
    .landing-purchase-preview; see the former for the feather reasoning. */
 .landing-mindmap-preview {
@@ -651,7 +651,7 @@ button.primary#mmCreateFirstBtn {
 .mm-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
 /* Save-to-your-account icon (import_icon_btn, render_mindmap_share in
-   app/pages.py)
+   app/pages/)
    Same recipe as .pg-import-wrap/.pg-import-card (purchase-goals.css). */
 .mm-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .mm-import-icon-btn {
@@ -683,7 +683,7 @@ button.primary#mmCreateFirstBtn {
 .mm-import-save-btn.action-failed { border-color: var(--red); color: var(--red); }
 .mm-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* Share-viewing page (myscape.io/s/<code>, render_mindmap_share in app/pages.py) */
+/* Share-viewing page (myscape.io/s/<code>, render_mindmap_share in app/pages/) */
 
 .mm-share-label { text-align: center; margin: 0 0 4px; }
 

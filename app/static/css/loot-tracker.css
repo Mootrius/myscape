@@ -1,4 +1,4 @@
-/* Loot Tracker page (render_loot_tracker in app/pages.py). The chart, "By NPC"
+/* Loot Tracker page (render_loot_tracker in app/pages/). The chart, "By NPC"
    row and item panel all scope to the selected range (see the app/loot.py module
    docstring). */
 
@@ -109,7 +109,7 @@
 .loot-share-icon-btn.open { color: var(--gold); }
 
 /* Floats under its trigger; closes on re-click or outside click (see
-   lootShareIconBtn in app/pages.py). Opaque --panel since it floats over
+   lootShareIconBtn in app/pages/). Opaque --panel since it floats over
    content; box-shadow matches .loot-range-menu.
    top: 32px, not icon height + gap: the wrap sits inside .page-title and
    inherits its 22px font-size/1.5 line-height, so its ~33px line box is taller
@@ -319,7 +319,7 @@
 }
 
 /* Search box and sort tabs each take a full-width row (side by side they cramp;
-   see _sort_tabs in app/pages.py). */
+   see _sort_tabs in app/pages/). */
 .loot-panel-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .loot-search { width: 100%; height: 34px; padding: 0 10px; font-size: 13px; }
 /* Wrapper so the CLEAR button can overlay the input's right edge (as
@@ -444,7 +444,7 @@
 .loot-item-box-wrap:hover .loot-eye-btn { opacity: 1; pointer-events: auto; }
 .loot-eye-btn:hover { color: var(--gold); }
 
-/* Landing page preview (render_landing_loot_preview in app/pages.py): the real
+/* Landing page preview (render_landing_loot_preview in app/pages/): the real
    page reused; only these rules are preview-specific. */
 
 /* Fits the panel in one landing scroll-snap slide (.landing-anchor has
@@ -482,7 +482,7 @@
 .loot-range-btn--static .loot-range-caret { display: none; }
 
 /* Two-line title row on a share page (myscape.io/s/<code>,
-   render_loot_tracker_share in app/pages.py): the date range on a .subtitle line
+   render_loot_tracker_share in app/pages/): the date range on a .subtitle line
    (this rule adds centering/spacing), then "Shared by <name>" carrying
    .page-title, so there is one title-sized heading. */
 .loot-share-range { text-align: center; margin: 0 0 4px; }

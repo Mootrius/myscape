@@ -335,7 +335,7 @@ def hidden_storage_keys(db: Session, game_account: GameAccount) -> set:
 
 def set_storage_hidden(db: Session, game_account: GameAccount, storage_key: str, hidden: bool) -> None:
     """Shows or hides one storage source for this player (gear-icon settings
-    menu; see render_possessions in app/pages.py). Idempotent, like
+    menu; see render_possessions in app/pages/). Idempotent, like
     pin/unpin_possession_item in app/main.py, so a repeated or out-of-order
     request never raises.
     """
@@ -355,7 +355,7 @@ def set_storage_hidden(db: Session, game_account: GameAccount, storage_key: str,
 def build_possessions_summary(db: Session, game_account: GameAccount) -> dict:
     """Section 3's payload: every owned item with its live GE/high-alch value and
     a per-location quantity breakdown, so toggles recompute client-side (see
-    render_possessions in app/pages.py). Dose variants are folded into one row
+    render_possessions in app/pages/). Dose variants are folded into one row
     (see _merge_dose_families).
     
     Untradeables with a RuneLite-linked value (derived_price_for in
@@ -424,7 +424,7 @@ def build_possessions_summary(db: Session, game_account: GameAccount) -> dict:
 def build_possessions_share_snapshot(db: Session, game_account: GameAccount, active_locations: List[str]) -> dict:
     """Freezes Storages Viewer's section 3 into a myscape.io/s/<code> snapshot
     (see POST /api/possessions/share in app/main.py, render_storages_share in
-    app/pages.py). Most fields come verbatim from build_possessions_summary.
+    app/pages/). Most fields come verbatim from build_possessions_summary.
     activeLocations is the one transient piece (the client-side location
     filter), so it is passed through from
     PossessionShareCreateRequest.locations, filtered against

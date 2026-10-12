@@ -3,7 +3,7 @@
 Each entry is {id, category, question, answer, tags}. `answer` is plain text
 with links written [label](url); `tags` are extra search keywords (synonyms,
 misspellings, feature names) used by the search script in render_help_support
-(app/pages.py).
+(app/pages/).
 
 To add or edit a question, edit app/data/faq.json: append an object with the
 next id. Nothing else needs to change.

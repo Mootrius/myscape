@@ -240,7 +240,7 @@ def import_shared_goals(
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Appends someone else's shared goal list to this player's goals
-    (render_goal_tracking_share in app/pages.py); the reverse of POST
+    (render_goal_tracking_share in app/pages/); the reverse of POST
     /api/goals/share. GAIN-mode and recurring goals get a fresh baseline
     against THIS account (see goals_module.import_goals_from_share_payload). A
     signed-out visitor is sent to /signup by the page script.

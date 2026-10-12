@@ -1,5 +1,5 @@
 /* Goal Tracking: player-built targets (boss KC, skill level/xp, item quantity)
-   with live progress (render_goal_tracking in app/pages.py). Add-goal wizard on
+   with live progress (render_goal_tracking in app/pages/). Add-goal wizard on
    top, goal list below. */
 
 .gt-card {
@@ -65,7 +65,7 @@
 #gtWizardStage { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 
 /* Stage 1: type picker (three options) using the same icon assets as Mindmaps'
-   GOAL_TYPE_PICKER (app/pages.py), plus a centered Cancel. The wrap fills the
+   GOAL_TYPE_PICKER (app/pages/), plus a centered Cancel. The wrap fills the
    fixed height like .gt-wizard-stage2: type cards at the top, Cancel pinned to
    the bottom by .gt-wizard-stage1-actions' margin-top: auto. */
 .gt-wizard-stage1-wrap {
@@ -168,7 +168,7 @@
 .gt-wizard-row .gt-field-target { flex: 0 0 118px; min-width: 0; }
 
 /* Row for stage 3's Lvl/Xp toggle and/or GAIN/REACH field
-   (#gtWizardSegRow/#gtTargetModeField in wizardStageTargetHtml, app/pages.py),
+   (#gtWizardSegRow/#gtTargetModeField in wizardStageTargetHtml, app/pages/),
    centered as a group. --empty (toggled by updateWizardSegRowVisibility in the
    script) collapses it for item goals and skill goals on Lvl, which have no
    segmented control. */
@@ -233,7 +233,7 @@
   color: var(--text);
 }
 
-/* Level/XP toggle inside #gtWizardSegRow (wizardStageTargetHtml, app/pages.py);
+/* Level/XP toggle inside #gtWizardSegRow (wizardStageTargetHtml, app/pages/);
    explicit 108px width (2 x 54px segments) since no flex sibling sizes it. 25px
    site-wide button height. */
 .gt-metric-toggle { display: flex; gap: 0; height: 25px; width: 108px; flex: none; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -313,7 +313,7 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
    border shows. 25px site-wide button height. Segments are a fixed 54px (5*54 -
    4*1px overlap = 266px), matching .gt-metric-toggle's per-segment width;
    .gt-wizard-segrow's justify-content: center centers it
-   (wizardStageCadenceHtml, app/pages.py). */
+   (wizardStageCadenceHtml, app/pages/). */
 .gt-recur-unit-toggle { display: flex; height: 25px; flex: none; width: 266px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-recur-unit-btn {
@@ -810,7 +810,7 @@ input[type="text"].invalid { border-color: var(--red); }
 .gt-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
 /* Save-to-your-account icon (import_icon_btn in render_goal_tracking_share,
-   app/pages.py); same recipe as the other pages' .*-import-wrap/.*-import-card,
+   app/pages/); same recipe as the other pages' .*-import-wrap/.*-import-card,
    duplicated per page. */
 .gt-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .gt-import-icon-btn {
@@ -843,7 +843,7 @@ input[type="text"].invalid { border-color: var(--red); }
 .gt-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
 /* Share-viewing page (/s/<code>; see render_goal_tracking_share in
-   app/pages.py). .goal-tracking-share wraps the body. */
+   app/pages/). .goal-tracking-share wraps the body. */
 
 /* "GOAL TRACKING SNAPSHOT: YYYY-MM-DD" line above "Shared by <name>", like
    .loot-share-range/.pg-share-label/.pm-share-asof/.mm-share-label. The string

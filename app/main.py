@@ -70,7 +70,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def _styled_not_found_handler(request: Request, exc: StarletteHTTPException):
     """Swaps in render_not_found's styled page for 404s on site pages. /api/*,
     /static/* and non-404 statuses keep FastAPI's JSON {"detail": ...} body,
-    which the site's JS (describeError() in app/pages.py) parses.
+    which the site's JS (describeError() in app/pages/) parses.
     
     Registered on Starlette's HTTPException because unmatched routes raise the
     base class, which a handler on the fastapi subclass never sees.

@@ -355,7 +355,7 @@ def hidden_item_keys(db: Session, game_account: GameAccount) -> set:
 
 def set_npc_hidden(db: Session, game_account: GameAccount, name: str, hidden: bool) -> None:
     """Hides or unhides one NPC by name (eye button in render_loot_tracker,
-    app/pages.py). Idempotent.
+    app/pages/). Idempotent.
     """
     key = npc_hide_key(name)
     existing = (
@@ -657,7 +657,7 @@ def kc_counts_by_player(db: Session, game_account: GameAccount) -> Dict[Tuple[st
 
 
 def build_loot_share_snapshot(db: Session, game_account: GameAccount, start: datetime, end: datetime) -> dict:
-    """Freezes the data render_loot_tracker_share's wrapper script (app/pages.py)
+    """Freezes the data render_loot_tracker_share's wrapper script (app/pages/)
     needs for a read-only, drillable copy of [start, end) at
     myscape.io/s/<code>. Built when a player clicks "Share" (POST
     /api/players/me/loot/share) and stored on SharedContent.payload; never

@@ -124,7 +124,7 @@ class PublicProfileUpdateRequest(BaseModel):
 
 class ModelViewerBackgroundUpdateRequest(BaseModel):
     """Body for POST /api/players/me/model-viewer-background. Only a non-negative
-    check here; the upper bound is _MODEL_VIEWER_BACKGROUNDS in app/pages.py,
+    check here; the upper bound is _MODEL_VIEWER_BACKGROUNDS in app/pages/,
     checked by the endpoint.
     """
     index: int
@@ -1695,7 +1695,7 @@ class GoalOut(BaseModel):
     one-time GAIN goals (see Goal.baseline_value in app/models.py).
     is_recurring/recur_interval/recur_unit feed the cadence tag;
     recur_period_start/baseline_value (plus created_at) feed the info icon
-    (goalInfoIconHtml in app/pages.py).
+    (goalInfoIconHtml in app/pages/).
     sort_order is the position in the custom drag-and-drop order
     (Goal.sort_order); null sorts after all placed goals, by created_at.
     """
@@ -1728,7 +1728,7 @@ class GoalsResponse(BaseModel):
     sort_mode: str
 
 
-# The nine #gtSortTabs modes (app/pages.py): a high/low pair per sortable field
+# The nine #gtSortTabs modes (app/pages/): a high/low pair per sortable field
 # (progress, type, name, recency) plus "custom" (Goal.sort_order).
 # "alphabetical"/"reverse_alphabetical"/"custom" match
 # STILL_TO_PURCHASE_SORT_MODES.

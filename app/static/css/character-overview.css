@@ -1,4 +1,4 @@
-/* Character Overview page (render_character_overview in app/pages.py), in its
+/* Character Overview page (render_character_overview in app/pages/), in its
    own file because none of it applies elsewhere. */
 
 .co-summary-row {
@@ -105,7 +105,7 @@
   gap: 4px;
 }
 
-/* Each cell is a link (see skill_cells in app/pages.py): the site-wide a/a:hover
+/* Each cell is a link (see skill_cells in app/pages/): the site-wide a/a:hover
    color and underline are reset, including under :hover since a:hover outweighs
    a single class. title is the tooltip (setSkillTooltip). Tight padding and no
    min-width let three cells fit in narrow windows; overflow: hidden + nowrap
@@ -147,7 +147,7 @@
   color: var(--text);
 }
 
-/* 3D model viewer card (render_character_overview in app/pages.py). No width
+/* 3D model viewer card (render_character_overview in app/pages/). No width
    rule: .co-left-col's flex-basis sets it. */
 .model-viewer-card {
   background: var(--panel-translucent);
@@ -337,7 +337,7 @@
 }
 /* Fixed-width rail so the grid starts at the same x on every tab; min-width
    keeps a long page name from widening it. The 361px height is a fallback until
-   syncClogHeight (app/pages.py) matches .model-viewer-card. overscroll-behavior:
+   syncClogHeight (app/pages/) matches .model-viewer-card. overscroll-behavior:
    contain stops scroll chaining to the page. */
 .clog-pages {
   flex: 0 0 226px;
@@ -666,7 +666,7 @@
 }
 
 /* Landing page preview (render_landing_character_overview_preview in
-   app/pages.py): the real page reused unmodified in one scroll-snap panel. Only
+   app/pages/): the real page reused unmodified in one scroll-snap panel. Only
    these rules are preview-specific. */
 
 /* Same fixed-height, clipped, feathered treatment as .landing-loot-preview
@@ -739,7 +739,7 @@
 
 /* Public profile settings cog + card. #publicProfileCard is absent on the
    landing preview and on visitors' views (see public_profile_settings_btn in
-   app/pages.py). Collapsed and floating so it does not push .co-summary-row
+   app/pages/). Collapsed and floating so it does not push .co-summary-row
    down. */
 
 /* Bare cog icon inline in the page title (same glyph as .pm-settings-btn,
@@ -763,7 +763,7 @@
 .co-settings-btn.active { color: var(--gold); }
 
 /* Floats under its trigger; closes on re-click or outside click (see
-   publicProfileSettingsBtn in app/pages.py). Opaque --panel (as .tracker-menu)
+   publicProfileSettingsBtn in app/pages/). Opaque --panel (as .tracker-menu)
    since it floats over content; box-shadow matches .loot-range-menu. top: 32px,
    not icon height + gap: the wrap inherits .page-title's larger font-size, so
    its line box is taller than the 15px icon (see .loot-share-card in
@@ -1028,7 +1028,7 @@
 
   /* Drawn scrollbars: phone browsers use fading overlay scrollbars (iOS cannot
      disable this), so the real one is hidden and the page draws its own (.co-sb,
-     built by the 'drawn scrollbars' script in app/pages.py) in a strip reserved
+     built by the 'drawn scrollbars' script in app/pages/) in a strip reserved
      by padding-right. Positioned against each list's parent, hence position:
      relative. */
   body:not(.phone-off) .clog-panes,

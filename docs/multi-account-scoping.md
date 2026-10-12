@@ -232,7 +232,7 @@ four business-logic modules) undercounted -- it missed
 reset-password/change-email/change-password/delete-account/
 verify-email, 52 references), `app/routers/linking.py` (the
 LinkCode/PlayerApiKey exchange itself, 15 references), and
-`app/pages.py` (HTML rendering for every one of those pages plus the
+`app/pages/` (HTML rendering for every one of those pages plus the
 dashboard, 23 references) entirely, and undercounted `app/main.py`
 itself (189, not 78 -- the original grep pattern missed type
 annotations and the `get_current_player_from_session`-family
@@ -267,7 +267,7 @@ needs later anyway.
 
 - [x] `app/auth.py`, `app/routers/auth.py`, `app/routers/linking.py`,
   `app/main.py`, `app/possessions.py`, `app/purchase_goals.py`,
-  `app/loot.py`, `app/mindmaps.py`, `app/pages.py`, `app/schemas.py`
+  `app/loot.py`, `app/mindmaps.py`, `app/pages/`, `app/schemas.py`
   (doc-only) -- every remaining `Player`/`player_id` reference across
   the app now says `Account`/`GameAccount`/`game_account_id`, and the
   whole app imports and runs again.
@@ -293,14 +293,14 @@ tokenize-based rename (Python's `tokenize` module, not plain regex,
 so only real code identifiers were touched and prose/comments talking
 about "the player" as a person were left alone) handled those safely
 across hundreds of references. But the website's own server-rendered
-pages (`app/pages.py`'s `render_dashboard`, `_footer`'s "Linked to
+pages (`app/pages/`'s `render_dashboard`, `_footer`'s "Linked to
 X" note, `_link_banner`'s verified-email gate, etc.) need *both*
 identity fields (`email`, `email_verified_at`, from `Account`) and
 game-data fields (`runescape_name`, `account_hash`, from the active
 `GameAccount`) at once -- the exact same conflation `PlayerOut` (the
 API response schema) already had, just on the HTML side. Fixed the
 same way in both places: a small combined view built fresh per
-request (`PlayerView` + `build_player_view` in `app/pages.py`, used
+request (`PlayerView` + `build_player_view` in `app/pages/`, used
 by a new `get_optional_current_player_view_from_session` dependency
 in `app/auth.py`) rather than trying to make `GameAccount` or
 `Account` alone carry fields that don't belong to it. `PlayerOut`
@@ -354,7 +354,7 @@ in the UI calls it yet).
   SQLAlchemy `cascade="all, delete-orphan"` relationships -- no
   extra cleanup code needed; allowed all the way down to zero, per
   the "unlimited accounts, no minimum" decision above).
-- [x] Account page UI (`app/pages.py`'s `render_account`): a new
+- [x] Account page UI (`app/pages/`'s `render_account`): a new
   "LINKED ACCOUNTS" section listing every `GameAccount` with a
   Switch button (hidden on whichever is already active) and a
   two-step "ARE YOU SURE?" Remove button, plus the add button.

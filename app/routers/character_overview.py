@@ -56,7 +56,7 @@ router = APIRouter()
 @router.get("/api/character-overview/summary")
 def character_overview_summary(game_account: GameAccount = Depends(get_current_verified_game_account_from_session)):
     """Character Overview's summary row (session-authenticated). Null stats
-    render as an em dash (render_character_overview in app/pages.py).
+    render as an em dash (render_character_overview in app/pages/).
     """
     return _character_overview_summary_payload(game_account)
 
@@ -148,9 +148,9 @@ def update_model_viewer_background(
     db: Session = Depends(get_db),
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
-    """Called by the shuffle button (shuffleBackground in app/pages.py),
+    """Called by the shuffle button (shuffleBackground in app/pages/),
     fire-and-forget. The schema checks index >= 0; the upper bound is
-    _MODEL_VIEWER_BACKGROUNDS' length in app/pages.py.
+    _MODEL_VIEWER_BACKGROUNDS' length in app/pages/.
     """
     if payload.index >= len(_MODEL_VIEWER_BACKGROUNDS):
         raise HTTPException(
@@ -267,7 +267,7 @@ def public_character_overview_page(
     viewer: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
     viewer_game_account: Optional[GameAccount] = Depends(get_optional_current_game_account_from_session),
 ):
-    """The shared-link page: render_public_character_overview (app/pages.py)
+    """The shared-link page: render_public_character_overview (app/pages/)
     wired to the public endpoints above. Missing and private codes 404 into
     the styled not-found page.
     """
@@ -299,7 +299,7 @@ def shared_content_page(
     share = find_valid_share(db, code)
     if share is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shared link not found.")
-    # The share's owner, queried by FK (pages.py stays DB-free). May be None if
+    # The share's owner, queried by FK (app/pages/ stays DB-free). May be None if
     # the account was deleted (no cascade on this FK); render_loot_tracker_share
     # handles that.
     if share.game_account_id is None:

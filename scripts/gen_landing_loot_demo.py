@@ -1,5 +1,5 @@
 """One-off script: build the curated "day of loot" dataset behind the landing
-page's Loot Tracker preview (render_landing_loot_preview in app/pages.py) and
+page's Loot Tracker preview (render_landing_loot_preview in app/pages/) and
 write app/data/landing_loot_demo.json.
 The preview is a fixed snapshot, not a live feature: one made-up day of
 killing four NPCs (Goblin, Hill Giant, Turoth, Pyrelord), with drops simulated
@@ -294,7 +294,7 @@ def main():
 
         # One build_loot_state call per bucket over its [start, end) range, the
         # same call the real page makes when a bar is clicked
-        # (bucketUrl()/loadBucketData() in render_loot_tracker, app/pages.py).
+        # (bucketUrl()/loadBucketData() in render_loot_tracker, app/pages/).
         # Precomputed because the preview has no backend;
         # render_landing_loot_preview's fetch shim serves it by each bucket's
         # `start` timestamp.

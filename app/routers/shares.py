@@ -21,7 +21,7 @@ def import_shared_purchase_goal(
     game_account: GameAccount = Depends(get_current_verified_game_account_from_session),
 ):
     """Imports someone else's shared setup as a new GearSetup of the signed-in
-    player (render_purchase_goals_share in app/pages.py); the reverse of POST
+    player (render_purchase_goals_share in app/pages/); the reverse of POST
     /api/gear-setups/{setup_id}/share. A signed-out visitor is sent to /signup
     by the page script.
     

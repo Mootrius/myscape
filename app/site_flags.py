@@ -3,7 +3,7 @@
 SIGNUPS_ENABLED: whether new accounts can be created. Off while myscape.io is
 shared ahead of the RuneLite plugin's release. While off:
 - GET /signup shows a "coming soon" page (render_signup_coming_soon in
-app/pages.py; render_signup is untouched), and
+app/pages/; render_signup is untouched), and
 - POST /api/auth/signup returns 403 (hiding the form is not enough; anyone can
 POST directly).
 Login, password resets and everything else for existing accounts are

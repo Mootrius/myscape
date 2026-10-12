@@ -56,7 +56,7 @@ def unlink_via_session(
     game_account: GameAccount = Depends(get_current_game_account_from_session),
 ):
     """Unlinks the active game account from the website using only the browser
-    session (the "Unlink" button on /dashboard in app/pages.py). See
+    session (the "Unlink" button on /dashboard in app/pages/). See
     revoke_link() for why this second path exists.
     """
     revoke_link(db, game_account)
@@ -183,7 +183,7 @@ def add_game_account(
     makes it the session's active one: the entry point for linking another
     character (no cap; see docs/multi-account-scoping.md). Requires a verified
     email, like start_link. The account page reloads afterwards and the link
-    banner (_link_banner in app/pages.py) takes over, since account_hash is
+    banner (_link_banner in app/pages/) takes over, since account_hash is
     NULL.
     """
     game_account = GameAccount(account_id=account.id)

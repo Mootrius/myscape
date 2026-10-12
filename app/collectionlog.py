@@ -105,7 +105,7 @@ def get_valid_item_ids() -> FrozenSet[int]:
 
 def get_collection_log_tabs() -> List[dict]:
     """The full tab -> page -> item structure, each item with its name
-    (get_item_name) for render_character_overview in app/pages.py:
+    (get_item_name) for render_character_overview in app/pages/:
     [{"name": <tab>, "pages": [{"name": <page>, "items": [{"id": <id>, "name":
     <name>}, ...]}, ...]}, ...]
     

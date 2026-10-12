@@ -54,13 +54,13 @@ def root(
     player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session),
 ):
     # A logged-in player goes straight to /dashboard, except via the header logo
-    # (_shell() in pages.py), which adds ?home=1 while signed in.
+    # (_shell() in app/pages/shell.py), which adds ?home=1 while signed in.
     if player and not home:
         return RedirectResponse("/dashboard", status_code=302)
     return render_landing(player)
 
 
-# Every page _shell() renders noindex (app/pages.py); keep in sync when adding a
+# Every page _shell() renders noindex (app/pages/); keep in sync when adding a
 # page. /dashboard covers all /dashboard/* by prefix.
 _ROBOTS_TXT = """User-agent: *
 Allow: /
@@ -237,7 +237,7 @@ def goal_tracking_page(player: Optional[PlayerView] = Depends(get_optional_curre
 @router.get("/dashboard/help-and-support", response_class=HTMLResponse)
 def help_support_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     """Same login/verified gate as every other /dashboard/* page (see
-    render_help_support in app/pages.py).
+    render_help_support in app/pages/).
     """
     if not player:
         return RedirectResponse("/login", status_code=302)
@@ -249,7 +249,7 @@ def help_support_page(player: Optional[PlayerView] = Depends(get_optional_curren
 @router.get("/dashboard/character-overview", response_class=HTMLResponse)
 def character_overview_page(player: Optional[PlayerView] = Depends(get_optional_current_player_view_from_session)):
     """Same login/verified gate as every other /dashboard/* page (see
-    render_character_overview in app/pages.py).
+    render_character_overview in app/pages/).
     """
     if not player:
         return RedirectResponse("/login", status_code=302)

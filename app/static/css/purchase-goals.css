@@ -1,5 +1,5 @@
 /* Purchase Goals: gear-setup planner. Loaded only by /dashboard/purchase-goals
-   (render_purchase_goals in app/pages.py), not the shared myscape.css. */
+   (render_purchase_goals in app/pages/), not the shared myscape.css. */
 
 .pg-header {
   display: flex;
@@ -37,7 +37,7 @@
 }
 .tracker-icon-btn.active { border-color: var(--gold); }
 .tracker-icon-btn:hover { border-color: var(--gold-dim); }
-/* Setup icons are draggable to reorder (wireSetupIconDrag in app/pages.py). */
+/* Setup icons are draggable to reorder (wireSetupIconDrag in app/pages/). */
 .tracker-icon-btn.dragging { opacity: 0.4; cursor: grabbing; }
 .tracker-icon-fallback { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1.15; padding: 0 3px; }
 
@@ -174,7 +174,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 /* 18px matches .loot-panels' gap in loot-tracker.css. */
 .pg-body { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
 /* Holds the gear frame and, when editing a slot, the slot picker beneath it. JS
-   pins its px width to the frame's (renderContent in app/pages.py); otherwise
+   pins its px width to the frame's (renderContent in app/pages/); otherwise
    the picker's search box stretches it and pushes .pg-summary-col out of the
    row. max-width: 100% is the narrow-viewport fallback. */
 .pg-doll-wrap { display: flex; flex-direction: column; gap: 18px; max-width: 100%; }
@@ -264,7 +264,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-slot.filled { background: #1c1a14; }
 .gear-slot.filled:hover { background-color: rgb(38, 35, 27); }
 .gear-slot.picking { border-color: var(--gold); }
-/* Backs up the img's draggable="false" (slotHtml in app/pages.py): Safari can
+/* Backs up the img's draggable="false" (slotHtml in app/pages/): Safari can
    still start a native image drag otherwise. */
 /* RuneLite CDN canvas padding: size bump plus recentering translate (see
    .loot-item-box-icon in loot-tracker.css). */
@@ -273,7 +273,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   transform: translate(5.5%, -1%);
 }
 
-/* Drag and drop (wireSlotClicks/moveSlotItem in app/pages.py). Outline rather
+/* Drag and drop (wireSlotClicks/moveSlotItem in app/pages/). Outline rather
    than border so the ownership border color stays visible. .dragging fades the
    source; .drag-over rings the drop target. */
 .gear-slot.dragging { opacity: 0.4; }
@@ -283,7 +283,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-slot.not-owned { border-color: var(--red); }
 .gear-slot.affordable { border-color: var(--amber); }
 
-/* Shift-click multi-select (toggleSlotSelected/wireSlotClicks in app/pages.py).
+/* Shift-click multi-select (toggleSlotSelected/wireSlotClicks in app/pages/).
    Solid blue outline stays visible over every border color and differs from the
    gold .picking border. */
 .gear-slot.multi-selected { outline: 2px solid var(--blue); outline-offset: -2px; }
@@ -306,7 +306,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   padding: 18px 20px;
 }
 /* "Still to purchase" sort buttons: GP and A-Z toggle direction, CUSTOM is
-   standalone (renderSortButtons in app/pages.py). */
+   standalone (renderSortButtons in app/pages/). */
 .gear-summary-sort { display: flex; gap: 6px; margin-bottom: 12px; }
 /* 25px matches the site-wide button height (.loot-sort-tab in loot-tracker.css). */
 .sort-btn {
@@ -327,7 +327,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
    (RuneScapePlain11 lacks the arrows). */
 .sort-btn-arrow { display: inline-block; }
 /* One-off nudge pulse for CUSTOM when a row is clicked/dragged in another sort
-   mode (glowCustomSortButton in app/pages.py); same shape as mm-edit-glow in
+   mode (glowCustomSortButton in app/pages/); same shape as mm-edit-glow in
    mindmaps.css. Finite iteration count, and the extra box-shadow keeps it
    distinct from .active. */
 @keyframes sort-btn-custom-glow {
@@ -355,7 +355,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-summary-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: var(--panel-2); border: 1px solid var(--border); }
 .gear-summary-row.unpurchasable { opacity: 0.55; }
 /* Backs up draggable="false" on the icon img (renderSummaryList in
-   app/pages.py); same as .gear-slot-icon. */
+   app/pages/); same as .gear-slot-icon. */
 /* RuneLite CDN canvas padding: size bump plus recentering translate (see
    .loot-item-box-icon in loot-tracker.css). */
 .gear-summary-row-icon {
@@ -366,7 +366,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-summary-row-cost { font-size: 12px; color: var(--gold); white-space: nowrap; }
 .gear-summary-row-cost.na { color: var(--text-faint); }
 
-/* Drag-to-reorder, custom sort mode only (wireSummaryDrag in app/pages.py). No
+/* Drag-to-reorder, custom sort mode only (wireSummaryDrag in app/pages/). No
    .drag-over ring: rows slide aside to preview the drop (animateReorder).
    user-select: none stops text selection while dragging. */
 .gear-summary-row.draggable { cursor: grab; user-select: none; }
@@ -404,7 +404,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
    it. Also used for the slot picker's search box so both match. */
 .search-box input[type="text"] { width: 100%; height: 32px; padding: 0 14px; }
 /* Opaque for a clean dropdown; a suggestion click saves immediately
-   (renderSlotSuggestions in app/pages.py). */
+   (renderSlotSuggestions in app/pages/). */
 .suggestions {
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
   background: var(--panel); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
@@ -451,7 +451,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   .gear-doll-misc { margin-top: 16px; }
 }
 
-/* Landing page preview (render_landing_purchase_preview, app/pages.py). Same
+/* Landing page preview (render_landing_purchase_preview, app/pages/). Same
    container treatment as .landing-loot-preview in loot-tracker.css
    (viewport-capped, clipped, bottom feather). max-width matches its 900px so
    both previews are the same size. */
@@ -547,7 +547,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   transform: scaleX(-1);
 }
 
-/* Export icon next to "Purchase Goals" (purchase_share_icon_btn in app/pages.py)
+/* Export icon next to "Purchase Goals" (purchase_share_icon_btn in app/pages/)
    and its popup. Same 14px bare icon as .loot-share-icon-btn (duplicated per
    page stylesheet). .pg-share-wrap anchors .pg-share-card. No transform on it: a
    transform creates a stacking context that walls the popup's z-index: 5 off,
@@ -575,7 +575,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .pg-share-icon-btn.open { color: var(--gold); }
 
 /* Download icon next to "Shared by <name>" on a share page (import_icon_btn in
-   render_purchase_goals_share, app/pages.py). Same bare 14px shape as
+   render_purchase_goals_share, app/pages/). Same bare 14px shape as
    .pg-share-icon-btn; toggles .pg-import-card via .open. Rendered as a <button>
    (signed-in) or an <a> (signed-out, no popup), so the rule targets the class
    alone. */
@@ -641,7 +641,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .pg-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
 /* Popup under its trigger (absolute against .pg-share-wrap); closes on re-click
-   or outside click (pgShareIconBtn handler in app/pages.py). Opaque, with the
+   or outside click (pgShareIconBtn handler in app/pages/). Opaque, with the
    box-shadow of .loot-range-menu (loot-tracker.css). top: 32px: the wrap sits
    inside .page-title, whose larger font-size makes its line box taller than the
    14px icon (see .loot-share-card in loot-tracker.css). */
@@ -692,7 +692,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .pg-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
 /* Share-viewing page (/s/<code>; see render_purchase_goals_share in
-   app/pages.py). .purchase-goal-share wraps the body. */
+   app/pages/). .purchase-goal-share wraps the body. */
 
 /* Hide the setup switcher and menu rather than strip them from the markup;
    visitors only see the one frozen setup. */

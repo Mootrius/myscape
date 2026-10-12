@@ -1,5 +1,5 @@
 """Static reference data for Character Overview's quests, achievement diaries and
-combat achievements sections (render_character_overview in app/pages.py, via
+combat achievements sections (render_character_overview in app/pages/, via
 /api/character-overview/progress in app/main.py). Like app/quest_names.py and
 app/item_ids.py, it loads fixed snapshots from app/data/*.json:
 
@@ -39,7 +39,7 @@ def _load_json(path: pathlib.Path, default):
 def get_quest_list() -> Dict[str, List[str]]:
     """{"free": [...], "members": [...], "miniquests": [...]}, each alphabetized
     ignoring a leading "The", in the in-game Free/Members/Miniquests order
-    (see the quest section in app/pages.py).
+    (see the quest section in app/pages/).
     
     "members" excludes the "Recipe for Disaster/<subquest>" entries:
     RuneLite's Quest enum has no per-subquest entries, so they would always

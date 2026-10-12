@@ -6,7 +6,7 @@
   src: url('/static/fonts/RuneScapePlain11.otf') format('opentype');
   /* font-display: block, not optional/swap: `optional` locks the page into the
      fallback font if the font misses its ~100ms window; `swap` flashes the
-     system font on every navigation. _shell() (app/pages.py) preloads the file. */
+     system font on every navigation. _shell() (app/pages/) preloads the file. */
   font-display: block;
 }
 
@@ -61,7 +61,7 @@ html { overflow-x: hidden; }
 ::-webkit-scrollbar-thumb:hover { background: var(--gold); }
 ::-webkit-scrollbar-corner { background: var(--bg); }
 
-/* Landing-page scroll-snap (render_landing() in app/pages.py), scoped via
+/* Landing-page scroll-snap (render_landing() in app/pages/), scoped via
    body.landing. scroll-snap-type must sit on the scrolling box, <html>, hence
    :has(). */
 html:has(body.landing) {
@@ -595,7 +595,7 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 }
 
 /* Shows the lowercase code; click copies the full https://myscape.io/s/<code>
-   URL (handler in app/pages.py). */
+   URL (handler in app/pages/). */
 .shared-link-code-btn {
   width: 68px;
   padding: 4px 0;
@@ -619,7 +619,7 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
    th, so the title alone is centered and title+arrow re-centers as one unit. */
 .shared-link-sort-arrow { display: inline-block; }
 
-/* DELETION header: bulk delete (sharedLinksDeleteAllBtn, app/pages.py), red on
+/* DELETION header: bulk delete (sharedLinksDeleteAllBtn, app/pages/), red on
    hover and red + "SURE?" when armed. Standalone so its red states never fight
    .shared-link-sort-header's gold .active. */
 .shared-link-delete-all-header {
@@ -762,7 +762,7 @@ button.danger--filled:hover { background: #a84a3d; }
   margin-top: 14px;
 }
 
-/* Wrapper (_dash_card_wrap, app/pages.py) for .dash-card-link's rules. */
+/* Wrapper (_dash_card_wrap, app/pages/) for .dash-card-link's rules. */
 
 /* Hover repeated: the site-wide `a:hover` outranks a single class and would
    underline the card. */
@@ -842,7 +842,7 @@ button.danger--filled:hover { background: #a84a3d; }
 
 .dash-card .subtitle { margin-top: 0; margin-bottom: 0; }
 
-/* Site-wide footer (_footer(), app/pages.py): the header gradient mirrored and
+/* Site-wide footer (_footer(), app/pages/): the header gradient mirrored and
    darker so it reads as a floor. */
 footer {
   flex: 0 0 auto;
@@ -943,7 +943,7 @@ footer {
   margin: 10px auto 0;
 }
 
-/* Landing anchor panels (render_landing(), app/pages.py): full-viewport slides
+/* Landing anchor panels (render_landing(), app/pages/): full-viewport slides
    that scroll-snap stops at, reinforced by the page's wheel-locking script.
    Breaks out of .wrap like header/.link-banner. */
 .landing-anchors {
@@ -1083,7 +1083,7 @@ footer {
 }
 
 /* Closing "ARE YOU READY?" pitch (render_landing()'s landing_cta/_footer(),
-   app/pages.py), inside <footer> so it shares footer's snap stop (body.landing
+   app/pages/), inside <footer> so it shares footer's snap stop (body.landing
    footer) and the same min-height as .landing-anchor scrolls the panel above out
    of view.
    .landing-cta takes flex: 1 and centers its content, which pins the
@@ -1157,7 +1157,7 @@ body.landing .footer-inner {
 
 /* Custom site-wide tooltip replacing the slow native title tooltip, styled like
    .loot-share-card/.suggestions. One reused element driven by the IIFE at the
-   end of _shell's shared_script (app/pages.py); elements opt in with
+   end of _shell's shared_script (app/pages/); elements opt in with
    data-tooltip.
    position: fixed because it is placed from getBoundingClientRect (scrolling
    hides it). pointer-events: none so it never steals the hover or click. */
@@ -1192,7 +1192,7 @@ body.landing .footer-inner {
 
 /* Friends
    Red count pill next to ACCOUNT in the header (_nav_sides and the poll in
-   _shell, app/pages.py) and on a Linked Accounts card with a pending friend
+   _shell, app/pages/) and on a Linked Accounts card with a pending friend
    request. */
 .friend-badge {
   display: inline-flex;

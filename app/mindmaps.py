@@ -28,7 +28,7 @@ DEFAULT_TEXT = "New"
 MAX_NODE_TEXT_LENGTH = 120
 MAX_MINDMAP_NAME_LENGTH = 60
 # Max note length: only a backstop for direct API calls. The real 2-line cap is
-# client-side (clampNoteInput in app/pages.py; the font is proportional),
+# client-side (clampNoteInput in app/pages/; the font is proportional),
 # because a scrolling note reintroduces the blur described at .mm-suggestions in
 # mindmaps.css. See _clean_note.
 MAX_NODE_NOTE_LENGTH = 200
@@ -85,7 +85,7 @@ MIN_SKILL_XP, MAX_SKILL_XP = 0, 200_000_000
 
 def _build_skill_xp_table() -> List[int]:
     """OSRS xp-per-level curve for levels 1-126 (including virtual levels).
-    Mirrors SKILL_XP_TABLE in app/pages.py. Index 0 is unused; index 1 is 0.
+    Mirrors SKILL_XP_TABLE in app/pages/. Index 0 is unused; index 1 is 0.
     """
     table = [0, 0]
     cumulative = 0
@@ -506,7 +506,7 @@ def delete_node(nodes: List[Dict], node_id: str) -> List[Dict]:
 
 def replace_nodes(nodes: List[Dict]) -> List[Dict]:
     """Returns a new node list from a full snapshot `nodes` (undo/redo PUTs back
-    past server responses; see MM.undoStack in app/pages.py). The payload is
+    past server responses; see MM.undoStack in app/pages/). The payload is
     untrusted, so everything is re-cleaned; goals use require_complete=False.
     Raises ValueError unless it is a well-formed tree (one root, unique ids,
     no dangling references, no cycles).
@@ -701,7 +701,7 @@ def serialize_mindmap(mindmap: MindMap, context: Optional[Dict] = None) -> Dict:
 def build_mindmap_share_snapshot(mindmap: MindMap, context: Dict) -> dict:
     """Freezes one of game_account's mindmaps (resolved and ownership-checked by
     the caller) into the payload for a SharedContent row (see POST
-    /api/mindmaps/<id>/share, render_mindmap_share in app/pages.py). This is
+    /api/mindmaps/<id>/share, render_mindmap_share in app/pages/). This is
     serialize_mindmap verbatim, with each node's `completed` flag baked in as
     evaluated against `context` at share time.
     """
@@ -733,7 +733,7 @@ def import_mindmap_from_share_payload(db: Session, game_account: GameAccount, pa
 
 
 def build_mindmaps_state(db: Session, game_account: GameAccount, context: Optional[Dict] = None) -> Dict:
-    """The state the Mindmaps page loads (render_mindmaps in app/pages.py): every
+    """The state the Mindmaps page loads (render_mindmaps in app/pages/): every
     mindmap with its nodes, oldest first. `context` is optional for
     scripts/tests; real callers always pass one so `completed` flags are real.
     """

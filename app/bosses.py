@@ -3,7 +3,7 @@ official hiscores "Bosses" category (an NPC/activity killcount, not a skill or
 minigame score).
 
 Used for the Goal Tracking reference table (render_goal_tracking in
-app/pages.py) and matched by exact name against the hiscores JSON
+app/pages/) and matched by exact name against the hiscores JSON
 "activities[].name" in app/hiscores.py. A Jagex rename or addition needs
 updating here, so both stay in sync.
 

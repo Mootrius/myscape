@@ -160,7 +160,7 @@ class GameAccount(Base):
     character_model_glb = Column(LargeBinary, nullable=True)
     character_model_synced_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Model-viewer background index (_MODEL_VIEWER_BACKGROUNDS, app/pages.py).
+    # Model-viewer background index (_MODEL_VIEWER_BACKGROUNDS, app/pages/).
     # The browser's localStorage is primary; this lets public-profile visitors
     # see the owner's choice. Null means 0.
     model_viewer_background_index = Column(Integer, nullable=True)
@@ -788,7 +788,7 @@ class SharedContent(Base):
     """A frozen snapshot of a player's data shared at myscape.io/s/<code>
     (currently Loot Tracker). Unlike GameAccount.public_code these are many
     per account and never live: `payload` is stored verbatim. content_type
-    selects the renderer (app/pages.py).
+    selects the renderer (app/pages/).
     
     code comes from generate_share_code (app/sharing.py). expires_at is always
     set; is_valid is a lazy read-time check and expired rows are kept.

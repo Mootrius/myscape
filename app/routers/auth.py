@@ -286,7 +286,7 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
 def verify_email(request: Request, payload: VerifyEmailRequest, db: Session = Depends(get_db)):
     """Consumes a signup/resend-verification token exactly once and logs the
     account in. The link may be opened in a different browser than the signup
-    (see render_verify_email in app/pages.py), so proving the token grants the
+    (see render_verify_email in app/pages/), so proving the token grants the
     session.
     """
     token_hash = hash_token(payload.token)
@@ -313,7 +313,7 @@ def resend_verification_email(
     account: Account = Depends(get_current_account_from_session),
 ):
     """For a signed-in, unverified account that lost its confirmation email
-    (RESEND EMAIL button in render_verify_email_required, app/pages.py). Uses
+    (RESEND EMAIL button in render_verify_email_required, app/pages/). Uses
     the unverified-allowed login dependency (app/auth.py) rather than an email
     address. Rate-limited like forgot_password (5/minute) since it sends real
     email.
