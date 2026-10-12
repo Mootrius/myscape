@@ -430,11 +430,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   letter-spacing: 0.05em;
 }
 
-.account-section-title--danger {
-  text-align: center;
-  color: var(--red);
-}
-
 /* Update Email / Password / Delete Account share one row; one
    .account-collapse-body is visible at a time (accordion script in
    render_account). */

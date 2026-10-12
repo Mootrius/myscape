@@ -10,15 +10,6 @@
   margin-bottom: 20px;
 }
 
-.gt-card-title {
-  margin: 0 0 16px;
-  font-size: 13px;
-  font-weight: normal;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
 .gt-link-note { color: var(--text-muted); margin: 0; }
 
 /* Add-goal wizard. Collapsed (.gt-wizard-add-btn alone) or expanded

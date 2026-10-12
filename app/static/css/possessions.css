@@ -287,7 +287,6 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-col-ge .pm-filter-popover,
 .pm-col-ha .pm-filter-popover,
 .pm-col-tradeable .pm-filter-popover { left: auto; right: 0; }
-.pm-filter-popover-row { display: flex; align-items: center; gap: 6px; }
 .pm-filter-popover-label {
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
 }
@@ -346,14 +345,12 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   display: flex; align-items: center; justify-content: center;
   padding: 0 10px; font-size: 10.5px;
 }
-.pm-filter-input,
-.pm-filter-select {
+.pm-filter-input {
   height: 28px; padding: 0 8px; box-sizing: border-box; width: 100%;
   font-size: 13px; color: var(--text); font-family: inherit;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
 }
-.pm-filter-input:focus,
-.pm-filter-select:focus { outline: none; border-color: var(--gold-dim); }
+.pm-filter-input:focus { outline: none; border-color: var(--gold-dim); }
 .pm-filter-input-pair { display: flex; align-items: center; gap: 6px; }
 .pm-filter-input-pair .pm-filter-input { flex: 1 1 0; min-width: 0; }
 .pm-filter-input-pair-sep { color: var(--text-faint); font-size: 11px; flex: 0 0 auto; }

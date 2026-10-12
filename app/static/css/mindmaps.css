@@ -147,11 +147,6 @@ button.primary#mmNameSave, .mm-name-form-save {
 }
 #mmEditModeBtn.mm-glow { animation: mm-edit-glow 0.6s ease-in-out 2; }
 
-.mm-canvas-empty {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  color: var(--text-faint); font-size: 12px; text-align: center;
-}
-
 /* Nodes
    Fixed width and height so the layout math needs no measurement pass; text
    clamps to 2 lines. */
@@ -424,8 +419,6 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
    validateSkillTarget, validateNodeText). One ancestor rule covers every nested
    input.mm-goal-input. */
 .mm-goal-fields input.mm-goal-input.invalid { border-color: var(--red); }
-
-.mm-manual-toggle-btn { width: auto; height: 24px; align-self: center; white-space: nowrap; padding: 0 14px; }
 
 .mm-search-wrap { width: 100%; }
 /* Not a child of .mm-search-wrap: one shared element on <body>, `position:
