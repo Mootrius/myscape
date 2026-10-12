@@ -1,9 +1,4 @@
-/* Mindmaps -- goal/idea trees a player builds up node by node. Loaded
-   only by /dashboard/mindmaps (see app/pages.py's render_mindmaps),
-   same as loot-tracker.css/purchase-goals.css are each scoped to their
-   own page. No Maintrius equivalent to port here (brand new feature),
-   so nothing here is carried over from anywhere else -- see
-   app/mindmaps.py for the server-side tree logic this renders. */
+/* Mindmaps page (/dashboard/mindmaps). Tree logic: app/mindmaps.py. */
 
 .mm-header {
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -12,10 +7,6 @@
 
 .mm-menu-wrap { position: relative; }
 
-/* The switcher trigger -- shows the active mindmap's own name (not a
-   generic icon/label) since that's the one piece of context a player
-   needs at a glance, with a small caret marking it as a dropdown
-   rather than a plain button. */
 .mm-switch-btn {
   display: flex; align-items: center; gap: 8px;
   background: var(--panel-2); border: 1px solid var(--border);
@@ -27,22 +18,12 @@
 .mm-switch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mm-switch-caret { color: var(--text-dim); font-size: 9px; flex: none; }
 
-/* Same floating-panel treatment as .tracker-menu (purchase-goals.css)
-   -- duplicated rather than shared across a stylesheet boundary
-   neither page otherwise crosses -- but taller/wider, since this one
-   also doubles as the mindmap-switch list (one row per mindmap) on
-   top of the usual New/Rename/Delete actions, not just a few fixed
-   options. */
 .mm-menu {
   position: absolute; top: 100%; left: 50%; transform: translateX(-50%); z-index: 5;
   margin-top: 6px; background: var(--panel); border: 1px solid var(--border);
   min-width: 160px; max-width: 240px; max-height: 320px; overflow-y: auto;
   display: flex; flex-direction: column;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-  /* Same fix as this page's own .mm-suggestions below -- without it,
-     scrolling this list (one row per mindmap, can run long) past its
-     own top/bottom bound chains into the next scrollable ancestor
-     instead of just stopping there. */
   overscroll-behavior: contain;
 }
 .mm-menu-item {
@@ -52,18 +33,8 @@
 }
 .mm-menu-item:hover { background: var(--panel-2); color: var(--gold); }
 .mm-menu-item.active { color: var(--gold); }
-/* Delete mindmap picks up the extra .danger class for its hover color
-   just below, but .danger alone is also button.danger's selector
-   (myscape.css) -- element+class beats this file's plain .mm-menu-item
-   on every property they both set (padding, font-size, color, border,
-   background), and button.danger also sets width: 100%, which
-   .mm-menu-item never sets at all. Left alone, that made Delete
-   mindmap render as a full-width, bigger-padding, red-bordered pill
-   instead of a plain menu row the same size as New/Rename mindmap
-   above it. Reset every one of those properties back to
-   .mm-menu-item's own values so .danger here only ever does what the
-   :hover rule below already intended -- redden the text on hover,
-   nothing else. */
+/* button.danger (myscape.css) outranks .mm-menu-item and sets width: 100%; reset
+   so .danger only reddens the text on hover. */
 .mm-menu-item.danger {
   width: auto;
   background: none;
@@ -73,13 +44,8 @@
   font-size: 11.5px;
 }
 .mm-menu-item.danger:hover { color: var(--red); }
-/* Delete mindmap's armed "Are you sure?" state (see closeMenu's
-   own comment in the script for when this gets applied/cleared) --
-   same red-tint treatment button.danger:hover already uses
-   elsewhere (myscape.css), just held permanently instead of only
-   while the pointer happens to be over it, since this one has to
-   stay legible as "you're about to delete something" even after
-   the player's moved their mouse to actually click it again. */
+/* Armed "Are you sure?" state (closeMenu in the page script); held permanently,
+   unlike :hover. */
 .mm-menu-item--confirm,
 .mm-menu-item--confirm:hover {
   color: var(--red);
@@ -87,27 +53,13 @@
 }
 .mm-menu-divider { border-top: 1px solid var(--border); margin: 4px 0; }
 
-/* The mindmap-switch rows (the player's own mindmap names) are
-   centered same as the New/Rename/Delete actions below them, but stay
-   normal-case -- a typed name uppercased everywhere it shows up would
-   be a much bigger visual change than just centering it, and nothing
-   asked for that. */
 .mm-menu-switch { text-align: center; }
-/* The New/Rename/Delete actions -- centered and all-caps to read as
-   actions rather than more list entries. */
 #mmMenuNew, #mmMenuDuplicate, #mmMenuRename, #mmMenuDelete { text-align: center; text-transform: uppercase; }
 
-/* Inline new/rename form -- same shape as .pg-setup-form
-   (purchase-goals.css), duplicated for the same self-contained-
-   stylesheet reason as .mm-menu above. */
 .mm-name-form { display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 14px; }
 .mm-name-form input[type="text"] { flex: 1 1 280px; max-width: 360px; }
-/* Site-wide standard: a required-field miss (saving with no name
-   typed) is a red border only, never a popup or inline message. The
-   .mm-name-form ancestor + [type="text"] compound outranks this
-   file's own rule above (and myscape.css's shared input[type="text"]
-   rule) on specificity -- same trick as .pg-setup-form's own .invalid
-   rule (purchase-goals.css). */
+/* Required-field miss is a red border only. The .mm-name-form + [type="text"]
+   compound outranks myscape.css's input[type="text"] rule. */
 .mm-name-form input[type="text"].invalid { border-color: var(--red); }
 button.primary#mmNameSave, .mm-name-form-save {
   width: auto; flex: 0 0 auto;
@@ -126,16 +78,10 @@ button.primary#mmNameSave, .mm-name-form-save {
 .btn-secondary:hover { border-color: var(--gold-dim); color: var(--text); }
 .btn-secondary:disabled { opacity: 0.5; cursor: default; }
 
-/* ---- Canvas -------------------------------------------------------- */
+/* Canvas */
 
-/* A fixed-height viewport, not "however tall the tree is" -- a mindmap
-   can grow arbitrarily wide/tall (that's the whole point), so it pans
-   and zooms inside a stable frame instead of pushing the rest of the
-   page around every time a node is added. position: relative anchors
-   the zoom controls (absolute) and #mmWorld (also absolute, panned/
-   zoomed via its own transform) against this box's own top-left corner.
-   touch-action: none stops the browser's own scroll/zoom gestures from
-   fighting the pointer-drag panning below (see the script). */
+/* Fixed-height frame so the tree pans/zooms without reflowing the page.
+   touch-action: none keeps browser gestures from fighting drag panning. */
 .mm-canvas {
   position: relative; overflow: hidden;
   height: 620px;
@@ -144,75 +90,29 @@ button.primary#mmNameSave, .mm-name-form-save {
 }
 .mm-canvas.panning { cursor: grabbing; }
 
-/* The "fill the browser window" toggle (mmFullscreenBtn/setFullscreen
-   in the script) -- NOT the real Fullscreen API (no browser chrome or
-   OS taskbar goes away, no permission prompt, Escape still just backs
-   out of this the same way it would close anything else) -- just this
-   canvas escaping .wrap's 880px cap and .page's padding to pin itself
-   to the viewport instead, the same "ignore every ancestor, cover the
-   screen" trick a plain modal overlay uses. inset: 0 alone determines
-   the new width (position: fixed with both left/right set computes it
-   from the viewport, same as .mm-canvas's own un-fullscreened width
-   was always auto to begin with) -- height still needs its own
-   override here since the un-fullscreened height above is a fixed
-   620px, not auto. --panel (opaque) rather than --panel-translucent
-   (the un-fullscreened background just above) or --bg (the page's
-   own base tone, tried here first and reverted -- it read as the
-   canvas itself changing color rather than just filling the screen)
-   -- same panel color the canvas already normally is, just without
-   the alpha, since --panel-translucent's own 18% see-through would
-   otherwise let the header/footer this now covers edge to edge bleed
-   faintly through it. */
+/* "Fill the window" mode (setFullscreen), not the Fullscreen API: escapes
+   .wrap's 880px cap and .page padding. Height is overridden since the base is a
+   fixed 620px. Opaque --panel so the covered header/footer do not bleed through. */
 .mm-canvas.mm-fullscreen {
   position: fixed; inset: 0; z-index: 100;
   height: auto; border: none;
   background: var(--panel);
 }
 
-/* transform-origin: 0 0 so panX/panY (translate) and zoom (scale) in
-   the script compose the way they're computed there -- top-left as
-   the fixed point, not the element's own center. The transition makes
-   every zoom change (the +/-/fit/reset controls, the wheel) glide
-   smoothly to its new scale/pan instead of snapping there in one
-   frame -- but a smoothed transform would also make click-drag
-   panning visibly lag behind the cursor, so the pan handlers in the
-   page script zero out transitionDuration for the span of an actual
-   drag and hand it back afterward; this rule is only ever "live"
-   during a zoom. */
+/* transform-origin: 0 0 so translate/scale compose from the top-left. Drag
+   handlers zero transitionDuration so panning does not lag. */
 .mm-world {
   position: absolute; top: 0; left: 0; transform-origin: 0 0;
   transition: transform 0.18s ease-out;
-  /* NOT will-change: transform (tried it, reverted it -- see git log).
-     The theory ("give this shared layer its own stable, persistent
-     GPU layer so a child's own promotion/demotion doesn't drag it
-     into a re-rasterize too") was reasonable, and matched the pattern
-     every OTHER blur bug in this file has had -- but the result was
-     permanent blur across the whole canvas instead of a transient one
-     around whatever triggered it, which is a well-documented failure
-     mode of forcing a persistent compositing layer of its own: the
-     browser rasterizes that layer at a fixed resolution up front
-     rather than the display's actual device pixel ratio, and unlike a
-     layer that's only promoted for the duration of a real transition
-     (which gets to re-rasterize crisp once it settles), a layer that
-     NEVER stops being "promoted" never gets that chance to correct
-     itself. Same underlying mistake as the .mm-edge-btn
-     will-change: opacity regression above, just applied to the large
-     shared layer instead of hundreds of small ones -- both ended up
-     permanent rather than transient. Whatever fix the search-dropdown-
-     scroll blur (see .mm-suggestions' own comment on the mechanism)
-     still needs, it isn't a persistent will-change here. */
+  /* No will-change: transform: a permanent layer is rasterized at a fixed scale,
+     not the device pixel ratio, and stays blurry. */
 }
 
 .mm-lines { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .mm-lines path { stroke: var(--border); stroke-width: 1.5; fill: none; }
 
-/* Undo/redo share this same floating group with the zoom buttons
-   (rather than getting their own corner) deliberately -- the canvas's
-   top-left is where a plain click-on-empty-space-to-deselect gesture
-   naturally lands near a freshly-created mindmap's root node, so a
-   second button cluster planted there risks eating that click. Keeping
-   every floating control in one corner leaves the rest of the canvas,
-   including that one, unambiguously "empty space." */
+/* Undo/redo share the zoom group so the top-left stays free for
+   click-to-deselect near a new root node. */
 .mm-zoom-controls {
   position: absolute; top: 10px; right: 10px; z-index: 3;
   display: flex; flex-direction: column; gap: 4px;
@@ -223,54 +123,24 @@ button.primary#mmNameSave, .mm-name-form-save {
   display: flex; align-items: center; justify-content: center;
 }
 .mm-zoom-controls button:hover { border-color: var(--gold-dim); color: var(--text); }
-/* A thin rule between the undo/redo pair and the zoom buttons below --
-   same group, but a visual seam marking them as two different kinds
-   of action (edit history vs. view). */
 .mm-zoom-divider { height: 1px; background: var(--border); margin: 2px 2px; }
-/* Undo/redo disable themselves (see updateHistoryButtons in the
-   script) rather than disappearing, so the layout never shifts --
-   same reasoning as any other disabled control site-wide. The zoom
-   in/out buttons share this exact rule too (see updateZoomButtons),
-   dimming whichever direction is already at MIN_ZOOM/MAX_ZOOM. */
 .mm-zoom-controls button:disabled {
   opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-dim);
 }
 #mmZoomFit svg, #mmEditModeBtn svg, #mmUndoBtn svg, #mmRedoBtn svg, #mmFullscreenBtn svg { display: block; }
 
-/* The Edit Mode pencil toggle -- its own row below the zoom cluster,
-   separated by the same .mm-zoom-divider seam the undo/redo pair
-   uses above the zoom buttons (same "different kind of action" logic:
-   view/navigate vs. edit). Plain --text-dim like every other zoom
-   button while off; solid gold border+icon while on (see
-   updateEditModeButton in the script) -- the one control in this
-   whole cluster that STAYS a certain color rather than just
-   hover-brightening, since it's a persistent mode indicator, not a
-   one-shot action button. */
 #mmEditModeBtn.active {
   border-color: var(--gold); color: var(--gold);
 }
 #mmEditModeBtn.active:hover { border-color: var(--gold); color: var(--gold); }
 
-/* Same persistent-mode-indicator treatment as Edit Mode's own .active
-   above, for the same reason -- while filling the browser window this
-   is the one button in the cluster that stays gold rather than just
-   hover-brightening, since it's a mode you're currently in, not a
-   one-shot action. */
 #mmFullscreenBtn.active {
   border-color: var(--gold); color: var(--gold);
 }
 #mmFullscreenBtn.active:hover { border-color: var(--gold); color: var(--gold); }
 
-/* Hint pulse: fires when the player clicks a node's body while Edit
-   Mode is off (see glowEditModeButton in the script) -- a node isn't
-   clickable at all outside Edit Mode, so this points at the control
-   that actually turns it on instead of the click just doing nothing.
-   A fixed iteration count (2 -- "a couple of times") rather than
-   `infinite`, so it reads as a one-off nudge, not a persistent state
-   the way solid gold (.active, above) already means. Animates
-   border-color/color to the same gold .active ends up at, plus a soft
-   glow via box-shadow that .active itself doesn't use, so a glowing
-   button still reads as distinct from an already-active one. */
+/* Hint pulse (glowEditModeButton) when a node is clicked with Edit Mode off; two
+   iterations, so it reads as a nudge, not .active. */
 @keyframes mm-edit-glow {
   0%, 100% { box-shadow: none; border-color: var(--border); color: var(--text-dim); }
   50% { box-shadow: 0 0 8px 2px var(--gold); border-color: var(--gold); color: var(--gold); }
@@ -282,15 +152,9 @@ button.primary#mmNameSave, .mm-name-form-save {
   color: var(--text-faint); font-size: 12px; text-align: center;
 }
 
-/* ---- Nodes ----------------------------------------------------------
-   Fixed width AND height (not "as tall as the text needs") so the
-   layout the script computes is pure arithmetic -- every node's box is
-   exactly the same size the layout math assumed, so connector lines
-   always meet a node's real top/bottom-center with no per-node
-   measurement pass needed. Longer text wraps up to 2 lines and is
-   clipped with an ellipsis past that rather than growing the box (see
-   the -webkit-line-clamp block below) -- a rare case for a short goal/
-   label, and one that keeps every row's vertical spacing predictable. */
+/* Nodes
+   Fixed width and height so the layout math needs no measurement pass; text
+   clamps to 2 lines. */
 .mm-node {
   position: absolute; box-sizing: border-box;
   width: 160px; height: 46px;
@@ -300,79 +164,28 @@ button.primary#mmNameSave, .mm-name-form-save {
   text-align: center; font-size: 11.5px; letter-spacing: 0.02em; text-transform: uppercase;
   line-height: 1.25; cursor: pointer; user-select: none;
 }
-/* A node isn't clickable at all outside Edit Mode (see the
-   pointerdown delegation's own comment in the page script, and
-   renderCanvas, which toggles this class on the whole layer) -- the
-   plain cursor here says so instead of the "pointer" above, which
-   would otherwise invite a click that does nothing. The one thing
-   that still works without Edit Mode -- a gray node's own
-   manual-complete checkbox -- keeps its own "pointer" regardless,
-   since input[type="checkbox"]'s own rule (myscape.css) targets that
-   element directly rather than inheriting this one. */
 .mm-view-mode .mm-node { cursor: default; }
-/* Plain form -- gray/white's own free-typed label, unchanged from
-   before: a straight 2-line clamp on the label itself. */
 .mm-node-label {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
   width: 100%;
 }
-/* .mm-node sets user-select: none (a node isn't normal page text), but
-   the selected node's label becomes contenteditable, and contenteditable
-   relies on the same text-selection machinery user-select: none turns
-   off -- without this override the caret can't be placed and the
-   focus-then-select-all in the script's renderCanvas silently does
-   nothing. Only the root's (white) label is ever contenteditable now
-   (see renderCanvas's isInlineEditable) -- a gray node renames through
-   a text box in its own popover instead (see .mm-goal-fields below),
-   and every trackable color's text is derived from its goal, never
-   typed either way. */
+/* Restore selection (.mm-node is user-select: none): the root label is
+   contenteditable and needs it for caret and select-all (renderCanvas). */
 .mm-node-label[contenteditable="true"] {
   cursor: text; outline: none; user-select: text; -webkit-user-select: text;
 }
-/* Icon form -- a trackable node's goal-type icon (see
-   GOAL_TYPE_ICON_BY_COLOR/goalDisplayText in the page script) sits to
-   the left of its own derived text; the clamp moves onto the inner
-   text span since the outer label is now a flex row, not a
-   webkit-box, and the icon needs to stay a fixed size regardless of
-   how much the text wraps. */
 .mm-node-label-with-icon {
   display: flex; align-items: center; justify-content: center; gap: 5px;
 }
 .mm-node-icon {
   width: 16px; height: 16px; flex: none; object-fit: contain;
-  /* The source icons are tiny (13x13) OSRS sprites -- crisp
-     nearest-neighbor scaling reads far better blown up than the
-     browser's default smoothing, which just turns them to mush. */
   image-rendering: pixelated;
 }
-/* A gray node's own manual-complete checkbox sits in this exact same
-   left slot (see renderCanvas's own comment) -- same 16x16 sizing as
-   the icon above (input[type="checkbox"]'s own base rule in
-   myscape.css already matches it exactly), just flex: none added here
-   so it can't get squeezed by a long label next to it. Its color
-   treatment diverges from that shared base rule on purpose though --
-   it's sitting right on a node's own face rather than a settings row,
-   so it stays subtler: a dark-but-not-flat-black box by default (a
-   shade between the node's own --panel-2 fill and the page's own
-   --bg behind everything -- darker than the node it sits on, but
-   never quite as dark as the page itself) rather than the base rule's
-   even darker near-black, and a black OUTLINE -- border plus a
-   slightly thinner check than the base rule's own (1.5px instead of
-   2px -- see the ::after override below), rather than the base rule's
-   solid gold fill with a dark check cut out of it. Black rather than
-   gold here on purpose: the node's own frame/fill is what announces
-   "done" now (see .mm-node-gray.completed's own comment below), so
-   the checkbox itself stays quiet rather than competing with it. The
-   background DOES switch once checked though, to a gray so the black
-   outline/check actually reads against it instead of nearly vanishing
-   into the idle box's own near-black -- a step darker than --gray-
-   bright itself (rather than that exact value) so the small checkbox
-   still reads as its own separate control sitting on top of the
-   node's own (now much bigger) completed fill, not just a blank patch
-   of the same color. (input.mm-node-checkbox matches the base rule's
-   own specificity so these actually win, source order alone wouldn't
-   be reliable here.) */
+/* Manual-complete checkbox, subtler than the myscape.css base (it sits on the
+   node face): black outline and 1.5px check, since the completed fill already
+   says "done". Checked background is a step darker than --gray-bright to stand
+   out from the fill. input.mm-node-checkbox matches the base specificity. */
 .mm-node-checkbox { flex: none; }
 input.mm-node-checkbox { background: #1b1b1c; }
 input.mm-node-checkbox:checked { background: #55555a; border-color: #000; }
@@ -381,73 +194,26 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; min-width: 0;
 }
-/* An item goal's leading "x" (see renderNodeLabelHtml in the page
-   script) stays lowercase against .mm-node's own inherited
-   text-transform: uppercase -- everything else in the label still
-   renders upper as normal. */
 .mm-node-x-lower { text-transform: lowercase; }
 
-/* ---- Note flip (renderCanvas/renderNoteFieldHtml) ---------------------
-   A node with a note (see the popover's own note textarea) gets a
-   small paper-icon button pinned to its own top-right corner --
-   clicking it flips the node over via a real 3D rotateY on an inner
-   wrapper (never .mm-node itself, which is what the layout math's
-   left/top/width/height actually positions/sizes -- see .mm-node's own
-   comment above), landing on a back face that shows the note text. The
-   same button then shows a back-arrow instead, in the exact same spot,
-   to flip back. Works from plain browsing (a view action, not an edit
-   one) the same way the gray manual-complete checkbox above does, and
-   is excluded from the pointerdown delegation's Edit-Mode gate the same
-   way that checkbox is (see the page script). It USED to be hidden for
-   the whole duration of Edit Mode, by request -- reversed by a later
-   request: it stays visible now (Edit Mode already pins its own "+"
-   edge buttons to a node's corners, see .mm-edge-btn, and the two
-   don't collide -- opposite corners) but is inert for that whole
-   duration instead (see the :not(.mm-view-mode) rule right below),
-   since flipping a node over isn't itself part of editing and
-   setEditMode force-flips every node back to its front face the
-   instant Edit Mode turns on anyway (see the page script) -- nothing
-   to flip TO from here even if it did respond to a click.
-   A node with no note gets none of this at all -- no button, no
-   flip-inner wrapper, nothing to flip TO -- so it costs nothing in the
-   common case. */
+/* Note flip (renderCanvas/renderNoteFieldHtml)
+   The flip runs on an inner wrapper, never .mm-node, whose box the layout math
+   positions. Inert during Edit Mode (rule below). */
 .mm-node-note-toggle {
   position: absolute; top: 2px; right: 2px; z-index: 1;
   width: 14px; height: 14px; padding: 0;
   background: none; border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  /* A shade lighter than the panel-2 fill every non-completed color
-     shares while just outlined (see the per-color rules below) -- one
-     shared rule covers every color here, gray included, since there's
-     no color of its own to be specific about until it's actually
-     filled in (see the .completed overrides right after). */
   color: #676768;
 }
 .mm-node-note-toggle svg { width: 12px; height: 12px; display: block; }
-/* #mmNodesLayer only carries .mm-view-mode outside Edit Mode (see
-   renderCanvas's own nodesLayer.classList.toggle) -- so this is what
-   makes the note-toggle button inert specifically WHILE Edit Mode is
-   on, per the note toggle's own comment above: pointer-events: none
-   makes a click on it fall straight through to whatever's underneath
-   (the node itself) rather than flipping anything, and the dimmed
-   opacity + default cursor read as "here, but not clickable right
-   now" rather than a plain visual bug. The click delegation's own
-   note-toggle handler (see the page script) also checks MM.editMode
-   before acting, so this stays inert even for a click that somehow
-   still lands on the button itself (a stray touch event, dev tools,
-   etc.) instead of relying on pointer-events alone. */
+/* Inert in Edit Mode (#mmNodesLayer lacks .mm-view-mode); the click handler also
+   checks MM.editMode. */
 #mmNodesLayer:not(.mm-view-mode) .mm-node-note-toggle {
   pointer-events: none; cursor: default; opacity: 0.35;
 }
-/* Completed: filled solid with that color's own fill-color (see each
-   .mm-node-<color>.completed rule below), so the icon becomes a shade
-   DARKER than that exact fill instead -- one rule per color, same
-   "match what it's sitting on, just a shade off" logic the default
-   rule above already follows against panel-2. Gray's completed fill is
-   var(--gray-bright), not a hue of its own (see .mm-node-gray.completed's
-   own comment below), so it gets the equivalent dark-gray treatment,
-   recalibrated to the same ~78% lightness ratio every other color's
-   own darkened icon uses against its fill. */
+/* Completed: icon a shade darker than the fill; gray uses the same ~78%
+   lightness ratio. */
 .mm-node-gray.completed .mm-node-note-toggle { color: #56565a; }
 .mm-node-red.completed .mm-node-note-toggle { color: #96463b; }
 .mm-node-orange.completed .mm-node-note-toggle { color: #9d5f30; }
@@ -457,23 +223,9 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-node-purple.completed .mm-node-note-toggle { color: #6c549d; }
 .mm-node-white.completed .mm-node-note-toggle { color: #b8b3a8; }
 
-/* The actual flip: an immediate hard cut, no animation -- flipNodeNote
-   (the page script) just toggles which face is in the DOM and
-   re-renders. Earlier drafts animated this (first a true 3D rotateY,
-   then a 2D scaleX squish once the rotateY version turned out to
-   soften text/icons across the WHOLE canvas, not just the flipped
-   node -- transform-style: preserve-3d + backface-visibility: hidden
-   are a well-documented pairing for exactly that, and the ancestor
-   they were degrading was .mm-world, the one transformed/panned/
-   zoomed layer every node and popover on the canvas already shares),
-   but the animation itself wasn't wanted on its own merits either, so
-   .mm-node-flip-inner carries no transform/transition of its own at
-   all now -- only ever ONE face is in the DOM at a time (see
-   renderCanvas's own isFlipped branch), nothing to hide or ease
-   between. inset:0 fills .mm-node's full bordered box (ignoring its
-   own padding, the same way any absolutely positioned child of a
-   padded box does), so the face itself reproduces that 4px/10px
-   padding instead. */
+/* Hard cut, no animation: flipNodeNote swaps faces in the DOM. rotateY
+   (preserve-3d + backface-visibility) blurred text across the whole canvas via
+   .mm-world. inset: 0 ignores padding, so the face re-applies 4px/10px. */
 .mm-node-flip-inner { position: absolute; inset: 0; }
 .mm-node-face {
   position: absolute; inset: 0;
@@ -481,80 +233,23 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   padding: 4px 10px; box-sizing: border-box;
 }
 .mm-node-face-back {
-  /* The note is the player's own free-form prose, not a short
-     goal/label -- plain case and left-aligned (against .mm-node's own
-     inherited uppercase/centered text), and scrollable rather than
-     clamped/truncated the way the front face's label is, so a longer
-     note stays fully readable inside the same fixed-size card instead
-     of losing most of it. */
   text-transform: none; letter-spacing: normal; text-align: left;
   font-size: 9.5px; line-height: 1.35;
 }
-/* overflow: hidden, not overflow-y: auto -- a note is hard-capped to 2
-   lines end to end now (see clampNoteInput in the page script), with
-   this as the backstop: nothing should ever actually need clipping
-   here in normal use, but should the cap ever be circumvented (an
-   already-saved note from before this change, say), the failure mode
-   is silently losing a would-be 3rd line rather than growing a
-   scrollbar -- a scrollable overflow:auto region with real overflowing
-   content is exactly what promotes to its own compositing layer and
-   forces .mm-world (this box's ancestor, sharing one flattened layer
-   with every node/popover on the canvas) to re-rasterize around it,
-   which is the same mechanism behind the search-dropdown blur bug this
-   file's history spent several rounds chasing (see
-   getFloatingSuggestionsEl's own comment in the page script for the
-   full account) -- just with no "move it outside .mm-world" escape
-   hatch available here the way that dropdown got, since this box IS
-   the node. overscroll-behavior: contain kept, NOT dropped -- this IS
-   the box clampNoteInput measures against, so it should fit clean, but
-   .mm-note-wrap's own textarea (a DIFFERENT box, clamped against THIS
-   one's metrics rather than its own) turned out to still have a few px
-   of real scrollTop range even with overflow: hidden set, confirmed via
-   Playwright -- cheap insurance here too against the same class of
-   subpixel/box-model mismatch, rather than assuming this element is
-   somehow immune to it. */
+/* overflow: hidden, not auto: notes are capped to 2 lines (clampNoteInput). A
+   scroller with overflowing content gets its own layer and forces .mm-world to
+   re-rasterize (see .mm-suggestions). overscroll-behavior: contain stays for
+   residual scrollTop. */
 .mm-node-note-text { width: 100%; height: 100%; overflow: hidden; overscroll-behavior: contain; white-space: pre-wrap; word-break: break-word; }
 
-/* The selected node's own brighten treatment + stacking rule is
-   defined further below, alongside the edge buttons/color popover
-   it's shown with. */
 
-/* Each color is OUTLINED (panel background, colored border, plain
-   text) by default -- a goal that hasn't been met yet -- and only
-   becomes a solid FILL once the server says it's actually complete
-   (see evaluate_completion in app/mindmaps.py, and the `completed`
-   flag build_mindmaps_state attaches to every node; renderCanvas adds
-   the ".completed" class from that flag, nothing here decides it).
-   The filled state keeps the exact same background + hover-brightened
-   variant this page always used (background-color only, the same
-   "brighten just the box, not its content" hover treatment used for
-   .loot-npc-box/.gear-slot elsewhere on the site, not
-   filter: brightness(), so a node's own text doesn't brighten along
-   with it). Text is always BLACK once filled (a dark, same-hue tint
-   per color rather than flat #000 -- softer against a saturated fill
-   -- except gray/white, which have no hue of their own to tint from,
-   so they get a plain near-black instead) and always var(--text)
-   (white) while outlined, since there's no fill color behind it to
-   contrast against yet -- deliberately the SAME two colors for every
-   type, never picked per-color for contrast, so a glance at a node's
-   text color alone always says filled-or-not before its border color
-   has to. Order matches NODE_COLORS in app/mindmaps.py -- gray, red,
-   orange, yellow, green, blue, purple, white (no gold or amber here:
-   those stay reserved for the site accent color and Purchase Goals'
-   affordability states respectively, see --orange/--yellow's own
-   comment in myscape.css). */
+/* Outlined until the server marks the goal complete (evaluate_completion in
+   app/mindmaps.py; renderCanvas adds .completed), then filled. Hover brightens
+   only background-color. Filled text is a dark same-hue tint (near-black for
+   gray/white); outlined text is var(--text). Order matches NODE_COLORS in
+   app/mindmaps.py; gold/amber are reserved (--orange/--yellow in myscape.css). */
 .mm-node-gray { background: var(--panel-2); border-color: var(--gray-bright); color: var(--text); }
 .mm-node-gray:hover { background-color: rgb(51, 51, 54); }
-/* Gray has no real "goal color" to fill in with, so its completed
-   state doesn't introduce one either -- the border stays exactly
-   var(--gray-bright), same as the unfinished state, never gold.
-   Instead that same border color gets poured in as the fill once
-   complete. That fill is a dedicated, brighter neutral gray rather
-   than reusing the site's ordinary (much dimmer) --border value --
-   see --gray-bright's own comment in myscape.css -- so it reads as
-   "done" with the same visual weight every other node color's own
-   completed fill has, and since it's shared with the border above,
-   the unfinished frame gets that same brightening for free. */
 .mm-node-gray.completed { background: var(--gray-bright); border-color: var(--gray-bright); color: #1a1a1a; }
 .mm-node-gray.completed:hover { background-color: #7f7f85; }
 
@@ -593,26 +288,9 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-node-white.completed { background: var(--text); border-color: var(--text); color: var(--bg); }
 .mm-node-white.completed:hover { background-color: #ffffff; }
 
-/* The selected node needs to paint above its unselected siblings --
-   both for its own brighten treatment and for the edge buttons/color
-   popover below, which are its DOM children and would otherwise be at
-   the mercy of plain document order against other .mm-node boxes that
-   happen to sit nearby. */
-/* A shift-added node (see extendMultiSelect in the page script) gets
-   this exact same class/treatment -- there's no visually separate
-   "multi-select" mode, every currently-selected node just reads as
-   "selected" the same way. */
-/* Selection reads as the same BRIGHTEN feedback every button-like box
-   on the site already gives on hover/press (.gear-slot, .loot-npc-box,
-   .dash-card, .mm-segment-btn.active -- see their own comments), made
-   STICKY here rather than transient, instead of the gold ring this
-   used to draw. This lifts every selected node's panel-2 background by
-   the same rgb(51,51,54) amount those other boxes use; each color's
-   own already-established "brightened" hover shade (immediately above)
-   is reused as its SELECTED border (while outlined) or background
-   (once completed/filled) below, so a selected node ends up looking
-   exactly like it does mid-hover, just held instead of momentary.
-   Order matches the color rules above. */
+/* Selection is the sticky hover brighten (rgb(51,51,54) lift, as
+   .gear-slot/.loot-npc-box): each color's hover shade is reused as the selected
+   border (outlined) or background (completed). */
 .mm-node.selected { z-index: 2; background-color: rgb(51, 51, 54); }
 .mm-node-red.selected { border-color: #dd6857; }
 .mm-node-red.completed.selected { background-color: #dd6857; }
@@ -629,15 +307,9 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-node-white.selected { border-color: #ffffff; }
 .mm-node-white.completed.selected { background-color: #ffffff; }
 
-/* ---- Per-node hover controls -----------------------------------------
-   Small "+" buttons on each of a node's four edges, shown only while
-   hovering that node -- the direct replacement for the old toolbar's
-   +Parent/+Child/+Sibling buttons. top = parent, bottom = child,
-   left/right = sibling (placed before/after the node respectively).
-   Positioned as children of .mm-node itself (already position:
-   absolute) so they ride along with it through every pan/zoom without
-   any extra coordinate math, matching mindmaps.css's boxy/no-radius
-   look rather than a rounded "chip" treatment. */
+/* Per-node hover controls
+   "+" buttons on a node's edges: top = parent, bottom = child, left/right =
+   sibling. Children of .mm-node so they follow pan/zoom. */
 .mm-edge-btn {
   position: absolute; z-index: 3;
   width: 14px; height: 14px; box-sizing: border-box;
@@ -647,72 +319,28 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   cursor: pointer; padding: 0;
   opacity: 0; pointer-events: none;
 }
-/* No transition on that opacity toggle (deliberately -- this used to
-   fade in over 0.12s). Every node lives inside .mm-world, which is
-   itself an actively-transformed layer (see the wheel-zoom fix above
-   for the full mechanism), and a CSS transition on ANY property of an
-   element inside that shared layer gets Chrome to auto-promote/demote
-   that element to its own compositing layer for the transition's
-   duration -- which forces a repaint of the whole shared .mm-world
-   layer around it. With a transition here, that promote-on-hover-in /
-   demote-on-hover-out pair fired on literally every mouse-over of a
-   node in Edit Mode, which is exactly what was blurring every other
-   node's text for half a second and then clearing. An instant
-   opacity flip needs no such layer, so there's nothing to promote or
-   demote -- same "hard cut instead of an animated property" fix as
-   the note flip-card above, applied here for the same underlying
-   reason rather than by preference. */
-/* Edge buttons show while hovering the node itself, but NOT while
-   hovering the popover below it (color swatches, or the "add shared
-   child" button -- see .mm-node-popover below) -- the popover is
-   still a DOM descendant of .mm-node (see its own comment below for
-   why), so a plain ".mm-node:hover" alone stays matched the whole
-   time the mouse is over the popover too, which would otherwise leave
-   the edge "+" buttons visibly lit up while the player's actually
-   down in that panel. :has() lets the rule opt back out exactly then. */
+/* No transition: one on anything inside .mm-world makes Chrome promote the
+   element to its own layer and repaint the shared one, blurring other nodes on
+   every hover. */
+/* Hide while hovering the popover, which is a DOM descendant so .mm-node:hover
+   stays matched. */
 .mm-node:hover:not(:has(.mm-node-popover:hover)) .mm-edge-btn { opacity: 1; pointer-events: auto; }
-/* While ANY popover is open, a DIFFERENT node's edge "+" buttons must
-   never show on hover, even though the rule right above would
-   otherwise light them up same as always. The popover-owning node
-   gets z-index: 2 (see .mm-node.selected below) precisely so its own
-   popover clears the rest of the canvas, but .mm-edge-btn's own
-   z-index: 3 is scoped to ITS OWN node -- an ordinary node has no
-   z-index of its own to contain that inside, so it leaks straight out
-   to the shared stacking context .mm-node.selected's z-index: 2 lives
-   in, and 3 beats 2. A neighboring node that happens to sit partly
-   under the popover (mindmaps have no fixed layout bound to keep them
-   apart) would then hover its edge buttons right on top of it. Higher
-   specificity (the #id) rather than raising some z-index further --
-   this is a "shouldn't respond to hover at all right now" rule, not a
-   stacking fix, exactly what was asked for; the popover's own node
-   keeps working normally via :not(:has(> .mm-node-popover)) below. */
+/* While a popover is open, other nodes' edge buttons must not show:
+   .mm-edge-btn's z-index: 3 leaks into the shared stacking context and beats the
+   popover node's z-index: 2. The #id raises specificity instead of z-index. */
 #mmNodesLayer:has(.mm-node-popover) .mm-node:not(:has(> .mm-node-popover)) .mm-edge-btn {
   opacity: 0; pointer-events: none;
 }
 .mm-edge-btn:hover { background: var(--gold); color: #1a1408; border-color: var(--gold); }
-/* Centered exactly on the node's own border -- half the button
-   inside, half outside -- rather than sitting fully outside it. */
 .mm-edge-top { top: -7px; left: 50%; transform: translateX(-50%); }
 .mm-edge-bottom { bottom: -7px; left: 50%; transform: translateX(-50%); }
 .mm-edge-left { left: -7px; top: 50%; transform: translateY(-50%); }
 .mm-edge-right { right: -7px; top: 50%; transform: translateY(-50%); }
 
-/* ---- Per-node popover -----------------------------------------------
-   The anchor node's (MM.selectedNodeId's) popover -- color swatches +
-   delete when it's the only node selected, or a single "add shared
-   child" button once a second node's been shift-added (see
-   renderColorPopoverHtml/renderSharedChildPopoverHtml in the page
-   script; only one is ever shown at a time for a given node). Appears
-   directly below that node instead of in a panel docked under the
-   canvas -- replaces the old toolbar's swatch row and
-   +Parent/+Child/+Sibling/Delete buttons (the add-relative ones are
-   now the edge buttons above; delete didn't have anywhere else to go
-   once the toolbar was removed, so it lives here too). Cleared to sit
-   below the bottom edge button's own outer reach (that button
-   straddles the node's border and pokes out only 7px past it -- see
-   .mm-edge-bottom above) rather than right under the node, so a
-   selected node's own "add child" button never ends up underneath
-   this popover's higher z-index and unclickable. */
+/* Per-node popover
+   Below the anchor node (MM.selectedNodeId). Offset past the bottom edge
+   button's 7px reach (.mm-edge-bottom) so it stays clickable under this higher
+   z-index. */
 .mm-node-popover {
   position: absolute; z-index: 4; top: calc(100% + 22px); left: 50%; transform: translateX(-50%);
   background: var(--panel); border: 1px solid var(--border); padding: 10px;
@@ -720,34 +348,14 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
   cursor: default; /* .mm-node itself is cursor: pointer -- this panel isn't the node */
 }
-/* Edit Mode's popover additionally carries a goal-criteria form (see
-   .mm-goal-fields below), which needs more breathing room than the
-   plain swatches-only popover a gray node's view-mode toggle uses --
-   widened rather than sized to content so every goal type's form
-   (a search-field kc form vs. a 1-field gp form) settles at the same
-   width instead of the popover visibly resizing type to type. Wider
-   than the old 2-column picker's 208px -- the 3-column, icon-left/
-   text-right buttons need more horizontal room per button than the
-   old icon-on-top layout did. */
 .mm-node-popover-wide { width: 250px; }
 
-/* ---- Goal-type picker (renderGoalTypePickerHtml) ---------------------
-   Replaces the old plain color-swatch row -- a 3-column grid of
-   icon+label buttons, one per goal type (KC/ITEM/GP/SKILL/QUEST/
-   DIARY/MANUAL, in that array order -- see GOAL_TYPE_PICKER in the
-   page script), so the picker reads as "what kind of goal" rather
-   than just "what color". Clicking one still only ever sends a
-   `color` (see the click delegation), same request as the old
-   swatches. The array's own order IS the grid position (row 1
-   KC/ITEM/GP, row 2 SKILL/QUEST/DIARY, row 3 MANUAL alone) -- a plain
-   3-up grid with no explicit placement needed. */
+/* Goal-type picker (renderGoalTypePickerHtml)
+   3-column grid in GOAL_TYPE_PICKER order (KC/ITEM/GP, SKILL/QUEST/DIARY,
+   MANUAL); a click sends only a `color`. */
 .mm-type-picker {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; width: 100%;
 }
-/* Icon on the left, label text on the right (row, not column) -- the
-   HTML already emits the icon/swatch markup before the label span
-   (see renderGoalTypePickerHtml), so this is purely a flex-direction
-   change from the old icon-on-top layout. */
 .mm-type-btn {
   display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 5px;
   background: var(--panel-2); border: 1px solid var(--border); padding: 6px 6px;
@@ -758,25 +366,10 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-type-btn.active { border-color: var(--gold); color: var(--gold); }
 .mm-type-btn-icon {
   width: 18px; height: 18px; object-fit: contain; flex: none;
-  /* The source icons are tiny (13x13) OSRS sprites -- crisp
-     nearest-neighbor scaling reads far better blown up than the
-     browser's default smoothing, which just turns them to mush. */
   image-rendering: pixelated;
 }
-/* MANUAL's own swatch -- same small colored box the old plain color
-   picker used, but now it looks exactly like its own node's manual-
-   complete checkbox once checked (a dark-gray box, black outline
-   and check -- see input.mm-node-checkbox:checked above, including
-   its own comment on why that background is a step darker than
-   --gray-bright rather than that value itself) rather than a
-   diagonal red "no tracked goal" slash, standing in for a real icon
-   image the way every other option in this grid has one. Static --
-   always drawn "checked" -- since this is what CHOOSING manual looks
-   like, not an interactive toggle of its own; scaled up slightly from
-   the node checkbox's own 16x16/4x8 proportions to this grid's 18x18
-   icon slot, same 1.5px check thickness as that real checkbox for the
-   exact same "slightly thinner than the site's other checkboxes"
-   reason (see its own comment). */
+/* Static always-checked copy of the node checkbox
+   (input.mm-node-checkbox:checked), scaled to the 18x18 icon slot. */
 .mm-type-btn-swatch {
   position: relative; width: 18px; height: 18px; flex: none; background: var(--panel-2); border: 1px solid var(--border);
 }
@@ -789,23 +382,9 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 }
 .mm-type-btn-label { text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* The popover's bottom row once Edit Mode's on -- Save (every non-root
-   node now, including manual -- see renderNodePopoverHtml) and Delete
-   sit side by side here instead of Save living inside .mm-goal-fields
-   above Delete on its own line. Each button just takes an equal share
-   of the row; :has(...:only-child) below is what still centers a lone
-   Delete rather than stretching it full-width, for whatever popover
-   genuinely has no Save at all (there's none today -- every type gets
-   one -- but this is cheap insurance against that ever changing again
-   rather than something to rely on right now). */
 .mm-popover-actions {
   display: flex; flex-direction: row; gap: 8px; width: 100%; justify-content: center;
 }
-/* height: 25px matches the site-wide button height (see .loot-sort-tab
-   in loot-tracker.css, where that number comes from) -- scoped to just
-   these two buttons rather than raising .btn-secondary's own 32px
-   default, since mmNameCancel/.mm-add-shared-child-btn elsewhere in
-   this file share that base class but weren't part of this pass. */
 .mm-popover-actions .mm-goal-save-btn,
 .mm-popover-actions .mm-color-popover-delete {
   flex: 1 1 0; width: auto; height: 25px;
@@ -814,47 +393,25 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   flex: 0 1 auto; padding: 0 20px;
 }
 
-/* Save reads as the popover's primary action -- same gold-bg,
-   lighten-on-hover treatment button.primary/.gt-add-btn use elsewhere
-   on the site (myscape.css/goal-tracking.css), overriding the plain
-   grey .btn-secondary look it'd otherwise share with Delete right
-   next to it. Dark near-black text, not white -- every other gold
-   button on the site uses it for exactly this reason: white-on-gold
-   reads poorly against --gold's own brightness (#ff981f), while dark
-   text against it is comfortably high-contrast. */
+/* Primary action, as button.primary/.gt-add-btn. Dark text: white on --gold
+   (#ff981f) reads poorly. */
 .mm-goal-save-btn {
   background: var(--gold); border-color: var(--gold); color: #221c10;
 }
 .mm-goal-save-btn:hover { background: #ffab42; border-color: #ffab42; color: #221c10; }
 
-/* Shorter than .btn-secondary's own default 32px -- this one sits in
-   a small popover, not a row of full-size buttons. */
 .mm-color-popover-delete { width: auto; height: 25px; align-self: center; }
 .mm-delete-btn:hover { border-color: var(--red); color: var(--red); }
 .mm-delete-btn:disabled:hover { border-color: var(--border); color: var(--text-dim); }
 
-/* renderSharedChildPopoverHtml's own single action -- same compact
-   sizing as .mm-color-popover-delete above, just wide enough for its
-   own (longer) label rather than sharing that exact rule. */
 .mm-add-shared-child-btn { width: auto; height: 22px; align-self: center; white-space: nowrap; }
 
-/* ---- Goal-criteria form (renderGoalFieldsHtml) -----------------------
-   A trackable node's (red/orange/yellow/green/blue/purple) type-
-   specific fields, OR a gray (manual) node's own name text box, shown
-   inside the node popover, Edit-Mode-only, with the actual "SAVE"
-   button living just below in .mm-popover-actions (alongside Delete)
-   rather than inside this wrapper. Marking a gray goal COMPLETE is a
-   separate thing entirely -- the checkbox right on the node itself
-   (see .mm-node-checkbox above), not anything in this popover. */
+/* Goal-criteria form (renderGoalFieldsHtml)
+   Type-specific fields, or a gray node's name box, in the Edit-Mode popover.
+   Save is in .mm-popover-actions. */
 .mm-goal-fields {
   display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: stretch;
 }
-/* Overrides myscape.css's own input[type=text/number] sizing (16px
-   font, 12px/14px padding -- sized for full-width page forms) down to
-   something that actually fits this compact popover. No <select>
-   left to theme any more -- the skill/diary fields' own dropdowns
-   were the last two (see renderLocalSearchFieldHtml/LOCAL_SEARCH_POOLS
-   in the page script), now search boxes like KC/ITEM/QUEST. */
 .mm-goal-fields input.mm-goal-input {
   width: 100%; box-sizing: border-box;
   background: #100e0b; border: 1px solid var(--border); border-radius: var(--radius);
@@ -863,116 +420,39 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 }
 .mm-goal-fields input.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-goal-fields input.mm-goal-input::placeholder { color: var(--text-faint); }
-/* Site-wide standard: a missing/out-of-range field is a red border
-   only, no message anywhere -- see validateGoalFieldsForSave,
-   validateSkillTarget and validateNodeText in the page script, which
-   are what actually toggle this. One rule at this ancestor covers
-   every field in the popover (plain targets, the KC/ITEM/QUEST search
-   boxes, the skill/area local-search boxes, the manual node's own
-   name field, and the kc goal's optional sinceDate below) since
-   they're all a plain <input class="mm-goal-input">, however deeply
-   nested under .mm-goal-fields their own wrapper div sits them. */
+/* Invalid: red border only, no message (validateGoalFieldsForSave,
+   validateSkillTarget, validateNodeText). One ancestor rule covers every nested
+   input.mm-goal-input. */
 .mm-goal-fields input.mm-goal-input.invalid { border-color: var(--red); }
-/* .mm-goal-save-btn itself is sized/laid out by .mm-popover-actions
-   above (it now sits there, not inside .mm-goal-fields). */
 
-/* The gray node's manual-complete toggle -- shown on its own (no
-   .mm-goal-fields wrapper, see the comment above), ONLY outside Edit
-   Mode now (ticking a goal off is a "using it" action, not an
-   "editing its criteria" one), so it needs to look right sitting
-   directly inside the bare .mm-node-popover shell in that view-mode
-   case. */
 .mm-manual-toggle-btn { width: auto; height: 24px; align-self: center; white-space: nowrap; padding: 0 14px; }
 
-/* ---- Goal search fields (renderSearchFieldHtml) -----------------------
-   The KC/ITEM/QUEST goals' NPC/item/quest search boxes -- same
-   debounced-dropdown pattern as Purchase Goals' own item search (see
-   .search-box/.suggestions/.suggestion in purchase-goals.css), just
-   under mm- prefixed names and sized to fit this compact popover
-   rather than duplicated verbatim, since mindmaps.css is loaded on a
-   different page and shares no rules with that stylesheet. */
 .mm-search-wrap { width: 100%; }
-/* This dropdown is NOT rendered as a child of .mm-search-wrap any more
-   (see renderSearchFieldHtml/getFloatingSuggestionsEl in the page
-   script) -- it's a single shared element appended straight to <body>
-   and positioned with `position: fixed` to track whichever search
-   input is currently focused, wherever that input currently sits on
-   screen after .mm-world's own pan/zoom transform.
-
-   Every earlier attempt at this fix tried to contain the side effects
-   of this list living INSIDE .mm-world instead: overscroll-behavior
-   below (still needed, see its own comment) was never the problem;
-   `contain: paint` was tried next and, confirmed by the user's own
-   screen recording, made the underlying blur WORSE -- it stopped
-   clearing on zoom the way it used to, staying blurry through an
-   entire pan/zoom and only clearing once the dropdown was removed
-   from the DOM by picking a result. Best guess at why: paint
-   containment's guarantee ("this box's paint can never affect
-   anything outside it") gave the browser license to keep this region
-   composited PERSISTENTLY instead of only while actively being
-   scrolled, since with paint fully contained there's no correctness
-   cost to doing so -- the same raster-scale-mismatch failure
-   will-change hit twice before (see .mm-world's own comment), just
-   triggered a different way. (Full history in git log: 6e1e22c added
-   overscroll-behavior, b3dbe5b reverted a will-change: transform
-   attempt on .mm-world itself, 06127ca added contain: paint here and
-   fc6da5c reverted it again once the recording showed it regressed.)
-
-   All of those shared one root cause: a scrollable overflow:auto
-   region with real overflowing content, sitting inside .mm-world's
-   own shared compositing layer, gets promoted to its own GPU layer by
-   the browser just for being a scroller ready to scroll smoothly --
-   not only while something's actively dragging/scrolling in it -- and
-   that promotion forces .mm-world to re-rasterize around it. Moving
-   this list OUTSIDE .mm-world's subtree entirely, rather than trying
-   yet another way to contain the promotion from the inside, sidesteps
-   that mechanism instead of fighting it: its own layer promotion
-   simply can't force a repaint of an ancestor it no longer has. */
+/* Not a child of .mm-search-wrap: one shared element on <body>, `position:
+   fixed`, tracks the focused input (getFloatingSuggestionsEl). A scrollable list
+   inside .mm-world is promoted to its own GPU layer, forcing .mm-world to
+   re-rasterize and blur node text; `contain: paint` and will-change made it
+   worse. */
 .mm-suggestions {
   display: none; position: fixed; z-index: 1000;
   background: var(--panel); border: 1px solid var(--border); max-height: 180px; overflow-y: auto;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
-  /* Scrolling this list no longer reaches the canvas wheel handler at
-     all (see canvasEl's own wheel listener -- it bails out for any
-     target inside the popover), so the browser's own default scroll
-     handles it now instead. Without this, though, that default
-     handling still CHAINS past this list's own scroll bounds once the
-     player hits the top or bottom -- the leftover wheel delta doesn't
-     just vanish, it scrolls the next scrollable ancestor up the tree.
-     Still needed even now that this list lives outside .mm-canvas
-     entirely: without it, that same chaining would just hand off
-     straight into the surrounding document instead, which is taller
-     than the viewport on most screens. */
+  /* The canvas wheel handler ignores popover targets; contain stops chaining
+     into the document. */
   overscroll-behavior: contain;
 }
 .mm-suggestions.show { display: block; }
-/* Normal case, NOT the all-caps every other bit of popover text
-   inherits from .mm-node (see that rule's own comment) -- a search
-   result needs to show the NPC/item/quest's real name as typed, since
-   an all-caps rendering there is genuinely harder to read/compare
-   against what's on screen elsewhere. The NODE's own label once
-   picked and saved still renders through .mm-node's inherited
-   uppercase as normal -- this only touches the dropdown itself. */
 .mm-suggestion {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 11.5px;
   color: var(--text); cursor: pointer; text-transform: none;
 }
 .mm-suggestion:hover { background: var(--panel-2); }
-/* Bumped from 18px -- shared base size for every kind's icon (item,
-   diary, skill). */
 .mm-suggestion img {
   width: 20px; height: 20px; object-fit: contain; image-rendering: pixelated; flex: none;
 }
-/* Plus a small translate to recenter, item/diary results only -- both
-   are real item icons off RuneLite's own CDN (a diary's is its
-   elite-tier reward item's icon, see DIARY_AREA_ICON's own comment;
-   an icon never renders for an NPC/quest result), which draw on a
-   fixed canvas with built-in padding down the right side for the
-   in-game stack-count badge -- see .loot-item-box-icon's own comment
-   in loot-tracker.css for the full empirical writeup behind both the
-   size bump above and this exact translate. A skill result's icon is
-   a different, locally-hosted asset (app/static/skill-icons) with no
-   such padding, so it's left at dead center. */
+/* Item/diary icons are RuneLite CDN images with right-hand padding for the
+   stack-count badge; translate recenters (see .loot-item-box-icon in
+   loot-tracker.css). */
 .mm-suggestion[data-kind="item"] img,
 .mm-suggestion[data-kind="diary"] img {
   transform: translate(5.5%, -1%);
@@ -982,25 +462,12 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   text-transform: none;
 }
 
-/* ---- Segmented toggle (renderSegmentedToggleHtml) ---------------------
-   The skill goal's level/experience choice and the diary goal's tier
-   choice -- a row of equal-width buttons standing in for a <select>,
-   backed by a hidden input carrying whichever one's active (see the
-   segmented-toggle click delegation in the page script). */
+/* Segmented toggle (renderSegmentedToggleHtml)
+   Equal-width buttons replacing a <select>, backed by a hidden input. */
 .mm-segment-group {
   display: flex; flex-direction: row; width: 100%; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
 }
-/* A <button>'s default UA stylesheet resets text-transform to "none"
-   regardless of what an ancestor (here, .mm-node) sets -- unlike the
-   plain <div>-based .mm-suggestion above, which inherits that
-   uppercase normally. Explicit here for the same reason
-   .mm-type-btn-label needs it: without this, "Easy"/"Medium"/"Hard"/
-   "Elite" would render in plain title case instead of matching the
-   rest of the popover's all-caps look. */
-/* height: 25px matches the site-wide button height (see .loot-sort-tab
-   in loot-tracker.css) -- display: flex + align-items/justify-content:
-   center is what keeps each label centered at that height regardless
-   of its own font-size, rather than relying on padding math. */
+/* A <button>'s UA styles reset text-transform, so uppercase is explicit. */
 .mm-segment-btn {
   flex: 1 1 0; height: 25px; background: #100e0b; border: none; border-right: 1px solid var(--border);
   color: var(--text-dim); font-family: inherit; font-size: 10.5px; letter-spacing: 0.02em;
@@ -1011,52 +478,23 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
 .mm-segment-btn:hover { color: var(--text); }
 .mm-segment-btn.active { background: var(--panel-2); color: var(--gold); }
 
-/* The skill goal's own row -- the skill search box and its LVL/XP
-   segmented toggle sit side by side here (rather than the toggle
-   stacked on its own full-width line below), the search box taking
-   whatever room the toggle doesn't need. align-items: center (not
-   stretch, which this used to be) is what keeps the toggle -- 25px,
-   the site-wide button height, shorter than the search box's own 30px
-   -- vertically centered against it instead of stretched to match. */
 .mm-goal-skill-row { display: flex; flex-direction: row; gap: 6px; width: 100%; align-items: center; }
 .mm-goal-skill-row .mm-search-wrap { flex: 1 1 auto; width: auto; min-width: 0; }
 .mm-goal-skill-row .mm-segment-group { flex: 0 0 auto; width: auto; }
 .mm-goal-skill-row .mm-segment-btn { flex: 0 0 auto; padding: 0 10px; }
 
-/* ---- Inline field validation (validateSkillTarget) --------------------
-   The skill goal's target field -- shown directly under that one
-   input, not the page's global error banner, and empty/hidden
-   whenever the value's in range. */
+/* Inline field validation (validateSkillTarget) */
 .mm-goal-target-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; }
 .mm-field-error { display: none; font-size: 10.5px; color: var(--red); line-height: 1.3; }
 .mm-field-error.show { display: block; }
 
-/* ---- KC goal's optional sinceDate field (renderGoalFieldsHtml) -------
-   The same masked "type digits, watch them auto-dash into YYYY-MM-DD"
-   field the Loot Tracker's own custom-range date fields use (see
-   .loot-range-custom-field in loot-tracker.css and DATE_MASK/
-   applyDateMask/isValidIsoDate in this page's own script), paired
-   with a hint line underneath instead of that page's above-input
-   label -- this field is optional and needs to say so, which a bare
-   "Start"/"End"-style label can't. color-scheme: dark asks the
-   browser to draw the input's own text-selection/caret UI in its dark
-   variant, same reason .loot-range-custom-field's own input rule sets
-   it; an unparseable date gets the same .mm-goal-fields input.mm-
-   goal-input.invalid red border every other field in this popover
-   does (see that rule, above). */
+/* KC goal's optional sinceDate field (renderGoalFieldsHtml)
+   Masked date input as .loot-range-custom-field (loot-tracker.css).
+   color-scheme: dark darkens its caret/selection UI. */
 .mm-goal-date-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; }
 .mm-goal-date-wrap input.mm-goal-input { color-scheme: dark; }
 .mm-goal-hint { font-size: 10.5px; color: var(--text-faint); line-height: 1.3; }
 
-/* ---- Note field (renderNoteFieldHtml) --------------------------------
-   The one optional field every node type gets (manual included), a
-   sibling of .mm-goal-fields rather than one of its own inputs -- it
-   sits between that per-type form and the Save/Delete row, so it's the
-   last thing filled in before saving (see renderNodePopoverHtml). Its
-   textarea gets the exact same compact input theming
-   .mm-goal-fields input/select.mm-goal-input use just above, written
-   as its own rule since .mm-note-wrap isn't nested inside
-   .mm-goal-fields. */
 .mm-note-wrap { width: 100%; }
 .mm-note-wrap textarea.mm-goal-input {
   width: 100%; box-sizing: border-box;
@@ -1064,92 +502,39 @@ input.mm-node-checkbox:checked::after { border-color: #000; border-width: 0 1.5p
   color: var(--text); font-family: inherit; font-size: 11.5px;
   padding: 7px 8px;
   text-transform: none; letter-spacing: normal;
-  /* NOT resizable and NOT scrollable any more -- a note is hard-capped
-     to 2 lines end to end now (see clampNoteInput in the page script),
-     so there's nothing a resize handle or a scrollbar would ever need
-     to reveal. overflow: hidden here is a deliberate backstop, not a
-     workaround: a scrollable overflow:auto region with real
-     overflowing content is exactly what triggered the "blur while a
-     popover's search dropdown is open" bug this file's history spent
-     several rounds chasing (see .mm-suggestions' own comment, and
-     getFloatingSuggestionsEl's in the page script, for the full
-     account) -- this textarea is one of the two places on this canvas
-     that regression could still reach even after that fix (the
-     node's own flipped-over back face, .mm-node-note-text, is the
-     other), since neither one can be moved outside .mm-world the way
-     the search dropdown was -- this one has to live in the popover,
-     right where the player's editing it. rows="2" (the HTML attribute,
-     not set here) sizes the box itself; capping the CONTENT to 2 lines
-     removes the scrollbar instead of trying to contain its side
-     effects, same underlying idea as the search dropdown fix, just
-     applied by shrinking the content instead of moving the container.
-     overscroll-behavior: contain kept, NOT dropped -- clampNoteInput
-     measures the 2-line cap against the node's own flipped-over back
-     face (a plain div, different font-size/box model than a real
-     <textarea>'s own native rows="2" sizing), and confirmed via
-     Playwright: that mismatch can still leave a few px of real
-     scrollTop range even with overflow: hidden set, which Chromium
-     will happily hand wheel-scroll delta into and then chain the rest
-     of the gesture straight to the page once it's exhausted, exactly
-     the bug this rule originally fixed. overflow: hidden's job is
-     making sure that residual scrollability is never visible as a
-     scrollbar (so it can't trigger the compositing/blur issue above);
-     overscroll-behavior: contain's job is making sure it can't leak
-     into the page either. Keep both regardless of how tight the content
-     cap gets -- neither is made redundant by the other. */
+  /* Not resizable or scrollable: notes are capped to 2 lines (clampNoteInput),
+     so overflow: hidden only backstops the scroller blur (see .mm-suggestions).
+     overscroll-behavior: contain stays: clampNoteInput measures against the
+     node's back face, leaving a few px of scrollTop that would chain to the
+     page. */
   overflow: hidden; overscroll-behavior: contain;
 }
 .mm-note-wrap textarea.mm-goal-input:focus { outline: none; border-color: var(--gold-dim); }
 .mm-note-wrap textarea.mm-goal-input::placeholder { color: var(--text-faint); }
 
-/* ---- Zero-mindmaps state -------------------------------------------
-   Same shape as .pg-empty (purchase-goals.css): centered placeholder
-   copy, shown instead of the header/canvas/toolbar while the player
-   has no mindmaps yet (or none have loaded). */
+/* Zero-mindmaps state */
 .mm-empty-wrap { text-align: center; padding: 40px 10px; }
 .mm-empty { color: var(--text-faint); font-size: 13px; margin: 0 0 16px; }
-/* button.primary (myscape.css) defaults to width: 100% -- wrong for a
-   single centered call-to-action button, same fix as
-   button.primary#pgNameSave/#mmNameSave above. Also matches those
-   buttons' own all-caps treatment (myscape.css's button.primary
-   doesn't apply text-transform on its own). */
+/* button.primary defaults to width: 100% (see #pgNameSave/#mmNameSave above) and
+   lacks all-caps. */
 button.primary#mmCreateFirstBtn {
   width: auto; padding: 0 22px; height: 32px;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
 }
 
-/* ---------- Landing page preview (render_landing_mindmap_preview,
-   app/pages.py) -- same container treatment as .landing-loot-preview
-   (loot-tracker.css) and .landing-purchase-preview (purchase-
-   goals.css): max-height capped to the viewport, clipped rather than
-   overflowing, with a bottom feather that only shows up once there's
-   actually something hidden below it. Scoped here instead since this
-   preview's own markup/CSS classes are Mindmaps', not either other
-   page's. See .landing-loot-preview's own comment in loot-tracker.css
-   for the fuller reasoning -- not repeated here. max-width matches
-   the other two previews' own 900px exactly so all three interactive
-   previews read as the same size panel. ---------- */
+/* Landing page preview (render_landing_mindmap_preview, app/pages.py)
+   Same container as .landing-loot-preview (loot-tracker.css) and
+   .landing-purchase-preview; see the former for the feather reasoning. */
 .landing-mindmap-preview {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  /* A fixed height now (was max-height, a cap content could come in
-     under) -- see .landing-loot-preview's own comment in loot-
-     tracker.css for why: a filter that leaves a panel shorter than
-     this used to shrink the whole container to fit, taking the bottom
-     feather below with it since that used to be gated on whether
-     content was actually overflowing. Pinning this box at a fixed
-     height regardless of how much is currently inside it is what
-     keeps the feather in the same screen position always. */
   height: calc(100vh - 80px);
   height: calc(100svh - 80px);
   overflow: hidden;
   position: relative;
 }
-/* Unconditional now -- no --clipped modifier class to gate it (see
-   .landing-loot-preview::after's own comment in loot-tracker.css for
-   the fuller reasoning this mirrors). */
 .landing-mindmap-preview::after {
   content: '';
   position: absolute;
@@ -1159,32 +544,16 @@ button.primary#mmCreateFirstBtn {
   pointer-events: none;
 }
 
-/* The reused body's own heading and the mindmap-switcher header row --
-   hidden rather than stripped from the markup itself, so
-   _mindmaps_panel_markup stays untouched (same discipline as
-   .landing-purchase-preview .page-title/.pg-header in purchase-
-   goals.css). This preview only ever has the one "Example" mindmap to
-   show (see render_landing_mindmap_preview's own docstring, and
-   #mmSwitchBtn's own one-time neutering in its wrapper script), so
-   there's nothing for the switcher to switch between anyway -- same
-   reasoning purchase-goals.css's .pg-header already went through. */
+/* Hidden, not stripped, so _mindmaps_panel_markup is untouched; the preview has
+   one mindmap. */
 .landing-mindmap-preview .page-title,
 .landing-mindmap-preview .mm-header {
   display: none;
 }
 
-/* ---------- Landing-preview-only hero row: tagline + character,
-   above the reused panel's own toolbar/canvas -- see
-   render_landing_mindmap_preview's own hero_markup comment. Mirrors
-   .loot-preview-hero/.loot-preview-tagline-wrap/.loot-preview-char in
-   loot-tracker.css left-to-right: same flex row, bottom-aligned, same
-   sizing -- just with the tagline's own wrap as the FIRST flex child
-   (so it lands on the left) and the character second (so it lands on
-   the right), same order Loot Tracker itself uses and the reverse of
-   Purchase Goals' (character first, purchase-goals.css) -- per this
-   preview's own explicit "text on the left"/"image... right side"
-   request. See loot-tracker.css's own fuller comments for the
-   reasoning behind each rule here, not repeated. ---------- */
+/* Landing-preview hero row
+   Mirrors .loot-preview-hero (loot-tracker.css) with the tagline first, the
+   reverse of Purchase Goals. */
 .mindmap-preview-hero {
   display: flex;
   align-items: flex-end;
@@ -1212,22 +581,11 @@ button.primary#mmCreateFirstBtn {
 .mindmap-preview-tagline-gold { color: var(--gold); }
 .mindmap-preview-tagline-white { color: var(--text); }
 
-/* Fixed-HEIGHT flex item -- 157px matches .loot-preview-char/
-   .purchase-preview-char exactly, so all three preview characters
-   render at the same height next to each other despite each image's
-   own source aspect ratio differing -- width is left to follow from
-   that automatically rather than forced to match too. See
-   .loot-preview-char's own comment (loot-tracker.css) for the fuller
-   reasoning. */
 .mindmap-preview-char {
   flex: 0 0 auto;
   height: 157px;
   line-height: 0;
 }
-/* .landing-mindmap-preview .mindmap-preview-char img (two classes)
-   beats myscape.css's own .landing-anchor picture img (one class, two
-   elements) -- same override the other two previews' own characters
-   already need in their own stylesheets. */
 .landing-mindmap-preview .mindmap-preview-char img {
   display: block;
   height: 100%;
@@ -1237,16 +595,10 @@ button.primary#mmCreateFirstBtn {
 }
 
 
-/* ---------- Share icon (the export button next to "Mindmaps" on the
-   real page) -- same bare-icon/floating-popup recipe as Loot Tracker/
-   Purchase Goals/Storages Viewer's own .loot-share-wrap/.pg-share-wrap/
-   .pm-share-wrap, duplicated here with this page's own mm- prefix per
-   this project's per-page-CSS convention. 32px top/centered-via-
-   transform are both carried over verbatim from that same already-
-   empirically-measured fix (see .loot-share-wrap/.loot-share-card's
-   own comments in loot-tracker.css for the fuller reasoning) -- this
-   page's own h2.page-title shares that identical 22px/1.5 font-size,
-   so nothing here needs its own re-measurement. ---------- */
+/* Share icon beside the page title
+   Same recipe as .loot-share-wrap/.pg-share-wrap/.pm-share-wrap; the 32px top
+   and centering are measured there (.loot-share-card in loot-tracker.css) and
+   carry over since h2.page-title has the same 22px/1.5 font. */
 .mm-share-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
 }
@@ -1262,8 +614,6 @@ button.primary#mmCreateFirstBtn {
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
-     against the page-title text it's inline with. */
   position: relative;
   top: -2px;
 }
@@ -1281,9 +631,7 @@ button.primary#mmCreateFirstBtn {
   padding: 5px 6px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
-/* Author CSS setting `display` on this element always outranks the
-   browser's own [hidden]{display:none} default stylesheet rule --
-   same gotcha/fix as .loot-share-card[hidden] in loot-tracker.css. */
+/* Author `display` outranks the UA [hidden] rule (as .loot-share-card[hidden]). */
 .mm-share-card[hidden] { display: none; }
 .mm-share-generate-btn {
   height: 28px;
@@ -1309,18 +657,15 @@ button.primary#mmCreateFirstBtn {
 .mm-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .mm-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* ---------- Save-to-your-account icon (render_mindmap_share's own
-   import_icon_btn, app/pages.py) -- same recipe as Purchase Goals'
-   own .pg-import-wrap/.pg-import-card (purchase-goals.css), duplicated
-   with this page's own mm- prefix. ---------- */
+/* Save-to-your-account icon (import_icon_btn, render_mindmap_share in
+   app/pages.py)
+   Same recipe as .pg-import-wrap/.pg-import-card (purchase-goals.css). */
 .mm-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .mm-import-icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none; padding: 0; margin: 0;
   cursor: pointer; line-height: 1;
   color: var(--text-faint); transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
-     against the page-title text it's inline with. */
   position: relative;
   top: -2px;
 }
@@ -1345,69 +690,30 @@ button.primary#mmCreateFirstBtn {
 .mm-import-save-btn.action-failed { border-color: var(--red); color: var(--red); }
 .mm-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* ---------- Share-viewing page (myscape.io/s/<code> for a Mindmap
-   share -- see render_mindmap_share's own docstring in app/pages.py
-   for the full breakdown of what's reused vs. overridden here).
-   .mindmap-share wraps that whole page's body. ---------- */
+/* Share-viewing page (myscape.io/s/<code>, render_mindmap_share in app/pages.py) */
 
-/* The title-line-above-"Shared by <name>" -- same small-line-above-
-   the-title treatment as .loot-share-range/.pg-share-label/
-   .pm-share-asof, just this page's own mindmap name, kept in its own
-   natural case (not forced uppercase the way .pg-share-label's own
-   setup name is, per that rule's own comment on why -- a mindmap's
-   name isn't a site-authored label, it's whatever the owner actually
-   typed, same reasoning the reused panel's own node-name fields never
-   force a case on it either). */
 .mm-share-label { text-align: center; margin: 0 0 4px; }
 
-/* Same "hide rather than strip from the markup itself" discipline as
-   .purchase-goal-share .pg-header (purchase-goals.css) -- this share
-   page has no mindmap switcher, per explicit instruction ("wouldn't
-   make sense" -- switch to what? PAYLOAD only ever holds the one
-   mindmap this share was generated from), and hiding (not stripping)
-   is simplest here since nothing downstream reads or depends on that
-   markup being absent -- see render_mindmap_share's own docstring for
-   the fuller reasoning this mirrors. */
 .mindmap-share .mm-header { display: none; }
 
-/* Undo/Redo and the Edit Mode toggle, hidden the same way and for the
-   same reason -- per explicit instruction this share page has none of
-   the three. Zoom in/out/fit and fullscreen (the other four buttons
-   in this same .mm-zoom-controls cluster) are deliberately left
-   alone -- nothing asked for those to disappear, and nothing about
-   them risks mutating anything (see render_mindmap_share's own
-   docstring on why hiding, not stripping, these controls is safe).
-   The two .mm-zoom-divider seams (see mindmaps.css' own rule above)
-   sit one on each side of the zoom/fullscreen group -- first-of-type
-   is the one between Undo/Redo and Zoom In, last-of-type the one
-   between Edit Mode and Zoom In's own group boundary from the other
-   side -- so hiding both leaves the remaining four zoom/fullscreen
-   buttons with no now-orphaned seam on either edge. */
+/* Undo/Redo, Edit Mode and both .mm-zoom-divider seams are hidden too (no
+   orphaned seam); zoom and fullscreen mutate nothing and stay. */
 .mindmap-share #mmUndoBtn,
 .mindmap-share #mmRedoBtn,
 .mindmap-share #mmEditModeBtn { display: none; }
 .mindmap-share .mm-zoom-controls .mm-zoom-divider:first-of-type,
 .mindmap-share .mm-zoom-controls .mm-zoom-divider:last-of-type { display: none; }
 
-/* The one thing still clickable outside Edit Mode on the real page --
-   a GRAY node's manual "Mark complete" checkbox (see its own
-   data-role="manual-toggle" and the click-delegation comment next to
-   it in _mindmaps_panel_markup's script) -- is locked down here via
-   pointer-events: none, same established idiom as this file's own
-   #mmNodesLayer:not(.mm-view-mode) .mm-node-note-toggle rule above for
-   an analogous "inert right now" case. Edit Mode itself never actually
-   turns on on this page regardless (see render_mindmap_share's own
-   docstring on the localStorage shadow that guarantees that), so
-   every other node interaction is already unreachable for free -- this
-   is the one exception that needs its own explicit lock. */
+/* The remaining live interaction, a gray node's manual-toggle checkbox, is
+   locked with pointer-events: none. Edit Mode never turns on here (localStorage
+   shadow, see render_mindmap_share). */
 .mindmap-share .mm-node-checkbox[data-role="manual-toggle"] { pointer-events: none; }
 
 
-/* ---- Phone ----------------------------------------------------------
-   Same 320px centered column as the other phone pages, leaving a side
-   gutter for thumb page-scroll (the canvas itself is touch-action:
-   none, so a page scroll can't start on it). Fullscreen opts back out.
-   Scoped body:not(.phone-off) so the homepage preview is untouched. */
+/* Phone
+   320px centered column with a side gutter for thumb page-scroll (the canvas is
+   touch-action: none). Fullscreen opts back out; body:not(.phone-off) leaves the
+   homepage preview alone. */
 @media (max-width: 700px) {
   body:not(.phone-off) .mm-header { margin-bottom: 12px; }
   body:not(.phone-off) .mm-switch-btn { max-width: 320px; }
@@ -1420,14 +726,8 @@ button.primary#mmCreateFirstBtn {
   body:not(.phone-off) .mm-canvas.mm-fullscreen {
     max-width: none; width: auto; height: auto; margin: 0;
   }
-  /* The buttons run along the top edge instead of down the right side
-     (a column there covered part of the map), all together and centered:
-     Undo/Redo, zoom in/out/fit + fullscreen, Edit Mode -- with the same
-     thin dividers the desktop column has between those groups, turned
-     vertical. The row itself ignores touches (only the buttons take
-     them) so a drag starting beside it still pans the map. The share
-     page hides Undo/Redo/Edit and both dividers, leaving just the four
-     zoom/fullscreen buttons. */
+  /* Controls run along the top edge (a right-side column covered the map) with
+     vertical dividers. The row ignores touches so a drag beside it still pans. */
   body:not(.phone-off) .mm-zoom-controls {
     top: 8px; left: 8px; right: 8px;
     flex-direction: row; align-items: center; justify-content: center; gap: 4px;
@@ -1438,9 +738,6 @@ button.primary#mmCreateFirstBtn {
     width: 1px; height: auto; align-self: stretch; margin: 2px 2px;
   }
 
-  /* Share/export popup: centered on the title row, not on its small
-     icon (which sits off to the right of the centered title, so the
-     popup came out lopsided and could run off the screen edge). */
   body:not(.phone-off) .page-title:has(.mm-share-wrap) { position: relative; }
   body:not(.phone-off) .mm-share-wrap { position: static; }
   body:not(.phone-off) .mm-share-card { top: calc(100% + 6px); width: min(280px, 100%); box-sizing: border-box; }
@@ -1453,24 +750,16 @@ button.primary#mmCreateFirstBtn {
 }
 
 
-/* Homepage preview, touch screens: outside fullscreen the preview's
-   canvas doesn't take touch drags/pinches (the landing script skips
-   the reused pan/pinch handlers for touch until .mm-fullscreen), so a
-   finger on it scrolls the page instead -- pan-y rather than auto so
-   a two-finger pinch there doesn't zoom the whole page either. The
-   real page and fullscreen keep the canvas's own touch-action: none. */
+/* Homepage preview on touch: finger drags scroll the page (pan-y) until
+   .mm-fullscreen. */
 .landing-mindmap-preview .mm-canvas:not(.mm-fullscreen) {
   touch-action: pan-y;
 }
 
 
-/* ---- Share page "save to my account" icon: phone ---------------------
-   The popup is centered on its icon, which sits at the right-hand end
-   of the centered "Shared by <name>" title -- so on a phone the 280px
-   card ran off the right edge. Anchoring it to the title (full width,
-   centered) instead keeps it on screen. The 14px icon also gets a
-   thumb-sized tap area (padding + equal negative margin, so the title
-   layout doesn't move). */
+/* Share page save icon, phone: anchor the 280px popup to the full-width title
+   (centered on the icon it ran off the right edge). Thumb-sized tap area; the
+   negative margin keeps layout fixed. */
 @media (max-width: 700px) {
   body:not(.phone-off) .page-title:has(.mm-import-wrap) { position: relative; }
   body:not(.phone-off) .mm-import-wrap { position: static; }

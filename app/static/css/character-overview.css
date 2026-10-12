@@ -1,26 +1,9 @@
-/* Character Overview (render_character_overview in app/pages.py) --
-   currently just the summary row at the top of the page. Kept as its
-   own file rather than folded into myscape.css, same reasoning as
-   purchase-goals.css/loot-tracker.css/goal-tracking.css: none of this
-   applies anywhere else on the site.
-
-   One long shared box (.co-summary-row) holding all eight icon+number
-   pairs (.co-stat) at the same positions/spacing they'd have had as
-   individually-boxed tiles -- see _SUMMARY_STATS in app/pages.py for
-   what each one is and where its value comes from -- just without each
-   one's own separate background/border. flex-wrap rather than a fixed
-   8-column grid: a genuinely single row is the common case at normal
-   page widths, but nothing here forces an overflow-scroll or a
-   squeezed unreadable tile on a narrower one -- the row just wraps to
-   a second line, the same "no @media queries anywhere on this site"
-   approach every other page already takes (relying on flex/wrap
-   rather than breakpoints). */
+/* Character Overview page (render_character_overview in app/pages.py), in its
+   own file because none of it applies elsewhere. */
 
 .co-summary-row {
-  /* Always all eight stats on one row, or two rows of four -- never a
-     lopsided 7+1 or 6+2 wrap. Eight equal columns while there's room (the
-     widest value, a big total-xp number, is under ~90px), four columns
-     below 840px (see the media query right after this rule). */
+  /* Eight equal columns while there's room, four below 840px: never a lopsided
+     7+1 or 6+2 wrap. */
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 10px;
@@ -28,15 +11,8 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 8px 12px;
-  /* 18px, not this row's own previous 28px -- the same between-
-     sections gap every other page's top-level cards use (see .dash-
-     grid's own comment in myscape.css, and .overlay-card/.pg-body in
-     purchase-goals.css, .loot-chart-card/.loot-panels in loot-
-     tracker.css), so the space before the skills card below reads the
-     same as the gap between cards anywhere else in the app -- not to
-     be confused with .skills-grid's own 8px, the spacing *within* that
-     card between its 24 skill cells, which stays its own smaller
-     number on purpose. */
+  /* 18px: the site-wide gap between top-level cards (see .dash-grid in
+     myscape.css). */
   margin-bottom: 18px;
 }
 
@@ -53,16 +29,9 @@
   gap: 8px;
 }
 
-/* Every icon here is a different native size straight off the wiki
-   (a tab icon, a level icon, a completion-count icon, ...) -- the
-   whole point of this row is that they all read as the same size on
-   the page regardless, so this is a fixed box every one of them is
-   scaled into rather than shown at its own natural dimensions. No
-   RuneLite-CDN padding-compensation transform here (compare
-   .dash-card-icon img in myscape.css) -- that offset is specific to
-   RuneLite's own item-icon canvas convention (see loot-tracker.css's
-   own comment on .loot-item-box-icon), which these wiki UI icons
-   don't share. */
+/* Wiki icons have varying native sizes; each is scaled into this fixed box. No
+   RuneLite padding-compensation transform (compare .dash-card-icon img in
+   myscape.css), which only applies to RuneLite item icons. */
 .co-stat-icon {
   width: 28px;
   height: 28px;
@@ -77,22 +46,9 @@
   white-space: nowrap;
 }
 
-/* The page's main two-column row, below .co-summary-row: a left
-   column (.co-left-col -- the 3D model viewer stacked directly above
-   the skill levels card) and, to its right, the collection log card
-   (.clog-card, styled further down this file) -- per explicit
-   instruction, replacing the earlier skills-card/hiscores-card side-
-   by-side row (the hiscores/boss-KC card has been removed outright,
-   not just relocated). flex, not grid, align-items: flex-start,
-   flex-wrap: nowrap, 18px gap -- same reasoning as the row this
-   replaces: the left column and .clog-card can land at very different
-   natural heights (a tall portrait model + a multi-row skill grid vs.
-   a collection log page list/item grid that scrolls its own
-   overflow), so flex-start keeps both pinned to the same top edge
-   rather than stretching the shorter one to match, and nowrap (no
-   fixed width on either side -- see .co-left-col/.clog-card's own
-   flex-basis instead) is what keeps them side by side at every width
-   with no scrollbar, exactly like the row this replaces. */
+/* Main row: .co-left-col beside .clog-card. flex-start pins both to the same top
+   edge (their heights differ a lot); nowrap keeps them side by side at every
+   width. */
 .co-main-row {
   display: flex;
   align-items: flex-start;
@@ -101,17 +57,6 @@
   margin-bottom: 18px;
 }
 
-/* The left column itself -- now holds only .model-viewer-card
-   (.skills-card moved out to .co-quad-row below, per explicit
-   instruction that Skills join Quests/Achievement Diaries/Combat
-   Achievements as four equal-width sections under this row instead).
-   Still a plain flex column, not a card in its own right, so a future
-   second item here would keep the same 18px between-sections gap
-   every other pair of cards on this page uses. flex: 1 1 290px is
-   unchanged from before -- .model-viewer-card has no width rule of
-   its own, so this column's own flex-basis is still what sets its
-   (and therefore the model viewer's) width against .clog-card beside
-   it. */
 .co-left-col {
   display: flex;
   flex-direction: column;
@@ -120,32 +65,16 @@
   min-width: 0;
 }
 
-/* Skills/Quests/Achievement Diaries/Combat Achievements row, below
-   .co-main-row -- four equal-width cards spanning the same combined
-   width .co-main-row's model viewer + collection log do, per explicit
-   instruction that all four sit on one row rather than wrapping to
-   two. flex-wrap: nowrap (not .co-summary-row's own wrap) is what
-   keeps them there at any width -- each card's own list underneath
-   (.skills-grid/.quests-list/.diaries-list/.ca-list) already carries
-   its own fixed height + overflow-y: auto, so a narrow width just
-   squeezes all four cards' columns/text rather than forcing a scroll
-   the row itself would otherwise need. */
+/* Four cards on one row at any width: each list has a fixed height + overflow,
+   so a narrow width squeezes columns rather than scrolling the row. */
 .co-quad-row {
   display: flex;
   flex-wrap: nowrap;
   gap: 18px;
 }
 
-/* Shared card chrome for all four -- same panel-translucent/border/
-   radius treatment every other card on this page uses.
-   flex: 1 1 0/min-width: 0, not a natural-width basis like
-   .co-left-col/.clog-card use one row up -- per explicit instruction
-   that all four read as equally-sized, each of these four should
-   split co-quad-row's width evenly regardless of which one's own
-   content (a 3-column skill grid vs. a line of quest text vs. a diary
-   bar) would otherwise want more or less room. min-width: 0 is what
-   lets flex actually shrink a card below its content's natural width
-   instead of overflowing the row. */
+/* flex: 1 1 0 splits the row evenly whatever the content; min-width: 0 lets a
+   card shrink below its content. */
 .skills-card,
 .quests-card,
 .diaries-card,
@@ -158,20 +87,8 @@
   min-width: 0;
 }
 
-/* .skills-grid/.ca-list are sized to their own (fixed-count) content
-   rather than a fixed height, unlike .quests-list/.diaries-list next
-   to them -- see each one's own comment. Because co-quad-row's default
-   align-items: stretch still stretches .skills-card/.ca-card to match
-   their 272px-tall siblings, any gap between that stretched card
-   height and the content's own natural height doesn't vanish, it just
-   lands somewhere -- and left to the block-layout default (content
-   top-aligned within the card's padding box), it always lands as extra
-   space under the content, not above it. That's what made the bottom
-   padding read as bigger than the top per explicit report. Centering
-   each card's own (single) content block vertically instead means
-   that same leftover gap splits evenly above and below, so top/bottom
-   padding always looks equal regardless of exactly how many px of
-   slack there happens to be. */
+/* The row stretches these cards to match their 272px siblings; centering the
+   content splits the leftover space evenly above and below. */
 .skills-card,
 .ca-card {
   display: flex;
@@ -179,64 +96,20 @@
   justify-content: center;
 }
 
-/* A fixed 3-track grid -- the three columns are always there, and each
-   track just splits .skills-card's own width (set by the shared
-   flex: 1 1 0 rule above, same as its three siblings in .co-quad-row)
-   evenly between them.
-
-   minmax(0, 1fr) per track, not a bare 1fr -- this is the actual fix
-   for a real bug: a bare repeat(3, 1fr) track has an *automatic*
-   minimum width equal to its items' min-content size, not 0, so at a
-   narrower real window (.skill-cell's min-content width * 3 wider than
-   .skills-card actually was) the grid refused to shrink and the third
-   column bled straight through .skills-card's own right padding and
-   past its border -- exactly what the "skills extending past the
-   skills section box" report showed. minmax(0, 1fr) lets each track
-   actually shrink to whatever width the card really has. gap: 4px,
-   down from a previous 6px, for the same real-narrow-window reason
-   .skill-cell's own padding/icon shrink below responds to.
-
-   No fixed height/scrollbar here, unlike .quests-list/.diaries-list/
-   .ca-list below -- per explicit instruction, this card should never
-   scroll, so it's sized instead to its own content. */
+/* minmax(0, 1fr), not a bare 1fr: a bare track's automatic minimum is its items'
+   min-content width, which let the third column overflow the card. No scrollbar:
+   this card never scrolls. */
 .skills-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
 }
 
-/* Each cell is itself a link (<a>, not <div> -- see skill_cells in
-   app/pages.py) to that skill's wiki page, so its own base/hover link
-   color and underline (see the site-wide `a`/`a:hover` rules near the
-   top of myscape.css) need resetting here -- same "declare :hover
-   explicitly too" fix .dash-card-link/.dash-card-link:hover already
-   uses in myscape.css, and for the same reason: a:hover (element +
-   pseudo-class) outweighs a single class like plain .skill-cell, so
-   without repeating text-decoration/color under :hover specifically,
-   a:hover's own underline would win back the instant a cell is
-   hovered. .skill-cell:hover (class + pseudo-class) outweighs a:hover
-   in turn, same as .dash-card-link:hover does. The .skill-cell-level
-   override below is belt-and-suspenders on top of that, in case a
-   browser still draws the ancestor's underline through the inline-
-   block level span otherwise. title is the hover tooltip (skill name +
-   XP, see setSkillTooltip in render_character_overview's script) --
-   set on this whole box, not just its icon, so hovering anywhere on
-   the cell shows it, not only the small icon inside it.
-
-   padding: 3px 4px, down another notch from a previous 4px 6px, and
-   gap: 4px (between the icon and the level number), down from 6px --
-   shrunk further along with .skill-cell-icon below once a real,
-   narrower-than-expected window showed these cells still weren't small
-   enough to fit three per row without overflowing (see
-   .skills-grid's own comment on the minmax(0, 1fr) fix this pairs
-   with). No min-width floor any more -- at that same narrow width a
-   64px floor was itself wide enough to force a cell past its 1fr
-   column regardless of what the track could shrink to, so the cell is
-   now sized by its own content (icon + gap + padding + the level
-   text's own 3ch below) instead of a fixed floor. overflow: hidden +
-   white-space: nowrap are a safety net so a still-narrower window
-   clips a cell's own content at its own edge rather than ever
-   bleeding past the card border again. */
+/* Each cell is a link (see skill_cells in app/pages.py): the site-wide a/a:hover
+   color and underline are reset, including under :hover since a:hover outweighs
+   a single class. title is the tooltip (setSkillTooltip). Tight padding and no
+   min-width let three cells fit in narrow windows; overflow: hidden + nowrap
+   clip rather than bleed past the card border. */
 .skill-cell,
 .skill-cell:hover {
   display: flex;
@@ -254,12 +127,8 @@
 .skill-cell:hover { background-color: rgb(51, 51, 54); }
 .skill-cell:hover .skill-cell-level { color: var(--text); text-decoration: none; }
 
-/* Smaller than .co-stat-icon's 28px above -- shrinking the icon (not
-   the 15px level text next to it, which stays the same size as every
-   other stat on this page) is what makes this whole card read as more
-   compact than a plain scaled-down copy of the summary row would.
-   14px, down from an earlier 16px, for the same real-narrow-window
-   reason .skill-cell's own padding/gap shrink above responds to. */
+/* Smaller than .co-stat-icon (28px) so the card reads compact next to the 15px
+   level text. */
 .skill-cell-icon {
   width: 14px;
   height: 14px;
@@ -269,13 +138,8 @@
   flex: none;
 }
 
-/* 3ch, exactly what "126" (the highest virtual level, see levelForXp
-   in the script above) needs -- tightened from an earlier 5ch of
-   deliberate breathing room now that .skill-cell's own padding has
-   been shrunk to keep this card scroll-free (see .skills-grid's own
-   comment), so every level badge still lines up at the same width
-   regardless of digit count, just without the extra slack. inline-
-   block because a plain inline <span> ignores min-width. */
+/* 3ch fits the highest virtual level (126, see levelForXp). inline-block because
+   an inline <span> ignores min-width. */
 .skill-cell-level {
   display: inline-block;
   min-width: 3ch;
@@ -283,20 +147,8 @@
   color: var(--text);
 }
 
-/* 3D model viewer card (render_character_overview in app/pages.py) --
-   top of .co-left-col, directly above .skills-card, per explicit
-   instruction (the boss-KC hiscores card that used to sit to its
-   right, and the skill/hiscores row this column itself replaces, are
-   both gone outright -- see .co-main-row/.co-left-col's own comments
-   above). No width rule of its own (compare its old max-width: 300px/
-   margin: 0 auto, back when this was a standalone, centered full-
-   width row on its own below .co-cards-row) -- .co-left-col's own
-   flex-basis is what sets the column's 290px width now, and this card
-   just stretches to fill it, same as .skills-card below. Still paired
-   with .model-viewer-canvas-wrap's own portrait aspect-ratio below, so
-   a standing character reads as a tall portrait rather than a wide,
-   mostly-empty strip. Same panel-translucent/border/radius/padding
-   treatment as every other card on this page. */
+/* 3D model viewer card (render_character_overview in app/pages.py). No width
+   rule: .co-left-col's flex-basis sets it. */
 .model-viewer-card {
   background: var(--panel-translucent);
   border: 1px solid var(--border);
@@ -304,15 +156,8 @@
   padding: 8px;
 }
 
-/* Sized by this wrapper (a fixed aspect ratio, full available width up
-   to .model-viewer-card's own max-width) rather than the <canvas>
-   element's own width/height attributes -- the module script in
-   render_character_overview reads this element's clientWidth/
-   clientHeight and calls renderer.setSize with them, which is what
-   actually drives the canvas's backing-store resolution. Portrait (2
-   wide : 3 tall) rather than the previous fixed 360px landscape
-   height, since a standing character fills a tall frame far better
-   than a wide one. */
+/* Sized by this wrapper (2:3 portrait), not the canvas attributes: the module
+   script reads clientWidth/clientHeight for renderer.setSize. */
 .model-viewer-canvas-wrap {
   position: relative;
   width: 100%;
@@ -320,14 +165,8 @@
   border-radius: calc(var(--radius) - 2px);
   overflow: hidden;
 }
-/* Backdrop image behind the (alpha:true) canvas below -- see
-   applyBackground/modelViewerBg in the module script for how the
-   current image is chosen (shuffle button, remembered across reloads
-   via localStorage) and applied. Plain CSS background rather than
-   anything three.js renders, since it never needs to rotate, light,
-   or otherwise interact with the model scene -- just sit behind it.
-   z-index 0, one below the canvas just after it, so it shows through
-   the transparent parts of the render. */
+/* Backdrop behind the alpha:true canvas (see applyBackground/modelViewerBg).
+   z-index 0, one below the canvas. */
 .model-viewer-bg {
   position: absolute;
   inset: 0;
@@ -335,49 +174,30 @@
   background-position: center;
   background-repeat: no-repeat;
   z-index: 0;
-  /* Slight desaturate + darken, per explicit instruction, on this
-     backdrop only -- applies to nothing else since filter only
-     affects this element (a bare <div> with no children) and CSS
-     filter never bleeds across sibling elements like the canvas or
-     the button row below. */
+  /* Filter on the backdrop only, so it does not affect the canvas or buttons. */
   filter: saturate(0.75) brightness(0.8);
 }
-/* No more grab/grabbing cursor -- the camera no longer takes pointer
-   input (see controls.enableRotate/autoRotate in the module script
-   above), so a drag affordance here would invite an interaction that
-   no longer does anything. Default cursor, same as if this rule
-   didn't exist at all. Explicit position/z-index (1, above
-   .model-viewer-bg's 0) is what makes this paint over that backdrop
-   rather than the two racing on DOM order alone. */
+/* Default cursor: the camera takes no pointer input. Explicit position/z-index 1
+   paints it over .model-viewer-bg regardless of DOM order. */
 .model-viewer-canvas-wrap canvas {
   position: relative;
   z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
-  /* The model's materials are unlit (KHR_materials_unlit -- see the
-     GLB export comment in app/main.py), so there's no scene light to
-     raise instead; a flat 15% brightness lift on the canvas itself is
-     the direct way to do it. Scoped to just this element, same as
-     .model-viewer-bg's own filter below -- it doesn't reach the
-     backdrop or the button row either. */
+  /* Materials are unlit (KHR_materials_unlit, see the GLB export in
+     app/main.py), so there is no scene light to raise; brighten the canvas
+     itself. */
   filter: brightness(1.15);
-  /* three.js's OrbitControls sets touch-action: none on its canvas to
-     claim touch drags for itself -- but this camera takes no pointer
-     input at all (rotate/pan/zoom are all off, see the module script),
-     so on a touch screen that only meant a finger that started on the
-     model could never scroll the page. !important because the library
-     writes it as an inline style. */
+  /* OrbitControls sets touch-action: none, which would block page scrolling from
+     the model on touch screens; the camera takes no pointer input. !important
+     beats the library's inline style. */
   touch-action: auto !important;
 }
 
-/* Bottom button row (info / shuffle-bg / play-pause / reset),
-   overlaid on the viewport itself per explicit instruction -- the
-   camera fit in the module script (CAMERA_DISTANCE_MULTIPLIER/
-   applyVerticalFramePan) shrinks and raises the character a bit
-   specifically to leave this strip clear at the bottom rather than
-   sitting on top of the model. z-index 2, above both the backdrop and
-   the canvas. */
+/* Button row overlaid on the viewport; the camera fit
+   (CAMERA_DISTANCE_MULTIPLIER/applyVerticalFramePan) leaves this strip clear.
+   z-index 2, above backdrop and canvas. */
 .model-viewer-controls {
   position: absolute;
   left: 0;
@@ -389,13 +209,8 @@
   align-items: center;
   gap: 6px;
 }
-/* Same icon-only footprint as .clog-sync-btn (29px squares, panel/
-   border/radius, see that rule's own comment) but sized down slightly
-   to 26px to fit these across this narrower column, and a translucent
-   dark scrim instead of that rule's opaque --panel-2 -- these sit on
-   top of a photo backdrop of unpredictable brightness rather than
-   this page's own dark panel, so a fixed dark background keeps the
-   icon legible against any of them. */
+/* Like .clog-sync-btn but 26px, with a translucent dark scrim so the icon stays
+   legible over any backdrop photo. */
 .model-viewer-btn {
   flex: 0 0 auto;
   width: 26px;
@@ -412,20 +227,13 @@
 }
 .model-viewer-btn:hover { border-color: var(--gold); color: var(--gold); }
 .model-viewer-btn svg { display: block; }
-/* The rule above sets `display` on every icon inside a button,
-   including the play/pause pair's two stacked SVGs -- author CSS
-   like that always outranks the browser's own [hidden]{display:none}
-   default stylesheet rule, no matter how low its specificity looks,
-   so without this the `hidden` attribute setPlayPauseIcon toggles
-   (see the module script) had no visible effect and both icons
-   showed at once. This rule's own specificity (an added attribute
-   selector) is what lets it win back that case correctly. */
+/* Author `display` outranks the UA [hidden] rule; restores it for the play/pause
+   SVG pair (see setPlayPauseIcon). */
 .model-viewer-btn svg[hidden] { display: none; }
 
 
-/* Shown instead of the canvas wrap above (see showEmpty in the module
-   script) when the account has never used the plugin's "Export 3D
-   model" button, or the fetch/parse itself fails. */
+/* Shown instead of the canvas wrap (see showEmpty) when no model was exported or
+   the fetch fails. */
 .model-viewer-empty {
   display: none;
   padding: 40px 12px;
@@ -434,28 +242,10 @@
   font-size: 13px;
 }
 
-/* Collection Log card (render_character_overview in app/pages.py) --
-   beside .co-left-col, inside .co-main-row (per explicit instruction:
-   this card sits to the right of the 3D model/skill levels column,
-   not below it any more), same panel-translucent/border/radius/
-   padding treatment as every other card on this page. Modeled on
-   RuneProfile's own collection log browser (tabs across the top, a
-   scrollable page list on the left, an icon grid for the active page
-   on the right) but entirely this app's own visual language -- no
-   RuneProfile styling copied, just the same information layout. Data
-   comes from GET /api/players/me/collection-log (the script below),
-   which is GameAccount.collection_log_items -- see that column's own
-   doc in app/models.py and CollectionLogItemCapture in the
-   Mootrius/myscape-plugin repo for how the plugin actually captures
-   this.
-
-   flex: 1 1 572px/min-width: 0 -- the exact same basis the old
-   hiscores-card carried (see .co-left-col's own comment for the
-   290px side of this same math), so at this page's normal ~880px
-   width the two columns still land flush on both edges (290 + 572 +
-   18px gap = 880) with nothing left for flex-grow/flex-shrink to do.
-   No margin-bottom of its own any more -- .co-main-row's own gap/
-   margin-bottom now carries that spacing instead. */
+/* Collection Log card, right of .co-left-col. Data: GET
+   /api/players/me/collection-log (GameAccount.collection_log_items,
+   app/models.py). flex-basis 572px + .co-left-col's 290px + 18px gap = the 880px
+   page width, so the columns land flush. */
 .clog-card {
   flex: 1 1 572px;
   min-width: 0;
@@ -465,10 +255,8 @@
   padding: 8px 10px 12px;
 }
 
-/* Shown instead of .clog-body below (see showClogEmpty in the script)
-   when the account has never opened its collection log with the
-   myscape plugin running -- same "display:none until proven
-   otherwise" convention as .model-viewer-empty above. */
+/* Shown instead of .clog-body (see showClogEmpty) until the collection log has
+   been synced. */
 .clog-empty {
   display: none;
   padding: 32px 12px;
@@ -477,11 +265,6 @@
   font-size: 13px;
 }
 
-/* Wraps .clog-tabs + .clog-sync-btn in one row so the manual
-   hiscores refresh trigger sits beside the tabs instead of inside
-   them -- .clog-tabs' own former margin-bottom now lives here, since
-   the tab row is just one flex item in this row now rather than the
-   card's own direct full-width child. */
 .clog-toolbar {
   display: flex;
   align-items: center;
@@ -502,18 +285,8 @@
   gap: 3px;
 }
 
-/* Manual "pull fresh boss/clue counts from the OSRS hiscores right
-   now" trigger for renderClogItemsHeader's own count -- see that
-   button's own click handler in the script above for why this
-   exists (an account linked before a newly-tracked stat existed, most
-   recently clue-scroll tiers, has no other way to backfill it short
-   of a full relink). Square icon-only button, not a labeled one --
-   .clog-toolbar has no room to spare beside three tabs at this card's
-   own width (see .clog-card's own comment), so this follows
-   .pm-filter-icon-btn's icon-only footprint (possessions.css) rather
-   than button.secondary's full-width labeled one. 29px, not that
-   rule's 15px, since this sits in its own toolbar rather than a
-   dense table header cell and can afford a proper click target. */
+/* Manual hiscores refresh for renderClogItemsHeader's counts (backfills stats
+   added after linking). Icon-only to fit beside three tabs; 29px click target. */
 .clog-sync-btn {
   flex: 0 0 auto;
   width: 29px;
@@ -528,46 +301,18 @@
   color: var(--text-dim);
   cursor: pointer;
 }
-/* Idle hover only highlights the border -- the icon itself (color:
-   currentColor in its own SVG, same as every other icon-only button
-   on this page) stays the dim default until a sync is actually
-   running, per explicit instruction: a plain hover is "you could
-   click this", not "this is doing something" the way .syncing below
-   is. */
 .clog-sync-btn:hover { border-color: var(--gold-dim); }
-/* No more opacity dimming here -- disabled is only ever true while
-   .syncing is also set (see this button's own click handler above),
-   and that state is now a deliberate full highlight (below), not a
-   faded one. cursor stays plain regardless, since a click genuinely
-   does nothing while a sync is already in flight. */
 .clog-sync-btn:disabled { cursor: default; }
 .clog-sync-btn svg { display: block; }
-/* While a sync is actually in flight: both the border AND the icon
-   go gold (unlike the idle :hover above, which is border-only), on
-   top of the spin below -- "this is doing something" reads as a
-   stronger highlight than "you could click this", per explicit
-   instruction. Declared after :hover so it wins the tie on
-   border-color if the pointer happens to still be sitting over the
-   button when a sync starts (same specificity, source order decides),
-   rather than this fading back to :hover's own weaker border color
-   the instant the mouse so much as twitches. Clearing this class once
-   the request settles (success or failure -- see that handler's own
-   final .then) is what makes the button "go back to normal" -- there
-   is no separate rule to remove, just this one no longer matching. */
+/* Sync in flight: gold border and icon. Declared after :hover so it wins the
+   equal-specificity tie while the pointer is over the button. */
 .clog-sync-btn.syncing { border-color: var(--gold); color: var(--gold); }
-/* Spins the icon itself (not the button's own border/background)
-   while a sync is in flight, so the button's square footprint never
-   shifts. */
 .clog-sync-btn.syncing svg { animation: clog-sync-spin 0.8s linear infinite; }
 @keyframes clog-sync-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-/* Brief red flash on a failed sync (account not linked, or the
-   hiscores fetch itself failed) so the button doesn't just silently
-   do nothing -- removed a couple seconds later by the click handler's
-   own setTimeout, the same "temporary state, no persistent error
-   banner" footprint the rest of this page's UI uses. */
+/* Brief red flash on a failed sync, cleared by the click handler. */
 .clog-sync-btn.sync-failed { border-color: var(--red); color: var(--red); }
 .clog-tab {
   flex: 1;
@@ -590,20 +335,10 @@
   gap: 10px;
   align-items: flex-start;
 }
-/* The active tab's own page list -- a fixed-width rail so the item
-   grid to its right always starts at the same x position regardless
-   of which tab is active, min-width included so a long page name
-   (e.g. "Chambers of Xeric (Solo)") never expands the rail. Its own
-   scrollbar rather than growing the whole card taller. The 361px
-   height below is only a static fallback for the instant before
-   syncClogHeight's own script runs (see that function's own comment
-   in render_character_overview, app/pages.py) -- that script
-   overrides it with a live-measured value matching .model-viewer-
-   card's own real height exactly, so .clog-card as a whole lines up
-   with it regardless of the actual font/zoom/width in play, not just
-   at the one width/font this fallback number was measured against.
-   overscroll-behavior: contain keeps scrolling past this rail's own
-   top/bottom edge from chaining into a scroll of the whole page. */
+/* Fixed-width rail so the grid starts at the same x on every tab; min-width
+   keeps a long page name from widening it. The 361px height is a fallback until
+   syncClogHeight (app/pages.py) matches .model-viewer-card. overscroll-behavior:
+   contain stops scroll chaining to the page. */
 .clog-pages {
   flex: 0 0 226px;
   min-width: 0;
@@ -632,13 +367,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* Without this, once a tab's total row height exceeds .clog-pages'
-     own fixed height below, the flex column shrinks every row
-     proportionally to fit rather than leaving them at their natural
-     height and just scrolling -- that's what made rows in a
-     long/scrolling tab (Bosses) visibly shorter than rows in a short
-     one (Raids). Locking natural height here is what keeps every
-     page's own "box" the same size in every section. */
+  /* Keeps rows at natural height; otherwise the flex column shrinks rows when a
+     long tab (Bosses) overflows. */
   flex-shrink: 0;
 }
 .clog-page-btn:hover { color: var(--text); background: var(--panel-2); }
@@ -651,52 +381,23 @@
   flex: none;
   font-size: 15px;
 }
-/* Red/yellow/green by how far obtained this page is -- zero, partial,
-   or complete (see progressState in renderClogPages, app/pages.py) --
-   the same red/amber/green status vocabulary mindmaps.css' own node-
-   color states use, so this reads as a status signal at a glance
-   rather than a plain fraction, without opening every page in turn.
-   All three states set their own color explicitly (not a colored
-   "complete" layered on an unstyled default) so no page's state is
-   ambiguous. */
+/* Red/yellow/green for zero, partial or complete (progressState in
+   renderClogPages); same status vocabulary as mindmaps.css. */
 .clog-page-btn.zero .clog-page-count { color: var(--red); }
 .clog-page-btn.started .clog-page-count { color: var(--yellow); }
 .clog-page-btn.complete .clog-page-count { color: var(--green); }
 
-/* The active page's own item grid -- unlike .skills-grid/.hiscores-
-   grid above, this one IS a fixed column count: repeat(6, 1fr) so
-   every row holds exactly 6 tiles by construction. padding-right: 8px
-   (not flush with .clog-pages/.clog-tabs' own right edge any more --
-   see this rule's own padding below) leaves the scrollbar's own track
-   a clear gap from the tiles instead of touching/overlapping them;
-   scrollbar-gutter: stable already reserves the track's own width
-   outside the content box, this padding is the separate breathing
-   room INSIDE it. Its own scrollbar rather than growing the card,
-   height kept in sync with .clog-pages by the same syncClogHeight
-   script (see that rule's own comment) so both panes settle at
-   whatever .model-viewer-card's real height actually is.
-   overscroll-behavior: contain, same reasoning as .clog-pages
-   above. */
-/* Wraps .clog-items-header + .clog-items in a column so the header can
-   sit above the item grid without disturbing .clog-pages beside it --
-   .clog-pages stays a direct flex child of .clog-panes with no header
-   of its own, so it alone keeps the "flex: 1" .clog-items itself used
-   to carry (see syncClogHeight's own comment in
-   render_character_overview, app/pages.py, for how the two panes'
-   heights now split that budget differently). */
+/* Item grid, a fixed 6 columns. padding-right leaves the scrollbar track clear
+   of the tiles (scrollbar-gutter: stable reserves the track itself). Height
+   synced with .clog-pages by syncClogHeight. */
+/* Column wrapper so the header sits above the grid without affecting .clog-pages
+   (see syncClogHeight). */
 .clog-items-col {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
-/* The active page's own name + kill/completion count -- same info the
-   real in-game collection log shows above a page's own item grid, per
-   explicit instruction. justify-content is the default (flex-start,
-   not space-between) so the count sits directly after the name rather
-   than pushed to the card's far edge, per later explicit instruction
-   that these read closer together. Empty (0px tall, no margin pushing
-   anything down) until renderClogItemsHeader's first real call. */
 .clog-items-header {
   display: flex;
   align-items: baseline;
@@ -704,11 +405,7 @@
   margin-bottom: 8px;
   font-size: 15px;
 }
-/* min-width: 0 (overriding a flex item's own default of auto/min-
-   content) is what actually lets this shrink/ellipsis on a page name
-   long enough to crowd .clog-items-header-kc -- without it, a nowrap
-   text node refuses to shrink below its own full content width no
-   matter what overflow/text-overflow say. */
+/* min-width: 0 lets a long page name ellipsis instead of crowding the count. */
 .clog-items-header-name {
   min-width: 0;
   color: var(--text);
@@ -716,12 +413,8 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* Only rendered when clogKillCounts has an entry for the active page
-   (see renderClogItemsHeader's own comment) -- most pages simply have
-   no header count at all rather than a "0" or dash standing in for
-   one. A combo page's multiple numbers (twin bosses, a raid's normal/
-   hard-mode split, ...) are joined with a middot inside this one span
-   rather than summed -- see renderClogItemsHeader's own comment. */
+/* Rendered only when clogKillCounts has an entry (see renderClogItemsHeader);
+   multiple numbers are joined with a middot, not summed. */
 .clog-items-header-kc {
   flex: none;
   color: var(--gold);
@@ -734,12 +427,8 @@
   scrollbar-gutter: stable;
   padding-right: 8px;
   display: grid;
-  /* As many columns as fit with each tile at least 40px wide, the
-     columns then stretching to fill the row's full width: six across
-     at the normal width (same ~45px tiles as before), fewer, bigger
-     tiles per row as the card narrows (a zoomed-in browser) instead of
-     six tiles squeezed to a few pixels each. The phone layout sets its
-     own five columns below. */
+  /* As many columns as fit with tiles of at least 40px, stretched to fill: six
+     at normal width. The phone layout sets five. */
   grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
   align-content: flex-start;
   gap: 6px;
@@ -754,83 +443,45 @@
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  /* Tiles are <a> elements (link to the item's wiki page) now, not plain
-     divs -- same link reset .skill-cell's own clickable tiles use, so a
-     tile doesn't suddenly look/read like a text link. */
   color: inherit;
   text-decoration: none;
 }
 .clog-item:hover {
-  /* Same hover affordance .gear-slot (purchase-goals.css) already uses
-     for its own clickable item tiles. */
   background-color: rgb(51, 51, 54);
 }
-/* An obtained item's tile border picks up the same gold-dim accent
-   .clog-page-btn.complete's own count uses -- one consistent "you have
-   this" color across the whole card. */
 .clog-item.obtained { border-color: var(--gold-dim); }
 .clog-item-icon {
   width: 78%;
   height: 78%;
   object-fit: contain;
   image-rendering: pixelated;
-  /* Same RuneLite item-icon CDN as every other icon in this app
-     (item_icon_url in app/purchase_goals.py) and the same small
-     right/up nudge .loot-item-box-icon already applies to compensate
-     for that CDN's own baked-in sprite padding (see that rule's own
-     comment in loot-tracker.css) -- copied here rather than a shared
-     class since this page doesn't load that stylesheet. */
+  /* RuneLite item-icon CDN (item_icon_url in app/purchase_goals.py) with the
+     same nudge as .loot-item-box-icon for the CDN's baked-in sprite padding;
+     copied since this page does not load loot-tracker.css. */
   transform: translate(5.5%, -1%);
 }
-/* Not-yet-obtained items stay in the grid (so the page's own total
-   count is visible at a glance) but read as a dim silhouette rather
-   than a full-color icon -- grayscale plus a brightness cut, same
-   pairing loot-tracker.css's own hidden-tile convention uses for "less
-   important than what's still in color". */
 .clog-item:not(.obtained) .clog-item-icon {
   filter: grayscale(1) brightness(0.55);
   opacity: 0.75;
 }
-/* The obtained quantity, bottom-right corner of the tile -- omitted
-   entirely for a quantity of 1 (see the script below), since "you have
-   this" is already what the tile's own border/color communicates and
-   a "1" badge on every single non-stackable drop would just be noise. */
+/* Obtained quantity; omitted for 1 since the tile's border already says
+   'obtained'. */
 .clog-item-qty {
   position: absolute;
-  /* Digits have no descender, so line-height: 1's own box leaves real
-     whitespace below the glyph that a raw right/bottom offset comparison
-     doesn't see -- measured against the actual rendered glyph ink (not
-     just this box) the old right: 1px sat visibly closer to the tile's
-     right edge than bottom: 0px sat to its bottom edge. Nudged left only,
-     per instruction, to equalize the two visually; bottom stays put. */
+  /* Digits have no descender, so line-height: 1 leaves space below the glyph;
+     nudged left so the badge looks equally inset from the right and bottom. */
   right: 2.5px;
   bottom: 0px;
-  /* Same 15px every page name in .clog-pages reads at (.clog-page-btn
-     above), per explicit instruction that this match it, rather than
-     the smaller badge size it used to carry. */
   font-size: 15px;
   color: var(--gold);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
   line-height: 1;
 }
 
-/* Quests card (.quests-card, inside .co-quad-row above) -- a scrolling
-   list of every current quest, grouped "Free Quests" then "Members'
-   Quests" (matching the real in-game Quest List interface's own two
-   groups, see app.character_progress_data.get_quest_list), each
-   quest's name colored by its synced state: green (completed), yellow
-   (started but not finished), red (not started) -- var(--green)/
-   var(--yellow)/var(--red), the same three status colors myscape.css
-   already reserves for exactly this kind of state, not new picks of
-   their own. Fixed height + its own scrollbar rather than growing the
-   card (and therefore the whole .co-quad-row) to fit ~196 rows --
-   same convention .clog-pages/.clog-items already use one row up.
-   272px, down from an earlier 320px -- matches .skills-grid's own
-   actual content height now (24 skills at .skill-cell's shrunk size),
-   since .skills-card never scrolls and co-quad-row's flex stretch was
-   otherwise forcing all four cards 320px tall regardless, leaving
-   visible empty space below the skills grid specifically (per
-   explicit report). See .skills-grid's own comment. */
+/* Quests card: list grouped Free / Members' as in-game
+   (app.character_progress_data.get_quest_list), names colored green completed,
+   yellow started, red not started. Fixed height + own scrollbar instead of
+   growing the row for ~196 rows; 272px matches .skills-grid's content height. */
 .quests-list {
   height: 272px;
   overflow-y: auto;
@@ -844,20 +495,12 @@
   font-weight: normal;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  /* var(--text) (the page's own off-white body-text color), not
-     var(--gold-dim) -- per explicit instruction these read as plain
-     white section labels, not gold like a stat/accent would. */
   color: var(--text);
 }
 .quests-group-title:first-child { margin-top: 0; }
-/* Each row is itself a link to that quest's OSRS Wiki page now (<a>,
-   not <div> -- see renderQuests in app/pages.py), so display: block is
-   what keeps it laid out (and truncating via white-space/ellipsis
-   below) exactly like the plain div it used to be, an inline <a>
-   can't. color: inherit + text-decoration: none undo the site-wide
-   a/a:hover reset (myscape.css) the same way .skill-cell/.clog-item's
-   own clickable tiles already do, so a quest row keeps reading as
-   status-colored text, not a plain link, until hovered. */
+/* Rows are links to the quest's wiki page (see renderQuests). display: block
+   keeps div-like layout and ellipsis; color: inherit + text-decoration: none
+   undo the site-wide a/a:hover reset. */
 .quest-row {
   display: block;
   font-size: 13px;
@@ -874,13 +517,9 @@
 .quest-row--completed { color: var(--green); }
 .quest-row--in_progress { color: var(--yellow); }
 .quest-row--not_started { color: var(--red); }
-/* A background "box" highlight on hover, same .clog-page-btn:hover
-   convention one row up (var(--panel-2) fill, no border-color change
-   needed), not an underline -- per explicit instruction. Also cancels
-   a:hover's own underline + gold (element + pseudo-class, myscape.css)
-   the same "declare :hover explicitly" way .skill-cell/.diary-row's
-   own siblings already do; the three status-color rules just below
-   stay separate so hovering still shows which state a quest is in. */
+/* Hover shows a --panel-2 box instead of an underline, cancelling a:hover's
+   underline and gold. The status-color rules below stay separate so hover still
+   shows each quest's state. */
 .quest-row:hover {
   background: var(--panel-2);
   text-decoration: none;
@@ -894,34 +533,14 @@
   line-height: 1.5;
 }
 
-/* Achievement Diaries card -- one .diary-row per area
-   (app.character_progress_data.get_diary_tier_totals, same 12 areas
-   DIARY_AREAS in app/mindmaps.py already names), each pairing that
-   area's own elite-tier reward-item icon (same DIARY_AREA_ICON URLs
-   the Mindmaps goal editor's own diary-area picker already uses, see
-   render_mindmaps in app/pages.py) and in-game label with a
-   completed/total count and a four-segment tier bar underneath: one
-   segment per DIARY_TIERS tier, solid green if that tier is at or
-   below the area's own highest-completed tier (GameAccount.
-   diary_tiers), solid red otherwise -- no partial fill within the
-   current tier, see /api/character-overview/progress's own docstring
-   in app/main.py for why.
-
-   Each row is itself a link to that area's wiki diary page now (<a>,
-   not <div> -- see renderDiaries/diaryWikiUrl in app/pages.py), same
-   "declare :hover explicitly too" fix .skill-cell/.quest-row already
-   use above: a:hover (element + pseudo-class, myscape.css) outweighs
-   a single class like plain .diary-row, so .diary-row:hover below
-   repeats color/text-decoration too rather than just adding the
-   background -- without that, a:hover's own underline+gold would win
-   back the instant a row is hovered.
-
-   .diaries-list (the actual #diariesList wrapper in app/pages.py,
-   holding all 12 .diary-row below) gets the same fixed height + own
-   scrollbar as .quests-list above, same reasoning: keeps .diaries-card
-   the same height as its three .co-quad-row siblings regardless of
-   its own row count, rather than growing the whole row to fit. 272px,
-   down from an earlier 320px -- see .quests-list's own comment. */
+/* Achievement Diaries card: one .diary-row per area
+   (app.character_progress_data.get_diary_tier_totals, areas from DIARY_AREAS in
+   app/mindmaps.py) with a completed/total count and a four-segment tier bar:
+   green up to the area's highest completed tier (GameAccount.diary_tiers), no
+   partial fill (see /api/character-overview/progress in app/main.py).
+   Rows are links (see renderDiaries/diaryWikiUrl); :hover repeats
+   color/text-decoration because a:hover outweighs a single class. .diaries-list
+   has the same fixed 272px height + scrollbar as .quests-list. */
 .diaries-list {
   height: 272px;
   overflow-y: auto;
@@ -975,12 +594,8 @@
   gap: 2px;
   height: 6px;
 }
-/* var(--bg) -- the page's own darkest surface color, i.e. plain black
-   -- not var(--red), per explicit instruction: an incomplete tier no
-   longer reads as a "bad/red" status, just an empty/unfilled segment.
-   opacity: 1 now too (dropped the earlier 0.55 dimming); a translucent
-   black over this page's already-dark background would barely read as
-   a distinct segment at all, unlike translucent red did. */
+/* var(--bg) for unfilled segments: an incomplete tier reads as empty, not red.
+   Opaque, since translucent black would barely show. */
 .diary-tier-seg {
   flex: 1 1 0;
   background: var(--bg);
@@ -989,38 +604,14 @@
   background: var(--green);
 }
 
-/* Combat Achievements card -- one .ca-tile per tier
-   (app.character_progress_data.get_ca_tier_totals), laid out as a
-   2-column, 3-row grid of boxes (Easy/Medium on top down to Master/
-   Grandmaster on the bottom) matching the real in-game Combat
-   Achievements tab's own tile layout, per explicit instruction --
-   CA_TIER_ORDER in app/pages.py is already Easy,Medium,Hard,Elite,
-   Master,Grandmaster, so a 2-column grid lays these out row-major
-   exactly right with no reordering needed in renderCombatAchievements.
-   Each tile stacks tier name, then that tier's own wiki-sourced icon
-   (app/static/img/combat-achievement-tiers/<tier>.png, the same small
-   pixel-art sword icon the real tab uses), then a completed/total
-   count, then a single proportional fill bar (unlike .diary-tier-seg
-   above, this IS true within-tier progress -- the six
-   COMBAT_ACHIEVEMENT_COMPLETED_VARBITS this is read from are each a
-   real live "tasks completed in this tier" count, not a derived
-   highest-tier flag, see MyscapePlugin#patchCombatAchievementStats in
-   the Mootrius/myscape-plugin repo). completed being null (never
-   synced) renders as an em dash and a zero-width bar, same as every
-   other never-synced stat on this page.
-
-   Each tile is itself a link to that tier's own OSRS Wiki page now
-   (<a>, not <div> -- see renderCombatAchievements in app/pages.py;
-   https://oldschool.runescape.wiki/w/Combat_Achievements/<TitleCase
-   tier>, confirmed live), per explicit instruction.
-
-   No fixed height/scrollbar here any more, unlike .quests-list/
-   .diaries-list above -- those hold a variable, sometimes-long list
-   of rows and need one; .ca-list always holds exactly six tiles, so
-   like .skills-grid it's sized to its own content instead. Each
-   tile's own padding/gap below were tuned specifically to land this
-   grid's natural height at the same ~272px .quests-list/.diaries-list
-   use, so all four .co-quad-row cards still read as equally sized. */
+/* Combat Achievements card: one .ca-tile per tier
+   (app.character_progress_data.get_ca_tier_totals) in a 2-column grid like the
+   in-game tab; CA_TIER_ORDER is row-major so no reordering is needed. Unlike
+   .diary-tier-seg the bar is real within-tier progress
+   (COMBAT_ACHIEVEMENT_COMPLETED_VARBITS are live per-tier counts); a null count
+   renders as an em dash and an empty bar. Tiles link to the wiki (see
+   renderCombatAchievements). Always six tiles, so no scrollbar; padding/gap are
+   tuned to land near the 272px of .quests-list. */
 .ca-list {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1037,22 +628,12 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 3px 6px;
-  /* Link reset -- same color: inherit/text-decoration: none
-     .skill-cell/.clog-item/.quest-row's own clickable tiles already
-     use to undo the site-wide a/a:hover reset (myscape.css). */
   color: inherit;
   text-decoration: none;
 }
-/* rgb(51, 51, 54), not var(--panel-2) again -- the tile's own resting
-   background already IS var(--panel-2), so hovering needs a visibly
-   lighter shade to read as a highlight at all. Same exact hover shade
-   .skill-cell/.clog-item already use for this identical situation (a
-   panel-2 tile that needs its own hover color, not the plain
-   panel-2-on-translucent-card contrast .quest-row/.diary-row's hover
-   box relies on). text-decoration: none cancels a:hover's own
-   underline (element + pseudo-class, myscape.css) the same "declare
-   :hover explicitly" way .quest-row's own hover box already does --
-   without it the tile would gain a stray underline under its label. */
+/* rgb(51, 51, 54), not --panel-2: the tile's resting background already is
+   --panel-2. Same shade as .skill-cell/.clog-item; text-decoration: none cancels
+   a:hover's underline. */
 .ca-tile:hover {
   background-color: rgb(51, 51, 54);
   text-decoration: none;
@@ -1074,11 +655,8 @@
 .ca-tile-bar {
   width: 100%;
   height: 6px;
-  /* var(--bg), not the .ca-tile-icon/.skill-cell convention of
-     --panel-2 -- the tile itself is --panel-2 now (it used to be
-     transparent, sitting directly on .ca-card's own --panel-translucent
-     background), so the bar track needs the page's darkest surface
-     color to still read as a recessed track against it. */
+  /* var(--bg): the tile is --panel-2, so the track needs the darkest color to
+     read as recessed. */
   background: var(--bg);
   border: 1px solid var(--border);
 }
@@ -1087,24 +665,12 @@
   background: var(--gold-dim);
 }
 
-/* ---------- Landing page preview (render_landing_character_overview_
-   preview in app/pages.py) -- the real page's own body/script reused
-   completely unmodified, all six sections included (Skills/Quests/
-   Achievement Diaries/Combat Achievements too, see
-   _character_overview_panel_markup's own preview-mode comment),
-   inside one scroll-snap panel on the landing page. These rules are
-   the only preview-specific additions character-overview.css needed;
-   everything else above (summary row, model viewer, skills/quests/
-   diaries/combat achievements, collection log) is shared, unscoped
-   CSS the real, authenticated page uses too. ---------- */
+/* Landing page preview (render_landing_character_overview_preview in
+   app/pages.py): the real page reused unmodified in one scroll-snap panel. Only
+   these rules are preview-specific. */
 
-/* Same fixed-height/clipped/feathered treatment every other landing
-   preview's own container already uses -- see .landing-loot-preview's
-   own comment in loot-tracker.css for the fuller reasoning this
-   mirrors line for line. 900px max-width matches this page's own
-   natural ~880px content width (290px model viewer + 572px collection
-   log + 18px gap, see .co-left-col/.clog-card's own comments above)
-   almost exactly, same as every other preview's own 900px cap. */
+/* Same fixed-height, clipped, feathered treatment as .landing-loot-preview
+   (loot-tracker.css). 900px matches the ~880px page width (290 + 572 + 18). */
 .landing-character-overview-preview {
   width: 100%;
   max-width: 900px;
@@ -1121,26 +687,15 @@
   height: 15%;
   background: linear-gradient(to bottom, transparent, var(--bg));
   pointer-events: none;
-  /* Above everything in the reused panel -- the model viewer's canvas
-     (z-index 1) and its buttons (z-index 2) are positioned with their
-     own z-index, which otherwise paints them over this fade. */
+  /* Above the model viewer's canvas (z-index 1) and buttons (z-index 2), which
+     would otherwise paint over this fade. */
   z-index: 10;
 }
 
-/* The reused body's own heading -- hidden rather than stripped from
-   the markup itself, so _character_overview_panel_markup stays
-   untouched; the tagline below takes over as this preview's own
-   "title". Same technique as every other preview's own .page-title
-   override. */
 .landing-character-overview-preview .page-title { display: none; }
 
-/* ---------- Landing-preview-only hero row: tagline + character,
-   replacing the reused page's own "Character Overview" heading -- see
-   render_landing_character_overview_preview's own hero_markup comment.
-   Plain flex row, bottom-aligned, same as every other preview's own
-   hero row (.loot-preview-hero in loot-tracker.css, etc.) -- tagline's
-   wrap FIRST, character SECOND, so he lands on the right with the
-   text on the left, per this preview's own explicit request. ---------- */
+/* Landing-preview hero row: tagline + character, bottom-aligned like the other
+   previews (see hero_markup in render_landing_character_overview_preview). */
 .co-preview-hero {
   display: flex;
   align-items: flex-end;
@@ -1168,12 +723,6 @@
 .co-preview-tagline-gold { color: var(--gold); }
 .co-preview-tagline-white { color: var(--text); }
 
-/* Same fixed-HEIGHT-flex-item treatment every other preview's own
-   character crop uses (.loot-preview-char/.purchase-preview-char/
-   etc.) -- 157px matches them exactly, so this preview's own
-   character reads as the same size as the other five. See
-   .loot-preview-char's own comment in loot-tracker.css for the fuller
-   reasoning. */
 .co-preview-char {
   flex: 0 0 auto;
   height: 157px;
@@ -1188,56 +737,16 @@
 }
 
 
-/* ---------- Public profile settings cog + the card it toggles open.
-   #publicProfileCard is absent from the DOM entirely on both the
-   landing preview and a visitor's own view of someone else's link
-   (see public_profile_settings_btn's own comment in app/pages.py) --
-   these rules only ever apply on the real, authenticated page.
-   Tucked behind a settings-cog button next to the page's own title
-   (collapsed by default, floating open rather than pushing
-   .co-summary-row below it down the page) and built deliberately
-   small/inline rather than a full-width card like .co-summary-row
-   below -- this is a settings control opened rarely, not game data
-   that earns permanent space above it on every load. ---------- */
+/* Public profile settings cog + card. #publicProfileCard is absent on the
+   landing preview and on visitors' views (see public_profile_settings_btn in
+   app/pages.py). Collapsed and floating so it does not push .co-summary-row
+   down. */
 
-/* Settings-cog button sitting inline inside <h2 class="page-title">,
-   right after the "Character Overview" text -- back to a plain icon
-   (no border/background box), per explicit instruction, after three
-   rounds of feedback on the button-chrome version all landed on
-   "too big". Still the same cog glyph as the Storages Viewer's own
-   .pm-settings-btn (possessions.css), per the original explicit
-   instruction to use that same glyph, just without that button's own
-   box styling now -- this one opens a settings panel (private/public
-   + the share link), not an export flow, but reads the same bare-
-   icon-next-to-a-heading way Loot Tracker/Purchase Goals' own export
-   triggers do. The cog glyph's own <svg> (app/pages.py) dropped back
-   from 16px to 15px to match -- 1px bigger than the 14px feather
-   icons those export triggers use, same "cog needs slightly more
-   detail to read clearly" margin .pm-settings-btn's own glyph
-   already gave it before any of this. .co-settings-wrap carries what
-   used to live directly on this button -- just vertical-align:
-   middle now (no translateY cap-height nudge any more, the -2.4px
-   value this exact button used for its own original pre-cog icon
-   too) -- now that the button itself is just the wrap's one child.
-   The translateY is gone per explicit follow-up feedback that the
-   icon sat a few px too high -- empirically (a real Playwright
-   render of this exact markup/CSS/font) the icon reads as centered
-   against the title text with NO vertical nudge at all once this
-   wrap's own inherited 22px .page-title font-size is accounted for.
-   A transform here was also, separately, the root cause of a
-   "content text shows through the popup" bug reported alongside the
-   too-high icon -- see .loot-share-wrap's own comment in loot-
-   tracker.css for the fuller writeup: any transform value other than
-   none opens a new CSS stacking context, which walled .public-
-   profile-card's own z-index: 5 (below) off from the rest of the
-   page, letting later-in-DOM content (default z-index: auto) paint
-   over this "opaque" popup despite its explicit z-index. Removing
-   the transform removes that extra context, so the popup's z-index
-   now actually competes (and wins) in the page's one shared root
-   stacking context. It's also still the position: relative anchor
-   .public-profile-card below is positioned absolute against, for
-   this popup's own floating behavior, kept unchanged from the
-   button-chrome version. */
+/* Bare cog icon inline in the page title (same glyph as .pm-settings-btn,
+   possessions.css). .co-settings-wrap is the position: relative anchor of
+   .public-profile-card. No transform here: it would create a stacking context
+   and wall the popup's z-index: 5 off from the page, letting later content paint
+   over it (see .loot-share-wrap in loot-tracker.css). */
 .co-settings-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
 }
@@ -1246,39 +755,19 @@
   background: none; border: none; padding: 0; margin: 0;
   color: var(--text-faint); cursor: pointer; line-height: 1;
   transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low against
-     the page-title text it's inline with. */
+  /* Nudged up 2px: the SVG glyph sits low against the title text. */
   position: relative;
   top: -2px;
 }
 .co-settings-btn:hover { color: var(--text-dim); }
 .co-settings-btn.active { color: var(--gold); }
 
-/* Floats directly under its own trigger button (position: absolute
-   against .co-settings-wrap above), same shape as .pm-settings-menu
-   (possessions.css). Opaque (--panel, not the --panel-translucent
-   cards elsewhere on this page use) -- same reasoning .tracker-menu's
-   own comment in purchase-goals.css gives: this floats directly over
-   whatever's below it on the page, and at 82% opacity that showed
-   through distractingly. box-shadow matches Loot Tracker's own
-   .loot-range-menu identical value exactly (loot-tracker.css) -- same
-   subtle "floating above the page" depth cue, per explicit
-   instruction to bring every one of these popups in line with that
-   one. Closeable by re-clicking the trigger OR clicking anywhere else
-   on the page (see publicProfileSettingsBtn's own click handler and
-   the outside-click listener beside it, app/pages.py). top: 32px, not
-   the old "icon height + 6px gap" math (21px) -- that assumed this
-   card's own positioning context (.co-settings-wrap) rendered flush
-   with the icon's own top edge, but the wrap sits inside .page-title
-   and inherits ITS larger font-size, so its own line box reserves a
-   taller invisible font "strut" than the 15px cog icon alone needs,
-   pushing the wrap's rendered top several px above the icon's own top
-   edge -- see .loot-share-card's own comment in loot-tracker.css for
-   the fuller writeup (same bug, same fix, same empirical Playwright-
-   rendered measurement -- 32px landed the same here as the 14px
-   feather-icon triggers elsewhere, since the wrap's own strut height
-   is driven by the inherited .page-title font-size, not the icon's
-   own 1px size difference). */
+/* Floats under its trigger; closes on re-click or outside click (see
+   publicProfileSettingsBtn in app/pages.py). Opaque --panel (as .tracker-menu)
+   since it floats over content; box-shadow matches .loot-range-menu. top: 32px,
+   not icon height + gap: the wrap inherits .page-title's larger font-size, so
+   its line box is taller than the 15px icon (see .loot-share-card in
+   loot-tracker.css). */
 .public-profile-card {
   position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: inline-flex;
@@ -1290,23 +779,13 @@
   padding: 5px 6px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
-/* Author CSS setting `display` on this element always outranks the
-   browser's own [hidden]{display:none} default stylesheet rule, no
-   matter how low its specificity looks -- same gotcha, same fix, as
-   .model-viewer-btn svg[hidden] above: without this, toggling the
-   `hidden` attribute (publicProfileSettingsBtn's own click handler)
-   had no visible effect at all. */
+/* Author `display` outranks the UA [hidden] rule; same fix as .model-viewer-btn
+   svg[hidden]. */
 .public-profile-card[hidden] { display: none; }
 
-/* Same two-button segmented-control markup as Mindmaps' own goal-
-   field LVL/XP and tier toggles (.mm-segment-group/.mm-segment-btn in
-   mindmaps.css) -- duplicated here rather than shared across that
-   stylesheet boundary, same as every other style this page already
-   keeps to its own file. flex: 0 0 auto (not Mindmaps' own full-width
-   100%) since this group sits beside the link field/buttons in one
-   row rather than stacked above a form of its own. Hover/selection
-   coloring follows the site-wide segmented-control look (see
-   .public-profile-seg-btn's own comment below). */
+/* Segmented control as .mm-segment-group/.mm-segment-btn (mindmaps.css),
+   duplicated to keep this file self-contained. flex: 0 0 auto since it shares a
+   row with the link field. */
 .public-profile-seg-group {
   display: flex;
   flex: 0 0 auto;
@@ -1314,10 +793,6 @@
   border-radius: var(--radius);
   overflow: hidden;
 }
-/* Same segmented-control look as the Storages viewer's .pm-segment-btn
-   (and every other segmented control on the site): near-black idle
-   segments, the active one a lighter --panel-2 fill with gold text,
-   a 1px divider between segments inside the group's own border. */
 .public-profile-seg-btn {
   /* 23px + the group's own 1px top/bottom border = the site-wide 25px. */
   height: 23px;
@@ -1341,12 +816,8 @@
 .public-profile-seg-btn.active { background: var(--panel-2); color: var(--gold); }
 .public-profile-seg-btn:disabled { cursor: default; opacity: 0.7; }
 
-/* Click-to-copy/Generate new link -- same site-wide button
-   convention as .loot-range-btn (loot-tracker.css): 25px tall,
-   uppercase, --panel-2/--border. font-size: 15px matches the rest of
-   this card and the rest of the page's own base size, rather than
-   .loot-range-btn's own smaller 11px -- a deliberate departure from
-   that one property, kept otherwise identical. */
+/* Same convention as .loot-range-btn (25px, uppercase, --panel-2/--border),
+   except font-size 15px to match this card. */
 .public-profile-link-btn {
   flex: 0 0 auto;
   height: 25px;
@@ -1361,12 +832,8 @@
   cursor: pointer;
   white-space: nowrap;
 }
-/* :not(:disabled) -- without it, publicProfileLinkBtn still picked
-   up this hover highlight while Private (disabled, see
-   applyPublicProfileState in app/pages.py) even though hovering it
-   does nothing in that state; same guard protects
-   publicProfileRegenerateBtn's own brief disabled-mid-request
-   window. */
+/* :not(:disabled): no hover highlight in the Private (disabled) state or during
+   a regenerate request. */
 .public-profile-link-btn:hover:not(:disabled) {
   border-color: var(--gold-dim);
   color: var(--text);
@@ -1375,35 +842,22 @@
   cursor: default;
   opacity: 0.6;
 }
-/* publicProfileLinkBtn specifically (app/pages.py) -- the link
-   display, not a plain action button like Generate new link beside
-   it. 190px is enough to show a full myscape.io/c/<code> link
-   without being anywhere near the width .co-summary-row's own full-
-   width stats row uses. text-transform: none overrides
-   .public-profile-link-btn's own uppercase -- a link reads naturally
-   in its own mixed/lowercase form, not shouted in caps -- and
-   text-align stays centered (buttons already default to center, so
-   no override needed) for both the link itself and the "COPIED"
-   flash that briefly replaces it. overflow/ellipsis is a safety net
-   for the rare case a link doesn't fit, same as Loot Tracker's own
-   .loot-share-link-btn. */
+/* The link display (publicProfileLinkBtn): 190px fits a full
+   myscape.io/c/<code>; text-transform: none overrides the uppercase;
+   overflow/ellipsis is a safety net. */
 .public-profile-link-display {
   width: 190px;
   text-transform: none;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* "Generate new link" hitting its once-a-day throttle (429 -- see
-   regenerate_public_profile_code in app/main.py) -- same brief red-
-   border flash as the collection log's own .clog-sync-btn.sync-failed
-   above, not a persistent state (removed again after 2.5s by that
-   button's own click handler). */
+/* Red flash when 'Generate new link' hits its once-a-day throttle (429, see
+   regenerate_public_profile_code in app/main.py); cleared after 2.5s. */
 .public-profile-link-btn.action-failed { border-color: var(--red); color: var(--red); }
 
 
-/* Friend-request button next to a public profile's character name
-   (render_public_character_overview, app/pages.py) -- same placement/
-   look as the owner's own .co-settings-btn cog on the real page. */
+/* Friend-request button beside a public profile's character name
+   (render_public_character_overview); styled like .co-settings-btn. */
 .co-friend-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
 }
@@ -1424,16 +878,11 @@
    else. */
 .clog-tabs-arrow { display: none; }
 
-/* Desktop scrollbars on the four scrolling lists (Collection Log pages
-   + items, Quests, Achievement Diaries). myscape.css sets the standard
-   scrollbar-color/scrollbar-width on every element, and when either is
-   set Chrome ignores the ::-webkit-scrollbar rules there -- the ones
-   that give the thumb the site's square corners -- and draws its own
-   rounded one instead. Resetting both to auto on these lists lets the
-   site's ::-webkit-scrollbar styling (10px, square gold-dim thumb)
-   through. Wrapped in @supports so Firefox, which has no
-   ::-webkit-scrollbar, keeps its themed thin scrollbar. (The phone
-   block below hides these natively and draws its own.) */
+/* Desktop scrollbars on the four scrolling lists. myscape.css sets
+   scrollbar-color/scrollbar-width globally, and Chrome then ignores
+   ::-webkit-scrollbar and draws a rounded thumb; resetting both to auto lets the
+   site's square thumb through. @supports keeps Firefox on its thin themed
+   scrollbar. */
 @supports selector(::-webkit-scrollbar) {
   .clog-pages,
   .clog-items,
@@ -1442,9 +891,6 @@
     scrollbar-width: auto;
     scrollbar-color: auto;
   }
-  /* Thin (6px, like the drawn phone scrollbars) with no visible track
-     behind the thumb -- just the bar itself. The thumb's own color,
-     hover and square corners come from the site-wide rules. */
   .clog-pages::-webkit-scrollbar,
   .clog-items::-webkit-scrollbar,
   .quests-list::-webkit-scrollbar,
@@ -1458,8 +904,6 @@
     background: transparent;
   }
 }
-/* Firefox (no ::-webkit-scrollbar): same invisible track, as far as its
-   scrollbar-color allows. */
 @supports not selector(::-webkit-scrollbar) {
   .clog-pages,
   .clog-items,
@@ -1475,32 +919,19 @@
   body:not(.phone-off) .co-sb { display: block; }
 }
 
-/* Registered so the tab strip's edge-fade widths can be transitioned
-   (an unregistered custom property can't be animated). Where @property
-   isn't supported the fade simply switches instantly. */
+/* Registered so the tab strip's fade widths can transition; without @property
+   support the fade switches instantly. */
 @property --clog-fade-l { syntax: '<length>'; inherits: false; initial-value: 0px; }
 @property --clog-fade-r { syntax: '<length>'; inherits: false; initial-value: 0px; }
 
 
-/* ---- Phone layout ---------------------------------------------------
-   The first @media block on this page, on purpose: everything above is
-   a desktop layout that deliberately never wraps (the model viewer and
-   Collection Log sit side by side, and the four cards below them in a
-   row of four), which is what made this page ~40px wider than a phone
-   and squeezed Skills/Quests/Diaries/Combat Achievements down to
-   unreadable slivers. At phone width we instead stack everything into
-   one column. 700px is this site's phone breakpoint -- keep it the same
-   on every page so "mobile" means one thing site-wide.
-
-   Scoped to body:not(.phone-off) so the homepage's own preview of this
-   page (same classes, inside a fixed-size frame) is left exactly as is;
-   the homepage gets its own phone pass separately. */
+/* Phone layout. The first @media block on this page: the desktop layout never
+   wraps and is too wide for a phone, so everything stacks in one column here.
+   700px is the site-wide phone breakpoint; keep it identical on every page.
+   Scoped to body:not(.phone-off) so the homepage preview is unaffected. */
 @media (max-width: 700px) {
-  /* Every section is the same width as the model viewer (320px, or
-     the screen minus the page gutters if narrower), centered. That
-     leaves a strip of plain page on each side of the scrollable lists
-     (Quests, Diaries, Collection Log...) -- somewhere to put a thumb
-     to scroll the PAGE past them instead of scrolling the list. */
+  /* Sections are 320px wide (or screen minus gutters), centered, leaving plain
+     page strips beside scrollable lists to scroll the page with a thumb. */
   body:not(.phone-off) .co-summary-row,
   body:not(.phone-off) .co-main-row,
   body:not(.phone-off) .co-quad-row {
@@ -1541,12 +972,8 @@
     width: 100%;
     box-sizing: border-box;
   }
-  /* Every section except the summary row is the same 2:3 portrait
-     box -- the shape the model viewer has on desktop -- so the page
-     reads as a stack of identical panels. Each one's own content
-     (the list, grid or canvas) then fills whatever room is left
-     inside it, scrolling if it has more than fits. overflow: hidden
-     keeps a section from ever growing past its box. */
+  /* Every section except the summary row is a 2:3 portrait box; content fills
+     the remaining room and scrolls, and overflow: hidden keeps it in the box. */
   body:not(.phone-off) .model-viewer-card,
   body:not(.phone-off) .clog-card,
   body:not(.phone-off) .skills-card,
@@ -1599,16 +1026,11 @@
     grid-template-rows: repeat(3, minmax(0, 1fr));
   }
 
-  /* Scrollbars on the scrolling lists. Phone browsers draw thin
-     overlay scrollbars that sit on top of the content and fade away
-     when idle, and iOS in particular gives a page no way to turn that
-     off. So on phones the real scrollbar is hidden and the page draws
-     its own instead (.co-sb, built by the "drawn scrollbars" script in
-     this page's script, app/pages.py): a 12px track beside the list,
-     in the strip each list reserves for it with padding-right, with a
-     draggable thumb. It is always on screen while the list can scroll,
-     and gone when it can't. Positioned against each list's parent, so
-     those parents are position: relative here. */
+  /* Drawn scrollbars: phone browsers use fading overlay scrollbars (iOS cannot
+     disable this), so the real one is hidden and the page draws its own (.co-sb,
+     built by the 'drawn scrollbars' script in app/pages.py) in a strip reserved
+     by padding-right. Positioned against each list's parent, hence position:
+     relative. */
   body:not(.phone-off) .clog-panes,
   body:not(.phone-off) .clog-items-col,
   body:not(.phone-off) .quests-card,
@@ -1629,9 +1051,6 @@
   body:not(.phone-off) .diaries-list::-webkit-scrollbar {
     display: none;
   }
-  /* The track itself is invisible and 14px wide -- a comfortable
-     finger target -- while the thumb inside it is a thin 6px bar
-     hugging its right edge. */
   body:not(.phone-off) .co-sb {
     position: absolute;
     width: 14px;
@@ -1655,25 +1074,17 @@
     height: 36px;
   }
 
-  /* Collection Log: tabs scroll sideways inside their own strip (the
-     sync button stays put beside them), and the page list sits above
-     the item grid instead of beside it. */
   body:not(.phone-off) .clog-tabs {
     overflow-x: auto;
     scrollbar-width: none;
   }
   body:not(.phone-off) .clog-tabs::-webkit-scrollbar { display: none; }
 
-  /* "There's more this way": the strip fades out at whichever edge has
-     more tabs past it (can-scroll-left / can-scroll-right on the
-     wrapper, set by updateClogTabsFade in this page's script), and a
-     small gold chevron sits in the faded area. All of it eases in and
-     out on its own (opacity for the chevrons; the fade widths are
-     registered custom properties -- see @property above the phone
-     block -- so the mask itself can transition) and is gone at the end
-     of the scroll. The fade is a mask on the strip itself rather than
-     an overlay gradient, so it works over the card's translucent
-     background without needing a matching solid color. */
+  /* Scroll cue: the strip fades at whichever edge has more tabs (can-scroll-left
+     / can-scroll-right, set by updateClogTabsFade). The fade widths are
+     registered custom properties (see @property) so the mask can transition; a
+     mask rather than an overlay gradient works over the translucent card
+     background. */
   body:not(.phone-off) .clog-tabs {
     -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--clog-fade-l), #000 calc(100% - var(--clog-fade-r)), transparent);
     mask-image: linear-gradient(to right, transparent, #000 var(--clog-fade-l), #000 calc(100% - var(--clog-fade-r)), transparent);
@@ -1735,10 +1146,6 @@
     align-content: start;
   }
 
-  /* Public-profile settings popup: on desktop it floats centered under
-     the cog at its natural ~450px width, which runs off a phone's edge.
-     Here it is narrower (two thirds of a section's width, centered
-     under the title row rather than the cog) and stacks its controls. */
   body:not(.phone-off) .page-title:has(.co-settings-wrap) {
     position: relative;
   }
@@ -1771,10 +1178,8 @@
     font-size: 15px;
   }
 
-  /* Combat Achievements: the tier icons are 24px sprites, which looked
-     lost in these tall tiles -- 48px is an exact 2x, so they stay
-     crisp (image-rendering: pixelated, set on the icon above). 72px
-     (3x) was tried and was too big for the tile. */
+  /* Tier icons are 24px sprites; 48px is an exact 2x so they stay crisp
+     (image-rendering: pixelated above). */
   body:not(.phone-off) .ca-tile {
     gap: 6px;
   }

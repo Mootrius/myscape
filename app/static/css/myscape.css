@@ -1,46 +1,19 @@
-/* Shared visual identity across myscape's site -- same palette and body
-   font as Maintrius (the original single-user desktop tool this product
-   grew out of), so the website feels like the same app family. Just the
-   one pixel font everywhere (no display/heading font) -- the logo image
-   carries the wordmark instead. Font file is served from here (not
-   inlined as base64 like Maintrius's local HTML file) so browsers cache
-   it across pages instead of re-downloading on every request. */
+/* Shared site styles: Maintrius's palette and pixel font. The font is served
+   from here so browsers cache it across pages. */
 
 @font-face {
   font-family: 'RuneScapePlain11';
   src: url('/static/fonts/RuneScapePlain11.otf') format('opentype');
-  /* block -- text waits (invisible) for RuneScapePlain11, up to ~3s,
-     instead of painting in a system font. This used to be `optional`,
-     which gives the font only ~100ms to be ready and, if it isn't
-     (a refresh, a cold or slow load, a busy phone), locks the WHOLE
-     page into the fallback system font until the next reload -- the
-     "random Arial-looking page that a refresh fixes" bug. With `block`
-     a late font still shows up, just a beat later, and the page can
-     never get stuck on the fallback. The <link rel="preload"> for this
-     file in _shell() (app/pages.py) keeps that beat as short as
-     possible; the font is a small file that's cached after the first
-     page. `swap` was avoided because it flashes the system font and
-     then re-paints on every full-page navigation. */
+  /* font-display: block, not optional/swap: `optional` locks the page into the
+     fallback font if the font misses its ~100ms window; `swap` flashes the
+     system font on every navigation. _shell() (app/pages.py) preloads the file. */
   font-display: block;
 }
 
 :root {
-  /* Tells the browser this page IS a dark UI, not a light one it's
-     failing to theme -- without this, a few bits of native browser
-     chrome the site doesn't (and can't) draw itself default to their
-     own light-mode look regardless of every dark color declared below:
-     an autofill dropdown's own background, a native <input type="date">
-     picker, the default focus ring color on some browsers, and --most
-     visibly on a phone-- the light gray "rubber-band" overscroll area
-     a lot of mobile browsers paint past the very top/bottom of the
-     page while bouncing past its natural scroll limits. One plain
-     "dark" (not "light dark", which would let the browser pick either)
-     since the site itself has no light theme to fall back to. Pairs
-     with <meta name="theme-color"> in _shell(), app/pages.py, which
-     covers the browser's own toolbar/status bar chrome instead of its
-     in-page native form/scroll UI -- together the two are what let the
-     page blend into the browser around it rather than sitting inside
-     a mismatched light frame. */
+  /* Declares a dark UI so native chrome (autofill, date picker, focus ring,
+     mobile overscroll area) is dark too. Plain "dark": no light theme exists.
+     Pairs with <meta name="theme-color"> in _shell(). */
   color-scheme: dark;
   --bg: #0f0f10;
   --panel: #1d1d1f;
@@ -50,99 +23,36 @@
   --gold: #ff981f;
   --gold-dim: #cf7a17;
   --text: #ece6d8;
-  /* --text-dim and --text-muted are both "soft gray" tiers sitting
-     halfway between --text (white) and the original, noticeably
-     grayer values these used to be (#a8a5a0 and #77746e) -- muted
-     enough to still read as secondary text, not flat white, without
-     going back to how gray they were before. --text-faint keeps its
-     original, darker value: it's only used for input placeholders
-     now, which need to stay visually distinct from real (white)
-     typed text, not just "a bit softer" than it. */
   --text-dim: #cac6bc;
   --text-muted: #b2ada3;
   --text-faint: #77746e;
   --red: #c05a4c;
-  /* Added for Purchase Goals' gear-slot affordability states (green =
-     already owned, amber = not owned but affordable right now, red =
-     not owned and not affordable / not purchasable at all) -- same
-     values Maintrius itself used for the same purpose. */
+  /* Purchase Goals gear-slot affordability: green = owned, amber = affordable,
+     red = not. */
   --amber: #d9a53c;
   --green: #6fae5a;
-  /* Added for Mindmaps' recolorable nodes (see mindmaps.css) -- there's
-     no Maintrius equivalent to carry a value over from like
-     --red/--amber/--green above, so this is a new pick, matched to
-     their same moderate saturation/lightness so all four sit together
-     as one consistent "categorical node color" family rather than one
-     visibly standing apart. */
+  /* Mindmaps node colors (mindmaps.css), matched in saturation/lightness to
+     --red/--amber/--green. */
   --blue: #5a8cc4;
-  /* A second Mindmaps-only addition (see --blue above for why these
-     aren't ported from Maintrius) -- same moderate saturation/
-     lightness as the rest of that categorical family, just a distinct
-     hue from all of them. */
   --purple: #8b6cc9;
-  /* Two more Mindmaps-only node colors, same reasoning as --blue/
-     --purple above -- NOT the same as --gold or --amber (those stay
-     as they were for their own existing uses elsewhere: --gold is the
-     site's accent color, --amber is Purchase Goals' affordability
-     state), just similarly warm/bright hues picked fresh for the node
-     palette so gold/amber could be dropped from it without touching
-     what those two variables mean anywhere else. */
   --orange: #c97a3d;
   --yellow: #c9b355;
-  /* Mindmaps' gray/manual node has no hue of its own to fill in with,
-     so its "completed" background (and, since the two are shared on
-     purpose -- see mindmaps.css -- its uncompleted border too) reused
-     plain --border. That read as noticeably dimmer than every other
-     node color's own completed fill (all sitting around 50-60%
-     lightness), so this is a dedicated, brighter neutral gray for
-     just that pairing -- --border itself is untouched since it's
-     still used all over the site for ordinary panel/input borders. */
+  /* Mindmaps' gray node fill and border; --border is too dim next to the other
+     node fills. */
   --gray-bright: #6e6e74;
   --radius: 0px;
 }
 
 * { box-sizing: border-box; }
 
-/* A handful of elements (header, .link-banner, .landing-anchors)
-   deliberately break out of .wrap's column with the calc(50% - 50vw)
-   trick to go full-bleed edge-to-edge. That trick measures the true
-   viewport width with 100vw, but 100vw includes the vertical
-   scrollbar's own width while the visible content box doesn't --
-   so on any browser/platform where the scrollbar isn't an overlay,
-   those elements end up a few pixels wider than the actual visible
-   area and add a second, horizontal scrollbar to reveal that sliver.
-   Hiding x-overflow at the root is the standard fix -- nothing on
-   this site is meant to scroll sideways in the first place. */
+/* Full-bleed elements use calc(50% - 50vw); 100vw includes a non-overlay
+   scrollbar, so they overshoot. Hide x-overflow at the root. */
 html { overflow-x: hidden; }
 
-/* The browser's own scrollbar, recolored to match the site's dark
-   panels + gold accent instead of each visitor's stock OS/browser
-   chrome (usually a stark light-gray bar that clashes hardest right
-   on the landing page's own vertical scroll-snap). scrollbar-color/
-   scrollbar-width are the standard, cross-browser property pair
-   (Firefox, Chromium, and current Safari all read them). scrollbar-
-   color genuinely inherits (confirmed against a real nested scrolling
-   box -- the mindmap canvas's own pan/zoom surface -- so setting it
-   once on :root is enough for every scrollable element on the site,
-   no per-element rule needed), but scrollbar-width does NOT actually
-   cascade down the same way in testing despite being spec'd as
-   inherited too -- an element with its own overflow (that same
-   mindmap canvas, the loot tracker's range-preset dropdown) still
-   computed plain "auto" from just a :root rule, back to each
-   browser's own default (usually much thicker) width. Written on the
-   universal selector instead so every element gets it directly rather
-   than counting on inheritance for it. The ::-webkit-scrollbar-*
-   pseudo-elements below layer on top for Chromium/WebKit specifically
-   (Firefox has no equivalent and simply ignores these) -- scrollbar-
-   color/-width alone already get every browser a correctly-colored,
-   correctly-thin bar, this on top just gets Chromium/WebKit's own
-   extra bit of polish (a hover state brightening dim gold to full
-   gold, same "dim until hovered" convention .loot-range-btn/
-   .gt-goal-delete etc. already use elsewhere) that the standard pair
-   doesn't expose a way to control. border-radius: var(--radius) (0px
-   site-wide) keeps the thumb's own corners exactly as square as every
-   other box on the site, rather than the soft, rounded pill shape
-   most sites default to here. */
+/* Scrollbars recolored to the dark panels + gold accent. scrollbar-width did not
+   cascade to elements with their own overflow (mindmap canvas, loot range
+   dropdown), so it is on the universal selector. ::-webkit-scrollbar-* adds a
+   hover state for Chromium/WebKit. */
 :root { scrollbar-color: var(--gold-dim) var(--bg); }
 * { scrollbar-width: thin; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -151,55 +61,27 @@ html { overflow-x: hidden; }
 ::-webkit-scrollbar-thumb:hover { background: var(--gold); }
 ::-webkit-scrollbar-corner { background: var(--bg); }
 
-/* Scroll-snap for the landing page's anchor panels (see
-   render_landing() in app/pages.py and .landing-anchor below) --
-   scoped to just that page via body.landing (set through _shell()'s
-   body_class) rather than applied site-wide, so every other page's
-   scrolling is untouched. scroll-snap-type has to live on the actual
-   scrolling box, which in standards mode is <html> (not <body>) --
-   :has() is what lets that live rule react to a class on its child
-   instead of needing a class on <html> itself. */
+/* Landing-page scroll-snap (render_landing() in app/pages.py), scoped via
+   body.landing. scroll-snap-type must sit on the scrolling box, <html>, hence
+   :has(). */
 html:has(body.landing) {
   scroll-snap-type: y mandatory;
   scroll-behavior: smooth;
 }
 
-/* Without a snap point at the very top of the page, "mandatory" snap
-   has nothing valid to rest on at scroll position 0 and jumps
-   straight down to the first .landing-anchor on load, skipping
-   whatever's actually first -- normally header, but the "link your
-   account" banner (see _link_banner() in app/pages.py) renders ahead
-   of it for a logged-in, not-yet-linked player, and would be the one
-   silently scrolled out of view instead if this named header
-   specifically. body.landing > *:first-child targets whichever of
-   the two is actually there. The same problem happens in reverse at
-   the bottom: with the last .landing-anchor as the final snap point,
-   "mandatory" refuses to rest anywhere past it -- there's nothing to
-   align a further scroll to -- which traps the page and makes the
-   footer completely unreachable. Giving footer a snap point too
-   fixes that the same way. */
+/* "mandatory" snap needs a point at the top or it jumps to the first
+   .landing-anchor, skipping the header or link banner (_link_banner());
+   body.landing > *:first-child matches whichever exists. The footer needs one
+   too, or it is unreachable past the last anchor. */
 body.landing > *:first-child,
 body.landing footer {
   scroll-snap-align: start;
-  /* Same "don't let a fast scroll skip past this one" guarantee the
-     anchors themselves get (see .landing-anchor below) -- otherwise a
-     hard flick from further down the page could blow straight past
-     the header/intro stop (or the footer) without ever resting there. */
   scroll-snap-stop: always;
 }
 
-/* Site-wide: nothing on the page should be text-highlightable or
-   image-draggable. A lot of the UI here is drag/click-heavy (gear
-   setup slots and their drag-and-drop reordering, sort tabs, NPC/item
-   boxes, search results) and an accidental text selection -- or an
-   image starting to drag -- mid-click just gets in the way of that
-   instead of doing anything useful. Inputs/textareas/contenteditable
-   are explicitly carved back out since selecting text you've typed
-   (to copy or edit it) is exactly the normal, expected behavior
-   there. See _shell()'s shared_script in app/pages.py for the other
-   half of this -- a dragstart handler on <img>, since -webkit-user-drag
-   below is WebKit-only and doesn't stop Firefox's own native image
-   drag. */
+/* Nothing is selectable or draggable (drag/click-heavy UI) except inputs,
+   textareas and contenteditable. -webkit-user-drag is WebKit-only; _shell()'s
+   shared_script adds a dragstart handler for Firefox. */
 * {
   -webkit-user-select: none;
   -moz-user-select: none;
@@ -216,13 +98,8 @@ img {
   -webkit-touch-callout: none;
 }
 
-/* min-height + flex column is what actually pins <footer> (see below) to
-   the true bottom of the viewport on a short page (e.g. the dashboard
-   with just its two "coming soon" cards) instead of it sitting right
-   after the content, wherever that happens to end. .page is the one
-   child that grows (flex: 1 0 auto, below) to absorb any leftover
-   space above the footer; header/link-banner/footer all keep their
-   natural height. */
+/* min-height + flex column pins <footer> to the viewport bottom; .page (flex: 1
+   0 auto) absorbs the slack. */
 body {
   margin: 0;
   min-height: 100vh;
@@ -240,14 +117,8 @@ button, input { font-family: inherit; }
 a { color: var(--gold-dim); text-decoration: none; }
 a:hover { color: var(--gold); text-decoration: underline; }
 
-/* Generic "looks like a link, is actually a button" treatment -- used all
-   over the Purchase Goals page (mode toggles, "+ Add component", "Clear
-   slot"/"Cancel", "Clear icon", etc.) for tertiary actions that shouldn't
-   compete visually with a real button. Without this, a bare <button
-   class="link"> falls back to the browser's native button chrome (a
-   white, rounded box), which is what was happening before this rule
-   existed -- .nav-side below still wins on specificity for its own
-   two-class selector, so this only fills the gap everywhere else. */
+/* A <button class="link"> otherwise falls back to native button chrome.
+   .nav-side still wins on specificity. */
 button.link {
   background: none;
   border: none;
@@ -262,43 +133,26 @@ button.link {
 button.link:hover { color: var(--gold); text-decoration: underline; }
 button.link:disabled { opacity: 0.5; cursor: default; }
 
-/* Padding lives here rather than on body so the link banner (a sibling
-   before .page, see _shell) can sit flush against the very top and
-   sides of the viewport and push this content down in normal document
-   flow, instead of overlapping or covering it. Bottom padding is
-   smaller than it used to be now that a real <footer> (see below)
-   follows .page and supplies its own breathing room above the fold. */
+/* Padding lives here so the link banner can sit flush at the top and push
+   content down. */
 .page { padding: 32px 20px 40px; flex: 1 0 auto; }
 
-/* Phone width (700px is this site's phone breakpoint -- see
-   character-overview.css's own phone block): trim the page's side
-   gutters so cards get the room, 12px each side instead of 20px. */
+/* Phone breakpoint is 700px (see character-overview.css). */
 @media (max-width: 700px) {
   body:not(.landing) .page { padding: 24px 12px 32px; }
 }
 
 .wrap { max-width: 880px; margin: 0 auto; }
 
-/* header is a full-width sibling of .page (see _shell), the same
-   pattern .link-banner uses, so the darkening gradient behind the
-   logo/nav spans the whole viewport rather than being boxed in by
-   .page's padding. .header-inner (which doubles as .wrap, for the same
-   880px centered column as the rest of the page) holds the actual
-   content. */
 header {
   padding: 24px 20px 20px;
   margin-bottom: 28px;
   background: linear-gradient(to bottom, rgba(15, 15, 16, 0.82) 0%, rgba(15, 15, 16, 0.35) 65%, rgba(15, 15, 16, 0) 100%);
 }
 
-/* Two equal-width rails (1fr each) flank a fixed-width center column,
-   which is what actually guarantees the wordmark sits at the exact
-   horizontal center of the header regardless of how long "Log in" vs
-   "Sign up" (or "Dashboard" vs "Log out") happen to be -- centering
-   the flex group as a whole wouldn't do that if the two side labels
-   are different widths. The nav links are then pulled in toward the
-   middle (see .nav-left/.nav-right below) so they still read as one
-   cluster with the logo instead of sitting out at the header's edges. */
+/* Two 1fr rails flank a fixed center column so the wordmark is centered whatever
+   the side labels' widths; the nav links are pulled toward the middle
+   (.nav-left/.nav-right). */
 .header-inner {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -309,8 +163,6 @@ header {
 .nav-left { justify-content: flex-end; }
 .nav-right { justify-content: flex-start; }
 
-/* Text wordmark (replaces the old logo image) -- same pixel font as
-   the rest of the site, in the site's signature gold/orange. */
 .logo {
   margin: 0;
   line-height: 1;
@@ -328,26 +180,15 @@ header {
 
 .subtitle { color: var(--text-muted); font-size: 15px; margin-top: 6px; }
 
-/* A page's own on-page title -- e.g. "Purchase Goals"/"Loot Tracker"
-   at the top of their .wrap content, below the site header. Shared
-   here (rather than duplicated per-page-feature CSS file) since any
-   dashboard sub-page can use it the same way. */
 .page-title {
   font-size: 22px; font-weight: normal; letter-spacing: 0.04em; margin: 0 0 20px;
   text-align: center; text-transform: uppercase;
 }
 
-/* A few px lower than dead center -- the all-caps nav labels have no
-   descenders, so lining their box up with .logo's (which does, via
-   the "y"/"p" in "myscape") reads as visibly higher than the
-   wordmark even though the boxes themselves are centered evenly. */
+/* A few px lower: all-caps labels have no descenders and otherwise look higher
+   than .logo. */
 .nav-side { display: flex; align-items: center; font-size: 15px; position: relative; top: 3px; }
 
-/* White nav text (distinct from the rest of the site's gold/dim-text
-   link styling) so it reads clearly flanking the centered logo over
-   the video background. Capitalized -- unlike the "myscape" logo
-   between them, which stays lowercase on purpose (it's a wordmark,
-   not a nav label). */
 .nav-side a, .nav-side button.link {
   color: #fff;
   text-decoration: none;
@@ -368,25 +209,13 @@ header {
   padding-top: 40px;
 }
 
-/* Account (app/pages.py's render_account) is the one .auth-shell page
-   that's really part of the logged-in app rather than a pre-login
-   auth flow -- .page already gives every page 32px of top padding, so
-   .auth-shell's own extra 40px on top of that was landing its card a
-   lot lower than the dashboard's own cards. 14px here (not 0) matches
-   .dash-grid's own margin-top above exactly, so account's card starts
-   at the same y-position as the dashboard's cards do, not just close
-   to it. Scoped to this page (not .auth-shell itself) since every
-   other page using that class is a pre-login auth screen where the
-   current centered-lower feel isn't a reported problem. */
+/* Account is the one .auth-shell page inside the logged-in app; 14px matches
+   .dash-grid's margin-top so its card starts at the dashboard's y. */
 .account-shell {
   padding-top: 14px;
 }
 
-/* 15% wider than the base .auth-card's own 420px (420 * 1.15 = 483)
-   -- scoped to this page alone, not .auth-card itself, since every
-   other page using that class is a pre-login auth screen (signup,
-   login, ...) with no own reason to widen. The extra room is for the
-   Shared Links table's own columns further down this same card. */
+/* 420px * 1.15 = 483, for the Shared Links table; scoped to this page. */
 .account-shell .auth-card {
   max-width: 483px;
 }
@@ -429,17 +258,9 @@ input[type="email"], input[type="password"], input[type="text"], input[type="num
   width: 100%;
 }
 
-/* Kept at its original, more-gray value on purpose (darker than the
-   soft --text-dim/--text-muted tiers used elsewhere) -- it's a hint,
-   not real content, and needs to read as visually distinct from what
-   the player actually types (--text, full white). */
 input::placeholder { color: var(--text-faint); }
 input:focus { outline: none; border-color: var(--gold-dim); }
 
-/* Number inputs (the combo-builder's component quantity field) would
-   otherwise keep the browser's native white up/down spinner glued onto
-   the themed box above -- drop it entirely for a plain dark field
-   consistent with the rest of the site, rather than a mismatched widget. */
 input[type="number"] { -moz-appearance: textfield; }
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
@@ -447,12 +268,7 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 
-/* A fully custom flat checkbox (the combo builder's "Always count as
-   owned" toggle) -- accent-color alone still leaves the unchecked box
-   in the browser's native white/gray, so this replaces it outright with
-   the same small dark-square-plus-gold-fill treatment used everywhere
-   else on the site (tracker-icon-btn, gear-slot, etc.) instead of an
-   unstyled system control. */
+/* Custom flat checkbox: accent-color leaves the unchecked box native. */
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -500,10 +316,6 @@ button.primary {
 button.primary:hover { background: #ffab42; }
 button.primary:disabled { opacity: 0.5; cursor: default; }
 
-/* Account page's less-loud actions (render_account, app/pages.py) --
-   Log out is a real action but not the primary one on that section,
-   so it gets an outlined button instead of button.primary's filled
-   gold. */
 button.secondary {
   background: transparent;
   color: var(--text);
@@ -518,9 +330,6 @@ button.secondary {
 button.secondary:hover { border-color: var(--gold-dim); }
 button.secondary:disabled { opacity: 0.5; cursor: default; }
 
-/* Delete account -- same shape as button.secondary above, but in
-   --red so it reads as the one genuinely destructive action on the
-   page rather than just another settings button. */
 button.danger {
   background: transparent;
   color: var(--red);
@@ -548,9 +357,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 
 .auth-error.show { display: block; }
 
-/* Same shape as .auth-error above (used by render_forgot_password's
-   "check your inbox" message), just green instead of red for a
-   success/confirmation state rather than a problem. */
 .auth-success {
   display: none;
   background: rgba(111, 174, 90, 0.12);
@@ -575,22 +381,10 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 .auth-switch a { color: var(--gold-dim); text-decoration: none; }
 .auth-switch a:hover { color: var(--gold); }
 
-/* The "Forgot your password?" link under the login form's password
-   field (see render_login in app/pages.py) -- right-aligned and
-   pulled up snug under that field rather than the centered, ~22px-
-   below-the-whole-form treatment .auth-switch above gets, since this
-   one belongs to the password field specifically, not the card as a
-   whole. Same gold-dim/gold link coloring as .auth-switch either
-   way, so the two still read as the same kind of secondary link. */
 .auth-forgot { text-align: right; margin: -10px 0 18px; }
 .auth-forgot a { font-size: 13px; color: var(--gold-dim); text-decoration: none; }
 .auth-forgot a:hover { color: var(--gold); }
 
-/* The "we sent a confirmation link to <email>" / "confirming your
-   email..." message on the verify-email pages (render_verify_email
-   and render_verify_email_required in app/pages.py) -- these cards
-   otherwise hold only left-aligned form fields, but there's no form
-   here, so centered reads better for a plain sentence of body text. */
 .verify-email-message {
   text-align: center;
   color: var(--text-dim);
@@ -599,28 +393,15 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   margin: 0 0 20px;
 }
 
-/* The "myscape is coming soon." line on /signup while sign-ups are
-   switched off (render_signup_coming_soon in app/pages.py) -- the
-   page's one real message, so bigger than the plain body-text size
-   .verify-email-message above gives it. */
 .signup-closed-message {
   font-size: 22px;
   margin: 6px 0 26px;
 }
 
-/* render_verify_email's "missing/invalid link" state (app/pages.py) --
-   .auth-error itself stays left-aligned everywhere else (it sits above
-   left-aligned form fields on every other page that uses it), but this
-   page has no form at all, just this one message, so it's centered
-   like the rest of this page's text instead. */
 #noTokenError {
   text-align: center;
 }
 
-/* Account page's stacked settings sections (render_account,
-   app/pages.py) -- email, password, log out, delete account, each
-   below the last inside the one .auth-card, separated by a thin top
-   border rather than being four separate cards. */
 .account-section {
   border-top: 1px solid var(--border);
   padding-top: 22px;
@@ -649,37 +430,20 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   letter-spacing: 0.05em;
 }
 
-/* Danger-zone variant of the title above -- centered and in --red,
-   for ACCOUNT DELETION right above the "This will PERMANENTLY..."
-   warning in render_account (app/pages.py). Combined with
-   .account-section-title, not a replacement for it, so it keeps that
-   class's size/weight/letter-spacing and only overrides alignment
-   and color. */
 .account-section-title--danger {
   text-align: center;
   color: var(--red);
 }
 
-/* Update Email / Update Password / Delete Account -- now one shared
-   row of three buttons (see .account-tab-row below) rather than each
-   stacked in its own .account-section, with only one of the three
-   .account-collapse-body sections below the row visible at a time
-   (accordion -- see the script in render_account, app/pages.py).
-   Same hidden-attribute toggle convention as the Character Overview
-   page's own publicProfileCard, just without that one's rotating-
-   caret indicator -- the button IS the whole header, nothing smaller
-   sitting beside a separate title to click instead. */
+/* Update Email / Password / Delete Account share one row; one
+   .account-collapse-body is visible at a time (accordion script in
+   render_account). */
 .account-collapse-body {
   margin-top: 16px;
 }
 
-/* The three toggle buttons above those bodies, side by side instead
-   of each stacked full-width in its own .account-section. Overrides
-   button.secondary/button.danger's own width: 100% (higher
-   specificity here beats those regardless of source order) -- same
-   shape/weight otherwise, just sized to share one row and with a
-   smaller font/padding so "UPDATE PASSWORD" (the longest label)
-   still fits its third of the row without wrapping. */
+/* Overrides button.secondary/button.danger's width: 100%; small enough for
+   "UPDATE PASSWORD" to fit a third of the row. */
 .account-tab-row {
   display: flex;
   gap: 8px;
@@ -693,11 +457,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   font-size: 12.5px;
 }
 
-/* Marks whichever tab is currently expanded (toggled alongside the
-   hidden attribute on its .account-collapse-body in the script
-   below) -- same gold-on-hover/red-on-hover colors button.secondary/
-   button.danger already use, just held permanently instead of only
-   on :hover, so the open tab stays visually distinct while expanded. */
 .account-tab-row button.secondary.active {
   border-color: var(--gold-dim);
   color: var(--gold);
@@ -707,31 +466,17 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   background: rgba(192, 90, 76, 0.12);
 }
 
-/* + ADD ANOTHER CHARACTER (render_account, app/pages.py) -- same
-   compact sizing as .account-tab-row's own three buttons just above
-   (width: auto, same padding/font-size), rather than plain
-   button.secondary's own full-width/16px default, per explicit
-   instruction to bring this one in line with those. Unlike that row,
-   this button is the only thing in its own .account-section, so
-   shrinking it to auto width would otherwise leave it flush against
-   the card's left edge (a block-level element's default alignment)
-   -- display: block; margin: 0 auto centers it the same way a
-   width: 100% button already reads as "centered" by filling the
-   whole row. */
+/* Alone in its section, so width: auto would leave it flush left; display:
+   block; margin: 0 auto centers it. */
 #addGameAccountBtn {
   display: block;
   width: auto;
   margin: 0 auto;
-  /* Same box as .account-logout-link (6px 16px, 13px text) so the two
-     are always the same height -- and it gets real side padding back
-     instead of the 6px it shared with the full-width tab buttons. */
   padding: 6px 16px;
   font-size: 13px;
 }
 
-/* Linked Accounts list (render_account, app/pages.py -- step 7 of
-   docs/multi-account-scoping.md). One .game-account-row per GameAccount
-   under the signed-in Account. */
+/* Linked Accounts list (render_account; step 7 of docs/multi-account-scoping.md) */
 .game-accounts-list {
   display: flex;
   flex-direction: column;
@@ -775,10 +520,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   flex-shrink: 0;
 }
 
-/* Same button.secondary/button.danger look used everywhere else on
-   this page, just not full-width and not stacked -- those read right
-   as THE one action in their own section, but would be oversized
-   repeated per row in a list like this one. */
 .game-account-actions button {
   width: auto;
   padding: 6px 12px;
@@ -786,24 +527,12 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   margin-top: 0;
 }
 
-/* Shared Links section (render_account, app/pages.py) -- a real
-   table, one row per currently-valid SharedContent link created from
-   any of the signed-in Account's own GameAccounts, directly below
-   the Linked Accounts list above. */
+/* Shared Links table (render_account) */
 .account-section-title--center { text-align: center; }
 
-/* overflow handles both directions: -y so more than ~10 rows scrolls
-   instead of growing the card forever (max-height below is sized for
-   that -- a header row plus 10 body rows at this table's own row
-   height), -x as a safety net for the .auth-card's 420px max-width
-   against a long character/app name or the action cell's own widest
-   state (BUTTON text "ARE YOU SURE?"), same situation .loot-range-
-   menu's own box-shadow/overflow handling elsewhere on this site
-   already assumes a cramped container rather than an infinitely wide
-   one. overscroll-behavior: contain stops scrolling past this box's
-   own top/bottom limit from chaining into a scroll of the whole
-   account page underneath it (the default browser behavior once an
-   inner scroll container runs out of room to scroll further). */
+/* overflow-y scrolls past ~10 rows (max-height); overflow-x guards long names
+   and the "ARE YOU SURE?" state. overscroll-behavior: contain stops chaining to
+   the page. */
 .shared-links-table-wrap {
   max-height: 340px;
   overflow-y: auto;
@@ -821,13 +550,8 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   font-size: 12px;
 }
 
-/* Explicit per-column widths (table-layout: fixed above makes these
-   the actual, permanent column widths -- content no longer has any
-   say in them at all) rather than letting auto layout size columns
-   off their own content, so a header's content width can freely
-   change (see .shared-link-sort-arrow below) without ever reflowing
-   any column. Roughly matches this table's old auto-layout
-   proportions. */
+/* table-layout: fixed makes these permanent widths, so header content
+   (.shared-link-sort-arrow) never reflows a column. */
 .shared-links-table th:nth-child(1),
 .shared-links-table td:nth-child(1) { width: 21%; }
 .shared-links-table th:nth-child(2),
@@ -839,10 +563,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 .shared-links-table th:nth-child(5),
 .shared-links-table td:nth-child(5) { width: 18%; }
 
-/* Character/App are the only columns whose content length actually
-   varies (names/labels) -- now that their width is pinned above
-   instead of grown to fit, a long one needs to truncate gracefully
-   rather than overflow its fixed-width cell. */
 .shared-links-table td:nth-child(1),
 .shared-links-table td:nth-child(2) {
   overflow: hidden;
@@ -857,10 +577,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   white-space: nowrap;
 }
 
-/* CODE is the 3rd column -- a fixed-width button (see
-   .shared-link-code-btn below) inside an otherwise-plain cell, so its
-   own cell padding is the other place extra side-space was coming
-   from alongside the button's own width. */
 .shared-links-table th:nth-child(3),
 .shared-links-table td:nth-child(3) {
   padding-left: 6px;
@@ -883,12 +599,8 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
   border-bottom: 1px solid var(--border);
 }
 
-/* Shows the share's own lowercase code (not uppercased the way most
-   other buttons on this site are -- see .loot-range-btn and friends
-   -- since this is meant to visually match the exact characters that
-   get copied, not just a label). Click copies the FULL https://
-   myscape.io/s/<code> URL, not just this text -- see the button's own
-   click handler in app/pages.py. */
+/* Shows the lowercase code; click copies the full https://myscape.io/s/<code>
+   URL (handler in app/pages.py). */
 .shared-link-code-btn {
   width: 68px;
   padding: 4px 0;
@@ -901,13 +613,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 }
 .shared-link-code-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 
-/* Sortable column headers (Character/App/Code/Expiration -- Deletion
-   isn't sortable, plain text) -- same plain-button-reset-to-text,
-   active-column-in-gold convention as Storages Viewer's own
-   .pm-sort-header/.pm-sort-arrow, just inheriting this table's own
-   centered/uppercase th styling instead of overriding it, since
-   every header here is centered rather than Storages Viewer's
-   left/center mix. */
 .shared-link-sort-header {
   background: none; border: none; padding: 0; margin: 0; font: inherit;
   color: inherit; letter-spacing: inherit; text-transform: inherit;
@@ -915,30 +620,13 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 }
 .shared-link-sort-header:hover { color: var(--text); }
 .shared-link-sort-header.active { color: var(--gold); }
-/* No reserved width here on purpose -- .shared-links-table's own
-   explicit per-column widths (table-layout: fixed, above) already
-   keep every column's width constant regardless of header content,
-   so this is free to be its natural (zero, when empty) width
-   instead. That's what gives the centering behavior the title text
-   wants: button.shared-link-sort-header is itself just centered as
-   an inline box inside its <th> (that th's own text-align: center),
-   so with no arrow present the title text alone sits dead-center,
-   and when sorting adds the " \u2191"/" \u2193" glyph (with its own
-   leading space baked into the textContent set in the script below)
-   the title+arrow pair grows together and re-centers as one unit --
-   no flex/nudge math needed, just plain inline centering with
-   nothing permanently reserved beside the title. */
+/* No reserved width (columns are fixed): the button is centered inline in its
+   th, so the title alone is centered and title+arrow re-centers as one unit. */
 .shared-link-sort-arrow { display: inline-block; }
 
-/* DELETION column header -- not sortable, a destructive bulk action
-   instead (see sharedLinksDeleteAllBtn in app/pages.py): gray at rest
-   like the sort headers beside it, but red on hover and red + "SURE?"
-   once armed, rather than this table's usual gold "active" convention
-   -- same red-on-hover-then-red-when-armed language as this table's
-   own per-row trash-can buttons below, just without their icon (this
-   one swaps its own text instead, there's no icon to begin with). A
-   standalone reset (not .shared-link-sort-header) on purpose, so its
-   red states never have to fight that class's own gold .active rule. */
+/* DELETION header: bulk delete (sharedLinksDeleteAllBtn, app/pages.py), red on
+   hover and red + "SURE?" when armed. Standalone so its red states never fight
+   .shared-link-sort-header's gold .active. */
 .shared-link-delete-all-header {
   background: none; border: none; padding: 0; margin: 0; font: inherit;
   color: inherit; letter-spacing: inherit; text-transform: inherit;
@@ -948,19 +636,10 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 .shared-link-delete-all-header--confirm,
 .shared-link-delete-all-header--confirm:hover { color: var(--red); }
 
-/* Shared gray-trash-can -> red-on-hover -> red "confirm" label delete
-   button -- used by both DEACTIVATE (Shared Links table) and DELETE
-   CHARACTER (Linked Accounts list below), same SVG-swaps-for-a-text-
-   label-on-click pattern Goal Tracking's own .gt-goal-delete already
-   uses per-goal. Inline in its own cell/slot in both layouts rather
-   than overlaid on a card's corner the way that one is -- there's
-   already a dedicated spot reserved for it either way, so no
-   position: absolute needed here. The confirm text itself ("SURE?"/
-   "ARE YOU SURE?") differs per caller and lives in the markup each
-   one renders -- only the swap mechanics are shared here. button.
-   (type + class) on both this and its --confirm variant so each
-   beats .game-account-actions button's own generic button override
-   at equal specificity, by coming later in this file. */
+/* Trash-can delete shared by DEACTIVATE (Shared Links) and DELETE CHARACTER
+   (Linked Accounts): swaps to a red confirm label on click (as .gt-goal-delete);
+   label text comes from each caller's markup. button.(type + class) beats
+   .game-account-actions button at equal specificity via source order. */
 button.trash-delete-btn {
   background: none;
   border: 1px solid transparent;
@@ -990,24 +669,11 @@ button.trash-delete-btn--confirm {
 button.trash-delete-btn--confirm .trash-delete-icon { display: none; }
 button.trash-delete-btn--confirm .trash-delete-confirm { display: block; }
 
-/* Shared Links' own DEACTIVATE button specifically -- "SURE?" is
-   short, but button.trash-delete-btn--confirm's own wider padding
-   above (sized to hold DELETE CHARACTER's much longer "ARE YOU
-   SURE?" without wrapping) still widens the button enough on click
-   to shift the Deletion column, and with it the whole table (every
-   column auto-sizes to its own widest content). Pinning both states
-   to the same fixed width here keeps the icon <-> "SURE?" swap from
-   resizing anything -- same fix as the Code column's own button
-   gets from .shared-link-code-btn's fixed width above. */
-/* display: flex (not the base rule's inline-flex) takes this button
-   out of the TD's inline formatting context entirely -- an inline-
-   flex child's own line-box metrics were still inflating the row's
-   height in the icon state vs. the "SURE?" text state even with an
-   explicit height set on the button itself (confirmed by measuring
-   the button's own box at a steady 23px in both states while the
-   surrounding <tr> still grew/shrank by 2px). margin: 0 auto takes
-   over the centering .shared-links-table td's own text-align: center
-   provided for the old inline-flex version. */
+/* Pin both states to one width: --confirm's wider padding would shift the
+   Deletion column on click. */
+/* display: flex, not inline-flex: the inline-flex line box changed the <tr>
+   height by 2px between icon and "SURE?" states. margin: 0 auto replaces the
+   td's text-align centering. */
 .shared-links-table .trash-delete-btn,
 .shared-links-table .trash-delete-btn--confirm {
   display: flex;
@@ -1017,14 +683,8 @@ button.trash-delete-btn--confirm .trash-delete-confirm { display: block; }
   padding: 4px 0;
 }
 
-/* DELETE ACCOUNT's own inner submit button -- the one revealed inside
-   the collapsed "ACCOUNT DELETION" section (render_account,
-   app/pages.py), not the DELETE ACCOUNT toggle button that opens it.
-   Filled solid red rather than button.danger's usual red-outline-on-
-   transparent, so the one button that actually deletes the account
-   reads as more final than the toggle above it. Combined with
-   .danger (not a replacement for it) so it keeps that class's shape/
-   sizing -- this only overrides color. */
+/* DELETE ACCOUNT's inner submit button, not the toggle. Solid red to read as
+   final; combined with .danger, so only color changes. */
 button.danger--filled {
   background: var(--red);
   color: #fff;
@@ -1039,10 +699,6 @@ button.danger--filled:hover { background: #a84a3d; }
   padding: 2px;
 }
 
-/* The signed-in player's own email, centered under the ACCOUNT
-   heading, and the LOG OUT text directly beneath it -- see
-   render_account in app/pages.py. Neither needs an .account-section
-   of its own; they sit above the first one instead. */
 .account-email {
   text-align: center;
   font-weight: normal;
@@ -1051,10 +707,6 @@ button.danger--filled:hover { background: #a84a3d; }
   margin: -10px 0 8px;
 }
 
-/* A small bordered button (not the plain text link it used to be) --
-   same look as button.secondary, just compact and shrink-to-fit
-   (no width: 100%) since it sits under the email rather than
-   anchoring a whole .account-section. */
 .account-logout-link {
   display: block;
   width: auto;
@@ -1071,12 +723,8 @@ button.danger--filled:hover { background: #a84a3d; }
 
 .account-logout-link:hover { border-color: var(--gold-dim); }
 
-/* The 404/teleport-icon header on render_not_found (app/pages.py) --
-   the 404 number sits plain (not a link) right under the heading, and
-   only the home-teleport icon below it is clickable, standing in for
-   the usual text "back to home" link. The icon wobbles gently on a
-   loop as a hint that it's the thing to click, and holds still (and
-   scales up slightly) on hover/focus instead. */
+/* render_not_found: only the teleport icon is clickable; it wobbles as a hint
+   and holds still on hover/focus. */
 .not-found-code {
   text-align: center;
   font-size: 32px;
@@ -1114,34 +762,15 @@ button.danger--filled:hover { background: #a84a3d; }
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  /* 18px, not the 20px this used to be -- standardized to the same
-     between-sections gap Purchase Goals and Loot Tracker's own cards
-     use (see .overlay-card/.pg-body in purchase-goals.css and
-     .loot-chart-card/.loot-panels in loot-tracker.css), so the space
-     between top-level cards reads the same across every one of these
-     pages instead of each picking its own slightly different number. */
+  /* 18px matches the between-sections gap of Purchase Goals and Loot Tracker. */
   gap: 18px;
   margin-top: 14px;
 }
 
-/* Plain wrapper around the actual card below -- see _dash_card_wrap in
-   app/pages.py -- so .dash-card-link's own display: block/color/
-   text-decoration rules just below have something to apply to. Used
-   to also be this dashboard's drag-and-drop reorder handle (removed
-   per explicit instruction in favor of one fixed card order for every
-   player -- see DASHBOARD_CARD_KEYS' own comment in app/pages.py). */
+/* Wrapper (_dash_card_wrap, app/pages.py) for .dash-card-link's rules. */
 
-/* :hover repeated explicitly, not just relying on the plain rule above
-   -- the site-wide `a:hover { color: var(--gold); text-decoration:
-   underline; }` (near the top of this file) has higher specificity
-   (element+pseudo-class) than a single class alone, so without this it
-   would win over .dash-card-link's own color/text-decoration the
-   moment a card is hovered, turning its title/description into a
-   plain underlined text link instead of the whole styled card reading
-   as hoverable via .dash-card:hover's background alone. The original
-   version of this link avoided the whole issue with an inline style
-   (inline styles always win regardless of specificity); moving that to
-   a real class for the reorder feature's sake needs this instead. */
+/* Hover repeated: the site-wide `a:hover` outranks a single class and would
+   underline the card. */
 .dash-card-link,
 .dash-card-link:hover {
   display: block;
@@ -1158,27 +787,15 @@ button.danger--filled:hover { background: #a84a3d; }
   border-radius: var(--radius);
   padding: 22px 24px 24px;
 }
-/* Each card is a single clickable link out to its own page (see
-   purchase_goals_card/loot_tracker_card in app/pages.py), so unlike
-   the translucent "frame" cards elsewhere on the site (.loot-chart-card,
-   .gear-summary, etc., which just hold a grid of separately-hoverable
-   boxes), this whole card IS the hoverable box here -- same
-   background-only brightening, and the same rgb(51,51,54) target, as
-   .loot-npc-box/.loot-item-box (loot-tracker.css) and .gear-slot/
-   .gear-summary-row (purchase-goals.css) use for their own hover
-   feedback, so hovering a dashboard card matches those. */
+/* The whole card is the hoverable link: background-only brighten to
+   rgb(51,51,54), as .loot-npc-box/.loot-item-box and
+   .gear-slot/.gear-summary-row. */
 .dash-card:hover { background-color: rgb(51, 51, 54); }
 
-/* When the grid has two columns, two cards on one row are the same height
-   (the grid already stretches each cell; the link and the card inside it
-   just have to fill it). */
 .dash-grid .dash-card-wrap,
 .dash-grid .dash-card-link { height: 100%; }
 .dash-grid .dash-card { height: 100%; box-sizing: border-box; }
 
-/* Medium-sized icon chip anchoring the left side of each card -- a flat
-   square (matching the site's sharp-corner identity) rather than a circle,
-   so it reads as a slot in the panel instead of a floating badge. */
 .dash-card-icon {
   flex: 0 0 auto;
   width: 72px;
@@ -1188,15 +805,8 @@ button.danger--filled:hover { background: #a84a3d; }
   border: 1px solid var(--border);
 }
 
-/* These are the game's actual (tiny, hand-pixelled) item icons, so scale
-   them up crisp rather than letting the browser blur them smooth, and
-   preserve their aspect ratio instead of stretching them to fill the
-   square chip. The translate compensates for built-in padding in
-   RuneLite's own icon CDN images themselves (a fixed canvas that
-   leaves room for the in-game stack-count badge, so the real item art
-   sits visibly left-of-center within it) -- see .loot-item-box-icon's
-   own comment in loot-tracker.css for the empirical numbers behind
-   this exact shift. */
+/* Crisp upscale of tiny item icons. The translate offsets RuneLite CDN padding
+   for the stack-count badge; see .loot-item-box-icon in loot-tracker.css. */
 .dash-card-icon img {
   width: 100%;
   height: 100%;
@@ -1206,19 +816,13 @@ button.danger--filled:hover { background: #a84a3d; }
   transform: translate(5.5%, -1%);
 }
 
-/* The Character Overview card's own bundled icon (a bald head) fills
-   much less of its 36x32 canvas than the item icons beside it do, so it
-   read noticeably smaller; scale it up to match, keeping the same
-   right/up nudge as the rest. */
+/* The Character Overview icon fills less of its 36x32 canvas, so scale it up. */
 .dash-card-icon img[src$="icon-character-overview.png"] {
   transform: translate(5.5%, -1%) scale(1.3);
 }
 
 .dash-card-body { flex: 1 1 auto; min-width: 0; }
 
-/* Help & Support's own row, below the six-card grid above -- the one
-   card on this page that isn't a full-size app card, so it gets its own
-   centered row rather than a slot in .dash-grid. */
 .dash-support-row {
   display: flex;
   justify-content: center;
@@ -1226,15 +830,9 @@ button.danger--filled:hover { background: #a84a3d; }
 }
 .dash-support-row .dash-card-wrap { width: 100%; max-width: 340px; }
 
-/* Smaller variant of .dash-card (shorter AND narrower than the app
-   cards): a 52px icon chip and tighter padding. Title/description font
-   sizes deliberately match the app cards. */
 .dash-card--compact { gap: 14px; padding: 14px 16px 16px; align-items: flex-start; }
 .dash-card--compact .dash-card-icon { width: 52px; height: 52px; padding: 6px; }
-/* (.dash-card.dash-card--compact, not just .dash-card--compact, so these
-   beat the plain .dash-card h3/.subtitle margins defined further down.)
-   Text block nudged down so the title's top sits a touch below the
-   icon chip's top edge, rather than level with or above it. */
+/* Doubled class beats the later plain .dash-card h3/.subtitle margins. */
 .dash-card.dash-card--compact .dash-card-body { padding-top: 6px; }
 .dash-card.dash-card--compact h3 { margin-bottom: 4px; }
 .dash-card.dash-card--compact .subtitle { margin-bottom: 0; }
@@ -1243,27 +841,14 @@ button.danger--filled:hover { background: #a84a3d; }
   font-weight: normal;
   font-size: 17px;
   margin: 0 0 8px;
-  /* "PURCHASE GOALS" / "LOOT TRACKER" -- both titles are fixed static
-     copy (see _dash_card in app/pages.py), not a value that ever needs
-     a mixed-case exception the way the loot tracker's own chart title
-     does (see .loot-chart-title in loot-tracker.css), so a plain CSS
-     transform is enough here. */
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
-/* No bottom margin -- the card's own bottom padding is the only space
-   under the description (a 14px margin here used to leave the cards
-   with noticeably more blank space below the text than above it). */
 .dash-card .subtitle { margin-top: 0; margin-bottom: 0; }
 
-/* Site-wide footer (see _footer() in app/pages.py) -- the visual mirror
-   of header above: same full-bleed darkening gradient technique, but
-   flipped (fading upward, `to top`) and pushed noticeably darker at its
-   base than the header ever gets, so it unmistakably reads as a floor
-   under the page rather than a second, weaker header. A generous top
-   padding keeps that strong color from crowding the linked-note/
-   trademark text right at the gradient's darkest point. */
+/* Site-wide footer (_footer(), app/pages.py): the header gradient mirrored and
+   darker so it reads as a floor. */
 footer {
   flex: 0 0 auto;
   margin-top: 40px;
@@ -1275,18 +860,9 @@ footer {
   text-align: center;
 }
 
-/* The GitHub/Discord/Patreon row (see _footer() in app/pages.py) --
-   the same three icons (minus its own myscape.io one, which would
-   just link back to the page the player's already on) the RuneLite
-   plugin's own sidebar shows above its cards (see buildSocialLinksRow
-   in MyscapePanel.java, myscape-plugin repo). The source PNGs are
-   plain white silhouettes with a transparent background (that's what
-   a flat, borderless Swing icon button needs), so they're used here
-   as mask-image shapes rather than shown as-is -- background-color is
-   what actually paints them, which is what lets them pick up the same
-   gold-dim/gold link language as .footer-trademark a below (and every
-   other link on the site) instead of sitting there a flat white that
-   nothing else on the page uses. */
+/* Social row (_footer(); icons as buildSocialLinksRow in MyscapePanel.java,
+   myscape-plugin repo). The PNGs are white silhouettes, so they are mask-image
+   shapes painted by background-color in the link colors. */
 .footer-social {
   display: flex; justify-content: center; align-items: center; gap: 18px;
   margin: 0 0 16px;
@@ -1318,17 +894,11 @@ footer {
   margin: 0;
 }
 
-/* Required attribution, but its two links use the same signature gold
-   as the Unlink link above (and every other link sitewide) -- the
-   surrounding "is a trademark of" text stays a soft gray so the two
-   clickable names stand out in gold. */
 .footer-trademark a { color: var(--gold-dim); text-decoration: none; }
 .footer-trademark a:hover { color: var(--gold); text-decoration: underline; }
 
-/* Site-wide "link your RuneLite account" banner -- rendered by _shell()
-   as a full-bleed block ahead of .page, so it shows on every page (not
-   just the dashboard) whenever a logged-in player hasn't linked yet,
-   and pushes the rest of the page down rather than covering it. */
+/* Link-your-RuneLite-account banner (_shell()): full-bleed ahead of .page on
+   every page, pushing content down. */
 
 .link-banner {
   background: var(--gold);
@@ -1369,8 +939,6 @@ footer {
 .link-banner-btn:hover { background: #362c1a; }
 .link-banner-btn:disabled { opacity: 0.5; cursor: default; }
 
-/* Once clicked, the button's own label becomes the code -- no separate
-   reveal area extends the banner. */
 .link-banner-btn--code {
   letter-spacing: 0.06em;
 }
@@ -1380,15 +948,9 @@ footer {
   margin: 10px auto 0;
 }
 
-/* Landing page anchor panels -- see render_landing() in app/pages.py.
-   Each <section> is one full-viewport "slide" (pre-composited
-   marketing art, not live content) that scroll-snap (see
-   html:has(body.landing) above) settles the page on as it's scrolled
-   past -- reinforced by that page's own wheel-locking script for a
-   firmer stop than CSS snap alone gives. .landing-anchors itself just
-   breaks the group out of .wrap's 880px cap (same calc(50% - 50vw)
-   trick as header/.link-banner), the same way the site already
-   escapes that column elsewhere. */
+/* Landing anchor panels (render_landing(), app/pages.py): full-viewport slides
+   that scroll-snap stops at, reinforced by the page's wheel-locking script.
+   Breaks out of .wrap like header/.link-banner. */
 .landing-anchors {
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
@@ -1396,103 +958,53 @@ footer {
 
 .landing-anchor {
   min-height: 100vh;
-  /* svh accounts for mobile browsers' collapsing address bar --
-     100vh there is the *tallest* the viewport ever gets, which
-     leaves a gap under the panel until the bar happens to hide.
-     Layered after the plain vh so it only takes over in browsers
-     that understand it. */
+  /* svh: mobile 100vh is the tallest viewport and leaves a gap; listed after vh
+     so only supporting browsers use it. */
   min-height: 100svh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
   scroll-snap-align: start;
-  /* Without this, a fast fling can skip a panel entirely and land on
-     the next one -- "always" forces every panel to actually stop the
-     scroll, not just the one it happens to settle near. */
+  /* "always" forces a stop at every panel, so a fast fling cannot skip one. */
   scroll-snap-stop: always;
 }
 
-/* The interactive Loot Tracker preview (render_landing_loot_preview,
-   app/pages.py) is the one .landing-anchor whose content's own height
-   actually changes after the page loads -- clicking an NPC tile or a
-   chart bar re-renders the NPC/item panels shorter, since there's
-   less to show once it's scoped down (see .landing-loot-preview in
-   loot-tracker.css for the feather that already handles the panel
-   coming out TALLER than its slide). .landing-anchor's own
-   align-items: center above re-centers that shorter content inside
-   the same fixed-height slide every time it changes -- for a marketing
-   image that height never changes, so centering is invisible there;
-   for this panel it reads as a jarring jump on every filter/drill-
-   down click instead. Anchoring to the top keeps this panel's own top
-   edge fixed regardless of how tall its current content is, so a
-   filter only ever changes how much (still centered horizontally,
-   just not vertically) empty space is left under it, never where it
-   itself sits. */
+/* The Loot Tracker preview (render_landing_loot_preview) changes height after
+   load (filters), and align-items: center would make it jump. Top-anchor so only
+   the space below changes; feather in .landing-loot-preview (loot-tracker.css). */
 .landing-anchor--loot-preview {
   align-items: flex-start;
 }
 
-/* Same top-anchoring, same reasoning, for the Purchase Goals preview
-   (render_landing_purchase_preview) -- sorting the "Still to
-   Purchase" list can change its content's own height same as
-   filtering Loot Tracker's own preview can, so this panel gets the
-   same fix for the same reason. See .landing-purchase-preview in
-   purchase-goals.css for its own feather. */
+/* Top-anchored likewise: Purchase Goals preview. */
 .landing-anchor--purchase-preview {
   align-items: flex-start;
 }
 
-/* Same top-anchoring, same reasoning, for the Mindmaps preview
-   (render_landing_mindmap_preview) -- editing the mindmap (adding/
-   deleting/reparenting nodes, opening a goal form) can change the
-   panel's own content height same as the other two previews' own
-   filtering/sorting can, so this panel gets the same fix for the same
-   reason. See .landing-mindmap-preview in mindmaps.css for its own
-   feather. */
+/* Top-anchored likewise: Mindmaps preview. */
 .landing-anchor--mindmap-preview {
   align-items: flex-start;
 }
 
-/* Same top-anchoring, same reasoning, for the Storages Viewer preview
-   (render_landing_storages_preview) -- sorting/filtering the table or
-   opening the saved-views strip's own save popover can change the
-   panel's own content height same as the other three previews' own
-   interactions can, so this panel gets the same fix for the same
-   reason. See .landing-storages-preview in possessions.css for its
-   own feather. */
+/* Top-anchored likewise: Storages Viewer preview. */
 .landing-anchor--storages-preview {
   align-items: flex-start;
 }
 
-/* Same top-anchoring, same reasoning, for the Goal Tracking preview
-   (render_landing_goal_tracking_preview) -- switching sort tabs,
-   deleting a goal, or dragging a custom-mode reorder can change the
-   panel's own content height same as the other four previews' own
-   interactions can, so this panel gets the same fix for the same
-   reason. See .landing-goal-tracking-preview in goal-tracking.css for
-   its own feather. */
+/* Top-anchored likewise: Goal Tracking preview. */
 .landing-anchor--goal-tracking-preview {
   align-items: flex-start;
 }
 
-/* The logo/tagline panel shares a single stop with the header above
-   it (see body.landing header in the scroll-snap rules up top)
-   instead of being its own separate one, but it's still pinned to
-   exactly one full screen -- header, logo, and the "explore
-   features" cue below, nothing else in view. --landing-intro-above
-   is set by that page's own script to the real measured height of
-   everything above this panel (header, plus the "link your account"
-   banner when it's showing, plus .page's own top padding) -- a fixed
-   guess wouldn't hold up once any of that varies. The literal px
-   fallback only matters for the instant before that script runs. */
+/* The logo/tagline panel shares the header's snap stop (body.landing header) and
+   is one screen tall. --landing-intro-above is the measured height above it (set
+   by the page script); the px fallback covers the moment before it runs. */
 .landing-anchor--intro {
   height: calc(100vh - var(--landing-intro-above, 130px));
   height: calc(100svh - var(--landing-intro-above, 130px));
-  /* Room for the art's floor height (see .landing-anchor--intro picture
-     img below), the scroll cue (~52px) and the media box's own bottom
-     padding, so a very small viewport (zoomed way in) scrolls instead of
-     squeezing the art. */
+  /* Room for the art's floor height, the ~52px scroll cue and the bottom
+     padding, so tiny viewports scroll instead of squeezing the art. */
   min-height: calc(min(300px, min(640px, 80vw) * 0.805) + 52px + 6vh + 12px);
   flex-direction: column;
   justify-content: flex-start;
@@ -1501,14 +1013,8 @@ footer {
   padding: 0 20px;
 }
 
-/* Fills whatever space the cue below doesn't need, so the logo sits
-   vertically centered in the room actually left for it rather than
-   centered across the whole panel (which would push it low, behind
-   where the cue's own height eats into that space). The bottom-only
-   padding nudges that centered position up a bit -- padding only on
-   one side shrinks the box the image is centered within from that
-   side alone, without needing a fixed offset that would fight the
-   height calc above. */
+/* Fills the space the cue leaves and centers the logo there; bottom-only padding
+   nudges it up without a fixed offset. */
 .landing-anchor-intro-media {
   flex: 1 1 auto;
   min-height: 0;
@@ -1537,17 +1043,11 @@ footer {
   height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  /* Gold instead of currentColor -- the arrows read as the call to
-     action, so they get the site's accent color, while the
-     "EXPLORE FEATURES" text next to them stays the more muted tone
-     the rest of the cue's text uses. */
   border-top: 7px solid var(--gold);
   animation: landing-scroll-cue-bounce 1.6s ease-in-out infinite;
 }
 
-/* Slightly offset from the left arrow so the two don't bounce in
-   lockstep -- reads more like a little wave pointing down than a
-   single flat pulse. */
+/* Offset from the left arrow so the two bounce out of step (a wave). */
 .landing-scroll-cue-arrow:last-child {
   animation-delay: 0.25s;
 }
@@ -1557,108 +1057,53 @@ footer {
   50% { transform: translateY(5px); opacity: 1; }
 }
 
-/* Scoped to "picture img" specifically, not every img under a
-   .landing-anchor -- the interactive Loot Tracker preview
-   (render_landing_loot_preview, a .landing-anchor of its own; see
-   .landing-loot-preview in loot-tracker.css) reuses the real Loot
-   Tracker page's own markup wholesale, which is full of its own
-   correctly-sized img tags (NPC portraits, item icons -- see
-   .loot-npc-box-icon/.loot-item-box-icon in loot-tracker.css) that
-   are never wrapped in a <picture> the way each plain marketing
-   screenshot below is. An unscoped `.landing-anchor img` cascaded
-   onto those too (one class + element beats their own one-class
-   rules) and blew every icon up to 700px -- scoping to the
-   <picture> wrapper keeps this rule aimed at just the marketing
-   screenshots it was written for. */
+/* Scoped to `picture` imgs: the Loot Tracker preview reuses real-page icon
+   <img>s (.loot-npc-box-icon/.loot-item-box-icon) outside <picture>, which an
+   unscoped `.landing-anchor img` outranked and blew up to 700px. */
 .landing-anchor picture img {
   display: block;
-  /* A fixed width (not max-width) is what makes all three panels the
-     same size regardless of their own image's aspect ratio -- height
-     just follows from that, auto-preserving each image's shape. The
-     max-height is a backstop for unusually short/wide viewports
-     (a landscape phone, say) where this width would otherwise make a
-     tall image spill past the top and bottom of the screen. */
+  /* Fixed width (not max-width) keeps panels the same size whatever the aspect
+     ratio; max-height backstops short/wide viewports. */
   width: min(700px, 82vw);
   max-height: calc(100vh - 80px);
   max-height: calc(100svh - 80px);
   height: auto;
 }
 
-/* The intro logo reads fine smaller than the two feature screenshots
-   -- it's a wordmark, not a UI panel that needs room to be legible --
-   so it gets its own, slightly smaller width instead of matching
-   .landing-anchor picture img above. Same specificity (one class +
-   element + element), so source order is what makes this win over
-   the shared rule. */
+/* The wordmark needs less room; same specificity as the shared rule, so source
+   order wins. */
 .landing-anchor--intro picture img {
-  /* The intro art is the wordmark over the group of characters
-     (anchor-myscape-v2), so it's much taller than the old wordmark-only
-     image: width is capped, and max-height is the room left in the
-     panel (viewport minus everything above it, the scroll cue's ~52px
-     and the media box's 6vh bottom padding above), with width: auto,
-     so it shrinks to fit on short screens instead of spilling into
-     the cue. (A plain max-height: 100% doesn't resolve against that
-     flex box.) */
+  /* The tall intro art: max-height is the room left (viewport minus what is
+     above, the ~52px cue and the 6vh bottom padding) with width: auto.
+     max-height: 100% does not resolve against this flex box. */
   width: auto;
   max-width: min(640px, 80vw);
-  /* max(): the room left in the panel, but never less than a floor of
-     300px tall (or the width-limited height on a narrow screen, the
-     art being ~0.805 as tall as it is wide). Zooming the browser in
-     shrinks the viewport in CSS pixels while the header and cue stay
-     the same size, so that "room left" went to nothing and the art
-     shrank to a speck; now it stops shrinking at the floor and the
-     panel grows taller than the screen instead (see min-height on
-     .landing-anchor--intro). */
+  /* max(): the room left, but at least 300px (or the width-limited height; the
+     art is ~0.805 as tall as wide). Zooming in shrinks the CSS-pixel viewport
+     while the header and cue stay fixed, so the panel grows past the screen
+     instead (min-height on .landing-anchor--intro). */
   max-height: max(calc(100vh - var(--landing-intro-above, 130px) - 52px - 6vh - 12px), min(300px, calc(min(640px, 80vw) * 0.805)));
   max-height: max(calc(100svh - var(--landing-intro-above, 130px) - 52px - 6vh - 12px), min(300px, calc(min(640px, 80vw) * 0.805)));
   height: auto;
 }
 
-/* The landing page's closing "ARE YOU READY?" pitch (see
-   render_landing()'s landing_cta/_footer()'s extra param in
-   app/pages.py) -- rendered inside <footer> itself rather than as
-   another .landing-anchor, so it shares footer's existing scroll-snap
-   stop (see body.landing footer, up near .landing-anchor's own scroll
-   -snap rules) instead of adding a fourth full-screen panel. Giving
-   that stop the same min-height every .landing-anchor already gets is
-   what actually keeps the purchase-planner panel above it fully
-   scrolled out of view once you land here -- without it, footer would
-   just be its own small natural height and the panel above would
-   still show through the top of the viewport.
-
-   The two pieces inside footer-inner want different vertical
-   treatment though: the CTA should read as this screen's own
-   centerpiece (roughly centered in the open space, the way every
-   .landing-anchor's own content is), while the social/trademark block
-   underneath it should stay exactly where it always is on every other
-   page -- flush with the bottom. .landing-cta (not footer-inner
-   itself) is what gets flex: 1 for that, below -- it absorbs all the
-   leftover vertical space and centers its own content inside it,
-   which as a side effect leaves the social/trademark block sitting
-   right where that leftover space runs out, i.e. pinned to the
-   bottom. Scoped to body.landing only, same as every other
-   landing-only rule here -- everywhere else footer keeps its ordinary
-   compact height. */
+/* Closing "ARE YOU READY?" pitch (render_landing()'s landing_cta/_footer(),
+   app/pages.py), inside <footer> so it shares footer's snap stop (body.landing
+   footer) and the same min-height as .landing-anchor scrolls the panel above out
+   of view.
+   .landing-cta takes flex: 1 and centers its content, which pins the
+   social/trademark block to the bottom. Scoped to body.landing. */
 body.landing footer {
   min-height: 100vh;
   min-height: 100svh;
   display: flex;
-  /* column, not the flex default row -- footer-inner is this
-     footer's only child, and row's default align-items: stretch only
-     applies on the CROSS axis (vertical in row mode); the child would
-     stay shrink-to-fit and left-anchored on the main axis instead of
-     spanning full width, breaking .footer-inner's own text-align:
-     center. column flips that: align-items' default (stretch) now
-     applies on the horizontal cross axis, so footer-inner fills the
-     full width for free. */
+  /* column, not row: in a row, stretch applies vertically, so the lone
+     footer-inner would stay shrink-to-fit and break its text-align: center. */
   flex-direction: column;
 }
 
-/* Only on the landing page: stretches footer-inner to fill the whole
-   (now full-viewport-tall) footer so .landing-cta's own flex: 1 below
-   has a real full-height column to expand inside. Every other page's
-   .footer-inner (see the plain, non-landing-scoped rule above) keeps
-   its ordinary height-auto block layout -- nothing here touches it. */
+/* Landing only: stretch footer-inner to the full-viewport footer for
+   .landing-cta's flex: 1. */
 body.landing .footer-inner {
   flex: 1;
   display: flex;
@@ -1666,12 +1111,6 @@ body.landing .footer-inner {
 }
 
 .landing-cta {
-  /* Grows to fill whatever vertical space footer-social/
-     footer-trademark (the flex siblings after it, sized to their own
-     content) don't need, then centers its own heading+buttons inside
-     that space on both axes -- see the body.landing footer comment
-     above for why this is what pins the social row to the bottom
-     while the CTA itself reads as centered. */
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1696,11 +1135,6 @@ body.landing .footer-inner {
   flex-wrap: wrap;
 }
 
-/* Same shape/weight as button.primary/button.secondary elsewhere on
-   the site, just as an <a> (these are plain navigation, not form
-   submits) and sized to its own label instead of button.primary's
-   width: 100% -- two of these need to sit side by side, not stack
-   full-width the way a form's fields do. */
 .landing-cta-btn {
   display: inline-block;
   padding: 13px 32px;
@@ -1726,27 +1160,12 @@ body.landing .footer-inner {
 .landing-cta-btn--secondary:hover { border-color: var(--gold-dim); color: var(--gold); text-decoration: none; }
 
 
-/* Custom hover tooltip, shared across the whole site -- replaces the
-   native browser/OS title tooltip (slow to appear, and styled by the
-   browser/OS rather than this site) with one that matches the same
-   floating-panel look every other popup here already uses (.loot-
-   share-card in loot-tracker.css, .suggestions in purchase-goals.css,
-   etc. -- var(--panel) background, var(--border) 1px border, var(--
-   radius) corners, a soft drop shadow). One shared element, created
-   once and repositioned/reused for every tooltip on the page rather
-   than built fresh per hover -- see the IIFE at the end of _shell's
-   own shared_script (app/pages.py) that drives it. Any element opts
-   in by setting data-tooltip (plain text) instead of title -- see the
-   Collection Log's own .clog-item tiles and the summary row's own
-   .co-stat-icon tiles (both app/pages.py) for the current uses.
-
-   position: fixed (not absolute) since it's positioned straight off
-   getBoundingClientRect's own viewport-relative coordinates -- no
-   containing-block offset to account for, and it stays correctly
-   placed under a scroll without that script needing to listen for one
-   (scroll just hides it instead, see the script). pointer-events: none
-   throughout -- it should never be able to steal the hover/click it's
-   only here to annotate. */
+/* Custom site-wide tooltip replacing the slow native title tooltip, styled like
+   .loot-share-card/.suggestions. One reused element driven by the IIFE at the
+   end of _shell's shared_script (app/pages.py); elements opt in with
+   data-tooltip.
+   position: fixed because it is placed from getBoundingClientRect (scrolling
+   hides it). pointer-events: none so it never steals the hover or click. */
 .myscape-tooltip {
   position: fixed;
   z-index: 1000;
@@ -1760,21 +1179,12 @@ body.landing .footer-inner {
   line-height: 1.35;
   color: var(--text);
   max-width: 240px;
-  /* pre-line: a literal \n in the tooltip text (used to force a
-     deliberate, length-balanced line break instead of leaving the
-     wrap point to the browser) renders as a real line break, while
-     ordinary runs of whitespace still collapse and still wrap
-     normally at max-width. */
+  /* pre-line: a literal \n forces a balanced break; other whitespace still
+     collapses. */
   white-space: pre-line;
-  /* Centered rather than left-aligned so a manually-broken multi-line
-     tooltip (see white-space above) reads as a balanced block instead
-     of a ragged left edge; makes no visible difference on the common
-     single-line case. */
   text-align: center;
-  /* Opacity/transform, not display -- the show/hide script needs this
-     element laid out (with real dimensions to measure) the instant its
-     text is set, before it's actually visible, to position it against
-     its target without a visible flash-then-jump. */
+  /* Opacity/transform, not display: the show script measures the element as soon
+     as its text is set, before it is visible. */
   opacity: 0;
   transform: translateY(2px);
   transition: opacity 0.08s ease, transform 0.08s ease;
@@ -1785,10 +1195,10 @@ body.landing .footer-inner {
 }
 
 
-/* ---- Friends --------------------------------------------------------
-   Small red count pill -- next to ACCOUNT in the header (see _nav_sides
-   and the poll in _shell, app/pages.py) and on a Linked Accounts card
-   that has a friend request waiting on it. */
+/* Friends
+   Red count pill next to ACCOUNT in the header (_nav_sides and the poll in
+   _shell, app/pages.py) and on a Linked Accounts card with a pending friend
+   request. */
 .friend-badge {
   display: inline-flex;
   align-items: center;
@@ -1811,8 +1221,6 @@ body.landing .footer-inner {
 .nav-side .friend-badge { margin-left: 6px; position: relative; top: -1px; }
 .game-account-friend-badge { margin-left: 8px; }
 
-/* Friends section (render_account) -- one compact row, centered and
-   only as wide as its parts need: MY CODE [code] | [input] [SEND REQUEST]. */
 .friends-add-form {
   display: flex;
   align-items: center;
@@ -1845,8 +1253,6 @@ body.landing .footer-inner {
 .friends-add-form button.secondary {
   width: auto;
   margin-top: 0;
-  /* Same box as .account-logout-link (6px 16px, 13px text), so this is
-     always the same height as LOG OUT. */
   padding: 6px 16px;
   font-size: 13px;
   white-space: nowrap;
@@ -1925,9 +1331,8 @@ body.landing .footer-inner {
 .friends-table tbody tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
 .friend-name-link { color: var(--text); text-decoration: none; }
 .friend-name-link:hover { color: var(--gold); }
-/* Sortable FRIEND/SINCE headers -- same look as the Shared Links
-   table's .shared-link-sort-header (its own class, since that one's
-   click wiring is scoped by class name in render_account). */
+/* Sortable FRIEND/SINCE headers: a separate class from .shared-link-sort-header
+   because render_account scopes click wiring by class name. */
 .friend-sort-header {
   background: none; border: none; padding: 0; margin: 0; font: inherit;
   color: inherit; letter-spacing: inherit; text-transform: inherit;
@@ -1936,8 +1341,6 @@ body.landing .footer-inner {
 .friend-sort-header:hover { color: var(--text); }
 .friend-sort-header.active { color: var(--gold); }
 .friend-sort-arrow { display: inline-block; }
-/* Same pinned size as the Shared Links table's trash button, so the
-   dash-circle <-> "SURE?" swap never resizes the column. */
 .friends-table .trash-delete-btn,
 .friends-table .trash-delete-btn--confirm {
   display: flex;
@@ -1947,20 +1350,13 @@ body.landing .footer-inner {
   padding: 4px 0;
 }
 
-/* Opt-in wider tooltip (data-tooltip-wide on the target -- see
-   showTooltip in _shell, app/pages.py) for a manually-broken tooltip
-   whose first line wouldn't fit the default 240px. */
+/* Opt-in wider tooltip (data-tooltip-wide, showTooltip in _shell) for manually
+   broken first lines over 240px. */
 .myscape-tooltip.myscape-tooltip--wide { max-width: 320px; }
 
-/* Account page buttons that sat too dark (transparent / --panel fill) --
-   brought up to the same lighter fill and text color as the Loot
-   Tracker's sort buttons (.loot-sort-tab in loot-tracker.css:
-   --panel-2 fill, --text-dim text). Scoped by id/class to just these
-   buttons: LOG OUT, + ADD CHARACTER, SEND REQUEST, UPDATE EMAIL,
-   UPDATE PASSWORD, and every code button (Shared Links' CODE column
-   and the Friends list's MY CODE). Borders and hover/active treatments
-   are unchanged -- the id selectors here outrank the open-tab rule
-   above, so its gold text is restated just below. */
+/* Account buttons that sat too dark get .loot-sort-tab's fill and text
+   (--panel-2, --text-dim). The id selectors outrank the open-tab rule above, so
+   its gold text is restated below. */
 .account-logout-link,
 #addGameAccountBtn,
 #friendsAddBtn,
@@ -1973,28 +1369,20 @@ body.landing .footer-inner {
 #emailToggleBtn.active,
 #passwordToggleBtn.active { color: var(--gold); }
 
-/* Thin darker separators between header cells, on both the Shared Links
-   and Friends tables. The Shared Links header had been showing these
-   only by accident (sub-pixel seams between its fractional-width sticky
-   cells -- which cells showed one depended on the display's scaling),
-   so they're drawn deliberately now, the same on every display: an
-   inset shadow rather than a border so it travels with the sticky
-   header cell when the list scrolls, and never shifts the layout. */
+/* Darker header-cell separators in both tables: an inset shadow, not a border,
+   so it travels with the sticky header cell and never shifts layout. */
 .shared-links-table th:not(:first-child),
 .friends-table th:not(:first-child) {
   box-shadow: inset 1px 0 0 var(--panel);
 }
 
-/* The DELETE ACCOUNT warning (render_account) -- centered, with its key
-   words (PERMANENTLY / CANNOT) picked out in the same red as the DELETE
-   ACCOUNT button itself. */
 .account-section-hint--center { text-align: center; }
 .account-hint-emphasis { color: var(--red); }
 
 
-/* ---- Dashboard: phone -----------------------------------------------
-   Same 320px centered column as the other phone pages (side gutter for
-   thumb page-scroll), tighter cards. Scoped body:not(.landing). */
+/* Dashboard: phone
+   Same 320px centered column as the other phone pages (side gutter for thumb
+   page-scroll). Scoped body:not(.landing). */
 @media (max-width: 700px) {
   body:not(.landing) .dash-grid { grid-template-columns: minmax(0, 320px); justify-content: center; gap: 14px; }
   body:not(.landing) .dash-card { gap: 14px; padding: 16px 16px 18px; }
@@ -2006,19 +1394,16 @@ body.landing .footer-inner {
   body:not(.landing) .dash-card--compact .dash-card-icon { width: 48px; height: 48px; }
 }
 
-/* Touch: no sticky hover highlight on a card after tapping it (it
-   stays lit through the page change and on coming back). */
+/* Touch: no sticky hover highlight after a tap. */
 @media (hover: none) {
   body:not(.landing) .dash-card:hover { background-color: var(--panel-translucent); }
   body:not(.landing) .dash-card:active { background-color: rgb(51, 51, 54); }
 }
 
 
-/* ---- Account: phone -------------------------------------------------
-   Same 320px centered column as the other phone pages. The Shared Links
-   and Friends tables become stacked rows (their fixed percentage
-   columns truncated every name), with the sortable headers turned into
-   a row of small chips above them. Scoped to the Account page's own
+/* Account: phone
+   320px column. The tables become stacked rows (fixed percentage columns
+   truncated names) with the sort headers as chips above. Scoped to
    .account-shell. */
 @media (max-width: 700px) {
   body:not(.landing) .account-shell .auth-card { max-width: 320px; padding: 22px 14px 22px; }
@@ -2030,8 +1415,8 @@ body.landing .footer-inner {
   body:not(.landing) .game-account-actions { gap: 6px; }
   body:not(.landing) .game-account-actions button { padding: 6px 10px; }
 
-  /* Friends: MY CODE on its own centered line, then input + SEND REQUEST
-     filling the next. 16px so focusing the input doesn't zoom the page. */
+  /* Friends: MY CODE on its own line, then input + SEND REQUEST. 16px so focus
+     does not zoom the page. */
   body:not(.landing) .friends-add-form { flex-wrap: wrap; gap: 10px; }
   body:not(.landing) .friends-code-wrap { width: 100%; justify-content: center; }
   body:not(.landing) .friends-add-divider { display: none; }
@@ -2039,7 +1424,6 @@ body.landing .footer-inner {
   body:not(.landing) .friend-request-row { padding: 8px 10px; gap: 8px; }
   body:not(.landing) .friend-request-name { min-width: 0; }
 
-  /* Update email / password / delete: stacked, full width. */
   body:not(.landing) .account-tab-row { flex-direction: column; }
   body:not(.landing) .account-tab-row button.secondary,
   body:not(.landing) .account-tab-row button.danger { flex: none; width: 100%; padding: 10px 6px; }
@@ -2079,9 +1463,8 @@ body.landing .footer-inner {
     text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* Shared link: character and type stacked on the left; the code and
-     the expiry date side by side in the middle, vertically centered
-     against that pair; trash on the far right. */
+  /* Shared link: character/type stacked left, code and expiry centered, trash
+     right. */
   body:not(.landing) .shared-links-table tbody tr { grid-template-columns: minmax(0, 1fr) 62px 52px 40px; column-gap: 8px; }
   body:not(.landing) .shared-links-table td:nth-child(1) { grid-column: 1; grid-row: 1; font-size: 13px; color: var(--text); }
   body:not(.landing) .shared-links-table td:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 11px; color: var(--text-faint); }
@@ -2092,8 +1475,8 @@ body.landing .footer-inner {
   body:not(.landing) .shared-links-table .trash-delete-btn,
   body:not(.landing) .shared-links-table .trash-delete-btn--confirm { width: 40px; }
 
-  /* Friend: name / since / remove on one line. Header and rows share
-     the same three columns, with Friend and Since centered over them. */
+  /* Friend: name / since / remove on one line, sharing the header's three
+     columns. */
   body:not(.landing) .friends-table thead tr,
   body:not(.landing) .friends-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) 92px 44px; column-gap: 8px; align-items: center; }
   body:not(.landing) .friends-table thead tr { padding: 0 10px; }
@@ -2104,14 +1487,12 @@ body.landing .footer-inner {
   body:not(.landing) .friends-table tbody tr td:nth-child(2) { font-size: 11px; color: var(--text-faint); }
   body:not(.landing) .friends-table tbody tr td:nth-child(3) { overflow: visible; }
 
-  /* Bigger tap targets for the row buttons */
   body:not(.landing) .shared-links-table .trash-delete-btn,
   body:not(.landing) .shared-links-table .trash-delete-btn--confirm,
   body:not(.landing) .friends-table .trash-delete-btn,
   body:not(.landing) .friends-table .trash-delete-btn--confirm { height: 34px; }
 }
 
-/* Touch: no sticky hover look after a tap on the Account page's buttons. */
 @media (hover: none) {
   body:not(.landing) button.trash-delete-btn:not(.trash-delete-btn--confirm):hover { color: var(--text-faint); }
   body:not(.landing) .shared-link-code-btn:hover { border-color: var(--border); color: var(--text-dim); }
@@ -2123,15 +1504,10 @@ body.landing .footer-inner {
 }
 
 
-/* ---------- Landing page, phones (<= 700px). ----------
-   Same structure as desktop: each preview gets exactly one screen
-   (the fixed-height, clipped box with the bottom fade each preview's
-   own stylesheet already sets up), and the panels' scroll-snap stops
-   step from one app to the next. All this block adds is the phone
-   look of the previews themselves: the other per-preview phone
-   layouts (loot-tracker.css, purchase-goals.css, ...) are shared with
-   the real pages -- see their body:not(.phone-off) rules -- and the
-   hero rows below. */
+/* Landing page, phones (<= 700px)
+   Each preview gets one screen (its fixed-height, clipped box with the bottom
+   fade). The per-preview phone layouts are shared with the real pages
+   (body:not(.phone-off) rules); this block adds the hero rows. */
 @media (max-width: 700px) {
   body.landing :is(
     .landing-character-overview-preview,
@@ -2144,26 +1520,18 @@ body.landing .footer-inner {
     max-width: 350px;
   }
 
-  /* Hero rows: as wide as the panels under them (320px, centered), so
-     a character on the left edge sits flush with the left edge of the
-     box below it and one on the right with its right edge, instead of
-     poking out past it. */
+  /* Hero rows match the 320px panels so characters sit flush with the box edges. */
   body.landing :is(.co-preview-hero, .loot-preview-hero, .purchase-preview-hero, .storages-preview-hero, .mindmap-preview-hero, .gt-preview-hero) {
     gap: 8px;
     max-width: 320px;
     margin-left: auto;
     margin-right: auto;
   }
-  /* About two thirds of the desktop 157px, so the text beside each
-     character has room to breathe. */
   body.landing :is(.co-preview-char, .loot-preview-char, .purchase-preview-char, .storages-preview-char, .mindmap-preview-char, .gt-preview-char) {
     height: 104px;
   }
-  /* The text beside the character: centered in whatever room the
-     character leaves. The gold app name stays big on a line of its own
-     (the landing script's fit pass only ever shrinks it, and only when
-     it wouldn't otherwise fit), the rest of the sentence is smaller and
-     wraps beneath it. */
+  /* The gold app name stays large on its own line (the landing script's fit pass
+     only shrinks it when needed); the rest wraps beneath. */
   body.landing :is(.co-preview-tagline-wrap, .loot-preview-tagline-wrap, .purchase-preview-tagline-wrap, .storages-preview-tagline-wrap, .mindmap-preview-tagline-wrap, .gt-preview-tagline-wrap) {
     justify-content: center;
     padding: 0 4px;
@@ -2186,13 +1554,9 @@ body.landing .footer-inner {
 }
 
 
-/* ---- Auth pages (sign up, log in, forgot/reset password, verify
-   email) and the 404 page: phone ------------------------------------
-   Same 320px centered column as the other phone pages (instead of the
-   card running nearly edge to edge), tighter padding and field spacing,
-   and the card starting at Account's height rather than 40px lower.
-   Every .auth-shell page but Account (which has its own block above).
-   Inputs are already 16px, so focusing one doesn't zoom the page. */
+/* Auth pages and the 404 page: phone
+   320px column, tighter padding, card at Account's height. Every .auth-shell
+   page but Account. Inputs are 16px, so focus does not zoom. */
 @media (max-width: 700px) {
   body:not(.landing) .auth-shell:not(.account-shell) { padding-top: 14px; }
   body:not(.landing) .auth-shell:not(.account-shell) .auth-card { max-width: 320px; padding: 22px 14px 18px; }
@@ -2206,8 +1570,8 @@ body.landing .footer-inner {
   body:not(.landing) .not-found-teleport { margin-bottom: 14px; -webkit-tap-highlight-color: transparent; }
 }
 
-/* Touch: the teleport icon's hover scale-up would stay stuck on after a
-   tap (through the page change and on coming back) -- keep it swaying. */
+/* Touch: keep the teleport icon swaying; its hover scale-up would stick after a
+   tap. */
 @media (hover: none) {
   .not-found-teleport:hover .not-found-icon {
     animation-play-state: running;
@@ -2215,10 +1579,8 @@ body.landing .footer-inner {
   }
 }
 
-/* Extreme zoom-in (a viewport under ~300px wide, e.g. 500% browser zoom
-   on a small window): the three-part header -- nav, logo, nav -- is
-   wider than the screen at its normal sizes and pushed the whole page
-   sideways. Shrink the three pieces so the header always fits. */
+/* Viewport under ~300px (extreme zoom): the nav/logo/nav header overflows and
+   pushes the page sideways, so shrink it. */
 @media (max-width: 300px) {
   .header-inner { gap: 8px; }
   .logo a { font-size: 20px; }

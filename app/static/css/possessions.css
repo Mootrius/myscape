@@ -1,33 +1,19 @@
-/* Storages Viewer -- a single line-by-line table of everything
-   currently owned across every synced storage (see render_possessions
-   in app/pages.py for the full breakdown of what each column shows).
-   Self-contained per this project's established per-page-CSS
-   convention -- nothing here is shared with or imported by another
-   page's stylesheet, even where a rule looks identical to one in
-   loot-tracker.css/purchase-goals.css. */
+/* Storages Viewer: one table of everything owned across synced storages (columns
+   described in render_possessions, app/pages.py). Self-contained per-page
+   stylesheet; rules that look identical to loot-tracker.css/purchase-goals.css
+   are intentionally duplicated. */
 
 .pm-section {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 18px 20px; margin-bottom: 22px;
 }
 
-/* ---- Export icon next to the title + the floating popup it toggles
-   open right beneath itself (see pm_share_icon_btn in app/pages.py,
-   and pmShareIconBtn/pmShareCard's own toggle in the script just
-   below it) -- duplicated from Loot Tracker's own identical
-   .loot-share-* rules in loot-tracker.css, with this page's own pm-
-   prefix, same "duplicated, not shared across pages' own
-   stylesheets" convention this file's own header comment already
-   states. top: 32px (not a smaller "icon height + gap" guess) and no
-   `transform` on .pm-share-wrap are both carried over verbatim from
-   that already-empirically-measured fix (see .loot-share-wrap/
-   .loot-share-card's own comments in loot-tracker.css for the full
-   reasoning: a transform creates a new stacking context that walls
-   this card's own z-index off from competing fairly against later
-   DOM content, and .pm-share-wrap inherits .page-title's own 22px/
-   1.5 font-size exactly the same way .loot-share-wrap does, so the
-   same 32px clears the same invisible font "strut" here too) --
-   nothing page-specific to re-measure. ---------------------------- */
+/* Export icon and its popup (pm_share_icon_btn in app/pages.py; toggle script
+   below it), duplicated from .loot-share-* in loot-tracker.css. top: 32px and no
+   `transform` on .pm-share-wrap: a transform creates a stacking context that
+   walls off the card's z-index, and the wrap inherits .page-title's 22px/1.5
+   font-size, whose invisible strut the 32px clears (see
+   .loot-share-wrap/.loot-share-card). */
 .pm-share-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
 }
@@ -43,8 +29,6 @@
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
-     against the page-title text it's inline with. */
   position: relative;
   top: -2px;
 }
@@ -62,9 +46,8 @@
   padding: 5px 6px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
-/* Author CSS setting `display` on this element always outranks the
-   browser's own [hidden]{display:none} default stylesheet rule --
-   same gotcha/fix as .loot-share-card[hidden] in loot-tracker.css. */
+/* Author display outranks the browser's [hidden] rule (same as
+   .loot-share-card[hidden] in loot-tracker.css). */
 .pm-share-card[hidden] { display: none; }
 .pm-share-generate-btn {
   height: 28px;
@@ -90,11 +73,9 @@
 .pm-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .pm-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* ---- Controls row: search, then the location filters, side by side
-   at the same height -- sorting now lives on the table's own column
-   headers instead (see .pm-sort-header further down). A vertical rule
-   between the two groups (rather than gap spacing alone) is what makes
-   each one read as its own separate section within the shared row. */
+/* Controls row: search, then location filters, at the same height. A vertical
+   rule separates the two groups. Sorting is on the column headers
+   (.pm-sort-header). */
 
 .pm-controls-row {
   display: flex; align-items: center; flex-wrap: wrap; gap: 14px;
@@ -104,18 +85,15 @@
 .pm-control-group + .pm-control-group {
   padding-left: 14px; border-left: 1px solid var(--border);
 }
-/* flex-basis is what decides when the row wraps (the box then grows to
-   fill the line): at 220px the settings cog dropped to its own line
-   just above the phone breakpoint (~700px wide, a zoomed-in browser),
-   though the search box could have squeezed a bit and kept everything on
-   one row. 150px keeps the cog on the same row down to the phone layout. */
+/* flex-basis decides when the row wraps. At 220px the settings cog wrapped onto
+   its own line just above the phone breakpoint (~700px); 150px keeps it on the
+   row. */
 .pm-search-group { flex: 1 1 150px; min-width: 150px; position: relative; }
-/* Same 32px height as .pm-filter-btn below, so the search box and the
-   location buttons beside it line up exactly. Right padding leaves
-   room for the CLEAR button below so typed text never runs under it. */
+/* 32px height matches .pm-filter-btn so the search box and location buttons line
+   up. Right padding leaves room for the CLEAR button. */
 .pm-search-group .loot-search { width: 100%; height: 32px; padding: 0 46px 0 10px; font-size: 13px; box-sizing: border-box; }
-/* Absolutely positioned over the search box's own right edge, shown
-   only while there's something to clear -- see updateSearchClear. */
+/* Overlays the search box's right edge; shown only while there is text
+   (updateSearchClear). */
 .pm-search-clear {
   position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
   background: none; border: none; padding: 0; margin: 0;
@@ -125,17 +103,10 @@
 .pm-search-clear:hover { color: var(--text); }
 .pm-location-group { flex: 0 1 auto; }
 
-/* Same visual recipe as Purchase Goals' own .sort-btn (purchase-
-   goals.css) -- deliberately re-declared here rather than shared
-   across files, per this project's per-page-CSS convention. Multi-
-   select: each button toggles independently and all start on. Fixed
-   25px height (the site-wide button height -- see .loot-sort-tab in
-   loot-tracker.css) rather than sizing purely off padding, so every
-   button lines up with every other button on the site regardless of
-   font rendering; .pm-controls-row/.pm-control-group's own
-   align-items: center is what keeps it vertically centered against
-   the taller 32px search box beside it now that they no longer match
-   heights outright. */
+/* Same look as .sort-btn in purchase-goals.css (duplicated). Multi-select: each
+   button toggles independently and all start on. 25px is the site-wide button
+   height (.loot-sort-tab in loot-tracker.css); align-items: center on
+   .pm-controls-row/.pm-control-group centers it against the 32px search box. */
 .pm-filter-btn {
   height: 25px; padding: 0 10px; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center;
@@ -147,20 +118,13 @@
 }
 .pm-filter-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .pm-filter-btn.active { border-color: var(--gold); color: var(--gold); }
-/* Every other group label (BANK, SEED VAULT, CHARACTER, PORTABLE) was
-   already typed in caps, so .pm-filter-btn's own uppercase transform
-   above is invisible on them -- but "PoH" has a deliberate mixed case
-   (capital P and H, lowercase o) that the same transform would erase.
-   This one button opts out of it so the label renders exactly as
-   written in app/pages.py's _POSSESSION_LOCATION_GROUPS. */
+/* Opts out of .pm-filter-btn's uppercase transform so "PoH" keeps its mixed case
+   (_POSSESSION_LOCATION_GROUPS in app/pages.py). */
 .pm-filter-btn-cased { text-transform: none; }
 
-/* The settings-cog button + its checkbox dropdown -- same trigger/
-   menu relationship as Purchase Goals' own .tracker-menu-wrap/
-   #setupMenu (purchase-goals.css), sized to this page's own 32px
-   control-row height instead of that one's 36px, and right- rather
-   than center-anchored under its trigger since this sits at the far
-   right edge of the row instead of centered above a icon strip. */
+/* Settings cog and checkbox dropdown; same relationship as
+   .tracker-menu-wrap/#setupMenu in purchase-goals.css, but 32px high and
+   right-anchored since it sits at the row's far right. */
 .pm-settings-wrap { position: relative; }
 .pm-settings-btn {
   width: 32px; height: 32px; box-sizing: border-box;
@@ -169,10 +133,8 @@
   color: var(--text-dim); cursor: pointer;
 }
 .pm-settings-btn:hover { border-color: var(--gold-dim); color: var(--text); }
-/* Same active treatment as .pm-filter-btn.active -- gold border and
-   icon while the menu is open (see setSettingsMenuOpen in the
-   script, which keeps this in sync on every path that closes the
-   menu, not just the button's own click). */
+/* Active (menu open) look matches .pm-filter-btn.active; setSettingsMenuOpen
+   keeps it in sync on every close path. */
 .pm-settings-btn.active { border-color: var(--gold); color: var(--gold); }
 .pm-settings-menu {
   position: absolute; top: 38px; right: 0; z-index: 5;
@@ -180,20 +142,13 @@
   min-width: 190px; max-height: 320px; overflow-y: auto;
   flex-direction: column; padding: 6px 0;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-  /* Same fix as Mindmaps' own .mm-suggestions (mindmaps.css) --
-     without this, scrolling this list past its own top/bottom
-     bound doesn't just stop, it chains into the next scrollable
-     ancestor, which here is the whole page. See .mm-suggestions'
-     own comment for the fuller history of why this (not a JS
-     wheel-event handler) is the fix. */
+  /* Stops scroll chaining into the page past the list bounds (same as
+     .mm-suggestions in mindmaps.css). */
   overscroll-behavior: contain;
 }
-/* Same small/gray/all-caps text treatment as .pm-filter-btn/
-   .tracker-menu-item -- one row per raw storage key, alphabetically
-   labeled (see render_possessions in app/pages.py), all checked on
-   by default. PoH gets the same text-transform opt-out
-   .pm-filter-btn-cased gives its own filter button above, for the
-   same reason (its mixed-case label). */
+/* Same small/gray/all-caps look as .pm-filter-btn; one row per raw storage key
+   (render_possessions), all checked by default. PoH opts out of the uppercase
+   transform like .pm-filter-btn-cased. */
 .pm-settings-item {
   display: flex; align-items: center; gap: 8px;
   padding: 7px 14px; cursor: pointer;
@@ -203,7 +158,7 @@
 .pm-settings-item input[type="checkbox"] { flex-shrink: 0; }
 .pm-settings-item-cased { text-transform: none; }
 
-/* ---- The table itself ---------------------------------------------- */
+/* Table */
 
 .pm-row {
   display: grid;
@@ -212,68 +167,33 @@
   gap: 10px;
   padding: 8px 6px;
 }
-/* Room on the left for the pin button (see .pm-pin-btn further down)
-   to sit in without overlapping the item icon/name -- a separate rule
-   from the padding shorthand above (which both .pm-row-header and
-   every data row still share) rather than folding it in there, purely
-   so this one comment can live next to the one value it explains. */
+/* Left gutter for the pin button (.pm-pin-btn) so it does not overlap the
+   icon/name. */
 .pm-row { padding-left: 26px; }
-/* Each data row is now wrapped in its own .pm-row-wrap (see rowHtml in
-   the page's own script) -- the pin button and the row's own <a> are
-   siblings inside it (see that rule's own comment below for why) --
-   so the border between consecutive rows has to key off THAT wrapper
-   now, not .pm-row itself: adjacent .pm-row elements aren't direct
-   siblings of each other any more, only their wrappers are. This also
-   means the row directly after .pm-pinned-divider (a plain, non-
-   .pm-row-wrap element) correctly does NOT get this border, so the
-   divider's own rule below is the only separator there -- no doubled
-   line under it. */
-/* content-visibility: auto tells the browser to skip layout/paint
-   work for a row entirely until it's actually near the viewport --
-   a player with a large collection (hundreds to low thousands of
-   items across every storage) can end up with that many rows in the
-   DOM at once, and laying every one of them out on every table
-   rebuild (any filter/sort/search change) was the single biggest
-   cost in the whole render path at that scale. contain-intrinsic-size
-   gives the browser a placeholder height to reserve for an
-   not-yet-laid-out row -- without it, the page's scroll height would
-   jump around as rows above the fold get measured for real -- set to
-   this row's own actual height (see .pm-row/.pm-row-header's shared
-   padding) so nothing visibly shifts once a row IS laid out. */
+/* Each data row sits in a .pm-row-wrap (rowHtml in the script), so the row
+   border keys off the wrapper. The row after .pm-pinned-divider (not a wrap)
+   gets no border, so there is no doubled line. */
+/* content-visibility: auto skips layout/paint for off-screen rows; with hundreds
+   to thousands of rows, laying out all of them on every rebuild
+   (filter/sort/search) was the dominant render cost. contain-intrinsic-size
+   reserves the row's real height (see the shared .pm-row/.pm-row-header padding)
+   so scroll height does not jump. */
 .pm-row-wrap {
   position: relative;
   content-visibility: auto;
   contain-intrinsic-size: auto 46px;
 }
 .pm-row-wrap + .pm-row-wrap { border-top: 1px solid var(--border); }
-/* The gap between a pinned group and the rest of the list -- "slightly
-   separated", per the feature this exists for, is a bit more margin
-   than an ordinary row boundary plus a gold-tinted (rather than the
-   usual plain --border) line, so it reads as a deliberate section
-   break rather than just another row. Only ever rendered between the
-   two groups when both actually have rows in them (see renderTable) --
-   an all-pinned or all-unpinned list has no divider at all. */
+/* Gap between the pinned group and the rest: extra margin and a gold-tinted line
+   for a deliberate section break. Only rendered when both groups have rows
+   (renderTable). */
 .pm-pinned-divider { margin: 6px 0 10px; border-top: 1px solid var(--gold-dim); }
-/* The pin toggle -- a hand-drawn thumbtack outline (see PIN_GLYPH in
-   the page's own script), absolutely positioned into the left gutter
-   .pm-row's own padding-left reserves above, rather than a grid column
-   of its own, since it's a sibling of the row's <a> (not a grid child
-   of it) and so isn't part of that grid layout at all. Hidden until
-   the row is hovered (see .pm-row-wrap:hover below) UNLESS the item is
-   already pinned, in which case it stays visible -- an already-pinned
-   row should always show *why* without needing a hover, the same way
-   a browser's own pinned tabs don't hide their pin icon.
-
-   Color follows the same "plain gray line icon, same family as
-   Mindmaps' zoom/undo/redo/edit-mode SVGs (see .mm-zoom-controls
-   button in mindmaps.css)" convention, but with its own hover twist:
-   an unpinned pin is --text-dim at rest and turns gold on hover (the
-   normal "you can act on this" affordance), while a pinned one is the
-   reverse -- gold at rest, since it's already active, and back to
-   --text-dim on hover, previewing the gray "unpinned" look you'd get
-   by clicking it. .pinned:hover's two classes plus :hover outrank the
-   plain :hover rule below regardless of source order, so this doesn't
-   depend on which rule happens to come first in the file. */
+/* Pin toggle: a thumbtack outline (PIN_GLYPH in the script), absolutely
+   positioned in the left gutter reserved by .pm-row's padding-left, since it is
+   a sibling of the row's <a>, not a grid child. Hidden until row hover
+   (.pm-row-wrap:hover) unless already pinned. Unpinned is --text-dim and turns
+   gold on hover; pinned is the reverse. .pinned:hover (two classes) outranks the
+   plain :hover rule regardless of source order. */
 .pm-pin-btn {
   position: absolute; left: 1px; top: 50%; transform: translateY(-50%);
   width: 20px; height: 20px; padding: 0; margin: 0;
@@ -289,37 +209,20 @@
 .pm-pin-btn:hover { color: var(--gold); }
 .pm-pin-btn.pinned { opacity: 1; pointer-events: auto; color: var(--gold); }
 .pm-pin-btn.pinned:hover { color: var(--text-dim); }
-/* Each data row is itself the link out to that item's OSRS Wiki page
-   now (an <a class="pm-row">, built by rowHtml in the page's own
-   script) -- .pm-row-header stays a plain, non-clickable <div>, which
-   is why these resets and the hover rule below are scoped to the `a`
-   tag rather than the bare .pm-row class. color/text-decoration reset
-   the browser's default link styling (and myscape.css's global
-   a { color: var(--gold-dim); } rule) back to how this row always
-   looked -- every bit of text inside (name, values, badge) already
-   sets its own explicit color regardless, same reasoning as Loot
-   Tracker's .loot-item-box. */
+/* Each data row is an <a class="pm-row"> linking to the item's wiki page
+   (rowHtml); .pm-row-header is a non-clickable div, hence the `a` scoping.
+   Resets color/text-decoration against myscape.css's global a rule. */
 a.pm-row { color: inherit; text-decoration: none; cursor: pointer; }
-/* Same whole-box background highlight as Loot Tracker's own
-   .loot-npc-box/.loot-item-box :hover (see loot-tracker.css) instead
-   of anything scoped to just the icon/name -- hovering anywhere on
-   the row lights up the whole thing. text-decoration: none has to be
-   reasserted here too, not just on the base rule above -- myscape.css's
-   global a:hover { text-decoration: underline; } has higher
-   specificity than a bare element selector but not higher than this
-   `a.pm-row:hover` (class + hover beats element + hover), so without
-   this line hovering would draw an underline through the row's text. */
+/* Whole-row background highlight, like .loot-npc-box/.loot-item-box :hover in
+   loot-tracker.css. text-decoration: none is repeated because myscape.css's
+   a:hover underline would otherwise win on a.pm-row:hover. */
 a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 
 .pm-row-header {
-  /* This shorthand resets padding-left back to 6px, which would
-     otherwise win over the earlier, lower-specificity ".pm-row {
-     padding-left: 26px; }" rule (same specificity, later in the
-     cascade) and misalign ITEM against the icon/name column below it
-     -- restated explicitly here rather than reordering the rules.
-     font-size bumped from 10.5px so the filter funnel icon beside
-     each header (see .pm-filter-icon-btn below) reads clearly next to
-     the label rather than dwarfing it. */
+  /* Resets padding-left to 6px, restated here because the earlier .pm-row {
+     padding-left: 26px } rule ties on specificity and would misalign ITEM
+     against the icon/name column. Larger font so the filter funnel icon does not
+     dwarf the label. */
   padding: 0 6px 10px 26px;
   font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint);
 }
@@ -328,28 +231,18 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-row-header .pm-col-ha,
 .pm-row-header .pm-col-tradeable { text-align: center; }
 
-/* Each header cell now holds two independent controls side by side --
-   the sort button (.pm-sort-header, unchanged click-to-sort behavior)
-   and its own separate filter funnel button (.pm-filter-icon-btn) --
-   so a click on one never also triggers the other. This wrapper is
-   now the actual CSS Grid item carrying the .pm-col-* width class
-   .pm-row's own grid-template-columns keys off, not .pm-sort-header
-   itself any more (see the header row's own markup in
-   render_possessions, app/pages.py). */
+/* Header cell holding the sort button and the separate filter funnel button
+   (.pm-filter-icon-btn), so a click on one never triggers the other. This
+   wrapper is the grid item carrying the .pm-col-* width class (header markup in
+   render_possessions). */
 .pm-header-cell { display: flex; align-items: center; gap: 4px; min-width: 0; position: relative; }
 .pm-header-cell.pm-col-qty,
 .pm-header-cell.pm-col-ge,
 .pm-header-cell.pm-col-ha,
 .pm-header-cell.pm-col-tradeable { justify-content: center; }
 
-/* Every header doubles as a sort control -- a plain <button> reset
-   back down to this row's own text styling (rather than default
-   button chrome). No longer width: 100% now that it shares its cell
-   with the filter button beside it -- it hugs its own text/arrow
-   instead of stretching to fill the whole column. All headers share
-   the same size regardless of which one is active; the active column
-   is called out in gold (text + arrow together), same as
-   .pm-filter-btn.active elsewhere on this page. */
+/* Sort <button> reset to the row's text styling; hugs its text now that it
+   shares the cell with the filter button. Active column is gold (text + arrow). */
 .pm-sort-header {
   background: none; border: none; padding: 0; margin: 0; font: inherit;
   color: inherit; letter-spacing: inherit; text-transform: inherit;
@@ -359,16 +252,10 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-sort-header.active { color: var(--gold); }
 .pm-sort-arrow { display: inline-block; }
 
-/* The funnel filter icon beside each header's text -- opens that
-   column's own filter popover (see .pm-filter-popover further down)
-   on click, entirely independent of the sort button beside it (a
-   separate element with its own click target and its own
-   stopPropagation in the page's own script, so filtering ITEM never
-   also re-sorts by it -- see wireFilterPopovers). Gray at rest, same
-   "you can act on this" affordance as every other icon-only control
-   on this page (compare .pm-pin-btn's unpinned state); gold once that
-   column has an active filter applied or while its popover is open,
-   same .active convention as everything else here. */
+/* Funnel icon opening that column's filter popover (.pm-filter-popover);
+   separate click target with its own stopPropagation (wireFilterPopovers) so
+   filtering never also sorts. Gray at rest, gold when the column is filtered or
+   the popover is open. */
 .pm-filter-icon-btn {
   flex: 0 0 auto; width: 15px; height: 15px; padding: 0; margin: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -379,27 +266,17 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-filter-icon-btn:hover { color: var(--text); }
 .pm-filter-icon-btn.active { color: var(--gold); }
 
-/* Shared by the ITEM header cell (.pm-col-image.pm-header-cell) and
-   each data row's own icon+name cell -- a plain <div> now, not its own
-   link (see a.pm-row above: the whole row is the link, so this cell
-   doesn't need or get its own hover affordance -- no underline, no
-   separate highlight, just the row's shared background lighting up). */
+/* Shared by the ITEM header cell and each row's icon+name cell; a plain div
+   since the whole row is the link. */
 .pm-col-image { display: flex; align-items: center; gap: 10px; min-width: 0; }
-/* The ITEM header cell sits flush-left by default, lining up with the
-   left edge of the 26px icon below it rather than that icon's center.
-   Nudge it right just enough to read as centered over the icon
-   column -- scoped to the header cell specifically (both classes
-   together) so the data rows' own icon+name cells above are
-   untouched. */
+/* Nudges the ITEM header right so it reads as centered over the 26px icon column
+   instead of flush-left; scoped to the header cell so data rows are untouched. */
 .pm-col-image.pm-header-cell { padding-left: 6px; }
 
-/* ---- Per-column filter popovers ------------------------------------ */
-/* Anchored under whichever header cell's funnel button opened it --
-   same trigger/menu panel recipe as .pm-settings-menu above
-   (background/border/radius), just anchored under its own header cell
-   instead of the control row's far right edge, and right- rather than
-   left-anchored on the three right-hand columns so it never spills
-   off the table's own right edge. */
+/* Per-column filter popovers */
+/* Anchored under the header cell whose funnel opened it, same panel recipe as
+   .pm-settings-menu; right-anchored on the three right-hand columns so it does
+   not spill off the table's right edge. */
 .pm-filter-popover {
   position: absolute; top: 22px; left: 0; z-index: 6;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -414,22 +291,11 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-filter-popover-label {
   font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-faint);
 }
-/* A segmented control -- every option shown at once, side by side,
-   with the current one picked out -- same visual recipe as Mindmaps'
-   own skill-goal LVL/XP switch (.mm-segment-group/.mm-segment-btn in
-   mindmaps.css), redeclared here rather than shared between the two
-   pages' stylesheets, per this project's per-page-CSS convention.
-   Divider lines between segments (and between wrapped rows) come from
-   the group's own background showing through a 1px gap, rather than
-   individual border-right/border-bottom rules -- simpler to get right
-   once flex-wrap is in play (Quantity/GE/HA's operator group is 7
-   options wide, too many to fit legibly in one row at this popover's
-   width, so it wraps to two). min-width on each segment is what
-   forces that wrap once a row can't fit every option at a readable
-   size -- a 2-option group (Contains/Does Not Contain, Tradeable/
-   Untradeable) never reaches it and just splits the full width evenly
-   between its two segments, same single-row look as Mindmaps' own
-   LVL/XP toggle. */
+/* Segmented control: all options visible, current one picked out; same recipe as
+   .mm-segment-group/.mm-segment-btn in mindmaps.css (duplicated). Dividers come
+   from the group's background showing through a 1px gap, simpler with flex-wrap.
+   The 7-option operator group wraps to two rows because each segment's min-width
+   forces it; 2-option groups split the width evenly. */
 .pm-segment-group {
   display: flex; flex-wrap: nowrap; gap: 1px;
   background: var(--border); border: 1px solid var(--border); border-radius: var(--radius);
@@ -443,29 +309,12 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-segment-btn:hover { color: var(--text); }
 .pm-segment-btn.active { background: var(--panel-2); color: var(--gold); }
 
-/* Quantity/GE/HA's 7-way operator picker -- all on one row instead
-   of letting the group wrap the way it used to.
-   The six comparison symbols are set in the site's smooth system
-   font, not RuneScapePlain11 (the site's pixel font, used for
-   everything else including BETWEEN below, and for the item/
-   tradeable segmented controls elsewhere on this popover):
-   RuneScapePlain11 has no dedicated glyph for "≥"/"≤"/"≠", so
-   those three always rendered in the system-font fallback anyway,
-   while ">"/"<"/"=" would render as that pixel font's own ASCII
-   punctuation -- which sits in only a sliver of its character box
-   and reads thin/small next to a normal font's glyphs. Forcing the
-   whole symbol set onto the system font keeps all six visually
-   consistent with each other. The system font's own default
-   line-height is noticeably taller than RuneScapePlain11's at the
-   same font-size (the pixel font has very tight built-in leading),
-   so line-height is set explicitly here rather than left to inherit
-   -- that's what makes this row's buttons come out exactly as tall
-   as the item/tradeable segmented controls' (7px padding, 8px line
-   box, same on both) instead of a mismatched taller row just because
-   the font changed. BETWEEN -- the one segment that's an actual
-   word, not a symbol -- keeps the site's normal pixel font and sizes
-   to fit its own label instead of being squeezed to match the
-   fixed-width symbol segments beside it. */
+/* Quantity/GE/HA 7-way operator picker on one row. The six comparison symbols
+   use the system font: RuneScapePlain11 has no glyphs for "≥"/"≤"/"≠" and draws
+   ">"/"<"/"=" thin and small. The system font's default line-height is taller
+   than the pixel font's, so line-height is set explicitly to keep the buttons as
+   tall as the item/tradeable segmented controls (7px padding, 8px line box).
+   BETWEEN is a word and keeps the pixel font, sized to its label. */
 .pm-segment-group[data-role="op"] .pm-segment-btn {
   flex: 0 0 36px; width: 36px; padding: 7px 2px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
@@ -476,28 +325,17 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   font-family: inherit; font-size: 10.5px;
 }
 
-/* No explicit width here -- .pm-filter-popover itself never sets one
-   either (only a 210px min-width floor), so this popover's own box
-   simply shrink-wraps to whatever its widest row actually needs (the
-   seven-segment operator row below), same as every other popover
-   already does. align-self: flex-start on that row is what makes
-   this work: without it, the popover's default align-items: stretch
-   would instead stretch the row to match the POPOVER's own resolved
-   width, leaving dead space past BETWEEN once that width settles on
-   something wider than the row's real content. */
+/* No explicit width: .pm-filter-popover only has a 210px min-width, so it
+   shrink-wraps to its widest row (the operator row). align-self: flex-start on
+   that row stops the default align-items: stretch from widening it and leaving
+   dead space past BETWEEN. */
 .pm-segment-group[data-role="op"] {
   align-self: flex-start;
 }
 
-/* GE/HA's Stack/Single toggle -- sits to the left of the Value field
-   (or, in Between mode, the Min/Max pair -- see below) rather than
-   above it, so it never costs the popover its own row. Sized to the
-   input's own 28px height (rather than reusing the 22px item/
-   tradeable/operator segmented-control height elsewhere in this
-   popover) so the two line up cleanly as one visual row; flex
-   centering on each segment button is what gets an exact 28px match
-   regardless of this button's own font metrics, the same problem the
-   operator row's explicit line-height solved a different way. */
+/* GE/HA Stack/Single toggle, left of the Value field (or the Min/Max pair) so it
+   costs no row. 28px matches the input height (not the 22px segmented controls);
+   flex centering on each button gives an exact match regardless of font metrics. */
 .pm-filter-value-row { display: flex; align-items: center; gap: 6px; }
 .pm-filter-value-row .pm-filter-input { flex: 1 1 auto; min-width: 0; }
 .pm-filter-value-row .pm-segment-group {
@@ -519,15 +357,10 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-filter-input-pair { display: flex; align-items: center; gap: 6px; }
 .pm-filter-input-pair .pm-filter-input { flex: 1 1 0; min-width: 0; }
 .pm-filter-input-pair-sep { color: var(--text-faint); font-size: 11px; flex: 0 0 auto; }
-/* The Between row's Min/Max pair is itself a flex child of
-   .pm-filter-value-row now (see filterPopoverHtml in app/pages.py),
-   same as the Value input it swaps places with -- this is what lets
-   it share a row with GE/HA's Stack/Single toggle instead of needing
-   one of its own, and what keeps every numeric column's popover the
-   same height switching in or out of Between, since there's only
-   ever this one row to begin with. flex: 1 1 auto here matches the
-   sibling Value input's own rule two rules up, so whichever of the
-   two is visible fills the same remaining space the same way. */
+/* The Between Min/Max pair is a flex child of .pm-filter-value-row like the
+   Value input it swaps with (filterPopoverHtml in app/pages.py), sharing the row
+   with the Stack/Single toggle and keeping the popover height constant. flex: 1
+   1 auto matches the Value input's rule. */
 .pm-filter-value-row .pm-filter-input-pair { flex: 1 1 auto; min-width: 0; }
 .pm-filter-popover-actions { display: flex; gap: 8px; margin-top: 2px; }
 .pm-filter-popover-actions button {
@@ -540,67 +373,38 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-filter-apply-btn:hover { background: #ffab42; border-color: #ffab42; }
 .pm-filter-clear-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim); }
 .pm-filter-clear-btn:hover { border-color: var(--red); color: var(--red); }
-/* Same base look as the filter popover's own "Clear" button above
-   (they share .pm-filter-clear-btn), but this one -- the Save View
-   popover's "Cancel" -- isn't a destructive/reset action, just closes
-   the popover, so it gets a gold border-only hover instead of Clear's
-   red. Text stays at .pm-filter-clear-btn's own resting color rather
-   than following the border to gold too (unlike the similar-looking
-   .landing-cta-btn--secondary:hover/.account-logout-link:hover pair
-   elsewhere, which color both) -- just the outline lighting up reads
-   as "this is hoverable" without also suggesting Cancel is now the
-   emphasized action, which coloring the text gold would. Two-class
-   selector for same-or-higher specificity over
-   .pm-filter-clear-btn:hover so this doesn't depend on staying
-   declared after it in source order -- and `color` has to be
-   reasserted here (not just left off) to the same value
-   .pm-filter-clear-btn's own resting rule already uses, or the
-   *other* .pm-filter-clear-btn:hover rule's `color: var(--red)`
-   still wins the cascade for that one property (same specificity
-   issue as button.danger vs .mm-menu-item.danger elsewhere on the
-   site -- omitting a property here doesn't mean "inherit the resting
-   value," it means "let the next-highest-specificity hover rule that
-   still declares it win," which for this shared base class is
-   Clear's red). */
+/* Save View popover's "Cancel" shares .pm-filter-clear-btn with Clear but is not
+   destructive, so hover is a gold border only (text stays at the resting color,
+   so Cancel is not emphasized). Two-class selector outranks
+   .pm-filter-clear-btn:hover regardless of source order, and `color` must be
+   restated: omitting it would let Clear's `color: var(--red)` hover rule win. */
 .pm-filter-clear-btn.pm-view-cancel-btn:hover { border-color: var(--gold-dim); color: var(--text-dim); }
-/* The Save View popover's own Save/Cancel drop to the site-wide 25px
-   button height (see .loot-sort-tab in loot-tracker.css) -- scoped to
-   just .pm-view-save-popover (not the general
-   .pm-filter-popover-actions button rule above) so the per-column
-   filter popover's own Apply/Clear, which shares that same base class,
-   stays at its own 28px untouched. They sit on their own row below the
-   view-name input here (see .pm-view-save-popover's own flex-direction:
-   column), not beside it, so there's no taller neighbor to center
-   against. */
+/* Save View popover's Save/Cancel use the 25px site-wide button height
+   (.loot-sort-tab in loot-tracker.css); scoped to .pm-view-save-popover so the
+   column filter's Apply/Clear (same base class) stay at 28px. They sit on their
+   own row below the name input. */
 .pm-view-save-popover .pm-filter-popover-actions button { height: 25px; }
 
-/* ---- Saved views strip (drag-and-drop reorderable, sits directly
-   above the table headers -- see PossessionView in app/models.py and
-   the saved-views section of render_possessions' own script) -------- */
+/* Saved views strip (drag-and-drop reorderable, above the table headers;
+   PossessionView in app/models.py, saved-views section of render_possessions'
+   script) */
 .pm-views-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   margin-bottom: 14px; position: relative;
 }
 .possessions-share #pmViewsRow { display: none; }
 
-/* "SNAPSHOT AS OF: <date> <time> (LOCAL)" line above "Shared by
-   <name>" (see render_storages_share's own banner_markup, app/
-   pages.py) -- same small-spacing-on-top-of-.subtitle tweak as Loot
-   Tracker's own .loot-share-range in loot-tracker.css. */
+/* "SNAPSHOT AS OF: <date> <time> (LOCAL)" line above "Shared by <name>"
+   (banner_markup in render_storages_share, app/pages.py); same as
+   .loot-share-range in loot-tracker.css. */
 .pm-share-asof { text-align: center; margin: 0 0 4px; }
 
-/* Same FLIP-preview/live-DOM-order/full-replacement drag-and-drop
-   shape as Purchase Goals' own .tracker-icon-btn row (see
-   wireSetupIconDrag in app/pages.py, reused here as wireViewChipDrag)
-   -- always draggable, no separate "custom mode" gate, same reasoning
-   as that row: reordering a short named list is never anything other
-   than a drag. */
-/* height: 25px is the site-wide button height (see .loot-sort-tab in
-   loot-tracker.css) -- .pm-views-row's own align-items: center is what
-   keeps this and .pm-view-add-btn below lined up on their shared
-   vertical middle even where one runs slightly taller than the other
-   (the delete "x" and drag-handle padding aren't pixel-identical
-   between the two). */
+/* Drag-and-drop shape of the .tracker-icon-btn row in purchase-goals.css
+   (wireSetupIconDrag, reused as wireViewChipDrag). Always draggable, no
+   custom-mode gate. */
+/* 25px site-wide button height (.loot-sort-tab in loot-tracker.css);
+   .pm-views-row's align-items: center keeps this and .pm-view-add-btn aligned
+   though their padding differs slightly. */
 .pm-view-chip {
   height: 25px; padding: 0 6px 0 10px; box-sizing: border-box;
   display: inline-flex; align-items: center; gap: 8px;
@@ -636,15 +440,9 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   min-width: 220px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
-/* Bumped from 26px, plus a small translate to recenter -- these are
-   real item icons off RuneLite's own CDN, which draws on a fixed
-   canvas with built-in padding down the right side for the in-game
-   stack-count badge -- see .loot-item-box-icon's own comment in
-   loot-tracker.css for the full empirical writeup behind both this
-   size bump and the exact translate. .pm-icon-blank (the no-icon
-   placeholder some rows render instead -- see rowHtml in the page's
-   own script) matches the new size so a row missing an icon still
-   lines up with the ones that have one. */
+/* RuneLite CDN canvas padding: size bump plus recentering translate (see
+   .loot-item-box-icon in loot-tracker.css). .pm-icon-blank (no-icon placeholder;
+   rowHtml) matches the size so rows stay aligned. */
 .pm-row-icon {
   width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; flex: 0 0 auto;
   transform: translate(5.5%, -1%);
@@ -656,37 +454,24 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 }
 
 .pm-col-qty { text-align: center; }
-/* Scoped to data rows only (not :root .pm-row-header) -- QUANTITY's
-   header button also carries this same .pm-col-qty class, and without
-   this scoping its font-size/color would win out over .pm-sort-
-   header's inherited styling (equal specificity, later in the
-   cascade), leaving QUANTITY looking different from every other
-   header. */
+/* Scoped to data rows: QUANTITY's header button also carries .pm-col-qty, and
+   without scoping its font-size/color would override the header styling at equal
+   specificity. */
 .pm-row:not(.pm-row-header) .pm-col-qty {
   font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums;
 }
 
 .pm-col-ge, .pm-col-ha { text-align: center; }
-/* The "each" line only renders when there's a per-unit price to show
-   (qty > 1 -- see valueCell in the page's own script); for a qty-1 or
-   unpriced row it's omitted entirely rather than left as an empty
-   spacer, so that single line is centered in the row by .pm-row's own
-   align-items: center instead of sitting in the top half of a
-   reserved-but-blank two-line space. When the each-line IS present,
-   zero gap plus its own min-height keeps the stack/each pair reading
-   as one tight unit instead of two separate rows. */
+/* The "each" line renders only when qty > 1 (valueCell in the script); otherwise
+   it is omitted so the single line is centered by .pm-row's align-items: center.
+   When present, zero gap plus min-height keeps the pair tight. */
 .pm-value-cell { display: flex; flex-direction: column; gap: 0; }
 .pm-value-stack { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .pm-value-stack.pm-value-none { color: var(--text-faint); }
 .pm-value-each { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; line-height: 1.2; min-height: 12px; }
-/* The "~" marking a derived (not a real GE listing) value -- see
-   valueCell in the page's own script. RuneScapePlain11's own tilde
-   glyph sits well above where a digit does in its em-box (drawn more
-   like a diacritic than a baseline symbol), which left inline in the
-   text was enough to drag the whole line's box -- and so the number
-   next to it -- up a few px versus every other row. Isolating it in
-   its own inline-block with line-height: 1 stops that glyph's tall
-   metrics from stretching the surrounding line at all. */
+/* The "~" marks a derived (non-GE) value (valueCell). RuneScapePlain11's tilde
+   sits high in its em-box and drags the line up a few px; an inline-block with
+   line-height: 1 isolates it. */
 .pm-derived-mark { display: inline-block; line-height: 1; vertical-align: baseline; }
 
 .pm-col-tradeable { text-align: center; }
@@ -698,9 +483,8 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .pm-badge-yes { background: rgba(111, 174, 90, 0.14); border-color: var(--green); color: var(--green); }
 .pm-badge-no { background: rgba(192, 90, 76, 0.14); border-color: var(--red); color: var(--red); }
 
-/* Compact column widths from 800px down (was 640px): between 700 and
-   ~800 -- a zoomed-in desktop browser -- the full-size grid is wider than
-   the panel and the last column ("Tradeable?") stuck out past its edge. */
+/* Compact columns from 800px down: between 700 and ~800px (zoomed-in desktop)
+   the full grid overflows the panel and "Tradeable?" sticks out. */
 @media (max-width: 800px) {
   .pm-row {
     grid-template-columns: minmax(140px, 1.6fr) 80px 96px 96px 66px;
@@ -709,39 +493,24 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   .pm-row-name { font-size: 12px; }
 }
 
-/* ---------- Landing page preview (render_landing_storages_preview,
-   app/pages.py) -- same container treatment as the other three
-   previews' own (.landing-loot-preview in loot-tracker.css,
-   .landing-purchase-preview in purchase-goals.css, .landing-mindmap-
-   preview in mindmaps.css): max-height capped to the viewport,
-   clipped rather than overflowing, with a bottom feather that only
-   shows up once there's actually something hidden below it. Scoped
-   here instead since this preview's own markup/CSS classes are
-   Storages Viewer's, not any other page's. See .landing-loot-preview's
-   own comment in loot-tracker.css for the fuller reasoning -- not
-   repeated here. max-width matches the other three previews' own
-   900px exactly so all four interactive previews read as the same
-   size panel. ---------- */
+/* Landing page preview (render_landing_storages_preview, app/pages.py). Same
+   container treatment as the other previews (.landing-loot-preview in
+   loot-tracker.css): viewport-capped, clipped, bottom feather. max-width 900px
+   matches them. */
 .landing-storages-preview {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  /* A fixed height now (was max-height, a cap content could come in
-     under) -- see .landing-loot-preview's own comment in loot-
-     tracker.css for why: a filter that leaves a panel shorter than
-     this used to shrink the whole container to fit, taking the bottom
-     feather below with it since that used to be gated on whether
-     content was actually overflowing. Pinning this box at a fixed
-     height regardless of how much is currently inside it is what
-     keeps the feather in the same screen position always. */
+  /* Fixed height (not max-height) so the bottom feather stays at the same screen
+     position however much content is inside; see .landing-loot-preview in
+     loot-tracker.css. */
   height: calc(100vh - 80px);
   height: calc(100svh - 80px);
   overflow: hidden;
   position: relative;
 }
-/* Unconditional now -- no --clipped modifier class to gate it (see
-   .landing-loot-preview::after's own comment in loot-tracker.css for
-   the fuller reasoning this mirrors). */
+/* Unconditional; no --clipped modifier (see .landing-loot-preview::after in
+   loot-tracker.css). */
 .landing-storages-preview::after {
   content: '';
   position: absolute;
@@ -751,23 +520,14 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   pointer-events: none;
 }
 
-/* The reused body's own heading -- hidden rather than stripped from
-   the markup itself, so _possessions_panel_markup stays untouched
-   (same discipline as the other three previews' own hidden headings).
-   The tagline below takes over as this preview's own "title". */
+/* Hide the reused body's heading rather than strip it (_possessions_panel_markup
+   stays untouched); the tagline replaces it. */
 .landing-storages-preview .page-title { display: none; }
 
-/* ---------- Landing-preview-only hero row: character + tagline,
-   above the reused panel's own controls/table -- see
-   render_landing_storages_preview's own hero_markup comment. Mirrors
-   .purchase-preview-hero/.purchase-preview-tagline-wrap/.purchase-
-   preview-char in purchase-goals.css left-to-right: same flex row,
-   bottom-aligned, same sizing -- character as the FIRST flex child
-   (so it lands on the left), tagline's own wrap second (so it fills
-   whatever's left on the right), per this preview's own explicit
-   "put him on the left" request. See loot-tracker.css's own fuller
-   comments (loot-preview-hero) for the reasoning behind each rule
-   here, not repeated. ---------- */
+/* Landing-preview hero row: character first (left), tagline wrap second; mirrors
+   .purchase-preview-hero/-tagline-wrap/-char in purchase-goals.css (see also
+   .loot-preview-hero in loot-tracker.css and render_landing_storages_preview's
+   hero_markup). */
 .storages-preview-hero {
   display: flex;
   align-items: flex-end;
@@ -795,22 +555,17 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 .storages-preview-tagline-gold { color: var(--gold); }
 .storages-preview-tagline-white { color: var(--text); }
 
-/* Fixed-HEIGHT flex item -- 157px matches .loot-preview-char/
-   .purchase-preview-char/.mindmap-preview-char exactly, so all four
-   preview characters render at the same height next to each other
-   despite each image's own source aspect ratio differing -- width is
-   left to follow from that automatically rather than forced to match
-   too. See .loot-preview-char's own comment (loot-tracker.css) for
-   the fuller reasoning. */
+/* Fixed height: 157px matches
+   .loot-preview-char/.purchase-preview-char/.mindmap-preview-char so all preview
+   characters are the same height despite differing source aspect ratios; width
+   follows. */
 .storages-preview-char {
   flex: 0 0 auto;
   height: 157px;
   line-height: 0;
 }
-/* .landing-storages-preview .storages-preview-char img (two classes)
-   beats myscape.css's own .landing-anchor picture img (one class, two
-   elements) -- same override the other three previews' own characters
-   already need in their own stylesheets. */
+/* Two classes beat myscape.css's .landing-anchor picture img (one class, two
+   elements). */
 .landing-storages-preview .storages-preview-char img {
   display: block;
   height: 100%;
@@ -820,12 +575,9 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 }
 
 
-/* ---------- Phone layout (the whole site's phone breakpoint, 700px).
-   Scoped with body:not(.phone-off) so the homepage preview, which reuses
-   these classes, is untouched. The one section is max 320px wide and
-   centered -- the same gutter every other phone page leaves for a
-   thumb to scroll the page. The five-column table becomes one compact
-   card per item. ---------- */
+/* Phone layout (site breakpoint 700px). Scoped with body:not(.phone-off) so the
+   homepage preview is untouched. The section is max 320px wide and centered; the
+   five-column table becomes one compact card per item. */
 @media (max-width: 700px) {
   body:not(.phone-off) .pm-section {
     max-width: 320px; margin-left: auto; margin-right: auto;
@@ -844,7 +596,6 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   body:not(.phone-off) .pm-settings-btn { width: 32px; height: 32px; }
   body:not(.phone-off) .pm-settings-menu { top: 38px; right: 0; max-width: calc(100vw - 48px); }
 
-  /* Saved views. */
   body:not(.phone-off) .pm-views-row { gap: 8px; }
   body:not(.phone-off) .pm-view-chip, body:not(.phone-off) .pm-view-add-btn { height: 32px; }
   body:not(.phone-off) .pm-view-save-popover {
@@ -908,9 +659,8 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   body:not(.phone-off) .pm-value-stack, body:not(.phone-off) .pm-row:not(.pm-row-header) > .pm-col-qty { font-size: 12px; }
 }
 
-/* Phone browsers can inflate small text on their own, block by block --
-   the 9px QTY / GE / HA / TRADE? labels must all stay the same size, so
-   each item card opts out. */
+/* Phone browsers can inflate small text block by block; each item card opts out
+   so the 9px QTY / GE / HA / TRADE? labels stay the same size. */
 @media (max-width: 700px) {
   body:not(.phone-off) .pm-row:not(.pm-row-header) {
     -webkit-text-size-adjust: 100%;
@@ -928,10 +678,9 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
 }
 
 
-/* ---------- Scroll cue wrappers (see wireScrollCue in the page script).
-   On desktop the wrappers vanish into the existing layout; the phone
-   block below turns them into scrolling strips with an edge fade and a
-   gold chevron. ---------- */
+/* Scroll cue wrappers (wireScrollCue in the page script). Transparent to layout
+   on desktop; the phone block below makes them scrolling strips with an edge
+   fade and a gold chevron. */
 .pm-loc-wrap, .pm-loc-scroll { display: contents; }
 .pm-views-wrap { position: relative; }
 .pm-scroll-arrow { display: none; }
@@ -978,10 +727,9 @@ a.pm-row:hover { background-color: rgb(51, 51, 54); text-decoration: none; }
   body:not(.phone-off) .pm-controls-row { align-items: center; }
   body:not(.phone-off) .pm-views-row { margin-bottom: 0; padding-bottom: 14px; }
 
-  /* Rows, second version: QTY / GE / HA / TRADE? all on one line
-     beneath the name; TRADE? is plain green/red text (no box). The pin
-     moves to the card's top-right corner where the badge used to be, so
-     the left gutter it needed is gone. */
+  /* Rows: QTY / GE / HA / TRADE? on one line beneath the name, TRADE? as plain
+     green/red text. The pin moves to the card's top-right corner, so the left
+     gutter is not needed. */
   body:not(.phone-off) .pm-row:not(.pm-row-header) {
     grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.75fr);
     grid-template-areas: "img img img pin" "qty ge ha trade";

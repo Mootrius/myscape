@@ -1,10 +1,5 @@
-/* Purchase Goals -- the gear-setup planner ported from Maintrius (the
-   original single-user desktop tool this grew out of). Loaded only by
-   /dashboard/purchase-goals, not the shared myscape.css, since none of
-   this applies anywhere else on the site yet -- see app/pages.py's
-   render_purchase_goals. Class names and values are carried over
-   directly from Maintrius's own osrs_tracker_ui.html so this looks and
-   behaves the same way it always has. */
+/* Purchase Goals: gear-setup planner. Loaded only by /dashboard/purchase-goals
+   (render_purchase_goals in app/pages.py), not the shared myscape.css. */
 
 .pg-header {
   display: flex;
@@ -33,36 +28,26 @@
   overflow: hidden;
 }
 
-/* Bumped from 30px, plus a small translate to recenter -- a real item
-   icon off RuneLite's own CDN, which draws on a fixed canvas with
-   built-in padding down the right side for the in-game stack-count
-   badge -- see .loot-item-box-icon's own comment in loot-tracker.css
-   for the full empirical writeup behind both this size bump and the
-   exact translate. .tracker-icon-btn is 44px, so there's still
-   comfortable margin around it. */
+/* RuneLite CDN icons draw on a fixed canvas with padding on the right for the
+   stack-count badge; the size bump and translate recenter the glyph (see
+   .loot-item-box-icon in loot-tracker.css). */
 .tracker-icon-btn img {
   width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated;
   transform: translate(5.5%, -1%);
 }
 .tracker-icon-btn.active { border-color: var(--gold); }
 .tracker-icon-btn:hover { border-color: var(--gold-dim); }
-/* Every setup icon is draggable to reorder the row itself (see
-   wireSetupIconDrag in app/pages.py) -- .dragging fades the one being
-   picked up, same opacity/cursor treatment as .gear-summary-row's own
-   .dragging below. */
+/* Setup icons are draggable to reorder (wireSetupIconDrag in app/pages.py). */
 .tracker-icon-btn.dragging { opacity: 0.4; cursor: grabbing; }
 .tracker-icon-fallback { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1.15; padding: 0 3px; }
 
 .tracker-menu-wrap {
   position: relative;
-  /* Same 44x44 cell as a setup icon, with the 36px button centered in
-     it, so when the menu button wraps onto a later row the setups on
-     that row line up in columns with the rows above. */
+  /* Same 44x44 cell as a setup icon so a wrapped menu button lines up in columns
+     with the rows above. */
   width: 44px; height: 44px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
 }
-/* Slightly smaller than the setup icons beside it -- it's a secondary
-   action (options), not another setup to pick. */
 .icon-menu-btn {
   width: 36px; height: 36px; border-radius: var(--radius);
   background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim);
@@ -70,49 +55,30 @@
   cursor: pointer;
 }
 .icon-menu-btn:hover { border-color: var(--gold); color: var(--text); }
-/* Open (the menu it controls is showing): border and icon both gold. */
 .icon-menu-btn.active, .icon-menu-btn.active:hover { border-color: var(--gold); color: var(--gold); }
 
-/* A drawn three-bar hamburger rather than a text glyph, so it stays
-   crisp and sharp-cornered like the rest of the site's iconography
-   instead of depending on how a font happens to render "☰". */
+/* Drawn three-bar hamburger rather than a text glyph, so it does not depend on
+   font rendering of the character. */
 .hamburger-icon { display: flex; flex-direction: column; justify-content: space-between; width: 16px; height: 11px; }
 .hamburger-icon span { display: block; height: 2px; background: currentColor; }
 
-/* Opaque, not the --panel-translucent used by cards elsewhere on this
-   page -- this floats directly over the gear grid/summary list, and at
-   82% opacity the content underneath showed through distractingly.
-   Centered under the hamburger button (left: 50% + translateX(-50%))
-   rather than right-anchored to its edge, and min-width brought down
-   from 160px -- the small/all-caps item labels below don't need
-   nearly that much room, and 160px left it looking unnecessarily wide
-   next to a 36px trigger button. */
+/* Opaque: floats over the gear grid/summary list, where translucency lets
+   content show through. */
 .tracker-menu {
   position: absolute; top: 48px; left: 50%; transform: translateX(-50%); z-index: 5;
   background: var(--panel); border: 1px solid var(--border); min-width: 128px;
   display: flex; flex-direction: column;
 }
-/* Same small/gray/all-caps text treatment as the "GP" / "A-Z" /
-   "Custom" sort buttons (.sort-btn below) -- applied here
-   and on .btn-secondary so every secondary control on this page reads
-   as one consistent family of text styling. Centered (not left-aligned)
-   to match the menu itself now being centered under its trigger button
-   rather than hugging one edge. */
+/* Same small/gray/all-caps treatment as .sort-btn and .btn-secondary. */
 .tracker-menu-item {
   background: none; border: none; text-align: center; padding: 10px 14px;
   color: var(--text-dim); font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase;
   cursor: pointer;
 }
 .tracker-menu-item:hover { background: var(--panel-2); color: var(--gold); }
-/* Same bleed-through as .mm-menu-item.danger in mindmaps.css: Delete
-   setup's extra .danger class (for the hover color just below) also
-   matches button.danger (myscape.css), which is more specific than
-   this file's plain .tracker-menu-item on every property they both
-   set, and additionally sets width: 100%, which .tracker-menu-item
-   never sets at all -- rendering Delete setup as a full-width,
-   bigger-padding, red-bordered pill instead of a plain row the same
-   size as the other menu items. Reset back to .tracker-menu-item's
-   own values so .danger only ever does what :hover below intended. */
+/* Reset button.danger (myscape.css) bleed-through: it is more specific than
+   .tracker-menu-item and adds width: 100%. Same as .mm-menu-item.danger in
+   mindmaps.css. */
 .tracker-menu-item.danger {
   width: auto;
   background: none;
@@ -122,13 +88,8 @@
   font-size: 10.5px;
 }
 .tracker-menu-item.danger:hover { color: var(--red); }
-/* Delete setup's armed "Are you sure?" state (see closeSetupMenu's
-   own comment in the script for when this gets applied/cleared) --
-   same red-tint treatment button.danger:hover already uses
-   elsewhere (myscape.css), just held permanently instead of only
-   while the pointer happens to be over it, since this one has to
-   stay legible as "you're about to delete something" even after
-   the player's moved their mouse to actually click it again. */
+/* Armed "Are you sure?" state of Delete setup (see closeSetupMenu in the page
+   script); the hover tint is held permanently. */
 .tracker-menu-item--confirm,
 .tracker-menu-item--confirm:hover {
   color: var(--red);
@@ -139,21 +100,14 @@
   display: flex; gap: 8px; justify-content: center; align-items: center; margin-bottom: 18px;
 }
 .pg-setup-form input[type="text"] { flex: 1 1 280px; max-width: 360px; }
-/* Site-wide standard: a required-field miss (e.g. saving with no name
-   typed) is shown as a red border only, never a popup or inline message.
-   Needs the .pg-setup-form ancestor + [type="text"] compound to outrank
-   this file's own rule above (and myscape.css's shared input[type="text"]
-   rule) on specificity, same trick used for .invalid elsewhere on the site. */
+/* A required-field miss is shown as a red border only. The .pg-setup-form
+   ancestor + [type="text"] compound outranks this file's rule above and
+   myscape.css's input[type="text"]. */
 .pg-setup-form input[type="text"].invalid { border-color: var(--red); }
-/* button.primary (myscape.css) defaults to width: 100% for full-width
-   auth-form submit buttons -- wrong here, where it sits beside an input
-   and a Cancel button in one row rather than stacked alone, and at 100%
-   it was blowing up to the width of the whole centered page column.
-   Pinned back down to a normal, content-sized button so the row reads
-   as one compact, centered group instead of three stretched elements. */
-/* #pgNameSave (id) rather than the .pg-setup-form-save class alone --
-   button.primary's own element+class selector in myscape.css otherwise
-   outweighs a single class here and the width: 100% below loses. */
+/* button.primary (myscape.css) defaults to width: 100%; pin it to content size
+   so it sits in one row with the input and Cancel. */
+/* Id selector so it outweighs button.primary's element+class selector in
+   myscape.css. */
 button.primary#pgNameSave, .pg-setup-form-save {
   width: auto; flex: 0 0 auto;
   padding: 0 22px; height: 25px; margin-top: 0;
@@ -161,19 +115,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
   display: inline-flex; align-items: center; justify-content: center;
 }
 
-/* A plain bordered "box" button for secondary actions that sit beside a
-   primary one (Cancel next to Save, Clear/Cancel in the icon picker) --
-   button.link (myscape.css) renders as bare text, which read as an
-   afterthought next to a real button; this gives it the same visual
-   weight as everything else in these rows. */
-/* height: 25px is the site-wide button height (see .loot-sort-tab in
-   loot-tracker.css) -- used to be pinned to 32px specifically to match
-   .search-box input[type="text"] below, back when every button on the
-   site sized itself independently; now that every button matches this
-   one number instead, .gear-icon-picker's own align-items: center
-   (below) is what keeps this shorter-than-32px button centered against
-   that taller search box, rather than the two matching heights
-   outright. */
+/* Bordered box button for secondary actions beside a primary one; button.link
+   (myscape.css) renders as bare text. */
+/* 25px is the site-wide button height (see .loot-sort-tab in loot-tracker.css).
+   .gear-icon-picker's align-items: center keeps it centered against the 32px
+   search box. */
 .btn-secondary {
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--text-dim); font-family: inherit;
@@ -188,13 +134,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .overlay-card {
   border-radius: var(--radius);
   padding: 18px 22px;
-  /* 18px, not the 24px this used to be -- matches the gap Loot
-     Tracker's own .loot-chart-card (loot-tracker.css) leaves below
-     itself before its NPC/item panels, so the space below this page's
-     own "graph-equivalent" section (this overview card) reads the
-     same as the space below that one, rather than visibly wider. See
-     .pg-body's own gap just below for the other half of this page's
-     standardized-to-Loot-Tracker spacing. */
+  /* 18px matches the gap below .loot-chart-card in loot-tracker.css; see also
+     .pg-body's gap. */
   margin-bottom: 18px;
   display: flex; align-items: center; gap: 18px;
   background: var(--panel-translucent);
@@ -203,15 +144,9 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 .overlay-side { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .overlay-side.overlay-target { flex-direction: row-reverse; }
-/* Both of this card's .overlay-icon <img>s (see app/pages.py) are real
-   RuneLite CDN item icons now -- the Coins icon (item id 995, via
-   _ICON_COINS/item_icon_url) used to be the one exception, a bundled
-   /static/img/icon-coins.png rather than a CDN hit, until it was
-   switched over to match #pgOverlayIconImg (the setup's own custom
-   display icon) below it. Same built-in-canvas-padding translate as
-   .loot-item-box-icon in loot-tracker.css (see its own comment for the
-   numbers) applies to both now, so it lives on the shared class rather
-   than #pgOverlayIconImg alone the way it used to need to. */
+/* Both .overlay-icon images are RuneLite CDN item icons, so the canvas-padding
+   translate (see .loot-item-box-icon in loot-tracker.css) lives on the shared
+   class. */
 .overlay-icon {
   width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; flex-shrink: 0;
   transform: translate(5.5%, -1%);
@@ -236,42 +171,19 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 .overlay-icon-wrap:hover .overlay-icon-placeholder { border-color: var(--gold-dim); color: var(--gold); }
 
-/* 18px, not the 28px this used to be -- matches .loot-panels' own gap
-   between its NPC and item panels (loot-tracker.css), the same "two
-   panels side by side" shape this row and that one both are (gear
-   frame + slot picker column, still-to-purchase summary column). */
+/* 18px matches .loot-panels' gap in loot-tracker.css. */
 .pg-body { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
-/* Holds the gear-frame (below) and, when a slot is being edited, the
-   slot picker -- stacked in this one column so the picker appears
-   directly under the gear+inventory box rather than at the bottom of
-   the whole two-column row, and the summary column beside it doesn't
-   move when the picker opens or closes. Its `width` is pinned in
-   pixels by JS right after the gear-frame renders (see renderContent
-   in app/pages.py) to the frame's own rendered width -- without that,
-   this column has no width of its own to speak of, so the slot
-   picker's search box (which would happily fill any space it's
-   given) stretches it out past the frame, which in
-   turn shoves .pg-summary-col out of the row entirely. Pinning the
-   width forces the picker to wrap its own contents inside the frame's
-   width instead. `max-width: 100%` is the narrow-viewport fallback,
-   in case JS ever sets a pixel width wider than the screen. */
+/* Holds the gear frame and, when editing a slot, the slot picker beneath it. JS
+   pins its px width to the frame's (renderContent in app/pages.py); otherwise
+   the picker's search box stretches it and pushes .pg-summary-col out of the
+   row. max-width: 100% is the narrow-viewport fallback. */
 .pg-doll-wrap { display: flex; flex-direction: column; gap: 18px; max-width: 100%; }
 .pg-summary-col { flex: 1 1 320px; min-width: 280px; }
 
-/* The box holding worn equipment and inventory together (see
-   .dash-card in myscape.css for the same translucent-panel/faint-
-   border treatment used site-wide) -- the individual slots inside stay
-   fully opaque (see .gear-slot below), only this shared frame around
-   them is translucent. Doll and inventory sit side by side, like the
-   original tool. `align-items: stretch` (the default, set explicitly
-   for clarity) makes .gear-doll the same height as the taller
-   .inventory-grid beside it, which is what lets .gear-doll-misc below
-   push itself down to the exact bottom of that shared height with
-   `margin-top: auto` -- see .gear-doll's own comment. `flex-shrink: 0`
-   keeps this frame from being squeezed narrower than its own content
-   once .pg-doll-wrap's width is pinned (see that rule's comment
-   above) -- it should always be exactly as wide as its content wants,
-   never more, never less. */
+/* Translucent frame (slots stay opaque). align-items: stretch makes .gear-doll
+   as tall as .inventory-grid so .gear-doll-misc can sit at the bottom via
+   margin-top: auto. flex-shrink: 0 keeps the frame at content width once
+   .pg-doll-wrap is pinned. */
 .pg-gear-frame {
   display: flex;
   align-items: stretch;
@@ -284,20 +196,10 @@ button.primary#pgNameSave, .pg-setup-form-save {
   box-sizing: border-box;
 }
 
-/* Stacks the paperdoll (.gear-doll-slots) above the 8 misc slots
-   (.gear-doll-misc, two rows of 4) in one flex column. Was previously
-   just the paperdoll grid, vertically centered against .inventory-grid;
-   now that column is stretched to that same height (see .pg-gear-frame
-   above) and .gear-doll-misc's `margin-top: auto` (below) claims all
-   the leftover space, which does two things at once: it pushes the
-   paperdoll up flush against the top of the frame (one row's worth
-   higher than it sat when centered), and it pins the misc block's own
-   bottom edge exactly level with inventory-grid's bottom -- both
-   without hardcoding either pixel offset. This still holds with two
-   misc rows instead of one: only .gear-doll-misc's own height grew,
-   and margin-top: auto just absorbs whatever leftover space remains
-   above it, so the paperdoll's top position is unaffected by however
-   many misc rows there are. */
+/* Paperdoll above the 8 misc slots. The column stretches to the inventory's
+   height and .gear-doll-misc's margin-top: auto absorbs the leftover space, so
+   the paperdoll sits at the top and the misc block ends level with
+   .inventory-grid. */
 .gear-doll { display: flex; flex-direction: column; }
 
 .gear-doll-slots {
@@ -312,10 +214,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
     "hands  boots  ring";
   gap: 8px;
 }
-/* Places each named equipment slot into its grid-template-areas cell
-   above -- without these, the areas are declared but nothing actually
-   claims them, and the slots just fill in document order instead of
-   forming the paperdoll shape. */
+/* Place slots into the grid-template-areas cells above; without them the slots
+   flow in document order. */
 .slot-head { grid-area: head; }
 .slot-cape { grid-area: cape; }
 .slot-neck { grid-area: neck; }
@@ -328,18 +228,9 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .slot-boots { grid-area: boots; }
 .slot-ring { grid-area: ring; }
 
-/* The 8 misc slots (runes, teleports, whatever else -- see
-   MISC_EQUIPMENT_SLOTS in app/schemas.py), two rows of 4 below the
-   paperdoll. Width: 184px is deliberately exactly 3 normal slots plus
-   their 2 gaps (3*56 + 2*8), i.e. the same width as .gear-doll-slots
-   above it, not 4 full-size slots' worth -- so each of the 4 slots in a
-   row is correspondingly smaller (see .gear-slot-sm) to still fit
-   4-across in that same 3-slot width; a second row stacks below the
-   first rather than widening it further. Height is left implicit (2
-   rows of 40px plus the 8px row gap = 88px) rather than set explicitly,
-   so the block sizes itself from its own rows instead of needing to be
-   kept in sync with them by hand. margin-top: auto is what actually
-   positions this block -- see .gear-doll's comment above. */
+/* The 8 misc slots (MISC_EQUIPMENT_SLOTS in app/schemas.py), 2 rows of 4. 184px
+   = 3 normal slots + 2 gaps (3*56 + 2*8). Height is implicit (2*40 + 8).
+   margin-top: auto positions it (see .gear-doll). */
 .gear-doll-misc {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -348,19 +239,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
   width: 184px;
   margin-top: auto;
 }
-/* Smaller than the standard 56px .gear-slot so 4 of them fit in each
-   row's same 184px width 3 normal slots take up (184 - 3 gaps of 8px =
-   160px / 4 = 40px each) -- width comes from the grid column above,
-   height is set to match so these stay square rather than squashed
-   (and matches the explicit 40px grid-template-rows above, so a row
-   is exactly as tall as its own slots with no extra padding). The icon
-   inside is sized down to match (compare .gear-summary-row-icon, the
-   same 26px used for compact rows elsewhere on this page).
-   .gear-slot.gear-slot-sm (both classes, matching the actual markup --
-   see slotHtml in app/pages.py) rather than .gear-slot-sm alone, so
-   this reliably outweighs .gear-slot's own width/height below on
-   specificity instead of depending on which rule happens to come
-   later in this file. */
+/* 40px = (184 - 3*8px gaps) / 4: 4 slots fit the width of 3 normal ones. Two
+   classes (as in slotHtml) outrank .gear-slot regardless of rule order. */
 .gear-slot.gear-slot-sm { width: auto; height: 40px; }
 .gear-slot.gear-slot-sm .gear-slot-icon { width: 30px; height: 30px; }
 
@@ -376,49 +256,26 @@ button.primary#pgNameSave, .pg-setup-form-save {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
 }
-/* Brightening the box (rather than recoloring the border) keeps a
-   slot's owned/not-owned/affordable border color intact on hover --
-   before this, .gear-slot.owned/.not-owned/.affordable (below, later
-   in the cascade at equal specificity) always won out over
-   .gear-slot:hover's border-color, so hovering a colored slot produced
-   no visible feedback at all.
-   background-color rather than filter: brightness() -- filter lights
-   up the whole rendered box, item icon included, which reads as the
-   icon itself getting highlighted rather than the slot around it.
-   background-color only affects the flat color sitting behind the
-   icon. Same rgb(51,51,54) lift used for the loot tracker's own
-   hover highlight (see loot-tracker.css), so the two pages' hover
-   feedback matches; .filled gets its own hover rule right below since
-   it starts from a different base color (#1c1a14, not panel-2) and
-   needs its own, proportionally-brightened target instead. */
+/* Hover brightens background-color, not the border (overridden by
+   .owned/.not-owned/.affordable at equal specificity) and not filter (would
+   light up the icon). Matches the loot tracker hover; .filled has its own rule
+   since its base is #1c1a14. */
 .gear-slot:hover { background-color: rgb(51, 51, 54); }
 .gear-slot.filled { background: #1c1a14; }
 .gear-slot.filled:hover { background-color: rgb(38, 35, 27); }
 .gear-slot.picking { border-color: var(--gold); }
-/* -webkit-user-drag: none backs up the icon <img>'s draggable="false"
-   attribute (see slotHtml in app/pages.py) -- Safari has a history of
-   still starting its own native image drag from a draggable="false"
-   <img> unless this is also set, which would again grab just the icon
-   instead of the whole .gear-slot box underneath it. */
-/* Bumped from 38px, plus a small translate to recenter -- a real item
-   icon off RuneLite's own CDN, which draws on a fixed canvas with
-   built-in padding down the right side for the in-game stack-count
-   badge -- see .loot-item-box-icon's own comment in loot-tracker.css
-   for the full empirical writeup behind both this size bump and the
-   exact translate. .gear-slot is 56px, so there's still comfortable
-   margin around it. */
+/* Backs up the img's draggable="false" (slotHtml in app/pages.py): Safari can
+   still start a native image drag otherwise. */
+/* RuneLite CDN canvas padding: size bump plus recentering translate (see
+   .loot-item-box-icon in loot-tracker.css). */
 .gear-slot-icon {
   width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; -webkit-user-drag: none;
   transform: translate(5.5%, -1%);
 }
 
-/* Drag-and-drop (see wireSlotClicks/moveSlotItem in app/pages.py) --
-   an outline rather than a border/background change so it never
-   competes with the owned/not-owned/affordable border color the same
-   way the plain hover state above doesn't. .dragging fades the slot
-   being dragged FROM so it reads as "picked up"; .drag-over rings
-   whichever slot the drag is currently over as a drop target,
-   including an empty one. */
+/* Drag and drop (wireSlotClicks/moveSlotItem in app/pages.py). Outline rather
+   than border so the ownership border color stays visible. .dragging fades the
+   source; .drag-over rings the drop target. */
 .gear-slot.dragging { opacity: 0.4; }
 .gear-slot.drag-over { outline: 2px dashed var(--gold); outline-offset: -2px; }
 
@@ -426,21 +283,12 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-slot.not-owned { border-color: var(--red); }
 .gear-slot.affordable { border-color: var(--amber); }
 
-/* Shift-click multi-select (see toggleSlotSelected/wireSlotClicks in
-   app/pages.py) -- a socket shift-clicked into the pending group,
-   whether it's filled or empty. An outline rather than a border-color
-   change, same reasoning as .drag-over above: it has to stay visible
-   over every existing border color (owned/not-owned/affordable, or
-   the gold .picking border once the group's shared picker is open)
-   instead of competing with it. Solid (not dashed) so it doesn't read
-   as a drag-and-drop drop target, and --blue so it doesn't get
-   confused with .picking's gold or the green/amber/red ownership
-   colors it can sit on top of. */
+/* Shift-click multi-select (toggleSlotSelected/wireSlotClicks in app/pages.py).
+   Solid blue outline stays visible over every border color and differs from the
+   gold .picking border. */
 .gear-slot.multi-selected { outline: 2px solid var(--blue); outline-offset: -2px; }
 
-/* Hover-only "remove item" button -- top-right corner. Hidden until the
-   slot itself is hovered, since it's a destructive shortcut, not
-   something that should always be on screen. */
+/* Hover-only remove button (destructive shortcut). */
 .gear-slot-remove {
   display: none;
   position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; z-index: 2;
@@ -457,14 +305,10 @@ button.primary#pgNameSave, .pg-setup-form-save {
   border-radius: var(--radius);
   padding: 18px 20px;
 }
-/* The three "Still to purchase" sort buttons (GP/A-Z, each toggling
-   its own direction, plus a standalone CUSTOM) -- replaced what used
-   to be a plain static heading label (see renderSortButtons in
-   app/pages.py). */
+/* "Still to purchase" sort buttons: GP and A-Z toggle direction, CUSTOM is
+   standalone (renderSortButtons in app/pages.py). */
 .gear-summary-sort { display: flex; gap: 6px; margin-bottom: 12px; }
-/* height: 25px matches the site-wide button height (see .loot-sort-tab
-   in loot-tracker.css, this file's own .sort-btn was in fact its
-   original namesake). */
+/* 25px matches the site-wide button height (.loot-sort-tab in loot-tracker.css). */
 .sort-btn {
   flex: 1;
   height: 25px;
@@ -478,23 +322,14 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 .sort-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .sort-btn.active { border-color: var(--gold); color: var(--gold); }
-/* No .loot-sort-arrow-style vertical nudge needed here, despite this
-   page sharing RuneScapePlain11 (and its own missing ↓/↑ glyphs,
-   same as loot-tracker.css's own .loot-sort-arrow) -- measured against
-   the real rendered glyph (not guessed), this button's own font-size/
-   padding/letter-spacing combination already centers the fallback-font
-   arrow against the label beside it with no correction, unlike the
-   Loot Tracker's own sort tabs. */
+/* Unlike .loot-sort-arrow, no vertical nudge is needed: this button's
+   font-size/padding/letter-spacing already centers the fallback-font arrow glyph
+   (RuneScapePlain11 lacks the arrows). */
 .sort-btn-arrow { display: inline-block; }
-/* Nudge pulse for the CUSTOM button -- fires when a "still to
-   purchase" row is clicked/dragged in any OTHER sort mode (see
-   glowCustomSortButton in app/pages.py), same idea and same shape as
-   Mindmaps' own Edit Mode button glow (mm-edit-glow in mindmaps.css):
-   a fixed iteration count rather than `infinite` so it reads as a
-   one-off nudge, not a persistent state the way .active already
-   means, animating to the same gold .active ends up at plus a soft
-   box-shadow glow .active itself doesn't use, so a glowing button
-   still reads as distinct from an already-active one. */
+/* One-off nudge pulse for CUSTOM when a row is clicked/dragged in another sort
+   mode (glowCustomSortButton in app/pages.py); same shape as mm-edit-glow in
+   mindmaps.css. Finite iteration count, and the extra box-shadow keeps it
+   distinct from .active. */
 @keyframes sort-btn-custom-glow {
   0%, 100% { box-shadow: none; border-color: var(--border); color: var(--text-dim); }
   50% { box-shadow: 0 0 8px 2px var(--gold); border-color: var(--gold); color: var(--gold); }
@@ -506,9 +341,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
   width: 44px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center;
   background: var(--panel-2); border: 1px solid var(--border);
 }
-/* Bumped from 30px, plus a small translate to recenter -- same
-   built-in-canvas-padding fix as .loot-item-box-icon in
-   loot-tracker.css (see its own comment for the numbers). */
+/* RuneLite CDN canvas padding: size bump plus recentering translate (see
+   .loot-item-box-icon in loot-tracker.css). */
 .gear-next-purchase-icon {
   width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated;
   transform: translate(5.5%, -1%);
@@ -520,14 +354,10 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-summary-list { display: flex; flex-direction: column; gap: 6px; }
 .gear-summary-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: var(--panel-2); border: 1px solid var(--border); }
 .gear-summary-row.unpurchasable { opacity: 0.55; }
-/* -webkit-user-drag: none backs up the icon <img>'s draggable="false"
-   attribute (see renderSummaryList in app/pages.py) -- same reasoning
-   as .gear-slot-icon: without it, starting a drag with the pointer
-   over the icon grabs the browser's own native image drag instead of
-   the row underneath it. */
-/* Bumped from 26px, plus a small translate to recenter -- same
-   built-in-canvas-padding fix as .loot-item-box-icon in
-   loot-tracker.css (see its own comment for the numbers). */
+/* Backs up draggable="false" on the icon img (renderSummaryList in
+   app/pages.py); same as .gear-slot-icon. */
+/* RuneLite CDN canvas padding: size bump plus recentering translate (see
+   .loot-item-box-icon in loot-tracker.css). */
 .gear-summary-row-icon {
   width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; flex: none; -webkit-user-drag: none;
   transform: translate(5.5%, -1%);
@@ -536,23 +366,12 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .gear-summary-row-cost { font-size: 12px; color: var(--gold); white-space: nowrap; }
 .gear-summary-row-cost.na { color: var(--text-faint); }
 
-/* Drag-to-reorder, "custom" sort mode only (see wireSummaryDrag in
-   app/pages.py) -- .dragging fades the row being picked up, same as
-   the gear slots above. No .drag-over ring here though: rows
-   physically slide out of the way to preview where a drop would land
-   (wireSummaryDrag's animateReorder) instead of just outlining
-   whichever one the cursor happens to be over. Plus user-select: none
-   so grabbing and dragging a row's text doesn't just select it instead
-   the way plain text in a draggable box normally would. */
+/* Drag-to-reorder, custom sort mode only (wireSummaryDrag in app/pages.py). No
+   .drag-over ring: rows slide aside to preview the drop (animateReorder).
+   user-select: none stops text selection while dragging. */
 .gear-summary-row.draggable { cursor: grab; user-select: none; }
-/* Same background-color hover feedback as .gear-slot on the gear grid
-   (see the comment above it -- background-color, not filter, so the
-   row's own icon and text don't brighten along with it) -- only while
-   draggable (i.e. only in "custom" sort mode), since these rows
-   aren't grabbable at all in the other two sort modes and shouldn't
-   look interactive there. .gear-summary-row's own background is
-   always panel-2 (no "filled" equivalent for rows), so this needs
-   only the one rule. */
+/* Background hover, not filter, so icon and text do not brighten. Only while
+   draggable (custom sort mode). */
 .gear-summary-row.draggable:hover { background-color: rgb(51, 51, 54); }
 .gear-summary-row.draggable.dragging { opacity: 0.4; cursor: grabbing; }
 
@@ -560,61 +379,38 @@ button.primary#pgNameSave, .pg-setup-form-save {
   background: var(--panel-translucent); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 14px 16px; margin: 0 0 22px;
   display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap;
-  /* box-sizing so the padding above is absorbed into (not added onto)
-     whatever width the parent gives this -- for .gear-slot-picker
-     specifically, that parent's width is pinned to the gear+inventory
-     frame's own width (see .pg-doll-wrap above), and this keeps the
-     picker from quietly overflowing past it by 2 * 16px of padding. */
+  /* Absorbs the padding into the parent's width; .gear-slot-picker's width is
+     pinned to the gear frame (see .pg-doll-wrap) and would otherwise overflow by
+     2 * 16px. */
   width: 100%;
   box-sizing: border-box;
 }
 
-/* .gear-icon-picker specifically (not .gear-slot-picker, which has no
-   buttons of its own to center) overrides the flex-start above to
-   center -- .gear-icon-picker-actions' Clear/Cancel row is 25px tall
-   (the site-wide button height) beside this same row's 32px search
-   box, and center is what keeps it vertically centered against that
-   taller field instead of pinned to the row's top edge. */
+/* Only .gear-icon-picker centers: its 25px Clear/Cancel row would otherwise sit
+   at the top beside the 32px search box. */
 .gear-icon-picker { align-items: center; }
 
-/* "Clear" and "Cancel" side by side in the setup-icon picker -- the two
-   are wrapped in their own row so they act as one flex child of
-   .gear-icon-picker (which also holds the search box) instead of two,
-   and flex-shrink: 0 keeps them their natural button width so it's the
-   search box beside them (flex: 1 1 240px, so it's the one allowed to
-   shrink) that gives up the room this row now takes. */
+/* Clear/Cancel share one row so they are a single flex child of
+   .gear-icon-picker; flex-shrink: 0 lets the search box (flex: 1 1 240px) give
+   up the room. */
 .gear-icon-picker-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; flex: 0 0 auto; }
 .gear-icon-picker-actions .btn-secondary { flex: 0 0 auto; }
 
 .search-box { position: relative; flex: 1 1 240px; min-width: 200px; }
-/* The slot picker's own search box (as opposed to the setup-icon
-   picker's) takes its whole row -- see the "Search for an item" input
-   in .gear-slot-picker. */
+/* The slot picker's search box takes its whole row. */
 .search-box.search-box-full { flex: 1 1 100%; width: 100%; }
-/* Shorter than the site-wide input height (myscape.css's padding: 12px
-   14px), kept at 32px on purpose even though .btn-secondary's Clear/
-   Cancel beside it dropped to the site-wide 25px button height --
-   .gear-icon-picker's own align-items: center (below) is what keeps
-   that shorter button row vertically centered against this field
-   rather than the two matching heights outright. Also used (via this
-   same .search-box class) for the gear-slot picker's "Search for an
-   item" box below the setup, which has no buttons of its own beside it
-   -- shortened to match anyway so both search bars on this page stay
-   the same height. */
+/* 32px, shorter than the site-wide input height (myscape.css padding: 12px
+   14px); .gear-icon-picker's align-items: center centers the 25px buttons beside
+   it. Also used for the slot picker's search box so both match. */
 .search-box input[type="text"] { width: 100%; height: 32px; padding: 0 14px; }
-/* Opaque, not the --panel-translucent used by the picker's own outer
-   card -- clicking a suggestion here saves it immediately (see
-   renderSlotSuggestions in app/pages.py), so there's nothing else in
-   the picker this could visually bleed into, but it stays opaque
-   anyway for a clean, unambiguous dropdown. */
+/* Opaque for a clean dropdown; a suggestion click saves immediately
+   (renderSlotSuggestions in app/pages.py). */
 .suggestions {
   display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 6;
   background: var(--panel); border: 1px solid var(--border); max-height: 260px; overflow-y: auto;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
-  /* Same fix as Mindmaps' own .mm-suggestions and Possessions' own
-     .pm-settings-menu -- without this, scrolling this list past its
-     own top/bottom bound chains into the next scrollable ancestor
-     (the whole page) instead of just stopping. */
+  /* Stops scroll chaining into the page past the list bounds (same as
+     .mm-suggestions and .pm-settings-menu). */
   overscroll-behavior: contain;
 }
 .suggestions.show { display: block; }
@@ -623,35 +419,23 @@ button.primary#pgNameSave, .pg-setup-form-save {
   color: var(--text); cursor: pointer;
 }
 .suggestion:hover, .suggestion.active { background: var(--panel-2); }
-/* Bumped from 22px, plus a small translate to recenter -- these
-   suggestion rows only ever show a real item icon off RuneLite's own
-   CDN (see renderIconSuggestions/renderSlotSuggestions in
-   app/pages.py) -- same built-in-canvas-padding fix as
-   .loot-item-box-icon in loot-tracker.css (see its own comment for
-   the numbers). */
+/* RuneLite CDN canvas padding: size bump plus recentering translate (see
+   .loot-item-box-icon in loot-tracker.css). */
 .suggestion img {
   width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated;
   transform: translate(5.5%, -1%);
 }
 
-/* The "no match" row that replaces the search results when the query
-   matches nothing at all -- search now spans live Grand Exchange
-   items, known combination recipes, and every other named item in the
-   game (see search_items in app/purchase_goals.py), so this is a rare
-   dead end (a typo, or something genuinely not in the game), not an
-   action -- plain muted text, not clickable, not styled like a real
-   search result. */
+/* "No match" row when the search (search_items in app/purchase_goals.py) finds
+   nothing; plain muted, non-clickable text. */
 .suggestion-empty {
   padding: 8px 10px; font-size: 13px; color: var(--text-faint); font-style: italic; cursor: default;
 }
 
 .pg-empty { text-align: center; color: var(--text-faint); font-size: 13px; padding: 40px 10px; }
 
-/* Between the phone layout and the full two-column one (721px to about
-   880px -- a zoomed-in desktop browser) the summary list no longer fits
-   beside the gear box and wraps underneath it, and it was left stuck to
-   the left edge at the page's full width. Center the gear box and give
-   the list the same width as it so the two read as one stacked column. */
+/* Between phone and full two-column layout (721-880px) the summary wraps under
+   the gear box; center the box and match the list's width. */
 @media (min-width: 721px) and (max-width: 879px) {
   .pg-body { justify-content: center; }
   .pg-summary-col { max-width: 502px; }
@@ -659,46 +443,32 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 @media (max-width: 720px) {
   .pg-body { flex-direction: column; align-items: center; }
-  /* Stacked: center the paperdoll and the inventory grid in the frame,
-     and keep the 8 small slots off the paperdoll's bottom row (their
-     margin-top: auto only makes room when the column is stretched to the
-     inventory's height beside it). The phone layout below 701px sets the
-     same things with its own rules. */
+  /* Stacked: center the paperdoll and inventory, and keep the 8 small slots off
+     the paperdoll's bottom row (margin-top: auto only helps when the column is
+     stretched beside the inventory). The phone layout sets the same with its own
+     rules. */
   .pg-gear-frame { flex-direction: column; align-items: center; gap: 20px; }
   .gear-doll-misc { margin-top: 16px; }
 }
 
-/* ---------- Landing page preview (render_landing_purchase_preview,
-   app/pages.py) -- same container treatment as .landing-loot-preview
-   in loot-tracker.css (max-height capped to the viewport, clipped
-   rather than overflowing, with a bottom feather that only shows up
-   once there's actually something hidden below it), scoped here
-   instead since this preview's own markup/CSS classes are Purchase
-   Goals', not Loot Tracker's. See that class's own comment for the
-   fuller reasoning -- not repeated here. max-width matches
-   .landing-loot-preview's own 900px exactly (was 1000px) so the two
-   interactive previews -- now back to back in the anchor order --
-   read as the same size panel, not two different widths. ---------- */
+/* Landing page preview (render_landing_purchase_preview, app/pages.py). Same
+   container treatment as .landing-loot-preview in loot-tracker.css
+   (viewport-capped, clipped, bottom feather). max-width matches its 900px so
+   both previews are the same size. */
 .landing-purchase-preview {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  /* A fixed height now (was max-height, a cap content could come in
-     under) -- see .landing-loot-preview's own comment in loot-
-     tracker.css for why: a filter that leaves a panel with only a row
-     or two used to shrink the whole container to fit, taking the
-     bottom feather below with it since that used to be gated on
-     whether content was actually overflowing. Pinning this box at a
-     fixed height regardless of how much is currently inside it is
-     what keeps the feather in the same screen position always. */
+  /* Fixed height (not max-height) so the bottom feather stays at the same screen
+     position however much content is inside; see .landing-loot-preview in
+     loot-tracker.css. */
   height: calc(100vh - 80px);
   height: calc(100svh - 80px);
   overflow: hidden;
   position: relative;
 }
-/* Unconditional now -- no --clipped modifier class to gate it (see
-   .landing-loot-preview::after's own comment in loot-tracker.css for
-   the fuller reasoning this mirrors). */
+/* Unconditional; no --clipped modifier (see .landing-loot-preview::after in
+   loot-tracker.css). */
 .landing-purchase-preview::after {
   content: '';
   position: absolute;
@@ -708,43 +478,25 @@ button.primary#pgNameSave, .pg-setup-form-save {
   pointer-events: none;
 }
 
-/* The reused body's own heading and the setup selector/menu row --
-   hidden rather than stripped from the markup itself, so
-   _purchase_goals_panel_markup stays untouched (same discipline as
-   .landing-loot-preview .page-title in loot-tracker.css). This
-   preview only ever shows the one setup it was built from (see
-   render_landing_purchase_preview's own docstring), so there's
-   nothing for a selector to switch between anyway. */
+/* Hide the reused body's heading and setup selector via CSS so
+   _purchase_goals_panel_markup stays untouched; the preview shows a single
+   setup. */
 .landing-purchase-preview .page-title,
 .landing-purchase-preview .pg-header {
   display: none;
 }
 
-/* Add/remove/move are all still swallowed in the gear doll/inventory
-   grid (see render_landing_purchase_preview's own docstring, point
-   2) -- default cursor rather than whatever .gear-slot/
-   .gear-slot-remove normally hint at (pointer), so neither an EMPTY
-   slot nor the hover "x" remove button invites a click that's already
-   been swallowed before it can do anything. A FILLED slot is the one
-   exception (below) -- it's genuinely clickable here (opens the
-   item's wiki page, same as the real page), so it keeps its base
-   cursor: pointer from .gear-slot's own rule instead of being
-   overridden to default like this. */
+/* Add/remove/move are swallowed in the preview: default cursor on empty slots
+   and the remove button. Filled slots keep pointer (they open the item's wiki
+   page). */
 .landing-purchase-preview .gear-slot:not(.filled),
 .landing-purchase-preview .gear-slot-remove {
   cursor: default;
 }
 
-/* ---------- Landing-preview-only hero row: character + tagline,
-   above the reused panel's own overlay/gear cards -- see
-   render_landing_purchase_preview's own hero_markup comment. Mirrors
-   .loot-preview-hero/.loot-preview-tagline-wrap/.loot-preview-char in
-   loot-tracker.css left-to-right: same flex row, bottom-aligned, same
-   sizing -- just with the character as the FIRST flex child (so it
-   lands on the left) and the tagline's own wrap second (so it fills
-   whatever's left on the right), instead of the other way around. See
-   that file's own fuller comments for the reasoning behind each rule
-   here, not repeated. ---------- */
+/* Landing-preview hero row: character first (left), tagline wrap second (right).
+   Mirrors .loot-preview-hero/-tagline-wrap/-char in loot-tracker.css with the
+   order swapped; see render_landing_purchase_preview's hero_markup. */
 .purchase-preview-hero {
   display: flex;
   align-items: flex-end;
@@ -772,24 +524,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .purchase-preview-tagline-gold { color: var(--gold); }
 .purchase-preview-tagline-white { color: var(--text); }
 
-/* Fixed-HEIGHT flex item (was fixed-width, 130px) -- 157px matches
-   .loot-preview-char in loot-tracker.css exactly, so the two preview
-   characters render at the same height next to each other despite
-   this image's own source aspect ratio (350x292, already cropped to
-   its upper half) being wider/shorter than the loot character's
-   (340x410) -- width is left to follow from that automatically
-   rather than forced to match too. See .loot-preview-char's own
-   comment for the fuller reasoning. */
+/* Fixed height: 157px matches .loot-preview-char in loot-tracker.css so both
+   preview characters render at the same height despite different source aspect
+   ratios (350x292 here); width follows. */
 .purchase-preview-char {
   flex: 0 0 auto;
   height: 157px;
   line-height: 0;
 }
-/* .landing-purchase-preview .purchase-preview-char img (two classes)
-   beats myscape.css's own .landing-anchor picture img (one class, two
-   elements) -- same override this preview's gear/item icons already
-   need elsewhere, and Loot Tracker's own character needs in
-   loot-tracker.css. */
+/* Two classes beat myscape.css's .landing-anchor picture img (one class, two
+   elements). */
 .landing-purchase-preview .purchase-preview-char img {
   display: block;
   height: 100%;
@@ -797,50 +541,18 @@ button.primary#pgNameSave, .pg-setup-form-save {
   width: auto;
   max-width: none;
 }
-/* Mirrors the character horizontally -- same technique and reasoning
-   as .loot-preview-char--flipped in loot-tracker.css, just facing the
-   opposite way: this preview moved from character-left/text-right to
-   text-left/character-right, so the flip here is what makes him face
-   back toward the tagline beside him instead of off the panel's own
-   right edge. */
+/* Mirrored horizontally (as .loot-preview-char--flipped in loot-tracker.css) so
+   the character faces the tagline on the left. */
 .landing-purchase-preview .purchase-preview-char--flipped img {
   transform: scaleX(-1);
 }
 
-/* ---------- Export icon (next to "Purchase Goals" -- see
-   purchase_share_icon_btn in _purchase_goals_panel_markup,
-   app/pages.py) + the floating popup it toggles open right beneath
-   itself. Back to a plain icon (no border/background box) per
-   explicit instruction, after this and the next two rounds of
-   feedback on the button-chrome version all landed on "too big" --
-   same bare-icon-next-to-a-heading shape this started with, same
-   14px SVG size (unchanged throughout every revision above -- only
-   the box around it ever grew or shrank) and same color states as
-   Loot Tracker's own .loot-share-icon-btn and the Purchase Goal
-   share page's own .pg-import-icon-btn (duplicated here, not shared
-   across these pages' own stylesheets, same "cross-page style
-   overlap" convention .loot-share-icon-btn's own comment in loot-
-   tracker.css already documents). .pg-share-wrap carries what used
-   to live directly on this button -- just vertical-align: middle now
-   (no translateY cap-height nudge any more -- removed per explicit
-   follow-up feedback that the icon sat a few px too high, same fix
-   and same reasoning as .loot-share-wrap's own identical rule in
-   loot-tracker.css: empirically, a transform-based nudge here isn't
-   needed at all once this wrap's own inherited 22px .page-title
-   font-size is accounted for, AND a transform on this element was
-   separately the root cause of a "title/content text shows through
-   the popup" bug -- any transform value other than none opens a new
-   CSS stacking context, which walled .pg-share-card's own z-index: 5
-   off from the rest of the page, so later-in-DOM page content with
-   the default z-index: auto could still paint over the "opaque"
-   popup despite its explicit z-index. Removing the transform removes
-   that extra context, so the popup's z-index now actually competes
-   (and wins) in the page's one shared root stacking context -- see
-   .loot-share-wrap's own comment for the fuller writeup, not
-   reproduced identically in every one of these duplicated rule sets.
-   It's also still the position: relative anchor .pg-share-card below
-   is positioned absolute against, for this popup's own floating
-   behavior, kept unchanged from the button-chrome version. ---------- */
+/* Export icon next to "Purchase Goals" (purchase_share_icon_btn in app/pages.py)
+   and its popup. Same 14px bare icon as .loot-share-icon-btn (duplicated per
+   page stylesheet). .pg-share-wrap anchors .pg-share-card. No transform on it: a
+   transform creates a stacking context that walls the popup's z-index: 5 off,
+   letting later page content paint over it (see .loot-share-wrap in
+   loot-tracker.css). */
 .pg-share-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
 }
@@ -856,42 +568,20 @@ button.primary#pgNameSave, .pg-setup-form-save {
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
-     against the page-title text it's inline with. */
   position: relative;
   top: -2px;
 }
 .pg-share-icon-btn:hover { color: var(--text-dim); }
 .pg-share-icon-btn.open { color: var(--gold); }
 
-/* The download icon next to "Shared by <name>" on a Purchase Goal
-   share page (render_purchase_goals_share's own import_icon_btn,
-   app/pages.py) -- back to a plain icon (no border/background box),
-   same bare shape and same 14px SVG size as .pg-share-icon-btn above
-   (it sits next to the exact same kind of all-caps .page-title text,
-   just a different heading), per the same explicit follow-up
-   feedback that button-chrome's own doc comment describes. Toggles
-   .pg-import-card below open/closed, same .open-on-the-icon
-   convention as .pg-share-icon-btn above -- this used to be a
-   one-shot action button itself, but per explicit instruction it's
-   now a toggle for a confirming popup instead (see .pg-import-card
-   below), so it picked up the same .open state .pg-share-icon-btn
-   already has. Rendered as either a real <button> (signed-in
-   visitor) or a plain <a> (signed-out, no popup, no .open ever
-   toggled onto it, and no .pg-import-wrap around it either -- see
-   import_icon_btn's own comment in app/pages.py) depending on viewer
-   at render time -- this rule targets the class alone rather than a
-   tag name, so both look identical regardless of which element it
-   ends up on. */
+/* Download icon next to "Shared by <name>" on a share page (import_icon_btn in
+   render_purchase_goals_share, app/pages.py). Same bare 14px shape as
+   .pg-share-icon-btn; toggles .pg-import-card via .open. Rendered as a <button>
+   (signed-in) or an <a> (signed-out, no popup), so the rule targets the class
+   alone. */
 .pg-import-wrap {
-  /* No translateY cap-height nudge any more (and no top offset to
-     replace it with) -- same fix/reasoning as .pg-share-wrap's own
-     identical rule above: empirically unneeded once this wrap's
-     inherited .page-title font-size is accounted for, and a
-     transform here was separately the root cause of a stacking-
-     context bug that let later page content paint over this
-     "opaque" popup. See .loot-share-wrap's own comment in loot-
-     tracker.css for the fuller writeup. */
+  /* No transform here, for the same stacking-context reason as .pg-share-wrap
+     above. */
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
 }
 .pg-import-icon-btn {
@@ -906,41 +596,17 @@ button.primary#pgNameSave, .pg-setup-form-save {
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
-     against the page-title text it's inline with. */
   position: relative;
   top: -2px;
 }
 .pg-import-icon-btn:hover { color: var(--text-dim); }
 .pg-import-icon-btn.open { color: var(--gold); }
 
-/* The popup pgImportBtn above toggles open -- same shape/sizing as
-   .pg-share-card below, floating directly under its own trigger
-   button (position: absolute against .pg-import-wrap above) rather
-   than a full-width row pushing the rest of the page down, holding
-   one confirming SAVE TO MY MYSCAPE button (see .pg-import-save-btn
-   below) plus a one-line explanation of what it does, per explicit
-   instruction. Only ever rendered at all when viewer was signed in at
-   render time (see render_purchase_goals_share's own import_card_
-   markup, app/pages.py) -- a signed-out visitor's icon is a plain
-   link straight to /signup instead, with no popup to open. Opaque
-   (--panel, not the --panel-translucent cards elsewhere on this page
-   use) -- same reasoning .tracker-menu's own comment above gives:
-   this floats directly over whatever's below it on the page, and at
-   82% opacity that showed through distractingly. box-shadow matches
-   .loot-range-menu's own identical value exactly (loot-tracker.css)
-   -- same subtle "floating above the page" depth cue, per explicit
-   instruction to bring every one of these popups in line with that
-   one. top: 32px, not the old "icon height + 6px gap" math (20px)
-   -- that assumed this card's own positioning context (.pg-import-
-   wrap) rendered flush with the icon's own top edge, but the wrap
-   sits inside .page-title and inherits ITS larger font-size, so its
-   own line box reserves a taller invisible font "strut" than the
-   14px icon alone needs, pushing the wrap's rendered top several px
-   above the icon's own top edge -- see .loot-share-card's own
-   comment in loot-tracker.css for the fuller writeup (same bug, same
-   fix, same empirical Playwright-rendered measurement, just this
-   file's own pg- prefix). */
+/* Confirming popup toggled by pgImportBtn; only rendered for signed-in viewers
+   (import_card_markup in render_purchase_goals_share). Opaque, with the
+   box-shadow of .loot-range-menu (loot-tracker.css). top: 32px: the wrap sits
+   inside .page-title, whose larger font-size makes its line box taller than the
+   14px icon (see .loot-share-card in loot-tracker.css). */
 .pg-import-card {
   position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
@@ -953,28 +619,18 @@ button.primary#pgNameSave, .pg-setup-form-save {
   padding: 5px 6px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
-/* Same [hidden] override as .pg-share-card[hidden] below -- author
-   CSS setting `display` always outranks the browser's own
-   [hidden]{display:none} default stylesheet rule. */
+/* author display outranks the browser's [hidden] rule (same as
+   .pg-share-card[hidden]). */
 .pg-import-card[hidden] { display: none; }
 
-/* Same sizing/coloring as .pg-share-generate-btn below -- the two
-   popups read as the same kind of UI even though one generates a
-   link and the other imports one. .action-failed here (expired link,
-   or the code lapsing between page load and click) is what used to
-   live on .pg-import-icon-btn itself back when that icon performed
-   the import directly; it moved here along with the actual import
-   action once the icon became a plain toggle (see this button's own
-   click handler in app/pages.py). */
+/* Same sizing/coloring as .pg-share-generate-btn. .action-failed covers an
+   expired link or a code that lapsed between page load and click. */
 .pg-import-save-btn {
   height: 28px;
   padding: 0 10px;
   font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
-  /* --panel-2, not --panel -- a bit lighter than .pg-import-card's
-     own now-opaque --panel background it sits inside, per explicit
-     instruction, so the button reads as a raised control rather than
-     disappearing flush into the popup behind it. */
+  /* --panel-2 so the button reads as raised against the opaque --panel popup. */
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
 }
@@ -984,28 +640,11 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 .pg-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* Floats directly under its own trigger button (position: absolute
-   against .pg-share-wrap above) rather than a full-width row pushing
-   the rest of the page down -- closeable by re-clicking the trigger
-   OR clicking anywhere else on the page (see pgShareIconBtn's own
-   click handler and the outside-click listener beside it, app/
-   pages.py). Opaque (--panel, not the --panel-translucent cards
-   elsewhere on this page use) -- same reasoning .tracker-menu's own
-   comment above gives: this floats directly over whatever's below it
-   on the page, and at 82% opacity that showed through distractingly.
-   box-shadow matches .loot-range-menu's own identical value exactly
-   (loot-tracker.css) -- same subtle "floating above the page" depth
-   cue, per explicit instruction to bring every one of these popups
-   in line with that one. top: 32px, not the old "icon height + 6px
-   gap" math (20px) -- that assumed this card's own positioning
-   context (.pg-share-wrap) rendered flush with the icon's own top
-   edge, but the wrap sits inside .page-title and inherits ITS larger
-   font-size, so its own line box reserves a taller invisible font
-   "strut" than the 14px icon alone needs, pushing the wrap's
-   rendered top several px above the icon's own top edge -- see
-   .loot-share-card's own comment in loot-tracker.css for the fuller
-   writeup (same bug, same fix, same empirical Playwright-rendered
-   measurement, just this file's own pg- prefix). */
+/* Popup under its trigger (absolute against .pg-share-wrap); closes on re-click
+   or outside click (pgShareIconBtn handler in app/pages.py). Opaque, with the
+   box-shadow of .loot-range-menu (loot-tracker.css). top: 32px: the wrap sits
+   inside .page-title, whose larger font-size makes its line box taller than the
+   14px icon (see .loot-share-card in loot-tracker.css). */
 .pg-share-card {
   position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
@@ -1018,9 +657,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
   padding: 5px 6px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
-/* Author CSS setting `display` on this element always outranks the
-   browser's own [hidden]{display:none} default stylesheet rule --
-   same gotcha/fix as .loot-share-card[hidden] in loot-tracker.css. */
+/* Author display outranks the browser's [hidden] rule (same as
+   .loot-share-card[hidden] in loot-tracker.css). */
 .pg-share-card[hidden] { display: none; }
 
 .pg-share-generate-btn {
@@ -1028,10 +666,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   padding: 0 10px;
   font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
-  /* --panel-2, not --panel -- a bit lighter than .pg-share-card's own
-     now-opaque --panel background it sits inside, per explicit
-     instruction, so the button reads as a raised control rather than
-     disappearing flush into the popup behind it. */
+  /* --panel-2 so the button reads as raised against the opaque --panel popup. */
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
 }
@@ -1039,22 +674,15 @@ button.primary#pgNameSave, .pg-setup-form-save {
 .pg-share-generate-btn:disabled { cursor: default; opacity: 0.6; }
 .pg-share-generate-btn.action-failed { border-color: var(--red); color: var(--red); }
 
-/* Replaces pgShareGenerateBtn in place once a link exists (see that
-   button's own click handler in app/pages.py) -- the link itself IS
-   the button, clicking it copies to clipboard and flashes "COPIED"
-   for a moment, same pattern/sizing as .pg-share-generate-btn above
-   so the swap doesn't change the card's own layout. */
+/* Replaces pgShareGenerateBtn once a link exists; clicking copies and flashes
+   "COPIED". Same sizing so the card layout does not shift. */
 .pg-share-link-btn {
   height: 28px;
   padding: 0 10px;
   font-size: 15px;
   font-family: inherit;
   color: var(--text-dim);
-  /* --panel-2, not --panel -- matches .pg-share-generate-btn's own
-     identical swap above (this button replaces it in place once a
-     link exists), same "raised control, not flush with the popup
-     behind it" reasoning, per explicit instruction to bring the two
-     in line with each other. */
+  /* --panel-2, matching .pg-share-generate-btn which this replaces in place. */
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -1063,95 +691,55 @@ button.primary#pgNameSave, .pg-setup-form-save {
 
 .pg-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* ---------- Share-viewing page (myscape.io/s/<code> for a Purchase
-   Goals share -- see render_purchase_goals_share's own docstring in
-   app/pages.py for the full breakdown of what's reused vs. overridden
-   here). .purchase-goal-share wraps that whole page's body. ---------- */
+/* Share-viewing page (/s/<code>; see render_purchase_goals_share in
+   app/pages.py). .purchase-goal-share wraps the body. */
 
-/* Same "hide rather than strip from the markup itself" discipline as
-   .landing-purchase-preview .pg-header above -- this share page has
-   neither a setup switcher nor a New/Rename/Delete menu, per explicit
-   instruction, since a visitor is only ever looking at the one frozen
-   setup the owner chose to share. */
+/* Hide the setup switcher and menu rather than strip them from the markup;
+   visitors only see the one frozen setup. */
 .purchase-goal-share .pg-header {
   display: none;
 }
 
-/* The summary box's current-GP number and progress bar are hidden
-   outright, per explicit instruction -- a visitor never sees a figure
-   that could read as the OWNER's own live GP. The coins icon
-   (#pgCoinsAmount's own sibling <img>, not touched here) stays, now
-   centered alongside the total cost and the setup's own display icon
-   by .overlay-card's own justify-content override below. */
+/* Hide the current-GP number and progress bar so a visitor never sees a figure
+   that reads as the owner's live GP. The coins icon stays. */
 .purchase-goal-share #pgCoinsAmount,
 .purchase-goal-share .overlay-progress {
   display: none;
 }
 
-/* Centers the two remaining children (.overlay-source's coins icon,
-   .overlay-target's cost + setup icon) now that the middle flex:1
-   .overlay-progress spacer is gone. .overlay-target already renders
-   icon-then-amount thanks to its own row-reverse (see purchase-
-   goals.css' own .overlay-side.overlay-target rule), so left-to-right
-   this reads exactly [coins icon][total cost][setup icon] with no
-   DOM reordering needed. */
+/* Center the remaining children now that the flex: 1 .overlay-progress spacer is
+   hidden. .overlay-target already renders icon-then-amount via row-reverse,
+   giving [coins][total][setup icon]. */
 .purchase-goal-share .overlay-card {
   justify-content: center;
 }
 
-/* The green/amber/red ownership border colors describe whether THIS
-   VISITOR's own bank could cover an item -- meaningless (and per
-   explicit instruction, unwanted) against a stranger's shared setup,
-   so all three fall back to the same neutral border every other
-   .gear-slot uses by default. (.affordable can't actually occur here
-   -- build_purchase_goal_share_snapshot always freezes coins at 0, so
-   _mark_slot_affordability's own affordable check never passes -- this
-   stays only as a defensive no-op in case that ever changes.)
-
-   This DOES include .owned, even though on this page "owned" only
-   ever means "a rune/food/potion/ammunition item" now (build_
-   purchase_goal_share_snapshot resolves everything else against
-   EMPTY owned-items pools -- see its own docstring in app/
-   purchase_goals.py) -- per explicit instruction, the real page's
-   "always green" treatment for those items (see _is_always_
-   attainable_item's own docstring) is a LIVE-setup-only affordance
-   and doesn't carry over to a shared link: here they get no border
-   color at all, same neutral gray as everything else. */
+/* Ownership border colors describe the visitor's own bank and are meaningless on
+   a stranger's setup, so all fall back to the neutral border. .affordable never
+   occurs (build_purchase_goal_share_snapshot freezes coins at 0); kept as a
+   defensive no-op. .owned is included: the live page's always-green treatment
+   (_is_always_attainable_item) does not carry over to shared links. */
 .purchase-goal-share .gear-slot.owned,
 .purchase-goal-share .gear-slot.not-owned,
 .purchase-goal-share .gear-slot.affordable {
   border-color: var(--border);
 }
 
-/* Nothing in the gear doll/inventory grid is interactive here (see
-   render_purchase_goals_share's own #pgGearFrame capturing-phase
-   listener) except a plain click on a filled slot, which still opens
-   that item's wiki page -- same cursor treatment as
-   .landing-purchase-preview's own identical override above, and same
-   reasoning: an EMPTY slot shouldn't invite a click that's already
-   being swallowed. */
+/* Only a plain click on a filled slot (opens the wiki page) is live here
+   (capturing-phase listener on #pgGearFrame); default cursor on empty slots, as
+   in .landing-purchase-preview. */
 .purchase-goal-share .gear-slot:not(.filled) {
   cursor: default;
 }
 
-/* The hover "remove item" button never appears here -- a visitor
-   can't delete anything from someone else's shared setup (the
-   capturing-phase listener above already blocks a click on it either
-   way, this just stops it from ever being drawn in the first place).
-   .gear-slot.filled:hover's own background-brightening highlight
-   (purchase-goals.css, above) is untouched -- hovering a filled slot
-   still visibly lights it up, per explicit instruction, just without
-   the red "x"/circle it would normally reveal in the corner. */
+/* Never draw the hover remove button; visitors cannot delete from a shared setup
+   (the capturing listener also blocks the click). */
 .purchase-goal-share .gear-slot.filled:hover .gear-slot-remove {
   display: none;
 }
 
-/* The setup-icon trigger is read-only here too (see
-   render_purchase_goals_share's own #pgIconTrigger clone-strip) --
-   default cursor instead of .overlay-icon-wrap's own base
-   cursor: pointer, and its hover affordance (background tint +
-   gold dashed outline) neutralized back to its resting look so
-   hovering it doesn't suggest it's still clickable. */
+/* The setup-icon trigger is read-only here (#pgIconTrigger clone-strip in
+   render_purchase_goals_share): default cursor and no hover affordance. */
 .purchase-goal-share #pgIconTrigger {
   cursor: default;
 }
@@ -1163,24 +751,16 @@ button.primary#pgNameSave, .pg-setup-form-save {
   color: var(--text-faint);
 }
 
-/* The setup-name line above "Shared by <name>" -- same small-line-
-   above-the-title treatment as .loot-share-range in loot-tracker.css,
-   just this page's own name, all-caps per explicit instruction (not
-   .subtitle's own natural case -- the Python string itself stays
-   natural case, same ".page-title text-transforms, the string
-   doesn't" convention every other all-caps label on this site
-   already follows). */
+/* Setup-name line above "Shared by <name>", like .loot-share-range in
+   loot-tracker.css. Uppercase via CSS; the string stays natural case. */
 .pg-share-label { text-align: center; margin: 0 0 4px; text-transform: uppercase; }
 
-/* ---------- Phone layout (the whole site's phone breakpoint, 700px).
-   Scoped with body:not(.phone-off) so the homepage preview, which reuses
-   these classes, is untouched. Every section is max 320px wide and
-   centered -- the same gutter Character Overview and Loot Tracker leave
-   so there is always page to put a thumb on when scrolling. ---------- */
+/* Phone layout (site breakpoint 700px). Scoped with body:not(.phone-off) so the
+   homepage preview, which reuses these classes, is untouched. Sections are max
+   320px wide and centered, leaving a gutter to scroll with. */
 @media (max-width: 700px) {
-  /* Overview card: coins on the left, target on the right, each with
-     its icon above its amount, and the progress bar on its own row
-     underneath -- the one-row desktop layout is ~500px wide. */
+  /* Overview card: coins left, target right, icon above amount, progress bar on
+     its own row (the one-row desktop layout is ~500px wide). */
   body:not(.phone-off) .overlay-card {
     flex-wrap: wrap;
     align-items: flex-start;
@@ -1201,16 +781,14 @@ button.primary#pgNameSave, .pg-setup-form-save {
   }
   body:not(.phone-off) .overlay-amount { font-size: 15px; }
 
-  /* Shared setups: no coins icon on the phone (there's no GP figure
-     beside it to belong to) -- the setup's icon and total GP take the
-     whole card, centered. */
+  /* Shared setups: no coins icon on the phone (no GP figure to pair with); icon
+     and total are centered. */
   body:not(.phone-off) .purchase-goal-share .overlay-source { display: none; }
   body:not(.phone-off) .purchase-goal-share .overlay-side.overlay-target { align-items: center; }
   body:not(.phone-off) .overlay-progress { order: 3; flex: 0 0 100%; min-width: 0; }
 
-  /* Gear + inventory frame, then the summary: one centered column. The
-     doll column's width is pinned in px by JS on desktop (see
-     .pg-doll-wrap above), hence !important. */
+  /* One centered column. The doll column's width is pinned in px by JS on
+     desktop (see .pg-doll-wrap), hence !important. */
   body:not(.phone-off) .pg-body { align-items: center; gap: 18px; }
   body:not(.phone-off) .pg-doll-wrap {
     width: 100% !important;
@@ -1230,8 +808,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
   }
   body:not(.phone-off) .gear-summary { padding: 14px 12px; }
 
-  /* The setup-icon picker sits outside .pg-body, so give it the same
-     width and centering. */
+  /* The setup-icon picker sits outside .pg-body; give it the same width and
+     centering. */
   body:not(.phone-off) .gear-icon-picker,
   body:not(.phone-off) #pgIconPicker > * {
     max-width: 320px;
@@ -1247,8 +825,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
 }
 
 @media (max-width: 700px) {
-  /* Share / import popups: anchored to the title row (not the small
-     icon) and no wider than it, so they can't run off the right edge. */
+  /* Popups anchor to the title row and stay within it so they cannot run off the
+     right edge. */
   body:not(.phone-off) .page-title:has(.pg-share-wrap),
   body:not(.phone-off) .page-title:has(.pg-import-wrap) { position: relative; }
   body:not(.phone-off) .pg-share-wrap,
@@ -1261,8 +839,8 @@ button.primary#pgNameSave, .pg-setup-form-save {
   }
 }
 
-/* Touch: no hover, so the slot "x" shows only on the slot armed by a
-   first tap (see wireSlotClicks), and is a bigger target. */
+/* Touch: no hover; the slot "x" shows only on the slot armed by a first tap
+   (wireSlotClicks). */
 @media (hover: none) {
   body:not(.phone-off) .gear-slot.filled:hover .gear-slot-remove { display: none; }
   body:not(.phone-off) .gear-slot.filled.touch-armed .gear-slot-remove { display: flex; }
@@ -1270,32 +848,27 @@ button.primary#pgNameSave, .pg-setup-form-save {
   body:not(.phone-off) .gear-slot.touch-armed { outline: 2px solid var(--gold); outline-offset: -2px; }
 }
 
-/* Setup row: the icons and the menu (hamburger) button are one wrapping
-   row, so when there are more setups than fit, the button follows the
-   last setup instead of jumping to the far right. The icon row's own
-   box is dissolved (display: contents) so its buttons and the menu wrap
-   are siblings in .pg-header's flex row. */
+/* Icons and menu button are one wrapping row, so the button follows the last
+   setup. display: contents dissolves the icon row's box so its buttons and the
+   menu wrap are siblings in .pg-header's flex row. */
 .pg-header {
-  /* A wrapping, centered flex row: full rows are the same width (every
-     cell is 44px, the menu button's included) so they line up, and the
-     last row is centered under them. */
+  /* Wrapping centered row; every cell is 44px (menu button included) so full
+     rows align and the last is centered. */
   flex-wrap: wrap;
   gap: 8px;
 }
 .tracker-icon-row { display: contents; }
 
 @media (max-width: 700px) {
-  /* Same 320px as every section, so a row holds at most 6 setup icons
-     (or 5 plus the menu button) and the rest wrap to the next row. */
+  /* Same 320px as every section: at most 6 setup icons (or 5 plus the menu
+     button) per row. */
   body:not(.phone-off) .pg-header { max-width: 320px; margin-left: auto; margin-right: auto; }
-  /* The 8 small slots sat flush against the paperdoll's bottom row
-     (margin-top: auto only helps on desktop, where the column is
-     stretched to the inventory's height). */
+  /* Keep the 8 small slots off the paperdoll's bottom row (margin-top: auto only
+     helps on desktop). */
   body:not(.phone-off) .gear-doll-misc { margin-top: 16px; }
 }
 
 @media (hover: none) {
-  /* No text selection / callout when long-pressing something draggable. */
   body:not(.phone-off) #pgBody [draggable="true"],
   body:not(.phone-off) #setupIconRow [draggable="true"] {
     -webkit-touch-callout: none;
@@ -1309,10 +882,9 @@ button.primary#pgNameSave, .pg-setup-form-save {
   body:not(.phone-off) #setupIconRow [draggable] { -webkit-user-drag: none; }
 }
 
-/* Phone: even 18px between every stacked section. The slot picker's
-   wrapper is a flex item even when empty, so it was adding a second
-   18px gap (36px) between the gear card and the summary card, and an
-   open picker carried its own 22px bottom margin on top of the gap. */
+/* Phone: even 18px between stacked sections. The empty slot-picker wrapper is a
+   flex item and would add a second gap; an open picker's bottom margin is also
+   reset. */
 @media (max-width: 700px) {
   body:not(.phone-off) #pgSlotPicker:empty { display: none; }
   body:not(.phone-off) .gear-slot-picker,
@@ -1320,8 +892,7 @@ button.primary#pgNameSave, .pg-setup-form-save {
   body:not(.phone-off) #pgIconPicker:not(:empty) { margin-bottom: 18px; }
 }
 
-/* Phone: the coins icon and the setup's chosen icon in the overview card
-   are 1.25x their desktop 44px size (55px). */
+/* Phone: overview icons are 1.25x the desktop 44px (55px). */
 @media (max-width: 700px) {
   body:not(.phone-off) .overlay-icon,
   body:not(.phone-off) .overlay-icon-wrap .overlay-icon { width: 55px; height: 55px; }
@@ -1329,20 +900,15 @@ button.primary#pgNameSave, .pg-setup-form-save {
   body:not(.phone-off) .overlay-icon-placeholder { width: 38px; height: 38px; font-size: 20px; }
 }
 
-/* Phone: Clear / Cancel in the setup-icon picker sit on their own row
-   under the search box, centered. */
 @media (max-width: 700px) {
   body:not(.phone-off) .gear-icon-picker-actions { width: 100%; justify-content: center; }
 }
 
 
-/* ---- Share page "save to my account" icon: phone ---------------------
-   The popup is centered on its icon, which sits at the right-hand end
-   of the centered "Shared by <name>" title -- so on a phone the 280px
-   card ran off the right edge. Anchoring it to the title (full width,
-   centered) instead keeps it on screen. The 14px icon also gets a
-   thumb-sized tap area (padding + equal negative margin, so the title
-   layout doesn't move). */
+/* Share page "save to my account" icon, phone: the popup is centered on its icon
+   at the right end of the title and would overflow, so anchor it to the
+   full-width title instead. The 14px icon gets a thumb-sized tap area (padding
+   with equal negative margin keeps the title layout unchanged). */
 @media (max-width: 700px) {
   body:not(.phone-off) .page-title:has(.pg-import-wrap) { position: relative; }
   body:not(.phone-off) .pg-import-wrap { position: static; }

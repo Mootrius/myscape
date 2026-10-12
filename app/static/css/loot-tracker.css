@@ -1,64 +1,31 @@
-/* Loot Tracker page -- see render_loot_tracker in app/pages.py. Reuses
-   the same --panel-2/--border/--gold tokens myscape.css and
-   purchase-goals.css already define, rather than inventing a second
-   palette for one more page. Everything on this page (the chart, the
-   "By NPC" row, the item panel) scopes together to whichever range is
-   currently selected via the range button below -- see app/loot.py's
-   module docstring. */
+/* Loot Tracker page (render_loot_tracker in app/pages.py). The chart, "By NPC"
+   row and item panel all scope to the selected range (see the app/loot.py module
+   docstring). */
 
-/* ---------- bar chart, at the top of the page -- ported in spirit
-   from the original single-user tool's Loot Tracker chart
-   (osrs_tracker_ui.html's .vorkath-chart/.bar-* classes), restyled
-   onto this site's own panel/border/gold tokens instead of that
-   tool's own palette. ---------- */
+/* Bar chart */
 .loot-chart-card {
-  /* panel-translucent, not panel-2 -- matches every other top-level
-     "card" on the site (.dash-card in myscape.css, .gear-summary/
-     .pg-gear-frame/.overlay-card in purchase-goals.css): a translucent
-     card frame, with fully-opaque panel-2 reserved for the boxes
-     living inside it (see .loot-npc-box/.loot-item-box below). This
-     card used panel-2 directly, the same shade as those inner boxes,
-     which is what made it (and, by not having any card behind them at
-     all, the NPC/item boxes further down the page too -- see
-     .loot-panel below) read as noticeably lighter than the rest of
-     the site. */
+  /* panel-translucent like every top-level card; opaque panel-2 is reserved for
+     the boxes inside it. */
   background: var(--panel-translucent); border: 1px solid var(--border);
   padding: 18px 22px 14px; margin-bottom: 18px;
 }
 .loot-chart-header { position: relative; display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
-/* Right side: kc + gp grouped together (see render_loot_tracker's
-   task -- these two used to sit on opposite ends of the header, with
-   a hardcoded "LAST 24H" filling the left slot the range button now
-   occupies instead). */
 .loot-chart-stats { display: flex; align-items: baseline; gap: 8px; }
 .loot-chart-total { font-size: 13px; color: var(--gold); font-variant-numeric: tabular-nums; }
 .loot-chart-kills { font-size: 12px; color: var(--text-faint); letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
-/* The selected NPC's name in ALL CAPS (e.g. "ZULRAH"), or "ALL NPCs"
-   when nothing's selected -- see renderBarChart in app/pages.py --
-   absolutely centered on the header rather than a third flex sibling,
-   since the range control and the stats either side of it aren't the
-   same width and true centering needs to ignore that instead of
-   splitting the remaining space evenly. No CSS text-transform here on
-   purpose -- a selected NPC's name is uppercased in JS instead (see
-   renderBarChart), since a CSS uppercase transform would also turn
-   the "ALL NPCs" fallback into "ALL NPCS", capitalizing the "s" it's
-   deliberately meant to keep lowercase. */
+/* Selected NPC name or "ALL NPCs" (renderBarChart), absolutely centered since
+   the range control and stats differ in width. Uppercased in JS, not CSS, which
+   would turn "ALL NPCs" into "ALL NPCS". */
 .loot-chart-title {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   font-size: 15px; color: var(--text-dim); letter-spacing: 0.03em;
   white-space: nowrap; max-width: 40%; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* ---------- range button (presets + CUSTOM date pair) -- replaces the
-   old hardcoded "LAST 24H" text in the chart header's left slot. A
-   plain dropdown menu, same open/close-on-outside-click pattern as
-   Purchase Goals' own .tracker-menu-wrap/#setupMenu. ---------- */
+/* Range button (presets + CUSTOM date pair) and its dropdown. */
 .loot-chart-range { position: relative; z-index: 2; display: flex; align-items: center; gap: 6px; }
-/* height: 25px pins this to the same site-wide button height
-   .loot-sort-tab below already renders at naturally (that's where the
-   25px number itself comes from) -- explicit here rather than left to
-   padding math, so it can't drift out of sync with every other
-   button/segmented-control-button on the site that now shares it. */
+/* 25px is the site-wide button height; pinned so it cannot drift from the other
+   buttons sharing it. */
 .loot-range-btn {
   display: flex; align-items: center; justify-content: center; gap: 5px;
   height: 25px;
@@ -69,17 +36,10 @@
   cursor: pointer; white-space: nowrap;
 }
 .loot-range-btn:hover { border-color: var(--gold-dim); color: var(--text); }
-/* Toggled on while the menu below it is open (see the button's own
-   click handler and closeRangeMenu in the page script) -- same gold
-   "currently on" treatment as .loot-sort-tab.active/
-   .loot-hide-toggle.active further down, so the button itself reads
-   as active for as long as its own dropdown is showing, not just
-   whichever preset happens to be checked inside it. */
+/* On while the menu is open (see closeRangeMenu). */
 .loot-range-btn.active { border-color: var(--gold); color: var(--gold); }
 .loot-range-caret { font-size: 9px; color: var(--text-faint); }
-/* The caret's own color above wins over .loot-range-btn.active's
-   inherited gold otherwise -- a more specific selector, not just
-   later in the sheet, so .active alone never actually reached it. */
+/* More specific than .loot-range-btn.active, so the caret keeps its own color. */
 .loot-range-btn.active .loot-range-caret { color: var(--gold); }
 .loot-range-menu {
   position: absolute; top: calc(100% + 4px); left: 0;
@@ -110,12 +70,7 @@
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   color-scheme: dark;
 }
-/* Toggled on Apply (or cleared on the next keystroke -- see
-   applyCustomRange/its 'input' listener in the page script) when a
-   typed value isn't a real 'YYYY-MM-DD' date -- the one thing a native
-   <input type="date">'s own picker used to guarantee structurally,
-   now worth a visible nudge since a plain text field will happily
-   hold anything. */
+/* Set by applyCustomRange for a typed value that is not a real YYYY-MM-DD date. */
 .loot-range-custom-field input[type="text"].invalid { border-color: var(--red); }
 .loot-range-apply {
   padding: 6px 8px;
@@ -126,49 +81,11 @@
 }
 .loot-range-apply:hover { border-color: var(--gold); }
 
-/* ---------- Export icon (next to the "Loot Tracker" .page-title, see
-   render_loot_tracker in app/pages.py) + the floating popup it
-   toggles open right beneath itself. Back to a plain icon (no
-   border/background box) per explicit instruction, after three
-   rounds of feedback on the button-chrome version all landed on
-   "too big" -- same bare-icon-next-to-a-heading shape this started
-   with, same 14px SVG size (unchanged throughout every revision
-   above -- only the box around it ever grew or shrank) and same
-   color states as Purchase Goals' own .pg-share-icon-btn (duplicated
-   here, not shared across these pages' own stylesheets, same as
-   every other cross-page style overlap on this site), just with its
-   own loot- prefix and its own SVG stroke-width (duplicated too,
-   same reasoning). .loot-share-wrap carries what used to live
-   directly on this button -- just vertical-align: middle now (no
-   translateY cap-height nudge any more -- see its own former comment
-   here, removed below); it's also still the position: relative
-   anchor .loot-share-card below is positioned absolute against, for
-   this popup's own floating behavior, kept unchanged from the
-   button-chrome version. The translateY(-2.4px) this rule used to
-   carry (meant to compensate for all-caps title text having no
-   descenders) is gone per explicit follow-up feedback that the icon
-   sat a few px too high -- empirically (a real Playwright render of
-   this exact markup/CSS/font, not more guessed pixel math, after two
-   rounds of guessed values already landed wrong) the icon reads as
-   centered against the title text with NO vertical nudge at all once
-   .loot-share-wrap's own inherited font-size is accounted for (see
-   .loot-share-card's own comment below for why that inherited
-   font-size matters here too). A `transform` on this element was
-   also, separately, the root cause of the "ALL NPCs text shows
-   through the popup" bug reported alongside the too-high icon: any
-   transform value other than none establishes a new CSS stacking
-   context on the element carrying it, which silently walled off
-   .loot-share-card's own z-index: 5 (below) from the rest of the
-   page -- it could only out-rank OTHER elements inside that same new
-   context, not .loot-chart-title (also position: absolute, but
-   z-index: auto, painted in the page's own root stacking context)
-   sitting later in the DOM. Later-in-DOM auto/0-stacked content
-   paints over earlier same-level content by default, which is
-   exactly backwards from what this popup needs -- removing the
-   transform removes the extra stacking context altogether, so
-   .loot-share-card's z-index: 5 now actually competes against (and
-   wins against) .loot-chart-title in the one shared root context, no
-   more bleed-through. ---------- */
+/* Export icon next to the "Loot Tracker" .page-title and its floating popup.
+   .loot-share-wrap is the position: relative anchor of .loot-share-card.
+   No transform on the wrap: it would create a stacking context that walls
+   .loot-share-card's z-index: 5 off from the root context, letting later content
+   (.loot-chart-title, position: absolute, z-index: auto) paint over the popup. */
 .loot-share-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
 }
@@ -184,46 +101,20 @@
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
-     against the page-title text it's inline with. */
+  /* Nudged up 2px: the SVG glyph sits low against the title text. */
   position: relative;
   top: -2px;
 }
 .loot-share-icon-btn:hover { color: var(--text-dim); }
 .loot-share-icon-btn.open { color: var(--gold); }
 
-/* Floats directly under its own trigger button (position: absolute
-   against .loot-share-wrap above) rather than a full-width row
-   pushing the rest of the page down -- closeable by re-clicking the
-   trigger OR clicking anywhere else on the page (see
-   lootShareIconBtn's own click handler and the outside-click
-   listener beside it, app/pages.py). padding/gap match Character
-   Overview's own .public-profile-card exactly -- that card's small
-   cushion around its (already bordered) buttons, not this one's old,
-   roomier 12px/8px, per earlier explicit instruction to bring the
-   two popups' amount of inner cushion in line with each other.
-   Opaque (--panel, not the --panel-translucent cards elsewhere on
-   this page use) -- same reasoning .tracker-menu's own comment in
-   purchase-goals.css gives: this floats directly over whatever's
-   below it on the page, and at 82% opacity that showed through
-   distractingly. box-shadow matches .loot-range-menu's own identical
-   value exactly below -- same subtle "floating above the page" depth
-   cue, per explicit instruction to bring every one of these popups
-   in line with that one. top: 32px, NOT the old "icon height + 6px
-   gap" math (20px) that reasoning used to use -- that assumed this
-   card's own positioning context (.loot-share-wrap) rendered flush
-   with the icon's own top edge, but .loot-share-wrap sits inside
-   .page-title and inherits ITS 22px font-size/1.5 line-height, so
-   even though the icon is this wrap's only visible content, the
-   wrap's own line box still reserves a full ~33px-tall invisible
-   font "strut" at that inherited size -- which is taller than the
-   14px icon itself, and pushes the wrap's own rendered top several
-   px above the icon's own top edge. The old top: 20px, counted from
-   that higher wrap edge, landed barely past the icon's own bottom
-   edge in practice -- exactly the near-zero gap/overlap reported.
-   32px was measured empirically (a real Playwright render of this
-   exact markup/CSS/font), landing a clean ~10px below the icon's
-   actual rendered bottom. */
+/* Floats under its trigger; closes on re-click or outside click (see
+   lootShareIconBtn in app/pages.py). Opaque --panel since it floats over
+   content; box-shadow matches .loot-range-menu.
+   top: 32px, not icon height + gap: the wrap sits inside .page-title and
+   inherits its 22px font-size/1.5 line-height, so its ~33px line box is taller
+   than the 14px icon and its top sits above the icon's. 32px (measured) lands
+   ~10px below the icon. */
 .loot-share-card {
   position: absolute; top: 32px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex;
@@ -236,35 +127,19 @@
   padding: 5px 6px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
-/* Author CSS setting `display` on this element always outranks the
-   browser's own [hidden]{display:none} default stylesheet rule --
-   same gotcha/fix as .public-profile-card[hidden] in character-
-   overview.css. */
+/* Author `display` outranks the UA [hidden] rule; same fix as
+   .public-profile-card[hidden] in character-overview.css. */
 .loot-share-card[hidden] { display: none; }
 
-/* The only thing visible in the card until it's actually clicked
-   (see lootShareGenerateBtn's own handler in app/pages.py) -- nothing
-   is generated just from opening the card, per explicit instruction.
-   Plain site-wide button look now (not highlighted/"CTA" until
-   hovered, only the border picking up color then) -- same .loot-
-   range-btn/.loot-share-link-btn convention every other button on
-   this page already uses, rather than the gold-bordered/gold-text
-   look this started with, per explicit instruction to match the
-   rest of the site instead of standing out as a primary action.
-   font-size: 15px matches the rest of this card and Character
-   Overview's own public-profile-card/public-profile-link-btn --
-   this page's own future sharing popups should keep that same
-   15px-text convention too, not this page's smaller ~11px site-wide
-   button default. */
+/* Only thing visible until clicked (see lootShareGenerateBtn); opening the card
+   generates nothing. font-size: 15px matches Character Overview's public-profile
+   buttons. */
 .loot-share-generate-btn {
   height: 28px;
   padding: 0 10px;
   font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-dim);
-  /* --panel-2, not --panel -- a bit lighter than .loot-share-card's
-     own now-opaque --panel background it sits inside, per explicit
-     instruction, so the button reads as a raised control rather than
-     disappearing flush into the popup behind it. */
+  /* --panel-2, lighter than the --panel card, so the button reads as raised. */
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
 }
@@ -272,51 +147,27 @@
 .loot-share-generate-btn:disabled { cursor: default; opacity: 0.6; }
 .loot-share-generate-btn.action-failed { border-color: var(--red); color: var(--red); }
 
-/* Replaces lootShareGenerateBtn in place once a link exists (see
-   that button's own click handler in app/pages.py) -- the link
-   itself IS the button, clicking it copies to clipboard and flashes
-   "COPIED" for a moment, same pattern/sizing as .loot-share-generate-
-   btn above so the swap doesn't change the card's own layout. Text-
-   only styling (not .loot-share-generate-btn's gold CTA look) since
-   once a link exists this reads as a field to copy, not an action to
-   take. overflow/ellipsis is a safety net for an unexpectedly long
-   URL against this card's own fixed width -- not expected to kick in
-   at this card's normal width, same as .shared-links-table td's own
-   ellipsis rule in myscape.css. */
+/* Replaces lootShareGenerateBtn once a link exists; clicking copies and flashes
+   "COPIED". Sized like it so the layout is stable; overflow/ellipsis is a safety
+   net for long URLs. */
 .loot-share-link-btn {
   height: 28px;
   padding: 0 10px;
   font-size: 15px;
   font-family: inherit;
   color: var(--text-dim);
-  /* --panel-2, not --panel -- matches .loot-share-generate-btn's own
-     identical swap above (this button replaces it in place once a
-     link exists), same "raised control, not flush with the popup
-     behind it" reasoning, per explicit instruction to bring the two
-     in line with each other. */
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .loot-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 
-/* Always visible whenever .loot-share-card itself is open -- not
-   hidden/revealed alongside lootShareGenerateBtn/lootShareLinkBtn
-   the way the card's own expiry hint briefly was before it got
-   dropped entirely, per explicit instruction this one stays on
-   screen under whichever of those two buttons is currently showing.
-   margin: 0 overrides the browser's own default <p> top/bottom
-   margins (~1em, i.e. ~15px at this text's own font-size) -- left in
-   place those stacked on top of .loot-share-card's own gap: 6px
-   between its children, making the whole card noticeably taller
-   than intended. */
+/* margin: 0 overrides the default <p> margins, which would stack on the card's
+   gap. */
 .loot-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* The y-axis label gutter is a fixed 10px inset on the gridlines/bars
-   themselves (not on .loot-bar-plot -- padding there would be a no-op
-   for absolutely-positioned children), with gridline labels
-   right-aligned just left of it -- same layout as the original tool's
-   bar-gridlines/bar-bars. */
+/* The y-axis label gutter is a 10px inset on the gridlines/bars themselves
+   (padding on .loot-bar-plot would not affect absolutely-positioned children). */
 .loot-bar-plot { position: relative; height: 150px; }
 .loot-bar-gridlines { position: absolute; inset: 0 0 0 10px; }
 .loot-bar-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); }
@@ -326,15 +177,9 @@
 }
 .loot-bar-bars { position: absolute; inset: 0 0 0 10px; display: flex; align-items: flex-end; gap: 3px; }
 
-/* Each column layers two bottom-anchored pieces: a full-height outline
-   at the bucket's own total (always drawn, only actually visible --
-   `.active`'s border-color -- once an NPC is selected) behind a solid
-   fill sized to whatever that bar should show filled in (the bucket's
-   full total when nothing's selected, or just the selected NPC's
-   share of it -- see renderBarChart in app/pages.py). Both anchor to
-   the column's bottom edge via position:absolute rather than the old
-   single-bar flex layout, so the fill can sit at a different height
-   than the outline around it. */
+/* Each column layers a full-height outline at the bucket's total (visible only
+   with .active) behind a solid fill for the displayed amount (renderBarChart);
+   both are absolute so their heights can differ. */
 .loot-bar-col { flex: 1 1 0; height: 100%; position: relative; }
 .loot-bar-outline {
   position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box;
@@ -342,139 +187,52 @@
   transition: height 0.5s ease, border-color 0.5s ease;
 }
 .loot-bar-outline.active { border-color: var(--gold-dim); }
-/* Suppresses just the outline's own bottom border (see
-   outlineHideBottomBorder in the script below) for a bucket the
-   current NPC selection had no part in -- its fill collapses to
-   nothing there, so without this the outline's bottom edge (sitting
-   right at the chart's baseline, same bottom: 0 as the fill above) is
-   left fully exposed and reads as a flat line under a bar that has
-   nothing selected in it. Only overrides border-bottom-color, not the
-   other three sides -- those still usefully show that bucket's total
-   loot existed, just not from this selection. Higher specificity
-   (two classes) than .active above so it wins over that rule's own
-   border-color shorthand, which would otherwise reset all four sides
-   back to gold-dim. */
+/* Hides the outline's bottom border (see outlineHideBottomBorder) for a bucket
+   the selection had no part in, so no flat line sits under an empty bar. Two
+   classes beat .active's border-color shorthand. */
 .loot-bar-outline.active.no-bottom-border { border-bottom-color: transparent; }
 .loot-bar-fill {
   position: absolute; left: 0; right: 0; bottom: 0; background: var(--gold-dim);
   transition: height 0.5s ease, background-color 0.5s ease, opacity 0.12s ease;
 }
 .loot-bar-fill.has-value { background: var(--gold); }
-/* cursor/click hit area lives on the outline+fill themselves, not the
-   whole .loot-bar-col (see that column's own comment above) -- so the
-   pointer only looks (and acts) clickable over the actual rendered
-   bar, never the empty column space above a short one. A zero-height
-   bar has no pixels here to hover in the first place, so there's
-   nothing further to do for that case. */
+/* The click/cursor hit area is the outline and fill, not the empty column above
+   a short bar. */
 .loot-bar-outline, .loot-bar-fill { cursor: pointer; }
-/* Hovering a bar fades the fill down a bit as nice, cheap visual
-   confirmation of which one the pointer is actually over -- scoped to
-   actually hovering the outline or fill itself (never the empty
-   column space that can sit above a short bar, up to the plot's full
-   height -- see .loot-bar-col's own height: 100% above) via the
-   sibling/self selectors below, rather than .loot-bar-col:hover
-   (which used to cover that whole column, outline-height and all).
-   The :hover is on .loot-bar-outline rather than .loot-bar-fill for
-   the first selector since the outline is the taller of the two when
-   an NPC is selected (see fillValue above) -- its own box still
-   covers the rest of "the bar" above a shorter fill, so that part
-   fades too, matched via ~ since fill is its later sibling in the
-   markup. :not(.selected) on both so this can't fight the selected
-   bar's own persistent dim just below over which one the cascade
-   actually applies -- both match at equal specificity otherwise,
-   which is exactly the kind of ordering trap this file's own
-   .pm-filter-clear-btn/.pm-view-cancel-btn fix (see possessions.css)
-   ran into. Clicking a bar re-scopes the NPC/item panels and the
-   chart's own title/header to just that bucket's own window -- see
-   the loot-bar-col click handler in render_loot_tracker's script
-   (app/pages.py). */
+/* Hover fades the fill, only over the outline or fill themselves. The outline is
+   hovered first since it is the taller piece when an NPC is selected, and ~
+   reaches the fill. :not(.selected) avoids a specificity tie with the selected
+   dim below. Clicking a bar re-scopes the panels (see the loot-bar-col click
+   handler). */
 .loot-bar-col:not(.selected) .loot-bar-outline:hover ~ .loot-bar-fill,
 .loot-bar-col:not(.selected) .loot-bar-fill:hover { opacity: 0.7; }
-/* The persistent marker for whichever bar's contents are currently
-   being shown below -- dims the fill rather than brightening it, so
-   attention stays on the NPC/item panels doing the actual showing
-   rather than pulling it back up to the bar itself. Distinct from
-   (and dimmer than) the plain hover fade above -- see that rule's own
-   :not(.selected) guard -- so a selected bar reads the same whether
-   or not the pointer happens to still be over it. */
+/* Selected bar: dimmer than the hover fade so it looks the same with or without
+   the pointer on it. */
 .loot-bar-col.selected .loot-bar-fill { opacity: 0.4; }
 .loot-bar-x-labels { display: flex; gap: 3px; padding-left: 10px; margin-top: 6px; }
-/* min-width: 0 overrides the flex item default of min-width: auto,
-   which otherwise refuses to shrink a label below its own text's
-   width. .loot-bar-x-labels and .loot-bar-bars share the same left
-   offset/gap/flex-basis (see each one's own rule), so every label's
-   column lines up with its bar directly above it ONLY when both rows
-   are actually free to shrink evenly -- a bar column has zero
-   intrinsic content, so it always shrinks to its fair share, but
-   without this a label that has real text in it (most don't -- see
-   labelStep in renderBarChart) would hold onto its min-content width
-   instead, throwing off every column that comes after it and visibly
-   dragging "NOW" off to the right of the bar it's meant to sit under
-   -- worse the narrower the chart gets (confirmed with a Playwright
-   repro: at 375px wide, "NOW" was landing 32px right of center before
-   this, versus 0px off after it, across every width tested). With
-   this, an overflowing label (real text, at a narrow width) just
-   visually spills past its own column's edges instead of resizing the
-   column -- unclipped, but still centered where that column actually
-   is, which is what keeps it lined up with its bar. */
+/* min-width: 0 overrides min-width: auto. Labels line up with their bars only if
+   both rows shrink evenly; a label with text (see labelStep) would otherwise
+   keep its min-content width and drag later labels ("NOW") off their bars at
+   narrow widths. An overflowing label spills past its column, still centered on
+   it. */
 .loot-bar-x-label { flex: 1 1 0; min-width: 0; text-align: center; font-size: 9px; color: var(--text-faint); white-space: nowrap; }
 .loot-bar-x-label.now { text-align: center; }
 
 .loot-column-empty { color: var(--text-faint); font-size: 13px; margin: 0 0 10px; }
 
-/* ---------- "By NPC" row -- one clickable box per NPC killed in the
-   last 24 hours (see renderNpcRow in app/pages.py), styled after
-   Purchase Goals' own gear-setup icon row (.tracker-icon-btn in
-   purchase-goals.css) since it's the same pattern: a row of icon
-   buttons, one active/selected at a time. Kept as its own copy here
-   rather than sharing that class across stylesheets, matching how
-   this page's CSS file has stayed self-contained so far. No name
-   label -- identity is icon + tooltip only (same as the Purchase
-   Goals version), with kill count and gp value as the two visible
-   lines instead. ---------- */
-/* gap: 8px -- matches .loot-item-list's own gap below exactly (used to
-   be 10px here, a small mismatch nobody had asked to fix until now)
-   so the cushioning between cards reads identically in both panels,
-   not just the cards' own sizing. */
+/* "By NPC" row (renderNpcRow): styled after Purchase Goals' .tracker-icon-btn
+   row (copied). Identity is icon + tooltip only. */
+/* gap matches .loot-item-list's. */
 .loot-npc-row { display: flex; flex-wrap: wrap; gap: 8px; }
-/* A fixed size, not a stretchy one -- flex-basis is calc()'d as
-   exactly one quarter of the row's own width (minus the three 8px
-   gaps a row of 4 needs, matching gap above), so four boxes always
-   line up flush edge to edge across the panel. flex-grow/shrink: 0
-   keeps that size constant
-   whether the current row has 1 box or 8 -- a lightly-filled row just
-   ends early and leaves empty space, rather than the boxes growing to
-   fill it (that stretchy behavior is what this replaces).
-
-   Height is pinned to exactly two item boxes stacked plus the 8px gap
-   between them (see .loot-item-list's own gap below), so the two
-   panels' rows line up visually even though the panels hold different
-   box counts per row (4 vs 6). Both boxes are square/rectangular
-   derived from the SAME panel width (the two panels are always equal
-   width -- see .loot-panels above), so an item box's height is
-   (panelWidth - 40px) / 6 (its own flex-basis formula, since it's
-   square) -- two of those plus 8px gives the height formula below,
-   expressed in cqw units against .loot-panel's own width (see its
-   container-type: inline-size above) since a CSS height can't
-   otherwise be computed from a width percentage. aspect-ratio is a
-   fallback for browsers without container-query support (that height
-   calc becomes invalid there and is dropped, leaving this instead) --
-   not an exact match to the item-box math, but keeps the same
-   taller-than-wide shape. content is vertically centered inside
-   whatever space that leaves rather than the box collapsing to fit
-   it, same as before. */
-/* A non-interactive wrapper around each NPC box and its own eye-toggle
-   button (see .loot-eye-btn further down) -- a <button> can't validly
-   nest inside another <button>, so now that a per-tile hide/unhide
-   control exists, it has to be a DOM SIBLING of .loot-npc-box instead
-   of living inside it, both wrapped in this div (same reasoning, same
-   pattern as Storages Viewer's .pm-row-wrap/.pm-pin-btn -- see
-   possessions.css). All the sizing that used to live on .loot-npc-box
-   itself (flex-basis/height/aspect-ratio -- see that rule's own long
-   comment above for why each piece is there) moves here instead, since
-   this wrap is now .loot-npc-row's actual flex child; .loot-npc-box
-   just fills whatever box this reserves. position: relative anchors
-   .loot-eye-btn's absolute positioning to this wrap, not the page. */
+/* Fixed size: a quarter of the row minus the three 8px gaps, no grow/shrink, so
+   a short row ends early.
+   Height is two item boxes plus the 8px gap so the panels' rows line up (4 NPC
+   boxes vs 6 item boxes per row). An item box is (panelWidth - 40px) / 6 square;
+   cqw resolves against .loot-panel's container-type: inline-size. aspect-ratio
+   is the fallback where container queries are unsupported. */
+/* Wrapper holding the NPC box and its eye button as siblings (a <button> cannot
+   nest in a <button>; as .pm-row-wrap in possessions.css). Carries the sizing;
+   position: relative anchors .loot-eye-btn. */
 .loot-npc-box-wrap { flex: 0 0 calc((100% - 24px) / 4); min-width: 0; box-sizing: border-box; position: relative; }
 @supports not (container-type: inline-size) {
   .loot-npc-box-wrap { aspect-ratio: 3 / 4; }
@@ -489,128 +247,45 @@
   padding: 10px 8px; cursor: pointer;
   min-width: 0; overflow: hidden;
 }
-/* A hidden NPC (or one whose every item is itself hidden -- see
-   npcEffectiveHidden in the script below) shown via the panel's own
-   "show hidden" eye toggle reads as present but de-emphasized, not
-   gone -- dims the box itself rather than the wrap, so the absolutely-
-   positioned .loot-eye-btn (a sibling, not a child of .loot-npc-box)
-   stays at full opacity once hovered instead of inheriting this too. */
+/* Hidden entries (see npcEffectiveHidden) shown via "show hidden" are dimmed.
+   Dims the box, not the wrap, so the sibling eye button stays at full opacity. */
 .loot-npc-box-wrap.hidden-entry .loot-npc-box { opacity: 0.45; }
-/* Matches .gear-slot's hover feedback on Purchase Goals (lighting the
-   box up, rather than recoloring the border, on hover -- see that
-   file's own comment on .gear-slot:hover for why) -- but as a plain
-   background-color instead of filter: brightness(1.18), and a bit
-   brighter than that (rgb(51,51,54) vs. panel-2's rgb(38,38,40) is
-   roughly a 1.35x lift). filter brightens the whole rendered box,
-   icon and kc/gp text included, which isn't wanted here -- only the
-   box's own background should light up on hover. .active (the
-   selected-NPC state, below) is untouched -- that's a different,
-   sticky affordance from this transient hover one. */
+/* Hover lightens the background (rgb(51,51,54) is ~1.35x panel-2) rather than
+   filter: brightness, which would also brighten the icon and text. */
 .loot-npc-box:hover { background-color: rgb(51, 51, 54); }
 .loot-npc-box.active { border-color: var(--gold); }
-/* Scales down with the box instead of staying a fixed 56px: at a
-   narrow desktop width (a zoomed-in browser, just above the phone
-   breakpoint) a quarter of the row is narrower than 56px + padding, and
-   a fixed icon pushed the tile wider than its slot, dropped the fourth
-   tile to the next line and let the icon/text spill out of the box. */
+/* Scales with the box instead of a fixed 56px: at narrow desktop widths a
+   quarter of the row is narrower than 56px + padding, which pushed the tile past
+   its slot. */
 .loot-npc-box-icon { width: min(56px, 80%); height: auto; aspect-ratio: 1 / 1; object-fit: contain; image-rendering: pixelated; }
-/* A clue tier's own casket tile (see isCasketNpc/loot-npc-box-icon-casket
-   in the script below) uses the wiki's much larger, more ornate
-   "detail" render (see clue_casket_icon_url in app/loot.py) rather
-   than a real NPC's own portrait -- at this box's shared 56px sizing
-   that read a bit oversized next to the smaller NPC portraits beside
-   it, so this tier alone gets scaled down to 70% -- via transform:
-   scale, NOT by shrinking width/height. .loot-npc-box is a column flex
-   container with justify-content: center (see its own rule above),
-   which centers the whole icon+kc+value stack as one block -- shrink
-   the icon's own width/height instead and that block gets shorter,
-   which justify-content: center then re-centers as a whole, visibly
-   pulling the kc/value text UP out of its usual spot (confirmed by
-   testing -- this used to be width/height: 39px here, which did
-   exactly that, despite this comment previously claiming otherwise).
-   transform: scale doesn't touch layout at all -- the icon still
-   occupies its full 56x56 flex slot (so the stack's total height, and
-   everything below the icon, stays exactly where it always was), it
-   just paints 70% as large within that same slot, centered by
-   transform's own default center origin. */
+/* Detail-render tiles: wiki "detail" images or portraits that look oversized at
+   the shared 56px are drawn at 70%. transform: scale, not a smaller
+   width/height: .loot-npc-box centers the icon+kc+value stack, so shrinking the
+   icon would pull the text up, while a transform leaves the 56x56 slot
+   untouched. Plain portraits that read large (crawling hand, implings, spider,
+   death spawn, goblin) need no _NPC_DISPLAY_OVERRIDES entry in app/loot.py. */
 .loot-npc-box-icon-casket,
-/* Intricate pouch's own tile (Guardians of the Rift's reward -- see
-   isIntricatePouch in the script below): same 70%-oversized "detail"
-   render as the casket tier above, same scale-not-resize fix. */
+/* Intricate pouch. */
 .loot-npc-box-icon-pouch,
-/* Crawling hand's own wiki portrait (a real NPC kill, see isCrawlingHand
-   in the script below -- no _NPC_DISPLAY_OVERRIDES entry needed, the
-   bare wiki guess already lands on the right picture) reads a bit
-   large next to a typical NPC portrait at this box's shared 56px
-   sizing, same story as the casket tier/Intricate pouch above. */
 .loot-npc-box-icon-crawling-hand,
-/* Every impling type's own wiki portrait (see isImpling in the script
-   below -- no _NPC_DISPLAY_OVERRIDES entry needed, the bare wiki guess
-   off each one's own name already lands on the right picture) reads a
-   bit large next to a typical NPC portrait at this box's shared 56px
-   sizing, same story as Crawling Hand above. */
 .loot-npc-box-icon-impling,
-/* Searching/opening a seed pack or a bird nest is its own event-type
-   loot source (see isSeedPackSource/isBirdNestSource in the script
-   below, and the matching _NPC_DISPLAY_OVERRIDES entries in
-   app/loot.py) -- the ONE place either of these ever gets the wiki's
-   bigger "detail" render (the item panel, right beside this NPC/
-   source one, always shows the plain pixel icon for the very same
-   thing instead -- per explicit instruction, the two panels
-   deliberately disagree here), same 70%-oversized story as every
-   other detail render on this shared 56px sizing. */
+/* Seed pack / bird nest sources: detail render here only; the item panel shows
+   the plain icon. */
 .loot-npc-box-icon-seedpack,
 .loot-npc-box-icon-birdnest,
-/* Same story again, one per Sailing salvage tier (see isSalvageSource
-   in the script below, and the matching _NPC_DISPLAY_OVERRIDES
-   entries in app/loot.py) -- using a salvaging hook on a shipwreck is
-   its own event-type loot source too, one per tier, all 8 sharing
-   this one class (isSalvageSource itself is what tells them apart
-   from a real NPC by name, not this rule). */
+/* Sailing salvage tiers. */
 .loot-npc-box-icon-salvage,
-/* Spider -- a real NPC kill (see isSpider in the script below, no
-   _NPC_DISPLAY_OVERRIDES entry needed, the bare wiki guess off its
-   own name already lands on the right picture), same "reads a bit
-   large at this box's shared 56px" story as Crawling Hand/implings
-   above, per explicit instruction. */
 .loot-npc-box-icon-spider,
-/* Death spawn -- same story as Spider just above (a real NPC kill, no
-   _NPC_DISPLAY_OVERRIDES entry needed, bare wiki guess off its own
-   name already lands on the right picture), per explicit instruction. */
 .loot-npc-box-icon-death-spawn,
-/* Goblin -- same story as Death spawn/Spider above (a real NPC kill,
-   no _NPC_DISPLAY_OVERRIDES entry needed, bare wiki guess off its own
-   name already lands on the right picture), per explicit instruction. */
 .loot-npc-box-icon-goblin,
-/* Dossier -- Yama's own reward container (see isDossier in the script
-   below, and _NPC_DISPLAY_OVERRIDES in app/loot.py): unlike Death
-   spawn/Spider above, this one DOES need an explicit wiki filename
-   override (the bare guess doesn't land on its own detail render),
-   but the same 70%-oversized-at-this-box's-shared-56px story applies
-   once it does, per explicit instruction. */
+/* Dossier and Unsired: detail renders in _NPC_DISPLAY_OVERRIDES (app/loot.py). */
 .loot-npc-box-icon-dossier,
-/* Unsired -- same story as Dossier just above (hand-picked "detail"
-   render, see _NPC_DISPLAY_OVERRIDES in app/loot.py), per explicit
-   instruction. */
 .loot-npc-box-icon-unsired {
   transform: scale(0.7);
 }
-/* Tarnished items -- the nine Tarnished NPCs folded into one tile (see
-   isTarnishedItems in the script below and _NPC_DISPLAY_OVERRIDES in
-   app/loot.py): a bundled battleaxe image at 70% -- same size as the
-   scaled-down tiles above, but done with padding instead of
-   transform: scale. Padding shrinks just the picture inside the same
-   56x56 slot (object-fit: contain scales it to the padded box), so the
-   tile's layout is untouched like the transform version, but the
-   browser draws the image once at its final size instead of
-   re-sampling it through a scale transform, which came out soft. The
-   bundled file is exactly 2x that final size so a normal or retina
-   screen shows it 1:1 or at an even 2:1. 8px of padding = 40px of
-   picture on the 56px slot (~71%, kept to whole pixels on purpose --
-   a fractional size would blur it again); a phone's fluid-width icon
-   gets 15% a side instead, i.e. exactly 70%. A smooth render rather
-   than pixel art, so the shared rule's image-rendering: pixelated
-   is turned off. */
+/* Tarnished items (nine NPCs in one tile): padding shrinks the picture inside
+   the 56x56 slot so it is drawn once at final size; a scale transform re-samples
+   and comes out soft. Smooth render, so pixelated is off. */
 .loot-npc-box-icon-tarnished {
   padding: 14%;
   image-rendering: auto;
@@ -626,64 +301,30 @@
 .loot-npc-box.active .loot-npc-box-kc { color: var(--text); }
 .loot-npc-box-value { font-size: 10.5px; color: var(--gold-dim); font-variant-numeric: tabular-nums; }
 .loot-npc-box.active .loot-npc-box-value { color: var(--gold); }
-/* Shift-click multi-select (see the NPC row's click handler in the
-   script below) -- 2+ NPCs selected at once get this blue outline
-   instead of .active's gold border; a solo selection (plain click, or
-   a shift-click group shrunk back down to one) still gets .active,
-   never both at the same time. An outline rather than a border-color
-   change, same reasoning as Purchase Goals' own .gear-slot.multi-
-   selected in purchase-goals.css (which this is deliberately styled
-   to match): it sits over .loot-npc-box's own existing border instead
-   of replacing it, and --blue keeps it visually distinct from .active's
-   gold. */
+/* Shift-click multi-select (2+ NPCs): blue outline instead of .active's gold
+   border, never both; matches .gear-slot.multi-selected (purchase-goals.css). */
 .loot-npc-box.multi-selected { outline: 2px solid var(--blue); outline-offset: -2px; }
 
-/* ---------- two-column layout below the chart: the NPC panel (search
-   + sort + boxes, above) on the left, an item panel of the same shape
-   on the right -- see render_loot_tracker in app/pages.py. Stacks to a
-   single column once the panels would otherwise get too cramped to
-   read the search/sort row. ---------- */
+/* Two columns below the chart (NPC panel, item panel); stacks when the
+   search/sort row would get cramped. */
 .loot-panels { display: flex; gap: 18px; align-items: flex-start; }
-/* container-type: inline-size turns this panel into a query container
-   so .loot-npc-box below can size its height off this panel's own
-   width (via cqw units) -- the two panels are always equal width (see
-   .loot-panels above), so that's the same width the item panel's
-   boxes are sized from. min-width: 0 already keeps this panel's width
-   from depending on its own content, which containment requires.
-
-   The translucent card background/border/padding matches every other
-   top-level card on the site (see .loot-chart-card above for the same
-   fix, and its comment for why). box-sizing: border-box keeps this
-   panel's own rendered width unaffected by adding that padding+border
-   (so the two panels stay exactly equal width, same as before);
-   .loot-npc-box's cqw height formula below is unaffected either way,
-   since cqw is based on this container's content box, which is the
-   same box the row of boxes inside it actually lays out against --
-   confirmed by measurement after this change, box width/height still
-   match what the formulas predict from that content width. */
+/* container-type: inline-size makes this a query container so .loot-npc-box can
+   size its height from the panel width (cqw); min-width: 0 keeps width
+   independent of content, as containment requires. Card styling matches
+   .loot-chart-card; border-box keeps the panels equal width. */
 .loot-panel {
   flex: 1 1 0; min-width: 0; container-type: inline-size; box-sizing: border-box;
   background: var(--panel-translucent); border: 1px solid var(--border);
   padding: 16px 18px;
 }
 
-/* Search box on its own full-width row, sort tabs on a second row below
-   -- used to share one row (see the old flex-wrap version this
-   replaced), but the sort tabs (one button per metric -- GP/count_label/
-   A-Z/TIME, each toggling its own ascending/descending direction in
-   place rather than a separate high/low pair -- see _sort_tabs in
-   app/pages.py) no longer fit beside the search box without cramping
-   both, so each control now gets the panel's full width on its own
-   line instead. */
+/* Search box and sort tabs each take a full-width row (side by side they cramp;
+   see _sort_tabs in app/pages.py). */
 .loot-panel-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .loot-search { width: 100%; height: 34px; padding: 0 10px; font-size: 13px; }
-/* Wraps the search box so its own CLEAR text button (below) can be
-   absolutely positioned over its right edge -- same recipe as Storages
-   Viewer's own .pm-search-group/.pm-search-clear (possessions.css),
-   kept as its own copy here per this project's established per-page-CSS
-   convention. The extra right padding on the input itself (overriding
-   .loot-search's own 10px above -- this selector wins on specificity)
-   leaves room for that button so typed text never runs under it. */
+/* Wrapper so the CLEAR button can overlay the input's right edge (as
+   .pm-search-group in possessions.css); the input's right padding keeps text
+   clear of it. */
 .loot-search-group { position: relative; }
 .loot-search-group .loot-search { padding-right: 46px; }
 .loot-search-clear {
@@ -694,35 +335,12 @@
 }
 .loot-search-clear:hover { color: var(--text); }
 
-/* Mirrors purchase-goals.css's .gear-summary-sort/.sort-btn pattern
-   (kept as its own copy here rather than shared across files, per this
-   project's established per-page-CSS convention) -- equal-width toggle
-   buttons, one active at a time, sized by padding alone (no explicit
-   height) so it matches .sort-btn's own box model exactly -- height
-   used to be pinned to 34px to line up with the search box beside it,
-   but now that each sits on its own row (see .loot-panel-controls
-   above) that's no longer needed, and this is shorter, matching how
-   the Purchase Goals page's own sort row looks.
-
-   The four sort tabs (one button per metric -- GP/count_label/A-Z/TIME,
-   see _sort_tabs in app/pages.py -- each toggling between ascending and
-   descending in place via its own .loot-sort-arrow child span rather
-   than a separate high/low or A-Z/Z-A pair of buttons, see
-   updateSortTabs in the script below) plus the "show hidden" eye toggle
-   (.loot-hide-toggle below) fit on one line as short label-only buttons
-   (e.g. "GP", "A-Z") with the active one's own arrow drawn alongside its
-   label -- five buttons total now, trimmed down from the old seven-
-   sort-tabs-plus-eye-toggle layout, alongside shaving each tab's own
-   padding/font-size down a notch from what more, wordier tabs
-   needed. */
+/* Equal-width toggle buttons, one active at a time, mirroring Purchase Goals'
+   .sort-btn (copied). Each tab toggles ascending/descending in place via
+   .loot-sort-arrow (see _sort_tabs, updateSortTabs). */
 .loot-sort-tabs { display: flex; gap: 5px; }
-/* 25px is THE site-wide button height -- every other button and
-   segmented-control button across the whole site (goal-tracking.css,
-   mindmaps.css, purchase-goals.css, possessions.css) is pinned to
-   match this one exactly, since this is where that number originally
-   came from (this rule used to size itself by padding alone; pinned
-   explicitly now so it can't quietly drift out of sync with
-   everything now matching it). */
+/* 25px is the site-wide button height shared by all buttons and segmented
+   controls. */
 .loot-sort-tab {
   flex: 1;
   height: 25px;
@@ -736,28 +354,13 @@
 }
 .loot-sort-tab:hover { border-color: var(--gold-dim); color: var(--text); }
 .loot-sort-tab.active { border-color: var(--gold); color: var(--gold); }
-/* RuneScapePlain11 (myscape.css's own site-wide pixel font) has no
-   ↓/↑ glyphs of its own, so the browser silently falls back to
-   a system font just for this one character -- its own, taller line
-   box sits the glyph visibly low against the plain-pixel-font label
-   beside it despite both being flex-centered the same way (each is
-   centered within its own line box, not against the other's). A small
-   upward nudge, measured against the real rendered glyph rather than
-   guessed, pulls it back in line with the label's own center. */
+/* RuneScapePlain11 (myscape.css) has no arrow glyphs; the system-font fallback
+   has a taller line box that sits the arrow low, so it is nudged up. */
 .loot-sort-arrow { position: relative; top: -1px; }
 
-/* The "show hidden" eye toggle -- same box model/colors as
-   .loot-sort-tab beside it (so the row reads as one consistent set of
-   five buttons, not four-plus-an-outlier), just icon-only and a
-   fixed width instead of flex: 1, so it doesn't steal space from the
-   four text tabs proportionally. .active (toggled on -- every hidden NPC/
-   item in this panel now shown, dimmed -- see the script below) reuses
-   .loot-sort-tab.active's own gold treatment, the same "currently on"
-   language Edit Mode's own button uses elsewhere on the site (see
-   #mmEditModeBtn.active in mindmaps.css). The icon itself is always
-   the plain open eye -- unlike the per-tile .loot-eye-btn, which swaps
-   to a crossed-out eye for an already-hidden tile, this button doesn't
-   hide anything itself, so there's no second state to draw. */
+/* "Show hidden" eye toggle: same box as .loot-sort-tab, icon-only and fixed
+   width. .active reuses its gold. The icon is always the open eye, unlike the
+   per-tile .loot-eye-btn. */
 .loot-hide-toggle {
   flex: 0 0 26px;
   height: 25px;
@@ -775,90 +378,45 @@
   .loot-panels { flex-direction: column; }
 }
 
-/* ---------- item panel (below-right) -- same small-box grid as the
-   NPC panel beside it (.loot-npc-box above) rather than a list of long
-   rows: just an icon, the quantity dropped, and its gp value, with the
-   item's name available on hover only (same identity-by-tooltip
-   convention as the NPC boxes). Same npc-scoped, 24h-windowed data --
-   see windowItems/npcItems in app/loot.py's build_loot_state. ---------- */
+/* Item panel: the same small-box grid as the NPC panel (name on hover). Data
+   from windowItems/npcItems in build_loot_state (app/loot.py). */
 .loot-item-list { display: flex; flex-wrap: wrap; gap: 8px; }
-/* Same fixed-size reasoning as .loot-npc-box above -- flex-basis is
-   exactly one sixth of the row's width (minus the five 8px gaps a row
-   of 6 needs), flex-grow/shrink: 0 so that size never changes no
-   matter how many items are actually in a given row. Square regardless
-   of content -- aspect-ratio: 1/1 ties the height to the width instead
-   of letting the icon+qty+gp stack decide it, same idea as the NPC
-   box's own aspect-ratio: 3/4 above (which pins it to taller-than-wide
-   instead). Smaller than the NPC box beside it, matching how much less
-   there is to show per item. */
-/* Same sibling-wrap reasoning as .loot-npc-box-wrap above -- an <a>
-   (see .loot-item-box below) can't validly contain a <button> either,
-   so the per-tile eye-toggle button is this wrap's other child, not
-   nested inside the item box itself. Sizing moves here from
-   .loot-item-box for the same reason. */
+/* Fixed size: a sixth of the row minus the five 8px gaps, no grow/shrink;
+   aspect-ratio: 1/1 keeps it square. */
+/* Sibling wrap as .loot-npc-box-wrap: an <a> cannot contain a <button>. Carries
+   the sizing. */
 .loot-item-box-wrap { flex: 0 0 calc((100% - 40px) / 6); min-width: 0; aspect-ratio: 1 / 1; box-sizing: border-box; position: relative; }
 .loot-item-box {
   width: 100%; height: 100%; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 4px; min-width: 0; overflow: hidden;
-  /* An <a> now (clicking an item opens its OSRS Wiki page in a new tab
-     -- see wikiItemUrl in the script below), so the browser's default
-     link styling (blue, underlined) needs resetting back to how this
-     box always looked; :hover mirrors .loot-npc-box's own for the same
-     "this is clickable" affordance. */
+  /* An <a> to the item's wiki page (see wikiItemUrl): default link styling is
+     reset. */
   color: inherit; text-decoration: none; cursor: pointer;
 }
-/* Same "dim the box itself, not the wrap" reasoning as
-   .loot-npc-box-wrap.hidden-entry above. */
 .loot-item-box-wrap.hidden-entry .loot-item-box { opacity: 0.45; }
 .loot-item-box:hover {
-  /* Same background-only brightening as .loot-npc-box:hover above
-     (see its comment) instead of recoloring the border. */
   background-color: rgb(51, 51, 54);
-  /* The base rule above already resets text-decoration to none, but
-     that alone doesn't survive hovering -- myscape.css's global
-     a:hover { text-decoration: underline; } has the same specificity
-     (one element + :hover vs. one class here), so once the pointer is
-     over the box that rule can still win and underline the anchor,
-     which then draws its line across the qty/gp text inside even
-     though those spans never set text-decoration themselves. Reassert
-     none here (class + :hover beats element + :hover) to keep it off. */
+  /* myscape.css's a:hover underline ties the base reset on specificity and would
+     underline the qty/gp text; class + :hover beats it. */
   text-decoration: none;
 }
-/* Bumped from 24px and nudged with a small translate -- RuneLite's own
-   static item-icon CDN (see item_icon_url in app/purchase_goals.py)
-   draws every item on a fixed 36x32 canvas that leaves room down its
-   right side for the in-game stack-count badge, so the actual item
-   art only fills part of that canvas and sits visibly left-of-center
-   within it. Sampling ~30 real item icons off the CDN found that bias
-   is remarkably consistent regardless of the item's own shape (a
-   dagger and a two-handed sword alike): roughly -5.5% of the icon's
-   own width, and a much smaller ~+1% of its height. object-fit:
-   contain has no way to know about that built-in padding -- it just
-   centers the whole 36x32 canvas, off-center content and all -- so
-   this translate shifts the rendered icon right/up by about that same
-   amount to compensate, on every item icon across the site (NPC
-   portraits and this app's own bundled icons -- goal-type badges, the
-   Coins overlay icon -- aren't drawn this way and don't get this
-   rule). It's a flat average correction, not a per-item recalculation,
-   so it won't be pixel-perfect for every single item, but it visibly
-   fixes the "small and shifted left" look across the board. */
+/* RuneLite's item-icon CDN (item_icon_url in app/purchase_goals.py) draws items
+   on a fixed 36x32 canvas with room on the right for the stack-count badge, so
+   the art sits left of center (measured over ~30 icons: about -5.5% of width,
+   +1% of height). object-fit: contain cannot know that, so this translate shifts
+   CDN item icons right/up by the average offset. NPC portraits and bundled icons
+   are not drawn this way. */
 .loot-item-box-icon {
   width: min(28px, 70%); height: auto; aspect-ratio: 1 / 1; object-fit: contain; image-rendering: pixelated;
   transform: translate(5.5%, -1%);
 }
 .loot-item-box-qty { font-size: 9px; color: var(--text-dim); text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
 .loot-item-box-value { font-size: 8px; color: var(--gold-dim); line-height: 1; font-variant-numeric: tabular-nums; }
-/* Item tiles stay six to a row at every desktop width and everything
-   inside them scales with the tile instead: the tile is one sixth of
-   the panel's width less the gaps, and the icon, quantity, gp value,
-   padding and gap are all the same fixed fractions of that width they are
-   at full size (28px icon in a ~59px tile), capped at the full-size values.
-   Without this a narrow panel (a zoomed-in browser, just above the phone
-   layout) made six ~40px tiles too small for their fixed-size contents,
-   which spilled out of the boxes. The phone layout (four to a row, its own
-   sizes) is untouched. */
+/* Tiles stay six per row at every desktop width and their contents scale with
+   the tile (28px icon in a ~59px tile), capped at full size; fixed-size contents
+   spilled out of ~40px tiles. The phone layout is separate. */
 @media (min-width: 701px) {
   @supports (container-type: inline-size) {
     .loot-item-box { padding: min(4px, calc((100cqw - 40px) * 0.0113)); gap: min(2px, calc((100cqw - 40px) * 0.0057)); }
@@ -868,20 +426,9 @@
   }
 }
 
-/* ---------- the per-tile hide/unhide control -- one of these lives in
-   every .loot-npc-box-wrap and .loot-item-box-wrap (see both above),
-   absolutely positioned into that wrap's own top-right corner. A plain
-   line-outline icon (an open eye when clicking would HIDE this tile,
-   a crossed-out one when clicking would UNhide it -- see EYE_GLYPH/
-   EYE_OFF_GLYPH in the script below), gray at rest and gold on hover --
-   same convention, and deliberately the same plain color-swap with no
-   background highlight box behind it, as Storages Viewer's own
-   .pm-pin-btn (possessions.css). Hidden until its own wrap is hovered,
-   for BOTH an already-visible tile (hover to reveal "hide this") and
-   an already-hidden one shown dimmed via the panel's own "show
-   hidden" toggle (hover to reveal "bring this back") -- unlike
-   .pm-pin-btn, a hidden tile's button does NOT stay visible without
-   hovering; hover is how you get at it either way. ---------- */
+/* Per-tile hide/unhide eye in the top-right of each wrap: open eye hides,
+   crossed-out unhides (EYE_GLYPH/EYE_OFF_GLYPH). Gray, gold on hover, as
+   .pm-pin-btn (possessions.css), but shown only while the wrap is hovered. */
 .loot-eye-btn {
   position: absolute; top: 4px; right: 4px;
   width: 18px; height: 18px; padding: 0; margin: 0;
@@ -897,73 +444,28 @@
 .loot-item-box-wrap:hover .loot-eye-btn { opacity: 1; pointer-events: auto; }
 .loot-eye-btn:hover { color: var(--gold); }
 
-/* ---------- the landing page's own interactive preview (see
-   render_landing_loot_preview in app/pages.py) -- everything above
-   this point is unchanged, shared markup/CSS with the real, logged-in
-   Loot Tracker page; these two rules are the only preview-specific
-   additions loot-tracker.css needed. ---------- */
+/* Landing page preview (render_landing_loot_preview in app/pages.py): the real
+   page reused; only these rules are preview-specific. */
 
-/* Constrains the reused panel to fit inside one landing-page scroll-
-   snap "slide" (see .landing-anchor in myscape.css, min-height: 100vh
-   with no matching max) instead of growing past it the way a normal
-   page lets this same content grow tall on a small viewport. 80px is
-   .landing-anchor's own top+bottom padding (40px each), so this fills
-   exactly the room that padding leaves rather than guessing a fixed
-   height. svh layered after vh for the same mobile-address-bar reason
-   .landing-anchor itself already does.
-
-   Clipped (overflow: hidden), not scrolled -- matches how every other
-   .landing-anchor handles content taller than its own slide (see
-   e.g. anchor-storages.png, cropped and feathered at the source
-   rather than left scrollable): a scrollbar here would be the one
-   part of the landing page that scrolls independently of the page
-   itself, which read as out of place next to three flat marketing
-   images doing the same job by simply being shorter. The ::after
-   feather below fades the cut edge to the section's own background
-   instead of hard-cropping it, echoing that same source-image
-   treatment; see render_landing_loot_preview's own wrapper script for
-   the accessibility side of this (nothing focusable is left sitting
-   in the faded-out region). position: relative anchors that ::after
-   to this box specifically, not the page. */
+/* Fits the panel in one landing scroll-snap slide (.landing-anchor has
+   min-height: 100vh and no max). 80px is its top+bottom padding; svh follows vh
+   for the mobile address bar.
+   Clipped, not scrolled, so no independent scrollbar appears; the ::after
+   feather fades the cut edge and position: relative anchors it. */
 .landing-loot-preview {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  /* A fixed height now, not a cap content can come in under -- see
-     this rule's own history: it used to be max-height, so a filter
-     that left the panel with only a row or two (e.g. clicking a
-     single NPC box down in #lootNpcRow, which re-scopes #lootItemList
-     to just that NPC's own drops) would shrink the whole container to
-     fit, and the bottom feather below (gated on whether content was
-     actually overflowing) would blink out along with it -- the
-     reported bug this replaced. Pinning the box at this exact height
-     regardless of how much content is currently inside it is what
-     keeps the feather sitting in the same screen position always,
-     filtered down to two rows or not. */
+  /* A fixed height, not a max-height: filtering to a row or two would otherwise
+     shrink the container and make the bottom feather blink out. */
   height: calc(100vh - 80px);
   height: calc(100svh - 80px);
   overflow: hidden;
   position: relative;
 }
-/* Fades the last ~15% of the panel's own (now fixed) height to --bg,
-   the same flat color .landing-anchor itself sits on -- tall enough
-   to read as a deliberate feather (matching the static images' own
-   crop) rather than a stray gradient line, short enough that it's
-   only ever covering the bottom row or two of tiles, never eating
-   into the chart or search/sort controls above. pointer-events: none
-   so it never intercepts a click meant for whatever's still visible
-   right at its top edge.
-
-   Unconditional now -- no --clipped modifier class to gate it (see
-   render_landing_loot_preview's own wrapper script for where that
-   ResizeObserver used to live). With the container above pinned to a
-   fixed height instead of shrinking to fit its content, there's
-   nothing left for that class to have ever toggled on a genuinely
-   short result (a filtered #lootItemList, say) other than adding dead
-   space under the feather that already matches the section's own
-   background -- so always painting it here is simpler and gives every
-   run of this preview the same fixed bottom edge, whether or not
-   there's really anything hidden beneath it to fade. */
+/* Fades the last ~15% of the height to --bg (the .landing-anchor background).
+   pointer-events: none so clicks reach tiles beneath it. Always painted: the
+   fixed height leaves no short-content case to gate it. */
 .landing-loot-preview::after {
   content: '';
   position: absolute;
@@ -973,68 +475,33 @@
   pointer-events: none;
 }
 
-/* The range/date selector is explicitly non-interactive here (see
-   render_landing_loot_preview's own fetch shim -- a fixed one-day
-   snapshot has no other range to switch to) -- no caret, and a
-   default cursor rather than the pointer .loot-range-btn normally
-   gets, so it reads as a label a visitor won't expect to be able to
-   click. It still lights up on hover exactly like the real, clickable
-   button, though (per this preview's own follow-up request) -- simply
-   leaving .loot-range-btn:hover above unoverridden here does that,
-   since nothing in this rule touches border-color/color any more. */
+/* The range selector is non-interactive in the preview (fixed one-day snapshot):
+   no caret, default cursor. It keeps .loot-range-btn:hover since
+   border-color/color are untouched. */
 .loot-range-btn--static { cursor: default; }
 .loot-range-btn--static .loot-range-caret { display: none; }
 
-/* The two-line title row on a Loot Tracker share page (myscape.io/
-   s/<code>, see render_loot_tracker_share in app/pages.py), which
-   strips the reused body's own "Loot Tracker" .page-title heading out
-   entirely and takes its place: the share's own date/time range on
-   this small line first (reusing .subtitle's own muted color/size
-   from myscape.css wholesale -- this rule only adds the centering/
-   spacing .subtitle doesn't already have on its own, same "augment a
-   shared class with a page-specific modifier" pattern .loot-range-
-   btn--static above already follows), then "Shared by <name>" right
-   below it on its own line, carrying .page-title itself (unmodified,
-   no modifier class needed -- it's the exact same heading treatment
-   the stripped "Loot Tracker" text used to have, just different
-   text), so this page still has exactly one title-sized heading. */
+/* Two-line title row on a share page (myscape.io/s/<code>,
+   render_loot_tracker_share in app/pages.py): the date range on a .subtitle line
+   (this rule adds centering/spacing), then "Shared by <name>" carrying
+   .page-title, so there is one title-sized heading. */
 .loot-share-range { text-align: center; margin: 0 0 4px; }
 
-/* ---------- Landing-preview-only hero row: character + tagline,
-   replacing the reused page's own "Loot Tracker" heading -- see
-   render_landing_loot_preview's own hero_markup comment. Everything
-   here is scoped under .landing-loot-preview so none of it reaches
-   the real, authenticated Loot Tracker page, which still gets its
-   plain .page-title heading and none of this markup at all. ---------- */
+/* Landing-preview hero row: character + tagline replacing the heading (see
+   hero_markup in render_landing_loot_preview). Scoped to .landing-loot-preview. */
 
-/* The reused body's own heading -- hidden rather than stripped from
-   the markup itself, so _loot_tracker_panel_markup stays untouched;
-   the tagline below takes over as this preview's own "title". */
+/* Hidden rather than removed so _loot_tracker_panel_markup stays unchanged. */
 .landing-loot-preview .page-title { display: none; }
 
-/* A plain flex row now, not an absolute-positioning/z-index rig --
-   the character is a normal flex item sharing the row with the
-   tagline's own wrap, so the row's own height is just whatever the
-   taller of the two needs (in practice, always the character -- see
-   .loot-preview-char below), and align-items: flex-end bottom-aligns
-   both children flush with the row's own bottom edge. That bottom
-   edge is also where the chart card begins (nothing between them
-   adds any margin/padding -- see .loot-chart-card, untouched here),
-   so the character's own bottom edge lands exactly on the card's own
-   top border with no overlap and no gap either side -- the "cut off
-   right at the border" look this replaced the earlier overlapping/
-   z-index version for. */
+/* Flex row, align-items: flex-end: the row is as tall as the character and its
+   bottom edge is the chart card's top border, so the character ends flush on it
+   with no overlap or gap. */
 .loot-preview-hero {
   display: flex;
   align-items: flex-end;
 }
-/* Stretches to the row's full height (overriding the row's own
-   flex-end for this one child) purely so its flex-centered text
-   below has the whole height to center within -- not just however
-   tall one line of text is -- then centers that text in both
-   directions inside whatever's left once .loot-preview-char (a fixed
-   width) has taken its own column, which is exactly "the remaining
-   space above the graph the character doesn't take up." */
+/* Stretches to the row's height (overriding flex-end) so its flex-centered text
+   centers beside .loot-preview-char. */
 .loot-preview-tagline-wrap {
   flex: 1 1 auto;
   align-self: stretch;
@@ -1052,48 +519,26 @@
   line-height: 1.25;
   font-weight: 400; /* unbolded -- was 600 */
   white-space: nowrap;
-  /* At 900px (this panel's own max-width) the full line fits with
-     room to spare -- this only ever engages on a narrow enough
-     viewport that it wouldn't, trading the truncated tail for a
-     line that reads off both edges of the panel at once (centered
-     text overflowing a fixed box spills evenly either side, which
-     -- combined with .landing-loot-preview's own overflow: hidden --
-     otherwise means neither "LOOT TRACKING" at the start nor the
-     "before." at the end stays on screen). */
+  /* Engages only on a viewport too narrow for the full line: centered text
+     overflowing a box spills evenly, and with overflow: hidden would lose both
+     ends, so it reads off both edges instead. */
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .loot-preview-tagline-gold { color: var(--gold); }
 .loot-preview-tagline-white { color: var(--text); }
 
-/* Downscaled well below the character's own source-image size
-   (landing-loot-preview-char.png/.webp -- 340x410, already cropped
-   to just its upper half) -- sized to read as a small figure peeking
-   over the chart, not a second focal point. A fixed-HEIGHT flex item
-   (was fixed-width, 130px) -- height is what this and
-   .purchase-preview-char (purchase-goals.css) are standardized on, so
-   the two preview characters read as the same size next to each
-   other despite their own source images having different aspect
-   ratios; width is left to follow from that automatically. Not
-   absolutely positioned -- see .loot-preview-hero above for why that
-   flex layout is what keeps its own bottom edge flush with the chart
-   card's top border instead of overlapping past it. 157px is this
-   image's own previous rendered height at width: 130px (130 *
-   410/340), kept as-is so this preview looks pixel-identical to
-   before -- .purchase-preview-char matches this value exactly rather
-   than the other way around. */
+/* Downscaled from the 340x410 source (already cropped to its upper half). Fixed
+   height, not width, as .purchase-preview-char (purchase-goals.css) so both
+   characters match despite different aspect ratios; width follows. 157px is the
+   old 130px width at 410/340; .purchase-preview-char matches it. */
 .loot-preview-char {
   flex: 0 0 auto;
   height: 157px;
   line-height: 0;
 }
-/* .landing-loot-preview .loot-preview-char img (two classes) beats
-   myscape.css's own .landing-anchor picture img (one class, two
-   elements) -- that rule sizes every plain marketing screenshot's
-   <picture><img> on this page (width: min(700px, 82vw)) and would
-   otherwise blow this character up the same way it once did the
-   NPC/item icons elsewhere in this same panel (see that rule's own
-   comment in myscape.css) if this weren't scoped to win over it. */
+/* Two classes beat myscape.css's .landing-anchor picture img (width: min(700px,
+   82vw)), which would otherwise blow this character up. */
 .landing-loot-preview .loot-preview-char img {
   display: block;
   height: 100%;
@@ -1101,31 +546,20 @@
   width: auto;
   max-width: none;
 }
-/* Mirrors the character horizontally -- this preview moved from
-   text-left/character-right to character-left/text-right (per
-   explicit instruction), and the source image itself still faces the
-   same way it always did, so a plain scaleX(-1) on just this preview's
-   own flipped variant is what makes him face back toward the tagline
-   text beside him instead of facing off the edge of the panel. Scoped
-   to the img itself (not the .loot-preview-char picture element it
-   sits in) so this doesn't also mirror the layout/positioning rules
-   above, just the pixels. */
+/* Mirrors the character so he faces the tagline; applied to the img only, so
+   layout is not mirrored. */
 .landing-loot-preview .loot-preview-char--flipped img {
   transform: scaleX(-1);
 }
 
 
-/* ---- Phone layout ---------------------------------------------------
-   700px is this site's phone breakpoint (see character-overview.css's
-   own phone block). Scoped to body:not(.phone-off) so the homepage's
-   preview of this page, which reuses these classes, is untouched.
-
-   The big one: the old rule above (.loot-panels { flex-direction:
-   column } at 640px) left align-items: flex-start in force. In a
-   column that means "shrink each panel to its own content width", and
-   .loot-panel is container-type: inline-size, which makes its content
-   width zero -- so on a phone both panels collapsed to a ~36px sliver
-   and every tile inside crushed together. Stretching them fixes it. */
+/* Phone layout. 700px is the site-wide phone breakpoint (see
+   character-overview.css). Scoped to body:not(.phone-off) so the homepage
+   preview is unaffected.
+   The .loot-panels column rule at 640px above leaves align-items: flex-start,
+   which in a column shrinks each panel to its content width; container-type:
+   inline-size makes that zero, collapsing panels to a ~36px sliver. Stretching
+   fixes it. */
 @media (max-width: 700px) {
   body:not(.phone-off) .loot-panels {
     flex-direction: column;
@@ -1140,9 +574,8 @@
     padding: 14px 12px 12px;
   }
 
-  /* Same side cushion as the Character Overview phone page: every
-     section is at most 320px wide, centered, leaving a strip of plain
-     page either side (somewhere to put a thumb to scroll the page). */
+  /* Sections at most 320px wide, centered, leaving plain page strips to scroll
+     with a thumb (as the Character Overview phone page). */
   body:not(.phone-off) .loot-chart-card,
   body:not(.phone-off) .loot-panels {
     max-width: 320px;
@@ -1151,10 +584,8 @@
     box-sizing: border-box;
   }
 
-  /* Chart header: range button left, kc/gp totals right, and the title
-     ("ALL NPCs", or the date range when drilled into a bar) moved down
-     onto its own centered row -- it used to be absolutely centered over
-     the other two and got squeezed between them. */
+  /* Title on its own centered row (absolute centering got squeezed between the
+     range button and totals). */
   body:not(.phone-off) .loot-chart-header {
     flex-wrap: wrap;
     row-gap: 12px;
@@ -1169,9 +600,8 @@
     white-space: normal;
   }
 
-  /* Controls: finger-sized (the desktop ones are 25px tall), and inputs
-     at 16px -- anything smaller makes iOS Safari zoom the page in when
-     the field is focused. */
+  /* Finger-sized controls; inputs at 16px, since smaller makes iOS Safari zoom
+     in on focus. */
   body:not(.phone-off) .loot-sort-tab,
   body:not(.phone-off) .loot-hide-toggle {
     height: 36px;
@@ -1194,10 +624,8 @@
     font-size: 12px;
   }
 
-  /* Share popup: fixed 280px, centered under the little share icon --
-     which isn't the middle of the page, so on a phone it ran off the
-     right edge (and made the whole page wider). Anchor it to the title
-     row instead, centered, and never wider than the page. */
+  /* Share popup anchored to the title row, centered and no wider than the page:
+     the fixed 280px popup under the small icon ran off the right edge. */
   body:not(.phone-off) .page-title:has(.loot-share-wrap) {
     position: relative;
   }
@@ -1210,7 +638,6 @@
     box-sizing: border-box;
   }
 
-  /* Chart axis labels were 9-10px. */
   body:not(.phone-off) .loot-bar-x-label {
     font-size: 10px;
   }
@@ -1218,10 +645,8 @@
     font-size: 11px;
   }
 
-  /* Item tiles: 4 to a row instead of 6 (they were ~48px, with 8-9px
-     text), so the icon, quantity and gp value are legible and each
-     tile is a fair tap target. NPC tiles stay 4 to a row but get
-     slightly larger text. */
+  /* Four item tiles per row (six were ~48px with 8-9px text); NPC tiles stay
+     four with slightly larger text. */
   body:not(.phone-off) .loot-item-box-wrap {
     flex: 0 0 calc((100% - 24px) / 4);
   }
@@ -1235,11 +660,9 @@
   body:not(.phone-off) .loot-item-box-value {
     font-size: 11px;
   }
-  /* The 56px NPC icon plus the box padding is wider than a quarter of a
-     narrow phone's row (about 62px at 320 wide), and a flex item never
-     shrinks below its content -- so the tiles stayed ~74px, only three
-     fit, and the row was left ragged. Let the tile and its icon scale
-     down with the row instead. */
+  /* The 56px icon plus padding is wider than a quarter of a ~320px row and flex
+     items do not shrink below content, so only three tiles fit; the tile and
+     icon scale with the row. */
   body:not(.phone-off) .loot-npc-box-wrap,
   body:not(.phone-off) .loot-npc-box {
     min-width: 0;
@@ -1264,13 +687,8 @@
   }
 }
 
-/* Touch screens: the per-tile hide/unhide eye is normally revealed by
-   hovering its tile, which a finger can't do (and a tap leaves a
-   "stuck" hover on whichever tile was touched last). So here the tile
-   eyes stay hidden until the panel's own eye toggle -- the one beside
-   the sort buttons -- is switched on, and then show on every tile of
-   that panel, dimmed and with a bigger tap area. Turning the toggle
-   off hides them again. */
+/* Touch screens cannot hover to reveal the per-tile eye, so the eyes show only
+   while the panel's eye toggle is on, dimmed with a bigger tap area. */
 @media (hover: none) {
   body:not(.phone-off) .loot-eye-btn,
   body:not(.phone-off) .loot-npc-box-wrap:hover .loot-eye-btn,

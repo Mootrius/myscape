@@ -1,9 +1,6 @@
-/* Goal Tracking -- a player-built list of targets (a boss kill count,
-   a skill level/xp, or an item quantity), each tracked toward
-   completion with live progress (see render_goal_tracking in
-   app/pages.py). The add-goal wizard up top (collapsed to a single
-   "Add goal" button until clicked), and the goal list itself below
-   it. */
+/* Goal Tracking: player-built targets (boss KC, skill level/xp, item quantity)
+   with live progress (render_goal_tracking in app/pages.py). Add-goal wizard on
+   top, goal list below. */
 
 .gt-card {
   background: var(--panel-translucent);
@@ -24,11 +21,10 @@
 
 .gt-link-note { color: var(--text-muted); margin: 0; }
 
-/* ---- Add-goal wizard --------------------------------------------------
-   Two states: collapsed (.gt-wizard-add-btn alone, centered under the
-   page title) and expanded (.gt-wizard-expanded, a 2-"page" flow --
-   see wizardStage1Html/wizardStage2Html in the script). Only one of
-   the two is ever visible at once (see renderWizard). */
+/* Add-goal wizard. Collapsed (.gt-wizard-add-btn alone) or expanded
+   (.gt-wizard-expanded, a multi-stage flow; see
+   wizardStage1Html/wizardStage2Html in the script); only one is visible at a
+   time (renderWizard). */
 
 .gt-wizard {
   display: flex;
@@ -55,34 +51,13 @@
 
 .gt-wizard-add-btn:hover { background: #ffab42; }
 
-/* A fixed size across every stage -- not "however tall this stage's
-   own content is" -- so the box never grows/shrinks/jumps as the
-   wizard moves through its stages; every stage's own content
-   (#gtWizardStage/.gt-wizard-stage1-wrap/.gt-wizard-stage2 below) then
-   fills it, top row flush to the top edge and the actions row pinned
-   to the bottom via margin-top: auto (see .gt-wizard-stage1-actions/
-   .gt-wizard-actions below), rather than sizing to content.
-   160px (trimmed down from 174px, tightening the padding and the
-   inter-row gap along with it -- see the padding below and
-   .gt-wizard-stage2's own gap) is still enough to fit stage 3/4's own
-   3 real rows (fields + segmented row + actions) -- 34px field row +
-   25px segmented row + 25px actions row + two 11px gaps = 106px --
-   inside the 114px of content height (160 minus the 26/20 top/bottom
-   padding) this leaves, with a little slack rather than a "zero
-   slack" exact fit that'd be fragile if any button/field's own height
-   ever drifted by a px or two.
-   max-width dropped again, 520px down to 380px -- narrow enough that
-   the widest row on the page is now Back/Cancel/Next(or Save), 3
-   buttons at 316px total (see .gt-wizard-btn/.gt-add-btn's own 100px
-   width + .gt-wizard-actions' 8px gaps), with the 20px side padding
-   below providing the cushion around it rather than any extra
-   leftover row width doing that job. Every other row still fits
-   comfortably inside that same 340px of content width (380 minus the
-   20+20 padding): the search+target field pair (which used to be the
-   widest row, back when GAIN/REACH still lived inline with it) is
-   118px target + 12px gap + a ~210px search field, still plenty
-   readable; the widest segmented-control row (Lvl/Xp + GAIN/REACH
-   together) is 246px; stage 4's own recur-unit toggle is 266px. */
+/* Fixed size across every stage so the box never jumps between stages; stage
+   content fills it, with the top row flush to the top and the actions row pinned
+   to the bottom via margin-top: auto. 160px fits the tallest stage with slack
+   (34px field row + 25px segmented row + 25px actions row + two 11px gaps =
+   106px, inside 160 minus the 26/20 vertical padding = 114px). max-width 380px:
+   the widest row is Back/Cancel/Next, 3 buttons at 316px (100px each + 8px
+   gaps), inside 340px of content width (380 minus 20+20 padding). */
 .gt-wizard-expanded {
   position: relative;
   width: 100%;
@@ -98,73 +73,42 @@
 
 #gtWizardStage { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 
-/* Stage 1: the type picker -- three tappable options (the wizard's
-   own "page 1"), same icon assets Mindmaps' own goal-type picker
-   already uses (GOAL_TYPE_PICKER in app/pages.py's mindmaps script),
-   so a KC/ITEM/SKILL badge means the same thing on both pages, plus
-   a small centered Cancel underneath (there's no top-right x any
-   more -- see wizardStage1Html). The wrap fills the full fixed
-   height (same technique .gt-wizard-stage2 uses); the type-card row
-   sits flush at the top and Cancel is pinned flush at the bottom (see
-   .gt-wizard-stage1-actions' own margin-top: auto below) -- the exact
-   same top-row-up/actions-row-down shape .gt-wizard-stage2 uses for
-   stages 3/4, just with an empty middle instead of a segmented-control
-   row, since stage 1/2 have none of their own. */
+/* Stage 1: type picker (three options) using the same icon assets as Mindmaps'
+   GOAL_TYPE_PICKER (app/pages.py), plus a centered Cancel. The wrap fills the
+   fixed height like .gt-wizard-stage2: type cards at the top, Cancel pinned to
+   the bottom by .gt-wizard-stage1-actions' margin-top: auto. */
 .gt-wizard-stage1-wrap {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  /* Flex items default to min-height: auto, which floors this at its
-     own content size and stops it from ever actually occupying the
-     parent's available space -- same fix #gtWizardStage already
-     applies to itself for the same reason. */
+  /* Flex items default to min-height: auto, which floors them at content size;
+     same fix as #gtWizardStage. */
   min-height: 0;
 }
 
-/* justify-content: center now that the cards below no longer stretch
-   to fill this row's whole width (see .gt-wizard-type-btn's own
-   flex-basis) -- without it, a narrower row of cards would just sit
-   flush against the row's left edge instead of centered under the
-   Back/Cancel/Save row beneath it, which .gt-wizard-actions/
-   .gt-wizard-stage1-actions both already center as a group. */
+/* Cards are fixed-size and no longer stretch, so center them under the centered
+   actions row. */
 .gt-wizard-stage1 {
   display: flex;
   justify-content: center;
   gap: 12px;
 }
 
-/* Wraps Cancel alone on stage 1 (one-time/recurring) or Back + Cancel
-   together on stage 2 (the type picker) -- centered as its own group
-   under the type-card row above it, same as a lone Cancel always was
-   before Back existed here. */
+/* Cancel alone (stage 1) or Back + Cancel (stage 2), centered as a group. */
 .gt-wizard-stage1-actions {
   display: flex;
   gap: 8px;
   align-self: center;
-  /* auto (not a fixed px value) is what pins this row to the box's
-     bottom edge, same as .gt-wizard-actions' own margin-top: auto does
-     for stages 3/4 -- it eats up whatever's left of the fixed box's
-     now-taller content height (see .gt-wizard-expanded) after the
-     type-card row above it, rather than needing that leftover math
-     worked out by hand. Self-adjusting if either row's own height ever
-     drifts, unlike a fixed margin sized to exactly fill a specific
-     leftover gap. */
+  /* margin-top: auto pins the row to the box bottom (as .gt-wizard-actions does
+     for stages 3/4) without hand-computed leftover math. */
   margin-top: auto;
 }
 
-/* Square now (64x64), not a 120x62 rectangle -- width dropped to
-   match the existing height instead of the other way around, so the
-   icon above the label still reads at roughly the same size it always
-   has. Fixed width AND height (not just a flex-basis) is what actually
-   guarantees the square -- box-sizing: border-box (myscape.css's own
-   site-wide * rule) keeps padding/border from pushing the rendered box
-   past either number. overflow: hidden is a safety valve for the
-   longest label ("SKILL LVL/XP") wrapping to a 3rd line at this width
-   -- 2 lines fits with room to spare (see .gt-wizard-type-btn span's
-   own font-size below), so this should never actually clip anything
-   in practice. flex-shrink stays allowed (flex: 0 1 64px, not 0 0) as
-   a safety valve for a narrow viewport, same reasoning the old 120px
-   rule already used -- see the max-width: 720px query below. */
+/* Fixed width and height (not just flex-basis) guarantee a 64x64 square;
+   border-box (myscape.css * rule) keeps padding inside it. overflow: hidden
+   guards the longest label ("SKILL LVL/XP") wrapping to a 3rd line (2 lines
+   fit). flex: 0 1 64px lets cards shrink on narrow viewports (see the max-width:
+   720px query). */
 .gt-wizard-type-btn {
   display: flex;
   flex-direction: column;
@@ -184,30 +128,18 @@
   cursor: pointer;
 }
 
-/* Trimmed from 26px alongside the card's own shrink to a 64px square
-   above -- keeps the icon reading as an icon (not crowding the label
-   under it) at the new, narrower content width. */
+/* Sized to read as an icon without crowding the label in the 64px card. */
 .gt-wizard-type-btn img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; }
 
-/* The one-time/recurring cards' own icons (ONE_TIME_ICON_SVG/
-   RECURRING_ICON_SVG in the script) -- inline SVGs rather than the
-   PNG badges every other type card uses, so they can be colored via
-   currentColor instead of needing their own pre-colored asset. Always
-   gold, not just on hover (unlike the card's own border/text, which
-   only picks up gold on :hover below) -- these two are the one card
-   style on this page whose icon is a deliberate color accent rather
-   than a neutral badge. */
+/* Inline SVGs (ONE_TIME_ICON_SVG/RECURRING_ICON_SVG in the script) colored via
+   currentColor; always gold, unlike the card's border/text which turn gold only
+   on :hover. */
 .gt-wizard-type-btn svg.gt-recur-icon { width: 22px; height: 22px; color: var(--gold); flex: none; }
 
-/* font-size (and letter-spacing) trimmed down from the old 120px-wide
-   card's own 11px/0.04em -- the square's ~52px of content width
-   (64px minus this rule's own 4px+4px padding and the 2px border)
-   needs a smaller label to keep the two- and three-word options
-   ("Item Qty", "Skill Lvl/Xp") readable across 2 lines rather than
-   overflowing sideways. text-align: center is what actually centers
-   each wrapped line -- align-items: center on the card above only
-   centers the label block AS a whole, not the text within its own
-   second line. */
+/* Small font for two- and three-word labels ("Item Qty", "Skill Lvl/Xp") to fit
+   2 lines in ~52px of content width (64 minus 4+4 padding and the 2px border).
+   text-align: center centers each wrapped line; align-items: center only centers
+   the block. */
 .gt-wizard-type-btn span {
   font-size: 9px;
   line-height: 1.25;
@@ -218,16 +150,10 @@
 
 .gt-wizard-type-btn:hover { border-color: var(--gold); color: var(--text); background: var(--panel); }
 
-/* Stage 2 -- three rows now: search for the target + set its value on
-   top, this stage's own segmented control(s) on a row of their own
-   underneath (see .gt-wizard-segrow below), then Back/Cancel/Save
-   pinned to the bottom. gap (rather than space-between) sets the
-   minimum breathing room between whichever rows are actually present
-   -- .gt-wizard-actions' own margin-top: auto (below) is what then
-   pins the actions row to this box's bottom edge regardless of how
-   many rows come before it, eating up whatever's left of the fixed
-   box's height (see .gt-wizard-expanded) after gap has done its part.
-   11px (down from 14px) alongside the box's own shorter height. */
+/* Stage 2: target search + value on top, segmented controls on their own row
+   (.gt-wizard-segrow), then the actions row. gap sets the minimum spacing
+   between present rows; .gt-wizard-actions' margin-top: auto pins the actions to
+   the box bottom. */
 .gt-wizard-stage2 {
   display: flex;
   flex-direction: column;
@@ -237,90 +163,47 @@
 
 .gt-wizard-row { display: flex; gap: 12px; align-items: center; }
 
-/* No <label> of its own any more -- placeholder text on the field's
-   own input (WIZARD_SEARCH_PLACEHOLDER/wizardTargetPlaceholder in
-   the script) does that job instead, so .gt-field wraps just one
-   child now rather than a label+input stack. Still flex-direction:
-   column (not the row default), since that's what makes that one
-   child (the search box or the target input) stretch to the
-   wrapper's own full width via the column axis's default
-   align-items: stretch -- switching to row would only stretch it to
-   the wrapper's height instead. */
+/* Placeholder text on the input replaces a label
+   (WIZARD_SEARCH_PLACEHOLDER/wizardTargetPlaceholder in the script).
+   flex-direction: column makes the single child stretch to full width via the
+   default align-items: stretch. */
 .gt-field { display: flex; flex-direction: column; flex: 1 1 200px; min-width: 160px; }
 
 .gt-field select, .gt-field input[type="number"], .gt-field input[type="text"] { width: 100%; height: 34px; padding: 0 12px; }
 
-/* The search field grows to fill whatever room the fixed-width
-   target field beside it doesn't need -- this is what keeps
-   item/quantity, boss/kc, and skill/level-xp/target each on one line
-   regardless of how long a picked name is. Just the two of them on
-   this row now -- the Lvl/Xp and GAIN/REACH toggles that used to sit
-   inline here moved down to their own row (.gt-wizard-segrow below). */
+/* The search field grows to fill what the fixed-width target field leaves,
+   keeping each goal type's fields on one line regardless of name length. */
 .gt-wizard-row .gt-field-target-search { flex: 1 1 auto; min-width: 0; }
 .gt-wizard-row .gt-field-target { flex: 0 0 118px; min-width: 0; }
 
-/* Stage 3's own Lvl/Xp toggle and/or GAIN/REACH field (see
-   #gtWizardSegRow/#gtTargetModeField in wizardStageTargetHtml,
-   app/pages.py) -- a segmented-control row of its own underneath the
-   search/target fields rather than living inline with them, same
-   "this stage's segmented controls get their own row" shape stage 4's
-   own .gt-recur-unit-toggle now uses too (see that rule's own comment
-   below). Centered as a group (not stretched full-width) since these
-   are compact fixed-width toggles, not fields that need the row's
-   whole ~530px to stay readable -- see .gt-metric-toggle/
-   .gt-target-mode-toggle's own width below for their exact sizing.
-   --empty (added/removed by updateWizardSegRowVisibility in the
-   script) is what collapses this whole row out of the stage's flex
-   flow for an item goal, or a skill goal currently on Lvl -- neither
-   has a segmented control to show here at all. */
+/* Row for stage 3's Lvl/Xp toggle and/or GAIN/REACH field
+   (#gtWizardSegRow/#gtTargetModeField in wizardStageTargetHtml, app/pages.py),
+   centered as a group. --empty (toggled by updateWizardSegRowVisibility in the
+   script) collapses it for item goals and skill goals on Lvl, which have no
+   segmented control. */
 .gt-wizard-segrow { display: flex; gap: 10px; justify-content: center; align-items: center; }
 .gt-wizard-segrow--empty { display: none; }
 
-/* :empty (not width: 0) is what makes an inapplicable goal's row look
-   exactly like it did before this field existed -- a display: none
-   field is skipped by flexbox entirely, so it consumes neither space
-   nor a gap on either side. Whether the whole .gt-wizard-segrow row
-   around it disappears too is a separate question, handled by
-   .gt-wizard-segrow--empty above rather than this rule, since that row
-   can also hold the Lvl/Xp toggle beside this field. */
+/* :empty rather than width: 0: a display: none field is skipped by flexbox, so
+   it takes no space or gap. Whether the whole row disappears is handled by
+   .gt-wizard-segrow--empty above. */
 #gtTargetModeField:empty { display: none; }
 
-/* Site-wide standard: a missing/out-of-range field just gets a red
-   border, no message anywhere (see validateTargetField/
-   validateRecurField and the search-input .invalid toggles in the
-   script). The actual rule lives at the bottom of this file, after
-   every other rule that sets one of these fields' border-color, so
-   it wins on source order without needing a higher-specificity
-   selector for each of them individually. */
+/* A missing/out-of-range field shows a red border only
+   (validateTargetField/validateRecurField and the search-input .invalid toggles
+   in the script). The rule lives at the end of this file so it wins on source
+   order. */
 
-/* Back/Cancel/Save (or Next) -- Back and Cancel share the same plain
-   secondary look as every other page's own .btn-secondary
-   (mindmaps.css/purchase-goals.css), duplicated here rather than
-   shared per this file's own "each page owns its stylesheet"
-   convention; Save/Next (.gt-add-btn) is the same fixed 100px width as
-   Back/Cancel now (see .gt-wizard-btn's own width below) rather than
-   growing to fill the row, so the whole row -- however many buttons it
-   has, whichever stage it's on -- always reads as a set of
-   same-sized buttons instead of one of them stretching to fill
-   leftover space. Centered as a group (align-self: center) so a
-   narrower row (stage 1's Cancel-alone, or stage 2's Back+Cancel)
-   doesn't just sit flush left the way a shrunk flex row normally
-   would -- same centering stage 1/2's own .gt-wizard-stage1-actions
-   already uses, shared here too so every stage's action row lines up
-   the same way horizontally. margin-top: auto is what pins this row
-   to the box's bottom edge vertically -- same reasoning as
-   .gt-wizard-stage1-actions' own margin-top: auto, just here for
-   stage 3/4's own actions row instead of stage 1/2's, so all 4
-   stages' action rows land on the same fixed bottom edge either way. */
+/* Back/Cancel use the same secondary look as .btn-secondary in
+   mindmaps.css/purchase-goals.css (duplicated per page stylesheet). All buttons,
+   Save/Next (.gt-add-btn) included, share a fixed 100px width. align-self:
+   center centers narrower rows (e.g. Cancel alone); margin-top: auto pins the
+   row to the box bottom so every stage's actions land on the same edge. */
 .gt-wizard-actions { display: flex; gap: 8px; align-self: center; margin-top: auto; }
 
-/* height: 25px on this and every other button/segmented-control-button
-   on the site is the shared site-wide button height -- matches Loot
-   Tracker's own .loot-sort-tab exactly (loot-tracker.css), which is
-   where that number comes from; display: flex + align-items/
-   justify-content: center is what keeps a button's own label centered
-   at this height regardless of its own font-size/padding, rather than
-   relying on padding math staying accidentally symmetric. */
+/* 25px is the site-wide button height (from .loot-sort-tab in loot-tracker.css).
+   display: flex with centering keeps the label centered at that height
+   regardless of font-size/padding. */
 .gt-wizard-btn {
   flex: 0 0 auto;
   width: 100px;
@@ -344,11 +227,9 @@
 
 .gt-wizard-actions .gt-add-btn { flex: 0 0 auto; width: 100px; height: 25px; }
 
-/* Next (stage 3, recurring only -- see wizardStageTargetHtml in the
-   script) -- same fixed 100px size as Save (it's still .gt-add-btn
-   underneath), recolored to the plain Back/Cancel look instead of
-   gold. There's a real Save still ahead of it on stage 4, so Next
-   shouldn't read as the button that actually creates the goal. */
+/* Next (stage 3, recurring only; wizardStageTargetHtml) uses the plain
+   Back/Cancel look instead of gold, so it does not read as the button that
+   creates the goal (Save is on stage 4). */
 .gt-wizard-actions .gt-add-btn.gt-wizard-btn-next {
   background: var(--panel-2);
   color: var(--text-dim);
@@ -361,15 +242,9 @@
   color: var(--text);
 }
 
-/* Level/XP toggle -- sits in #gtWizardSegRow now (see
-   wizardStageTargetHtml, app/pages.py), not inline with the search/
-   target fields any more, so this needs its own explicit width
-   (108px, the same size its old wrapping .gt-field-metric flex-basis
-   gave it) rather than relying on a flex sibling to size it. Same
-   segmented-pair look as Purchase Goals'/Mindmaps' own .btn-secondary
-   pairs, just a two-up toggle rather than a single button, and the
-   same site-wide 25px button height every other button/toggle on the
-   site shares (see .gt-wizard-btn's own comment above). */
+/* Level/XP toggle inside #gtWizardSegRow (wizardStageTargetHtml, app/pages.py);
+   explicit 108px width (2 x 54px segments) since no flex sibling sizes it. 25px
+   site-wide button height. */
 .gt-metric-toggle { display: flex; gap: 0; height: 25px; width: 108px; flex: none; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-metric-btn {
@@ -390,24 +265,17 @@
   justify-content: center;
 }
 
-/* 1px divider between segments; the last one has none (the toggle's
-   own border closes it off). */
+/* 1px divider between segments; the last has none (the toggle's border closes
+   it). */
 .gt-metric-btn:last-child { border-right: none; }
 
 .gt-metric-btn:hover { color: var(--text); }
 
 .gt-metric-btn.active { background: var(--panel-2); color: var(--gold); }
 
-/* Same segmented-pair idea as .gt-metric-toggle above (reused look,
-   own class -- this is a different CHOICE about the same target-value
-   field, not another metric), same site-wide 25px button height as
-   that one too. Lives inside #gtTargetModeField inside #gtWizardSegRow
-   now (see wizardStageTargetHtml, app/pages.py) -- beside
-   .gt-metric-toggle when both apply, same segmented-control row
-   either way -- so this also needs its own explicit width (128px,
-   the same size its old wrapping .gt-field-target-mode flex-basis
-   gave it, sized for "GAIN"/"REACH" being longer than Lvl/XP's own
-   2-3 letters) rather than relying on a flex sibling to size it. */
+/* GAIN/REACH toggle (inside #gtTargetModeField in #gtWizardSegRow); same look as
+   .gt-metric-toggle but its own class, as it is a separate choice. 128px width
+   fits "REACH". */
 .gt-target-mode-toggle { display: flex; gap: 0; height: 25px; width: 128px; flex: none; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-target-mode-btn {
@@ -434,67 +302,27 @@
 
 .gt-target-mode-btn.active { background: var(--panel-2); color: var(--gold); }
 
-/* A one-time skill goal on LEVEL -- see targetModeVisible/
-   wireTargetModeToggle in the script -- renders this toggle rather
-   than hiding it, but with this class added: GAIN/REACH doesn't mean
-   anything for a level goal, so it's not clickable (pointer-events:
-   none, no click handler even wired up) and reads as visibly
-   unavailable (dimmed via opacity) rather than looking identical to
-   its normal, interactive state. Neither button carries .active while
-   this class is present either (see wireTargetModeToggle's own
-   applies && check) -- .gt-target-mode-btn's plain, un-highlighted
-   look (near-black segments, dim text) is what both buttons fall back to,
-   so nothing reads as "chosen" on a goal type where that choice isn't
-   real yet. Switching to XP re-wires this toggle from scratch with
-   GAIN selected (see the metric toggle's own click handler) rather
-   than restoring whatever was dimmed here. */
+/* A one-time skill goal on LEVEL (targetModeVisible/wireTargetModeToggle in the
+   script) shows this toggle dimmed and non-interactive (pointer-events: none)
+   since GAIN/REACH has no meaning there; neither button is .active. Switching to
+   XP re-wires it with GAIN selected. */
 .gt-target-mode-toggle--disabled { opacity: 0.4; pointer-events: none; }
 
-/* Stage 4 (recurring goals only) -- just the interval field now; its
-   own HOUR/DAY/WEEK/MONTH/YEAR toggle moved down to a row of its own
-   (.gt-wizard-segrow, reused from stage 3 -- see
-   .gt-recur-unit-toggle's own comment below) rather than sharing this
-   one with it. justify-content: center is what centers the field
-   under the search/target row's own ~530px width now that it's the
-   row's only child, instead of sitting flush left the way a lone
-   fixed-width flex child normally would. */
+/* Stage 4 (recurring only): the interval field, centered via justify-content;
+   the unit toggle is on its own .gt-wizard-segrow row. */
 .gt-wizard-recur-fields { display: flex; flex-direction: row; justify-content: center; }
 
-/* Narrower than a full-width field on purpose -- this is a plain "how
-   many" count, not something that needs the row's whole width the way
-   the search/target fields on stage 3 do. Fixed rather than flexible
-   (no flex-grow) so the unit toggle beside it is what absorbs the
-   row's remaining width instead of splitting it with this field.
-   Selector is `input.` (type + class), not just `.` -- myscape.css's
-   own shared input[type="text"] rule (width: 100%, padding: 12px 14px)
-   is a type + attribute selector, which beats a class selector alone
-   on specificity regardless of file/source order; matching its own
-   specificity here is what lets THIS rule's width/padding actually
-   win instead of silently losing to that shared default. */
+/* Narrow fixed-width count field. Selector is input.* because myscape.css's
+   input[type="text"] (width: 100%, padding: 12px 14px) is type + attribute and
+   beats a lone class on specificity regardless of source order. */
 input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padding: 0 12px; }
 
-/* Same segmented-toggle idea as .gt-metric-toggle above, generalized
-   to 5 buttons instead of 2 -- rather than that rule's own
-   first-child-border hack (which only ever has one seam to manage),
-   this overlaps borders with a uniform -1px margin-left and lifts
-   whichever button is active/hovered a layer up (z-index) so its own
-   full border always shows unbroken, however many neighbors it has on
-   either side. Site-wide 25px button height, same as the wizard's own
-   Back/Cancel/Save/Next buttons (.gt-wizard-btn/.gt-add-btn) rather
-   than the 34px text fields elsewhere on this stage -- these are
-   buttons, not a field, so they read as part of the same button
-   family instead of another input. Sits alone in its own
-   .gt-wizard-segrow row now (see wizardStageCadenceHtml, app/pages.py)
-   rather than sharing a row with the interval field. Each segment is a
-   fixed 54px now (5*54 - 4*1px of overlap = 266px total), not a
-   flex-grow share of the row's full width -- same 54px each of
-   .gt-metric-toggle's own two LVL/XP segments get (108px / 2), so
-   HOUR/DAY/WEEK/MONTH/YEAR reads as the same "shortened" segment size
-   as that other segmented control rather than a much wider one just
-   because it happens to have more buttons in it. .gt-wizard-segrow's
-   own justify-content: center is what centers this narrower-than-
-   before control under the row above it now that it no longer
-   stretches to fill the row's full width. */
+/* Segmented toggle generalized to 5 buttons: borders overlap with a uniform -1px
+   margin-left and the active/hovered button is lifted with z-index so its full
+   border shows. 25px site-wide button height. Segments are a fixed 54px (5*54 -
+   4*1px overlap = 266px), matching .gt-metric-toggle's per-segment width;
+   .gt-wizard-segrow's justify-content: center centers it
+   (wizardStageCadenceHtml, app/pages.py). */
 .gt-recur-unit-toggle { display: flex; height: 25px; flex: none; width: 266px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-recur-unit-btn {
@@ -521,42 +349,19 @@ input.gt-recur-interval-input { width: 140px; flex: 0 0 auto; height: 34px; padd
 
 .gt-recur-unit-btn.active { background: var(--panel-2); color: var(--gold); }
 
-/* Stage 5 (recurring goals only) -- when this goal's cadence starts.
-   Same three-row shape stage 4 uses (.gt-wizard-stage2/.gt-wizard-
-   recur-fields/.gt-wizard-segrow/.gt-wizard-actions, all reused as-is)
-   just with a masked date/time field up top instead of the interval
-   count, and a NOW/CUSTOM toggle in the segmented row instead of the
-   HOUR/DAY/WEEK/MONTH/YEAR one -- per explicit instruction on this
-   exact field-then-toggle-then-buttons order.
-
-   Wider than .gt-recur-interval-input's own 140px (that field only
-   ever holds a few digits) -- this one holds the full "YYYY-MM-DD
-   HH:MM" mask at once, which measures ~100px of text on its own at
-   this input's inherited 16px site-wide font size (input[type="text"]
-   in myscape.css); 160px leaves comfortable side padding around that
-   without ballooning past what .gt-wizard-recur-fields' own
-   justify-content: center needs to keep it looking centered in the
-   340px-wide stage. */
+/* Stage 5 (recurring only): when the cadence starts. Reuses the stage 4 layout
+   with a masked date/time field and a NOW/CUSTOM toggle. 160px fits the full
+   "YYYY-MM-DD HH:MM" mask (~100px of text at the inherited 16px input font size,
+   see input[type="text"] in myscape.css) with padding. */
 input.gt-recur-start-input { width: 160px; flex: 0 0 auto; height: 34px; padding: 0 12px; }
 
-/* Disabled (NOW picked -- see wireStartStage in the script) reads as
-   visibly inert rather than looking identical to its normal,
-   interactive CUSTOM state, same dimming .gt-target-mode-toggle--
-   disabled already gives a toggle that doesn't apply yet -- just
-   applied to a field via the native :disabled pseudo-class instead of
-   a class, since an <input disabled> already gets the "can't type
-   here" cursor/behavior for free and this only needs to add the look
-   to match. */
+/* Disabled (NOW picked; wireStartStage in the script) is dimmed like
+   .gt-target-mode-toggle--disabled, via :disabled since a disabled input already
+   gets the native behavior. */
 input.gt-recur-start-input:disabled { opacity: 0.4; }
 
-/* Same segmented-pair idea/look as .gt-target-mode-toggle above
-   (reused look, own class -- this is a different field's own toggle,
-   see that rule's own comment for why that's still worth a dedicated
-   class), same site-wide 25px button height. 140px (70px per segment),
-   a touch wider than .gt-target-mode-toggle's own 128px -- "CUSTOM" is
-   longer than "REACH", the longest word either of THAT toggle's two
-   segments ever has to fit, so this one needs a little more room to
-   keep the same comfortable side padding around its own longer label. */
+/* Same look as .gt-target-mode-toggle. 140px (70px per segment): "CUSTOM" is
+   longer than "REACH". */
 .gt-recur-start-toggle { display: flex; gap: 0; height: 25px; width: 140px; flex: none; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 
 .gt-recur-start-btn {
@@ -589,10 +394,8 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 
 .gt-search-box input[type="text"] { width: 100%; height: 34px; padding: 0 12px; }
 
-/* Same dropdown-suggestion look as Purchase Goals' own .suggestions/
-   .suggestion (purchase-goals.css) -- kept as its own local copy
-   rather than a shared class, same "each page owns its own CSS file"
-   convention every page here already follows. */
+/* Same look as .suggestions/.suggestion in purchase-goals.css (local copy per
+   page stylesheet). */
 .gt-suggestions {
   display: none;
   position: absolute;
@@ -605,11 +408,8 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
   max-height: 240px;
   overflow-y: auto;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
-  /* Same fix as Mindmaps' own .mm-suggestions and Possessions' own
-     .pm-settings-menu (mindmaps.css/possessions.css) -- without this,
-     scrolling this list past its own top/bottom bound doesn't just
-     stop, it chains into the next scrollable ancestor, which here is
-     the whole page. */
+  /* Stops scroll chaining into the page past the list bounds (same as
+     .mm-suggestions and .pm-settings-menu). */
   overscroll-behavior: contain;
 }
 
@@ -654,29 +454,14 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 
 .gt-add-btn:hover { background: #ffab42; }
 
-/* ---- Goal list --------------------------------------------------- */
+/* Goal list */
 
-/* Same look as Loot Tracker's own .loot-sort-tabs/.loot-sort-tab
-   (loot-tracker.css) -- a row of equal-width buttons, one active at a
-   time (see updateSortTabs in the script), each just a short label
-   (no arrows -- unlike Loot Tracker's GP/count/alpha pairs, none of
-   these four is a high/low or A-Z/Z-A pair, just one fixed direction
-   each, so there's nothing a second button per mode would add). Kept
-   as its own local copy rather than shared, same "each page owns its
-   own CSS file" convention every page here already follows. Hidden
-   whenever the list itself is (see renderGoalList) -- sorting an
-   empty list has nothing to show for it. */
-/* 5 buttons now -- one per metric (Progress/Type/A-Z/Time), each
-   toggling its own ascending/descending direction in place via its
-   own .gt-sort-arrow child span, plus Custom -- same single-button-
-   per-metric convention Loot Tracker's own .loot-sort-tab row and
-   Purchase Goals' own .sort-btn row already use (see each file's own
-   comment), replacing what used to be 8 direction-paired buttons (4
-   metrics x asc/desc) plus Custom. Same 25px box model those two
-   already share -- see loot-tracker.css's own comment on why that
-   number is pinned sitewide -- rather than this page's old, much
-   smaller/tighter sizing that only existed to cram 9 buttons into one
-   row. */
+/* Sort tabs: same look as .loot-sort-tabs/.loot-sort-tab (loot-tracker.css),
+   local copy. Equal-width buttons, one active at a time (updateSortTabs in the
+   script). Hidden when the list is (renderGoalList). */
+/* 5 buttons: Progress/Type/A-Z/Time each toggle their direction in place via the
+   .gt-sort-arrow span, plus Custom. 25px box model shared with .loot-sort-tab
+   and .sort-btn. */
 .gt-sort-tabs { display: flex; gap: 5px; margin-bottom: 14px; }
 
 .gt-sort-tab {
@@ -697,19 +482,13 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 
 .gt-sort-tab:hover { border-color: var(--gold-dim); color: var(--text); }
 .gt-sort-tab.active { border-color: var(--gold); color: var(--gold); }
-/* Same RuneScapePlain11-has-no-arrow-glyphs fallback-font nudge
-   .loot-sort-arrow already documents in loot-tracker.css -- the
-   browser's fallback glyph for ↓/↑ sits visibly low against this
-   page's own pixel-font label beside it without this. */
+/* Nudge for the fallback-font arrow glyph (RuneScapePlain11 has no arrows); see
+   .loot-sort-arrow in loot-tracker.css. */
 .gt-sort-arrow { position: relative; top: -1px; }
 
-/* Nudge pulse for the CUSTOM tab -- fires when a goal row is
-   clicked/dragged in any OTHER sort mode (see glowCustomSortTab in
-   the script), identical shape to Purchase Goals' own
-   sort-btn-custom-glow (see its comment in purchase-goals.css) just
-   under this page's own tab class and gold token. Kept as its own
-   local copy rather than shared, same "each page owns its own CSS
-   file" convention every page here already follows. */
+/* One-off nudge pulse for CUSTOM when a goal row is clicked/dragged in another
+   sort mode (glowCustomSortTab in the script); same shape as
+   sort-btn-custom-glow in purchase-goals.css. */
 @keyframes gt-sort-tab-custom-glow {
   0%, 100% { box-shadow: none; border-color: var(--border); color: var(--text-dim); }
   50% { box-shadow: 0 0 8px 2px var(--gold); border-color: var(--gold); color: var(--gold); }
@@ -726,24 +505,17 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
   gap: 14px;
   padding: 12px 4px;
   border-bottom: 1px solid var(--border);
-  /* .gt-goal-delete is positioned absolutely within this (see below) so
-     it overlays the row instead of claiming a flex track -- that's what
-     lets .gt-goal-info/.gt-goal-bar use the row's full width. */
+  /* .gt-goal-delete is absolutely positioned so it overlays the row without
+     claiming a flex track, leaving .gt-goal-info/.gt-goal-bar the full width. */
   position: relative;
 }
 
 .gt-goal-list .gt-goal-row:last-child { border-bottom: none; }
 
-/* Drag-to-reorder, "custom" sort mode only (see wireGoalDrag in the
-   script) -- identical shape to Purchase Goals' own
-   .gear-summary-row.draggable/.dragging (see their own comments in
-   purchase-goals.css): .dragging fades the row being picked up, rows
-   physically slide out of the way to preview a drop (animateReorder)
-   rather than drawing a drop-target ring, and user-select: none stops
-   a grab-and-drag from just selecting the row's text instead. Rows
-   outside Custom mode carry none of this -- see .gt-goal-row's own
-   plain (non-draggable) styling above, which needs no hover treatment
-   since those rows aren't grabbable at all. */
+/* Drag-to-reorder, custom sort mode only (wireGoalDrag in the script); same as
+   .gear-summary-row.draggable/.dragging in purchase-goals.css: rows slide aside
+   (animateReorder) instead of a drop ring, user-select: none avoids text
+   selection. */
 .gt-goal-row.draggable { cursor: grab; user-select: none; }
 .gt-goal-row.draggable:hover { background-color: rgb(51, 51, 54); }
 .gt-goal-row.draggable.dragging { opacity: 0.4; cursor: grabbing; }
@@ -758,17 +530,10 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 
 .gt-goal-info { flex: 1 1 auto; min-width: 0; }
 
-/* Name + progress text on one line now, instead of the progress text
-   getting its own line below the name -- see goalRowHtml in the
-   script. align-items: baseline lines up the two differently-sized
-   texts on their text baseline rather than their box tops/middles,
-   the same way two differently-sized inline texts naturally would.
-   Room for .gt-goal-delete (which overlays the row's top-right corner
-   rather than sitting in flow) moved here from .gt-goal-name alone --
-   sized for its widest state, the "Are you sure?" confirm label, so a
-   long name/progress-text pair's own overflow never runs under it.
-   The bar below doesn't need this: the button doesn't reach down
-   that far. */
+/* Name and progress text share a line; align-items: baseline aligns the
+   differently-sized texts. padding-right reserves room for the overlaid
+   .gt-goal-delete at its widest ("Are you sure?"); the bar below does not need
+   it. */
 .gt-goal-headline {
   display: flex;
   align-items: baseline;
@@ -782,33 +547,15 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* flex-grow: 0 (not 1) -- this shouldn't stretch to fill the row's
-     leftover width the way a lone flex child normally would, or the
-     progress text beside it would just get shoved out to the row's
-     far edge instead of sitting right after the name the way it's
-     meant to. Shrinks first (not .gt-goal-sub beside it) when the two
-     don't both fit -- an ellipsized name still reads fine, but a
-     truncated "13,034,4... / 200,000,000 XP" progress readout
-     wouldn't. */
+  /* flex-grow: 0 keeps the progress text right after the name. The name shrinks
+     first (not .gt-goal-sub): an ellipsized name reads fine, a truncated
+     progress readout does not. */
   flex: 0 1 auto;
-  /* A floor, not 0 -- .gt-goal-sub beside it never shrinks (see its
-     own comment), so on a narrow screen with a long recurring-cadence
-     sub ("13,363 / 100,000 XP · EVERY 2 WEEKS") this would otherwise
-     get squeezed all the way down to nothing, leaving a row with no
-     name at all, just a progress readout and an icon to guess from.
-     This is only ever a CEILING on how far fixGoalNameMinWidths (the
-     script below) narrows this per row, though, not the floor every
-     row actually gets: a flex item's hypothetical size clamps UP to
-     min-width before the browser even checks whether shrinking is
-     needed at all, so left as a flat 48px this padded every title
-     shorter than that out to the full 48px regardless -- dead space
-     inside its own box that the flex gap below then added ON TOP of,
-     while a title already wider than 48px picked up none of it, so
-     the same 8px gap after each ended up sitting a different visual
-     distance from different titles' own actual rendered ends. See
-     that function's own comment for the fix -- this value is still
-     the one long/narrow-row protection reads from, so it has to stay
-     in sync with GT_GOAL_NAME_MIN_WIDTH there. */
+  /* Ceiling for how far fixGoalNameMinWidths (script) narrows the name per row,
+     and the protection against a long .gt-goal-sub squeezing the name to
+     nothing. A flat min-width would pad short titles out to 48px (a flex item
+     clamps up to min-width), making the gap after each title uneven. Keep in
+     sync with GT_GOAL_NAME_MIN_WIDTH in the script. */
   min-width: 48px;
 }
 
@@ -818,29 +565,19 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
   letter-spacing: 0.03em;
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
-  /* Never shrinks or wraps (see .gt-goal-name's own comment on why it,
-     not this, gives way first) and never claims more than its own
-     text needs, so it doesn't steal width from the name that isn't
-     actually necessary. */
+  /* Never shrinks or wraps (the name gives way first) and takes only the width
+     its text needs. */
   flex: 0 0 auto;
   white-space: nowrap;
 }
 
-/* Now doubles as the progress readout (current/target, in the goal's
-   own unit -- see goalProgressLabel in the script), so it picks up
-   the same done-state green .gt-goal-progress used to carry on its
-   own before that separate column was folded into this line. */
+/* Doubles as the progress readout (goalProgressLabel in the script), so it takes
+   the done-state green. */
 .gt-goal-done .gt-goal-sub { color: var(--green); }
 
-/* The little hoverable "i" that follows a recurring goal's own cadence
-   tag (see recurInfoIconHtml in the script) -- native title="..." is
-   its whole tooltip, so this only needs to look hoverable/clickable-
-   adjacent, not host any tooltip UI of its own. Inline-flex so the
-   icon centers on the cadence text's own line instead of sitting on
-   its own baseline the way a plain inline SVG would. Muted like the
-   cadence text itself at rest, brightening to gold on hover as the
-   only feedback that it's interactive at all (there's nothing to
-   click -- just hover -- so no cursor/active state beyond that). */
+/* Hover-only "i" after a recurring goal's cadence tag (recurInfoIconHtml in the
+   script); the native title attribute is the tooltip. Inline-flex centers it on
+   the cadence text's line. */
 .gt-goal-info-icon {
   display: inline-flex;
   vertical-align: middle;
@@ -849,11 +586,6 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 }
 .gt-goal-info-icon:hover { color: var(--gold); }
 
-/* Taller than before (5px -> 9px) -- folding the progress text onto
-   the name's own line (see .gt-goal-headline above) freed up the
-   vertical space that used to be its own separate line, and a
-   thicker bar reads as a more deliberate focal point for the row than
-   the old hairline did, rather than just leaving that space empty. */
 .gt-goal-bar {
   width: 100%;
   height: 9px;
@@ -864,9 +596,8 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 
 .gt-goal-bar-fill { height: 100%; background: var(--gold); }
 
-/* A completed goal's bar and progress number read green instead of
-   gold/dim -- a plain at-a-glance "done" signal once current_value
-   reaches target_value (see .gt-goal-done above, set in goalRowHtml). */
+/* Completed goals (current_value reaches target_value; .gt-goal-done set in
+   goalRowHtml) show green. */
 .gt-goal-done .gt-goal-bar-fill { background: var(--green); }
 
 .gt-goal-delete {
@@ -880,13 +611,9 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Overlaid on the row's top-right corner instead of sitting in the
-     row's flex flow, so it never claims horizontal space from
-     .gt-goal-info -- the name/sub/bar column, and the progress bar in
-     particular, run the row's full width whether this is the plain
-     trash icon or the wider "Are you sure?" confirm state. See
-     .gt-goal-row's position: relative and .gt-goal-name's padding-right
-     (which reserves room so a long name's ellipsis stays clear of it). */
+  /* Overlaid on the row's top-right corner so it never claims width from
+     .gt-goal-info. See .gt-goal-row's position: relative and .gt-goal-name's
+     padding-right. */
   position: absolute;
   top: 10px;
   right: 4px;
@@ -896,9 +623,8 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 
 .gt-goal-delete-icon { display: block; }
 
-/* Hidden until the button is armed (see the delegated click handler
-   in the script) -- the same element swaps from trash-icon to this
-   confirm label rather than the row growing a second control. */
+/* Hidden until the button is armed (delegated click handler in the script); the
+   same element swaps from trash icon to confirm label. */
 .gt-goal-delete-confirm {
   display: none;
   font-size: 10px;
@@ -916,68 +642,39 @@ input.gt-recur-start-input:disabled { opacity: 0.4; }
 .gt-goal-delete--confirm .gt-goal-delete-icon { display: none; }
 .gt-goal-delete--confirm .gt-goal-delete-confirm { display: block; }
 
-/* The one rule behind the comment up in .gt-field-error's old spot --
-   covers #gtWizardSearchInput (.gt-field/.gt-search-box), #gtTargetValue
-   (.gt-field), #gtRecurInterval (.gt-recur-interval-input), and
-   #gtRecurStartInput (.gt-recur-start-input) all at once, since
-   they're all plain <input type="text">. Specificity (0,2,1) ties
-   every one of those fields' own width/padding rules above (also
-   (0,2,1), or (0,1,1) for .gt-recur-interval-input/.gt-recur-start-
-   input, which this beats outright) -- placed last in the file so it
-   wins any tie on source order instead of needing a bespoke
-   higher-specificity selector per field. */
+/* Shared invalid-field rule for #gtWizardSearchInput, #gtTargetValue,
+   #gtRecurInterval and #gtRecurStartInput. Placed last so it wins specificity
+   ties (0,2,1) on source order, and beats the (0,1,1) selectors outright. */
 input[type="text"].invalid { border-color: var(--red); }
 
 @media (max-width: 720px) {
-  /* Fields stay in a row even here -- a fixed same-size box and
-     same-line fields (see .gt-wizard-expanded/.gt-wizard-row above)
-     are the whole point of this layout now, so narrower screens just
-     get tighter fixed widths instead of the stacking this media query
-     used to fall back to. The type cards need no such override any
-     more -- they're a fixed 64px square regardless of viewport width
-     now (see .gt-wizard-type-btn above), not a flex-basis that used
-     to need shrinking down here. Lvl/Xp and GAIN/REACH (now on their
-     own .gt-wizard-segrow row, not sharing the field row above) get
-     the same treatment here too, for the same reason. */
+  /* Fields stay in a row on narrow screens, with tighter fixed widths instead of
+     stacking. */
   .gt-wizard-row .gt-field-target { flex-basis: 96px; }
   .gt-metric-toggle { width: 92px; }
   .gt-target-mode-toggle { width: 108px; }
 }
 
-/* ---------- Landing-page-only interactive preview
-   (render_landing_goal_tracking_preview) -- container/feather, then
-   the hero row (character + tagline, replacing the reused page's own
-   "Goal Tracking" heading). Everything here is scoped under
-   .landing-goal-tracking-preview so none of it reaches the real,
-   authenticated Goal Tracking page, which still gets its plain
-   .page-title heading and none of this markup at all. Mirrors
-   .landing-loot-preview/.loot-preview-hero in loot-tracker.css --
-   same container sizing, same feather, same hero-row layout -- except
-   the hero row's own DOM order (see this file's own comment on
-   .gt-preview-hero below) puts the tagline first and the character
-   second, so he lands on the RIGHT rather than the left, per this
-   preview's own explicit request. ---------- */
+/* Landing-page interactive preview (render_landing_goal_tracking_preview):
+   container/feather, then the hero row. Scoped under
+   .landing-goal-tracking-preview so none of it reaches the real page. Mirrors
+   .landing-loot-preview/.loot-preview-hero in loot-tracker.css, except the DOM
+   order puts the tagline first and the character on the right. */
 
 .landing-goal-tracking-preview {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
-  /* A fixed height now (was max-height, a cap content could come in
-     under) -- see .landing-loot-preview's own comment in loot-
-     tracker.css for why: a filter/sort/delete that leaves this panel
-     shorter than this used to shrink the whole container to fit,
-     taking the bottom feather below with it since that used to be
-     gated on whether content was actually overflowing. Pinning this
-     box at a fixed height regardless of how much is currently inside
-     it is what keeps the feather in the same screen position always. */
+  /* Fixed height (not max-height) so the bottom feather stays at the same screen
+     position however much content is inside; see .landing-loot-preview in
+     loot-tracker.css. */
   height: calc(100vh - 80px);
   height: calc(100svh - 80px);
   overflow: hidden;
   position: relative;
 }
-/* Unconditional now -- no --clipped modifier class to gate it (see
-   .landing-loot-preview::after's own comment in loot-tracker.css for
-   the fuller reasoning this mirrors). */
+/* Unconditional; no --clipped modifier (see .landing-loot-preview::after in
+   loot-tracker.css). */
 .landing-goal-tracking-preview::after {
   content: '';
   position: absolute;
@@ -987,60 +684,27 @@ input[type="text"].invalid { border-color: var(--red); }
   pointer-events: none;
 }
 
-/* The reused body's own heading -- hidden rather than stripped from
-   the markup itself, so _goal_tracking_panel_markup stays untouched;
-   the tagline below takes over as this preview's own "title". */
+/* Hide the reused body's heading rather than strip it from the markup
+   (_goal_tracking_panel_markup stays untouched); the tagline replaces it. */
 .landing-goal-tracking-preview .page-title { display: none; }
 
-/* The reused body's own "Add goal" wizard (#gtWizard -- the collapsed
-   button, and the wizard itself once expanded) -- hidden the same
-   way, not stripped from the markup, so _goal_tracking_panel_markup
-   stays untouched and its own script (which still runs
-   getElementById('gtWizardAddBtn').addEventListener(...) on load,
-   unmodified) never errors even though there's nothing left to click.
-   Creating a goal always ends in this demo's own graceful "Not
-   available in this preview" failure anyway (see this file's own
-   fetch shim, POST /api/goals) -- keeping the button around just to
-   lead every visitor to that dead end wasn't earning its keep, so the
-   demo now leads with what actually works here: sorting, deleting,
-   and dragging a genuine custom reorder. display: none rather than
-   visibility: hidden so #gtWizard's own margin-bottom (goal-tracking.
-   css's plain, unscoped .gt-wizard rule -- shared with the real page,
-   so not editable here) collapses away with it instead of leaving a
-   dead gap behind -- the goal list card (.gt-card.gt-list-card,
-   nothing above it now but this hidden button and the equally
-   display:none-by-default #gtError) ends up sitting flush against the
-   hero row's own bottom edge instead. */
+/* Hide the reused "Add goal" wizard (#gtWizard) without stripping it, so the
+   page script's getElementById('gtWizardAddBtn') listener still finds its
+   element. Creating goals fails in this demo (POST /api/goals shim). display:
+   none (not visibility) collapses the shared .gt-wizard margin-bottom so the
+   list card sits flush under the hero row. */
 .landing-goal-tracking-preview #gtWizard { display: none; }
 
-/* Each row's own delete button (the trash icon in its top-right
-   corner) stays fully visible AND fully hoverable here -- same icon,
-   same spot, same red .gt-goal-delete:hover tint below as the real
-   page (per this preview's own follow-up request) -- so it can still
-   be armed or confirmed, so a passerby idly clicking around a
-   marketing page shouldn't be able to delete goals that read as
-   someone's real progress, even though the underlying DELETE
-   /api/goals/{id} shim this preview wires up would otherwise happily
-   go along with it, is instead stopped in JS (a capture-phase click
-   interceptor on #gtGoalList, see render_landing_goal_tracking_
-   preview's own wrapper script below the reused one) rather than
-   here -- pointer-events: none was this preview's first pass at this,
-   but that took the button out of hit-testing entirely, which
-   suppressed the hover along with the click. cursor: default alone is
-   all this rule needs now, so the pointer cursor a clickable button
-   normally gets doesn't imply this one still is. */
+/* The delete button stays visible and hoverable (same red hover tint as the real
+   page); actual deletion is blocked by a capture-phase click interceptor on
+   #gtGoalList in render_landing_goal_tracking_preview's script. pointer-events:
+   none would also suppress the hover, so only cursor: default is set. */
 .landing-goal-tracking-preview .gt-goal-delete { cursor: default; }
 
-/* A plain flex row, tagline's own wrap FIRST in source order and the
-   character SECOND -- the mirror image of .loot-preview-hero's own
-   DOM order (loot-tracker.css), which puts the character first. Flex
-   items lay out in source order by default, so this is the entire
-   difference between "he's on the left" and "he's on the right" --
-   no flex-direction/order override needed. align-items: flex-end
-   bottom-aligns both children flush with the row's own bottom edge,
-   same as every other preview's own hero row, so the character's own
-   bottom edge lands exactly on the goal list's top border below with
-   no overlap and no gap either side. */
+/* Tagline wrap first in source order, character second: the mirror of
+   .loot-preview-hero, so the character lands on the right with no
+   flex-direction/order override. align-items: flex-end bottom-aligns the
+   character on the goal list's top border. */
 .gt-preview-hero {
   display: flex;
   align-items: flex-end;
@@ -1068,11 +732,8 @@ input[type="text"].invalid { border-color: var(--red); }
 .gt-preview-tagline-gold { color: var(--gold); }
 .gt-preview-tagline-white { color: var(--text); }
 
-/* Same 157px standardized height every other preview character is
-   sized to (see .loot-preview-char's own comment in loot-tracker.css
-   for exactly why 157px) -- reads as the same size figure next to
-   the other four previews despite this source image's own different
-   aspect ratio (425x410, already cropped to its own upper half). */
+/* 157px standardized preview character height (see .loot-preview-char in
+   loot-tracker.css); the source image is 425x410, cropped to its upper half. */
 .gt-preview-char {
   flex: 0 0 auto;
   height: 157px;
@@ -1085,26 +746,19 @@ input[type="text"].invalid { border-color: var(--red); }
   width: auto;
   max-width: none;
 }
-/* Mirrors the character horizontally -- same technique and reasoning
-   as .loot-preview-char--flipped in loot-tracker.css: this preview
-   moved from text-left/character-right to character-left/text-right,
-   so the flip is what makes him face back toward the tagline beside
-   him instead of off the panel's own left edge. */
+/* Mirrored horizontally (as .loot-preview-char--flipped in loot-tracker.css) so
+   the character faces the tagline. */
 .landing-goal-tracking-preview .gt-preview-char--flipped img {
   transform: scaleX(-1);
 }
 
 
-/* ---------- Share icon (the export button next to "Goal Tracking" on
-   the real page) -- same bare-icon/floating-popup recipe as the other
-   four pages' own .loot-share-wrap/.pg-share-wrap/.pm-share-wrap/
-   .mm-share-wrap, duplicated here with this page's own gt- prefix per
-   this project's per-page-CSS convention. 32px top/centered-via-
-   transform are both carried over verbatim from that same already-
-   empirically-measured fix (see .loot-share-wrap/.loot-share-card's
-   own comments in loot-tracker.css for the fuller reasoning) -- this
-   page's own h2.page-title shares that identical 22px/1.5 font-size,
-   so nothing here needs its own re-measurement. ---------- */
+/* Share icon (export button next to "Goal Tracking"): same
+   bare-icon/floating-popup recipe as
+   .loot-share-wrap/.pg-share-wrap/.pm-share-wrap/.mm-share-wrap, duplicated per
+   page. The 32px top and centering-via-transform come from the measured fix in
+   .loot-share-wrap/.loot-share-card (loot-tracker.css); the page title shares
+   the same 22px/1.5 font-size. */
 .gt-share-wrap {
   position: relative; display: inline-block; vertical-align: middle; margin-left: 8px;
 }
@@ -1120,8 +774,6 @@ input[type="text"].invalid { border-color: var(--red); }
   line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
-     against the page-title text it's inline with. */
   position: relative;
   top: -2px;
 }
@@ -1139,9 +791,8 @@ input[type="text"].invalid { border-color: var(--red); }
   padding: 5px 6px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
-/* Author CSS setting `display` on this element always outranks the
-   browser's own [hidden]{display:none} default stylesheet rule --
-   same gotcha/fix as .loot-share-card[hidden] in loot-tracker.css. */
+/* Author display outranks the browser's [hidden] rule (same as
+   .loot-share-card[hidden] in loot-tracker.css). */
 .gt-share-card[hidden] { display: none; }
 .gt-share-generate-btn {
   height: 28px;
@@ -1167,18 +818,15 @@ input[type="text"].invalid { border-color: var(--red); }
 .gt-share-link-btn:hover { border-color: var(--gold-dim); color: var(--text); }
 .gt-share-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* ---------- Save-to-your-account icon (render_goal_tracking_share's
-   own import_icon_btn, app/pages.py) -- same recipe as every other
-   page's own .*-import-wrap/.*-import-card, duplicated with this
-   page's own gt- prefix. ---------- */
+/* Save-to-your-account icon (import_icon_btn in render_goal_tracking_share,
+   app/pages.py); same recipe as the other pages' .*-import-wrap/.*-import-card,
+   duplicated per page. */
 .gt-import-wrap { position: relative; display: inline-block; vertical-align: middle; margin-left: 8px; }
 .gt-import-icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none; padding: 0; margin: 0;
   cursor: pointer; line-height: 1;
   color: var(--text-faint); transition: color 0.15s ease;
-  /* Nudged up 2px -- its SVG glyph otherwise sits a touch low
-     against the page-title text it's inline with. */
   position: relative;
   top: -2px;
 }
@@ -1203,53 +851,36 @@ input[type="text"].invalid { border-color: var(--red); }
 .gt-import-save-btn.action-failed { border-color: var(--red); color: var(--red); }
 .gt-import-popup-hint { margin: 0; font-size: 13px; color: var(--text-faint); text-align: center; }
 
-/* ---------- Share-viewing page (myscape.io/s/<code> for a Goal
-   Tracking share -- see render_goal_tracking_share's own docstring in
-   app/pages.py for the full breakdown of what's reused vs. overridden
-   here). .goal-tracking-share wraps that whole page's body. ---------- */
+/* Share-viewing page (/s/<code>; see render_goal_tracking_share in
+   app/pages.py). .goal-tracking-share wraps the body. */
 
-/* The "GOAL TRACKING SNAPSHOT: YYYY-MM-DD" line above "Shared by
-   <name>" -- same small-line-above-the-title treatment as .loot-
-   share-range/.pg-share-label/.pm-share-asof/.mm-share-label, just
-   this page's own snapshot-date string. Already rendered in caps by
-   the Python string itself (app/pages.py), per explicit instruction
-   -- no text-transform needed here the way .pg-share-label's own
-   forced-uppercase treatment needs one for a title that ISN'T already
-   typed in caps. */
+/* "GOAL TRACKING SNAPSHOT: YYYY-MM-DD" line above "Shared by <name>", like
+   .loot-share-range/.pg-share-label/.pm-share-asof/.mm-share-label. The string
+   is already uppercase, so no text-transform. */
 .gt-share-label { text-align: center; margin: 0 0 4px; }
 
-/* Same "hide rather than strip from the markup itself" discipline as
-   every other reused-panel surface this site hides on a share page --
-   per explicit instruction this share page has no add-goal button
-   (or the wizard it expands into), and hiding (not stripping) is
-   simplest here since nothing downstream reads or depends on that
-   markup being absent. Same selector render_landing_goal_tracking_
-   preview's own #gtWizard hide above already uses, just scoped to
-   .goal-tracking-share instead of .landing-goal-tracking-preview. */
+/* Hide the add-goal button and wizard on the share page (not stripped from the
+   markup); same selector as the #gtWizard hide in
+   .landing-goal-tracking-preview. */
 .goal-tracking-share .gt-wizard { display: none; }
 
 /* Segmented-control look shared site-wide (standardized on the Storages viewer's .pm-segment-btn): near-black idle segments, the active one a --panel-2 fill with gold text, 1px dividers between segments inside one outer border. (.gt-metric-btn, .gt-target-mode-btn, .gt-recur-unit-btn and .gt-recur-start-btn above.) */
 
 
-/* ---- Phone ----------------------------------------------------------
-   Same 320px centered column as the other phone pages. Scoped
-   body:not(.phone-off) so the homepage preview (which reuses these
-   classes) is untouched. */
+/* Phone: same 320px centered column as the other pages. Scoped with
+   body:not(.phone-off) so the homepage preview is untouched. */
 @media (max-width: 700px) {
   body:not(.phone-off) .gt-wizard-expanded { max-width: 320px; padding: 26px 14px 20px; }
   body:not(.phone-off) .gt-card { max-width: 320px; margin-left: auto; margin-right: auto; padding: 14px; }
   body:not(.phone-off) .gt-wizard-row .gt-field-target { flex-basis: 112px; }
-  /* Every wizard button (Back/Cancel/Next/Save, on every step) is the
-     same fixed size -- 82px, so three still fit side by side in the
-     narrowest wizard (320px column) -- instead of stretching to share
-     whatever row they happen to be on (stages with only one or two
-     buttons made them far wider than the three-button stages). */
+  /* Every wizard button is a fixed 82px so three fit in the 320px column,
+     instead of stretching to the row. */
   body:not(.phone-off) .gt-wizard-btn,
   body:not(.phone-off) .gt-wizard-actions .gt-add-btn { flex: 0 0 auto; width: 82px; min-width: 0; padding: 0 4px; }
   body:not(.phone-off) .gt-wizard-expanded input[type="text"]::placeholder { font-size: 12px; }
 
-  /* Name on its own line (full width, ellipsized), progress readout
-     below it -- the one-line name+progress pair truncated long names. */
+  /* Name on its own line (ellipsized), progress readout below; the one-line pair
+     truncated long names. */
   body:not(.phone-off) .gt-goal-row { gap: 12px; padding: 12px 0; }
   body:not(.phone-off) .gt-goal-headline {
     flex-direction: column; align-items: flex-start; gap: 2px;
@@ -1258,29 +889,24 @@ input[type="text"].invalid { border-color: var(--red); }
   body:not(.phone-off) .gt-goal-name { max-width: 100%; padding-right: 34px; box-sizing: border-box; }
   body:not(.phone-off) .gt-goal-row:has(.gt-goal-delete--confirm) .gt-goal-name { padding-right: 96px; }
   body:not(.phone-off) .gt-goal-sub { white-space: normal; }
-  /* Bigger tap target for the info icon without moving anything. */
   body:not(.phone-off) .gt-goal-info-icon { padding: 7px; margin: -7px -7px -7px -4px; }
   body:not(.phone-off) .gt-goal-row.draggable { -webkit-touch-callout: none; -webkit-user-drag: none; }
 
-  /* Sort tabs: five in 290px. */
   body:not(.phone-off) .gt-sort-tabs { gap: 4px; }
   body:not(.phone-off) .gt-sort-tab { height: 28px; padding: 0 2px; font-size: 9.5px; }
 
-  /* The share popup anchors to the title row, not the small icon, so
-     it can't run off the screen edge. */
+  /* The share popup anchors to the title row, not the small icon, so it cannot
+     run off the screen edge. */
   body:not(.phone-off) h2.page-title { position: relative; }
   body:not(.phone-off) .gt-share-wrap { position: static; }
   body:not(.phone-off) .gt-share-card { top: 100%; margin-top: 6px; width: min(280px, calc(100vw - 32px)); }
 }
 
 
-/* ---- Touch: no sticky hover --------------------------------------------
-   A tap leaves :hover stuck on whatever's under the finger, so when the
-   wizard swaps to the next step, the button that lands in the same spot
-   showed up highlighted. On screens with no hover, put every hover
-   style back to its resting look and give a brief :active press look on
-   the tappable cards/buttons instead. Not applied on the homepage
-   preview. */
+/* Touch: no sticky hover. A tap leaves :hover stuck, so the button that lands
+   under the finger on the next wizard step looks highlighted. Without hover,
+   restore resting styles and add a brief :active press look. Not applied on the
+   homepage preview. */
 @media (hover: none) {
   body:not(.phone-off) .gt-wizard-add-btn:hover,
   body:not(.phone-off) .gt-add-btn:hover { background: var(--gold); }
@@ -1308,13 +934,10 @@ input[type="text"].invalid { border-color: var(--red); }
 }
 
 
-/* ---- Share page "save to my account" icon: phone ---------------------
-   The popup is centered on its icon, which sits at the right-hand end
-   of the centered "Shared by <name>" title -- so on a phone the 280px
-   card ran off the right edge. Anchoring it to the title (full width,
-   centered) instead keeps it on screen. The 14px icon also gets a
-   thumb-sized tap area (padding + equal negative margin, so the title
-   layout doesn't move). */
+/* Share page "save to my account" icon, phone: the popup is centered on its icon
+   at the right end of the title and would overflow, so anchor it to the
+   full-width title. The 14px icon gets a thumb-sized tap area (padding with
+   equal negative margin keeps the title layout unchanged). */
 @media (max-width: 700px) {
   body:not(.phone-off) .page-title:has(.gt-import-wrap) { position: relative; }
   body:not(.phone-off) .gt-import-wrap { position: static; }
