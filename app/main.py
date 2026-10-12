@@ -557,7 +557,7 @@ def health():
 @app.get("/api/health/db")
 def health_db(db: Session = Depends(get_db)):
     """Proves the app can reach and query the database."""
-    player_count = db.execute(text("SELECT COUNT(*) FROM players")).scalar()
+    player_count = db.execute(text("SELECT COUNT(*) FROM game_accounts")).scalar()
     return {"status": "ok", "playerCount": player_count}
 
 
