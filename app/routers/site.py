@@ -1,15 +1,16 @@
 """Site pages (landing, auth pages, dashboard pages), icon cache, robots/sitemap and health checks."""
+from email.utils import format_datetime, parsedate_to_datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import site_flags
 from app.auth import get_optional_current_player_view_from_session
 from app.database import get_db
-from app.icon_cache import ensure_cached_icon_path
+from app.icon_cache import ensure_cached_icon
 from app.pages import (
     _SITE_URL,
     PlayerView,
@@ -35,17 +36,42 @@ from app.pages import (
 router = APIRouter()
 
 
-@router.get("/icon-cache/{filename}")
-def get_cached_icon(filename: str):
-    """Serves a wiki-sourced icon via ensure_cached_icon_path (app/icon_cache.py)
-    with a long-lived Cache-Control. Item icons use the RuneLite CDN directly;
-    this serves NPC/event portraits and rare combination items missing from
-    app/item_ids.py. The filename is re-validated against path traversal.
+def _icon_not_modified(request: Request, etag: str, last_modified) -> bool:
+    """Whether the browser's conditional headers say its copy is current.
+    If-None-Match wins over If-Modified-Since, as in RFC 9110.
     """
-    path = ensure_cached_icon_path(filename)
-    if not path:
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match:
+        candidates = {tag.strip().removeprefix("W/") for tag in if_none_match.split(",")}
+        return "*" in candidates or etag in candidates
+    since = request.headers.get("if-modified-since")
+    if since:
+        try:
+            return last_modified.replace(microsecond=0) <= parsedate_to_datetime(since)
+        except (TypeError, ValueError):
+            return False
+    return False
+
+
+@router.get("/icon-cache/{filename}")
+def get_cached_icon(filename: str, request: Request):
+    """Serves a wiki-sourced icon via ensure_cached_icon (app/icon_cache.py)
+    with a long-lived Cache-Control, plus ETag/Last-Modified so a revalidating
+    browser gets a 304. Item icons use the RuneLite CDN directly; this serves
+    NPC/event portraits and rare combination items missing from
+    app/item_ids.py. The filename is re-validated there.
+    """
+    icon = ensure_cached_icon(filename)
+    if not icon:
         raise HTTPException(status_code=404)
-    return FileResponse(path, headers={"Cache-Control": "public, max-age=604800, immutable"})
+    headers = {
+        "Cache-Control": "public, max-age=604800, immutable",
+        "ETag": icon.etag,
+        "Last-Modified": format_datetime(icon.fetched_at, usegmt=True),
+    }
+    if _icon_not_modified(request, icon.etag, icon.fetched_at):
+        return Response(status_code=304, headers=headers)
+    return Response(content=icon.data, media_type=icon.content_type, headers=headers)
 
 
 @router.get("/", response_class=HTMLResponse)

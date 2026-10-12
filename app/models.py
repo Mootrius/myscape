@@ -863,3 +863,18 @@ class Friendship(Base):
 
     requester = relationship("GameAccount", foreign_keys=[requester_id], back_populates="friendships_sent")
     addressee = relationship("GameAccount", foreign_keys=[addressee_id], back_populates="friendships_received")
+
+
+class IconCacheEntry(Base):
+    """One wiki-sourced icon image (NPC/event portraits and a few rare item
+    icons), fetched once and re-fetched weekly by app/icon_cache.py. Keyed by
+    the /icon-cache/<filename> name, so it needs no id. Kept in Postgres
+    because the Render service has no persistent disk (render.yaml).
+    """
+
+    __tablename__ = "icon_cache_entries"
+
+    filename = Column(String, primary_key=True)
+    content_type = Column(String, nullable=False)
+    data = Column(LargeBinary, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)

@@ -1,4 +1,4 @@
-"""Local, weekly-refreshed disk cache for wiki-sourced icon images.
+"""Postgres-backed, weekly-refreshed cache for wiki-sourced icon images.
 
 Used for NPC/event portraits (npc_icon_url in app/loot.py; there is no numeric
 NPC id to use an id-keyed CDN) and as the last-resort fallback for rare recipe
@@ -9,21 +9,25 @@ Why cache: the wiki's Special:FilePath URL is the first of two redirects, and
 both hops are `cache-control: private, must-revalidate, max-age=0`, so
 hotlinking re-hits the wiki twice per icon per page load and trips Cloudflare
 rate limiting. This module fetches the image once server-side and serves it
-from app/static/item-icons/ under a same-origin /icon-cache/<filename> URL.
+under a same-origin /icon-cache/<filename> URL.
+
+Storage: the icon_cache_entries table (IconCacheEntry, app/models.py), with a
+small in-process LRU in front of it. It lives in Postgres rather than on a
+Render persistent disk because a disk turns off zero-downtime deploys (the old
+instance has to stop before the new one starts, which is what showed visitors
+Render's 502 page on every push); see render.yaml.
 
 Freshness: an icon is stale once the most recent Thursday 06:00
 America/New_York (after the Wednesday game update) has passed since it was
 fetched.
 
 Lazy, not cron-driven: the service is a single Render web process with no
-worker, so the /icon-cache/{filename} route (app/main.py) does a cheap stat()
-check and hands missing/stale files to a bounded background thread pool.
+worker, so the /icon-cache/{filename} route (app/routers/site.py) does a cheap
+lookup and hands missing/stale icons to a bounded background thread pool. The
+pool's threads open their own DB sessions.
 
-CACHE_DIR defaults to a folder next to this file (ephemeral on Render);
-ICON_CACHE_DIR (render.yaml) points it at a persistent disk.
-
-Only a request with nothing on disk waits (briefly) on a fetch; stale files
-are served immediately while refreshing in the background. Letting the browser
+Only a request with nothing cached waits (briefly) on a fetch; stale icons are
+served immediately while refreshing in the background. Letting the browser
 hotlink the wiki on a miss would bypass the pool's throttling and cause
 request bursts.
 
@@ -31,30 +35,34 @@ Guessed "<Name>.png" files can 404 permanently (multi-form bosses, names that
 are redirects/disambiguation pages); _first_infobox_image falls back to the
 page's infobox image and caches it under the originally guessed filename.
 """
+import hashlib
 import json
-import os
+import logging
+import mimetypes
 import re
-import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import OrderedDict
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Dict, Optional
 from zoneinfo import ZoneInfo
+
+from sqlalchemy.exc import IntegrityError
+
+from app.database import SessionLocal
+from app.models import IconCacheEntry
+
+logger = logging.getLogger(__name__)
 
 # Duplicated from purchase_goals.py (USER_AGENT / ICON_PATH_BASE); keep in sync.
 USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 ICON_PATH_BASE = "https://oldschool.runescape.wiki/w/Special:FilePath"
 WIKI_API_BASE = "https://oldschool.runescape.wiki/api.php"
-
-# ICON_CACHE_DIR overrides the location (a persistent disk in production).
-CACHE_DIR = os.environ.get("ICON_CACHE_DIR") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "static", "item-icons"
-)
-os.makedirs(CACHE_DIR, exist_ok=True)
 
 _EASTERN = ZoneInfo("America/New_York")
 _FETCH_TIMEOUT_SECONDS = 15
@@ -70,14 +78,33 @@ _FAILURE_BACKOFF_SECONDS = 10 * 60
 # request burst this cache avoids.
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="icon-fetch")
 
+# Icons kept in process memory (a few KB each), so a page of tiles does not
+# make one DB round trip per tile. Least recently used goes first.
+_MEMORY_MAX_ENTRIES = 256
+
 _lock = Lock()
 _in_flight: Dict[str, Future] = {}
 _recent_failures: Dict[str, float] = {}
+_memory: "OrderedDict[str, CachedIcon]" = OrderedDict()
+
+
+@dataclass(frozen=True)
+class CachedIcon:
+    """One cached image, as the route serves it."""
+
+    data: bytes
+    content_type: str
+    fetched_at: datetime  # timezone-aware
+
+    @property
+    def etag(self) -> str:
+        return '"' + hashlib.sha1(self.data).hexdigest()[:20] + '"'
 
 
 def _safe_filename(icon_filename: Optional[str]) -> Optional[str]:
-    """Rejects anything that is not a plain file name (no "/" or ".."), so a name
-    can never escape CACHE_DIR.
+    """Rejects anything that is not a plain file name (no "/" or ".."). Names
+    are only ever table keys now, but this keeps the URL space tidy and the
+    old traversal guarantee.
     """
     if not icon_filename:
         return None
@@ -98,16 +125,97 @@ def _thursday_cutoff(now: Optional[datetime] = None) -> datetime:
     return cutoff
 
 
-def _cached_path(filename: str) -> str:
-    return os.path.join(CACHE_DIR, filename)
+def _is_fresh(icon: CachedIcon) -> bool:
+    return icon.fetched_at >= _thursday_cutoff()
 
 
-def _is_fresh(filename: str) -> bool:
+def _sniff_content_type(data: bytes, filename: str) -> str:
+    """The wiki's image type from its magic bytes (the infobox fallback can be
+    a different format than the guessed filename), else from the filename.
+    """
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+
+def _aware_utc(value: datetime) -> datetime:
+    # SQLite (local/dev) drops tzinfo on DateTime(timezone=True) columns.
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def _memory_get(filename: str) -> Optional[CachedIcon]:
+    with _lock:
+        icon = _memory.get(filename)
+        if icon is not None:
+            _memory.move_to_end(filename)
+        return icon
+
+
+def _memory_put(filename: str, icon: CachedIcon) -> None:
+    with _lock:
+        _memory[filename] = icon
+        _memory.move_to_end(filename)
+        while len(_memory) > _MEMORY_MAX_ENTRIES:
+            _memory.popitem(last=False)
+
+
+def _db_get(filename: str) -> Optional[CachedIcon]:
+    db = SessionLocal()
     try:
-        mtime = os.path.getmtime(_cached_path(filename))
-    except OSError:
-        return False
-    return datetime.fromtimestamp(mtime, tz=_EASTERN) >= _thursday_cutoff()
+        row = db.get(IconCacheEntry, filename)
+        if row is None:
+            return None
+        return CachedIcon(bytes(row.data), row.content_type, _aware_utc(row.fetched_at))
+    finally:
+        db.close()
+
+
+def _db_save(filename: str, icon: CachedIcon) -> None:
+    """Insert or replace the row. A concurrent insert of the same key (two
+    workers, or a retry) loses the race at commit; the second attempt then
+    finds the row and updates it.
+    """
+    for attempt in range(2):
+        db = SessionLocal()
+        try:
+            row = db.get(IconCacheEntry, filename)
+            if row is None:
+                row = IconCacheEntry(filename=filename)
+                db.add(row)
+            row.content_type = icon.content_type
+            row.data = icon.data
+            row.fetched_at = icon.fetched_at
+            db.commit()
+            return
+        except IntegrityError:
+            db.rollback()
+            if attempt:
+                raise
+        finally:
+            db.close()
+
+
+def _lookup(filename: str) -> Optional[CachedIcon]:
+    """Memory first, then Postgres. A database error counts as a miss, so a
+    DB hiccup cannot turn into a broken page (the frontend hides a 404 <img>).
+    """
+    icon = _memory_get(filename)
+    if icon is not None:
+        return icon
+    try:
+        icon = _db_get(filename)
+    except Exception:  # noqa: BLE001 -- best-effort cache
+        logger.warning("icon cache read failed for %s", filename, exc_info=True)
+        return None
+    if icon is not None:
+        _memory_put(filename, icon)
+    return icon
 
 
 def _fetch_wiki_bytes(url: str) -> bytes:
@@ -205,22 +313,19 @@ def _fetch_and_save(filename: str) -> None:
                 raise
             # Cache the resolved image under the ORIGINALLY requested filename,
             # since callers only know the guessed name; later requests then
-            # resolve from disk without repeating the lookup.
+            # resolve from the cache without repeating the lookup.
             base_title = re.sub(r"\.(png|gif|jpe?g)$", "", filename, flags=re.IGNORECASE)
             fallback_name = _first_infobox_image(base_title)
             if not fallback_name:
                 raise
             fallback_url = ICON_PATH_BASE + "/" + urllib.parse.quote(fallback_name)
             data = _fetch_wiki_bytes(fallback_url)
-        # Write-then-rename: os.replace is atomic on POSIX, so readers never see
-        # a half-written file.
-        tmp_path = _cached_path(filename) + f".tmp{os.getpid()}-{threading.get_ident()}"
-        with open(tmp_path, "wb") as f:
-            f.write(data)
-        os.replace(tmp_path, _cached_path(filename))
+        icon = CachedIcon(data, _sniff_content_type(data, filename), datetime.now(timezone.utc))
+        _db_save(filename, icon)
+        _memory_put(filename, icon)
         with _lock:
             _recent_failures.pop(filename, None)
-    except Exception:  # noqa: BLE001 -- best-effort cache; a failed fetch just leaves nothing cached for this icon
+    except Exception:  # noqa: BLE001 -- best-effort cache; a failed fetch (or save) just leaves nothing new cached for this icon
         with _lock:
             _recent_failures[filename] = time.time()
         raise
@@ -246,29 +351,28 @@ def _get_or_start_fetch(filename: str) -> Optional[Future]:
         return future
 
 
-def ensure_cached_icon_path(icon_filename: Optional[str]) -> Optional[str]:
-    """Used by the /icon-cache/{filename} route (app/main.py): returns a path to
-    serve, fetching first if needed, or None if the icon cannot be served
-    (invalid name, or a failed/timed-out fetch with nothing on disk). The
-    route turns None into a 404 and the frontend hides the broken <img>.
+def ensure_cached_icon(icon_filename: Optional[str]) -> Optional[CachedIcon]:
+    """Used by the /icon-cache/{filename} route (app/routers/site.py): returns
+    the icon to serve, fetching first if needed, or None if it cannot be
+    served (invalid name, or a failed/timed-out fetch with nothing cached).
+    The route turns None into a 404 and the frontend hides the broken <img>.
     """
     filename = _safe_filename(icon_filename)
     if not filename:
         return None
-    path = _cached_path(filename)
-    have_file = os.path.isfile(path)
-    if _is_fresh(filename):
-        return path
+    icon = _lookup(filename)
+    if icon is not None and _is_fresh(icon):
+        return icon
     future = _get_or_start_fetch(filename)
-    if have_file:
-        # Serve what is on disk; a weekly refresh continues in the background.
-        return path
+    if icon is not None:
+        # Serve what is cached; a weekly refresh continues in the background.
+        return icon
     if future is None:
-        # Nothing on disk and a recent failure suppressed a retry: 404 until the
-        # back-off passes.
+        # Nothing cached and a recent failure suppressed a retry: 404 until
+        # the back-off passes.
         return None
     try:
         future.result(timeout=_WAIT_FOR_FRESH_SECONDS)
     except Exception:  # noqa: BLE001 -- includes the fetch's own failure and a timed-out wait alike
         pass
-    return path if os.path.isfile(path) else None
+    return _lookup(filename)

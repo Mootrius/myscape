@@ -10,28 +10,17 @@ services:
     plan: 1c-2g
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-    # Disks only attach to a paid service (see the disk docs) -- this
-    # service is on the 1c-2g plan now, which does support one, so
-    # ICON_CACHE_DIR below (app/icon_cache.py's whole reason to exist --
-    # see that module's own top-of-file comment) finally persists across
-    # redeploys and spin-downs instead of silently pointing at ephemeral
-    # container storage that looked identical to a real mounted disk.
-    disk:
-      name: icon-cache
-      mountPath: /var/data/item-icons
-      sizeGB: 1
+    # Render calls this before sending traffic to a new instance and keeps
+    # the old one serving until it passes, so deploys are zero-downtime.
+    # That only works with no persistent disk attached (a disk makes Render
+    # stop the old instance first, which is when visitors saw its 502 page),
+    # so wiki icons are cached in Postgres instead -- see app/icon_cache.py.
+    healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: myscape-db
           property: connectionString
-      - key: ICON_CACHE_DIR
-        # Points app/icon_cache.py's disk cache at the mount above --
-        # see that module's own top-of-file comment. Without this (e.g.
-        # in local dev), it falls back to a folder next to that file
-        # instead, which is fine there but would be wiped on every
-        # redeploy here.
-        value: /var/data/item-icons
       - key: PYTHON_VERSION
         # Pinned explicitly rather than trusting Render's default -- that
         # default has already jumped to a Python version (3.14) newer than
