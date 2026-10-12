@@ -679,7 +679,10 @@
   document.getElementById('mmZoomFit').addEventListener('click', zoomToFit);
   document.getElementById('mmUndoBtn').addEventListener('click', undo);
   document.getElementById('mmRedoBtn').addEventListener('click', redo);
-  document.getElementById('mmFullscreenBtn').addEventListener('click', function () { setFullscreen(!MM.fullscreen); });
+  document.getElementById('mmFullscreenBtn').addEventListener('click', function (e) {
+    if (window.myscapeDismissTooltip) window.myscapeDismissTooltip(e.currentTarget);
+    setFullscreen(!MM.fullscreen);
+  });
   document.getElementById('mmEditModeBtn').addEventListener('click', function () { setEditMode(!MM.editMode); });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && MM.fullscreen) setFullscreen(false);

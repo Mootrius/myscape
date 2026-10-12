@@ -110,6 +110,10 @@ if (linkBanner) {
   let tooltipEl = null;
   let showTimer = null;
   let currentTarget = null;
+  // Set by window.myscapeDismissTooltip(el): el stays tooltip-free until the
+  // pointer moves onto something else, so a button that was just pressed does
+  // not show its tooltip again on the next mouse move.
+  let suppressedTarget = null;
 
   function ensureTooltipEl() {
     if (!tooltipEl) {
@@ -171,9 +175,18 @@ if (linkBanner) {
     if (tooltipEl) tooltipEl.classList.remove('show');
   }
 
+  // For a button whose press moves or re-renders it (the Mindmaps fullscreen
+  // toggle): the old tooltip would be left behind, so hide it and keep it off
+  // while the pointer is still on the button.
+  window.myscapeDismissTooltip = function (el) {
+    suppressedTarget = el;
+    hideTooltip();
+  };
+
   document.addEventListener('mouseover', (e) => {
+    if (suppressedTarget && !suppressedTarget.contains(e.target)) suppressedTarget = null;
     const target = e.target.closest ? e.target.closest('[data-tooltip]') : null;
-    if (!target || target === currentTarget) return;
+    if (!target || target === currentTarget || target === suppressedTarget) return;
     currentTarget = target;
     clearTimeout(showTimer);
     showTimer = setTimeout(() => showTooltip(target), SHOW_DELAY);
