@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app import site_flags
 from app.auth import (
     get_current_account_from_session,
     get_optional_current_game_account_from_session,
@@ -16,7 +17,6 @@ from app.auth import (
 from app.database import get_db
 from app.email_client import send_email
 from app.limiter import limiter
-from app import site_flags
 from app.models import (
     EMAIL_VERIFICATION_TOKEN_LIFETIME,
     PASSWORD_RESET_TOKEN_LIFETIME,

@@ -31,7 +31,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from app.database import SessionLocal
-from app.loot import build_loot_state, item_hide_key, _resolve_loot_items
+from app.loot import _resolve_loot_items, build_loot_state, item_hide_key
 from app.models import Account, GameAccount, LootEvent
 from app.purchase_goals import get_latest_prices, get_mapping
 

@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.models import HiddenLootEntry, LootEvent, GameAccount
+from app.models import GameAccount, HiddenLootEntry, LootEvent
 from app.purchase_goals import COINS_ITEM_ID, get_latest_prices, get_mapping, item_icon_url
 
 # Timerange presets as fixed lookbacks from now; "24h" is the default for a

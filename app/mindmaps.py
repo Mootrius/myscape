@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.item_ids import find_item_ids
-from app.models import MindMap, GameAccount
+from app.models import GameAccount, MindMap
 
 # Node colors: a small named set (not free-form hex) so the client styles each
 # with a CSS class (mindmaps.css). "gray" is the default. Every color but

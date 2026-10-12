@@ -18,7 +18,6 @@ from sqlalchemy.orm import Session
 
 from app.bosses import HISCORE_BOSSES
 from app.item_ids import find_item_ids
-from app.models import Goal, _utcnow
 from app.mindmaps import (
     MAX_SKILL_LEVEL,
     MAX_SKILL_XP,
@@ -31,6 +30,7 @@ from app.mindmaps import (
     _offhand_pair_name,
     _xp_for_level,
 )
+from app.models import Goal, _utcnow
 from app.purchase_goals import build_owned_pools
 
 if TYPE_CHECKING:

@@ -22,7 +22,12 @@ from app.database import get_db
 from app.limiter import limiter
 from app.models import LINK_CODE_LIFETIME, Account, Friendship, GameAccount, LinkCode, PlayerApiKey
 from app.public_profile import generate_public_code
-from app.schemas import GameAccountSummary, LinkExchangeRequest, LinkExchangeResponse, LinkStartResponse
+from app.schemas import (
+    GameAccountSummary,
+    LinkExchangeRequest,
+    LinkExchangeResponse,
+    LinkStartResponse,
+)
 from app.security import generate_token, hash_token
 
 router = APIRouter(prefix="/api", tags=["account-linking"])

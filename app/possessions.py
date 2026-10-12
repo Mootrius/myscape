@@ -22,13 +22,13 @@ from app.models import (
     BoatCargoItem,
     EquipmentItem,
     ForestryKitItem,
+    GameAccount,
     HiddenPossessionStorage,
     HuntsmansKitItem,
     InventoryItem,
     LootingBagItem,
     MasterScrollBookItem,
     PinnedPossessionItem,
-    GameAccount,
     PohItem,
     PossessionTracker,
     PossessionView,
@@ -38,7 +38,15 @@ from app.models import (
     SeedVaultItem,
     TackleBoxItem,
 )
-from app.purchase_goals import COINS_ITEM_ID, derived_price_for, get_latest_prices, get_mapping, item_icon_url, search_items, unit_price_for
+from app.purchase_goals import (
+    COINS_ITEM_ID,
+    derived_price_for,
+    get_latest_prices,
+    get_mapping,
+    item_icon_url,
+    search_items,
+    unit_price_for,
+)
 from app.schemas import POSSESSION_STORAGE_KEYS
 
 # Storage key (matches schemas.POSSESSION_STORAGE_KEYS and
