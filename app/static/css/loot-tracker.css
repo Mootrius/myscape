@@ -279,9 +279,10 @@
 .loot-npc-box-icon-death-spawn,
 .loot-npc-box-icon-goblin,
 .loot-npc-box-icon-rockslug,
-/* Dossier and Unsired: detail renders in _NPC_DISPLAY_OVERRIDES (app/loot.py). */
+/* Dossier, Unsired and Forgotten lockbox: detail renders in _NPC_DISPLAY_OVERRIDES (app/loot.py). */
 .loot-npc-box-icon-dossier,
-.loot-npc-box-icon-unsired {
+.loot-npc-box-icon-unsired,
+.loot-npc-box-icon-forgotten-lockbox {
   transform: scale(0.7);
 }
 /* Tarnished items (nine NPCs in one tile): padding shrinks the picture inside

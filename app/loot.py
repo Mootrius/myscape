@@ -241,7 +241,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "hallowed sepulchre coffin": (None, "Coffin (Hallowed Sepulchre).png"),
     "golem crafting": (None, "Golem (sunstone).png"),
     # Reward events named after an item (seed pack, bird nest, salvage, dossier,
-    # unsired) show the wiki "detail" render in the NPC/source panel; the item
+    # unsired, forgotten lockbox) show the wiki "detail" render in the NPC/source panel; the item
     # panel uses the small CDN icon (see _resolve_loot_items).
     "seed pack": (None, "Seed pack detail.png"),
     "bird nest": (None, "Bird nest (empty) detail.png"),
@@ -255,6 +255,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "opulent salvage": (None, "Opulent salvage detail.png"),
     "dossier": (None, "Dossier detail.png"),
     "unsired": (None, "Unsired detail.png"),
+    "forgotten lockbox": (None, "Forgotten lockbox detail.png"),
     # Grotesque Guardians' loot is recorded under its phase NPC "Dusk".
     "dusk": ("Grotesque Guardians", "Dusk.png"),
     "duke sucellus": (None, "/static/img/npc-duke-sucellus.png"),
