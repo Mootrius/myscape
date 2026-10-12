@@ -1,0 +1,607 @@
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+  import * as THREE from "three";
+  import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+  import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+  (function () {
+    var wrap = document.getElementById("modelViewerCanvasWrap");
+    var canvas = document.getElementById("modelViewerCanvas");
+    var emptyEl = document.getElementById("modelViewerEmpty");
+    if (!wrap || !canvas) return;
+
+    var bgEl = document.getElementById("modelViewerBg");
+    var bgShuffleBtn = document.getElementById("mvBgShuffleBtn");
+    var playPauseBtn = document.getElementById("mvPlayPauseBtn");
+    var playIcon = document.getElementById("mvPlayIcon");
+    var pauseIcon = document.getElementById("mvPauseIcon");
+    var resetBtn = document.getElementById("mvResetBtn");
+
+    // Backdrop behind the alpha:true canvas, changed by the shuffle button; a
+    // plain <div> since it never interacts with the three.js scene (see
+    // .model-viewer-bg in character-overview.css).
+    var MODEL_VIEWER_BACKGROUNDS = __MODEL_VIEWER_BACKGROUNDS_JSON__;
+    // Persists the chosen background: localStorage for first paint, then the
+    // account's saved pick (GameAccount.model_viewer_background_index, via
+    // applyModelViewerBackgroundFromServer) so devices agree. A null key
+    // (__MODEL_VIEWER_BG_STORAGE_KEY_JSON__) disables persistence; the landing
+    // preview uses it to always start on index 0.
+    var MODEL_VIEWER_BG_STORAGE_KEY = __MODEL_VIEWER_BG_STORAGE_KEY_JSON__;
+    var bgIndex = 0;
+    if (MODEL_VIEWER_BG_STORAGE_KEY) {
+      try {
+        var storedBgIndex = parseInt(localStorage.getItem(MODEL_VIEWER_BG_STORAGE_KEY), 10);
+        if (!isNaN(storedBgIndex) && storedBgIndex >= 0 && storedBgIndex < MODEL_VIEWER_BACKGROUNDS.length) {
+          bgIndex = storedBgIndex;
+        }
+      } catch (e) {
+        // localStorage can throw (private browsing, disabled storage); the
+        // index-0 default is fine then.
+      }
+    }
+
+    function applyBackground() {
+      if (bgEl && MODEL_VIEWER_BACKGROUNDS.length) {
+        bgEl.style.backgroundImage = 'url("' + MODEL_VIEWER_BACKGROUNDS[bgIndex] + '")';
+      }
+    }
+    applyBackground();
+
+    function shuffleBackground() {
+      if (MODEL_VIEWER_BACKGROUNDS.length < 2) return;
+      var next = bgIndex;
+      while (next === bgIndex) {
+        next = Math.floor(Math.random() * MODEL_VIEWER_BACKGROUNDS.length);
+      }
+      bgIndex = next;
+      applyBackground();
+      if (MODEL_VIEWER_BG_STORAGE_KEY) {
+        try {
+          localStorage.setItem(MODEL_VIEWER_BG_STORAGE_KEY, String(bgIndex));
+        } catch (e) {}
+      }
+      // Fire-and-forget sync to GameAccount.model_viewer_background_index so
+      // public-profile visitors see the current pick (see
+      // applyServerBackground). Requiring the real page's exact storage key
+      // keeps this off the landing preview (null key) and public views (per-code
+      // key).
+      if (MODEL_VIEWER_BG_STORAGE_KEY === "myscape.modelViewerBgIndex") {
+        fetch("/api/players/me/model-viewer-background", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ index: bgIndex }),
+        }).catch(function () {
+        });
+      }
+    }
+    if (bgShuffleBtn) bgShuffleBtn.addEventListener("click", shuffleBackground);
+
+    // Lets the wrapper script (outside this IIFE) push the owner's synced
+    // background (from /api/public/<code>/summary) into the viewer. Only
+    // render_public_character_overview's wrapper_script calls it, since public
+    // visitors have no shuffle button or saved history.
+    function applyModelViewerBackgroundFromServer(index) {
+      if (typeof index !== "number" || isNaN(index) || index < 0 || index >= MODEL_VIEWER_BACKGROUNDS.length) {
+        return;
+      }
+      bgIndex = index;
+      applyBackground();
+      // On the signed-in page, keep this browser's copy in step with the
+      // account's so the next load doesn't flash a stale image first.
+      if (MODEL_VIEWER_BG_STORAGE_KEY === "myscape.modelViewerBgIndex") {
+        try {
+          localStorage.setItem(MODEL_VIEWER_BG_STORAGE_KEY, String(index));
+        } catch (e) {}
+      }
+    }
+    window.myscapeApplyModelViewerBackground = applyModelViewerBackgroundFromServer;
+    // This module script is deferred, but the wrapper's classic <script> runs
+    // synchronously, so its fetch shim can call
+    // window.myscapeApplyModelViewerBackground before it exists. The wrapper
+    // also stashes the value in window.__myscapePendingModelViewerBg for this to
+    // pick up, so whichever finishes second wins.
+    if (typeof window.__myscapePendingModelViewerBg !== "undefined") {
+      applyModelViewerBackgroundFromServer(window.__myscapePendingModelViewerBg);
+    }
+
+    // Syncs the play/pause button's SVGs and title/aria-label with a boolean;
+    // shared by the play/pause and reset buttons (wired in initViewer).
+    function setPlayPauseIcon(paused) {
+      // `.hidden = x` is a no-op on inline <svg> in some browsers (it only
+      // creates an expando), so set/remove the real attribute that the [hidden]
+      // UA rule uses.
+      function setHidden(el, isHidden) {
+        if (!el) return;
+        if (isHidden) el.setAttribute("hidden", "");
+        else el.removeAttribute("hidden");
+      }
+      setHidden(playIcon, !paused);
+      setHidden(pauseIcon, paused);
+      if (playPauseBtn) {
+        var label = paused ? "Play rotation" : "Pause rotation";
+        playPauseBtn.setAttribute("data-tooltip", label);
+        playPauseBtn.setAttribute("aria-label", label);
+      }
+    }
+
+    function showEmpty(message) {
+      wrap.style.display = "none";
+      if (emptyEl) {
+        if (message) emptyEl.textContent = message;
+        emptyEl.style.display = "block";
+      }
+    }
+
+    // GET /api/character-overview/model (app/main.py) serves the .glb uploaded
+    // by MyscapeClient#syncCharacterModel; 404 until the plugin's "Export 3D
+    // model" has been used. The landing preview substitutes a static URL via
+    // __MODEL_VIEWER_MODEL_URL_JSON__ (see _character_overview_panel_markup), so
+    // it needs no fetch shim.
+    var MODEL_VIEWER_MODEL_URL = __MODEL_VIEWER_MODEL_URL_JSON__;
+    fetch(MODEL_VIEWER_MODEL_URL)
+      .then(function (r) {
+        if (r.status === 404) {
+          // No captured model: fall back to a shared static default model so the
+          // viewer always shows something. The info popup explains how to
+          // replace it.
+          return fetch("/static/models/default-character.glb").then(function (r2) {
+            return r2.ok ? r2.arrayBuffer() : Promise.reject();
+          });
+        }
+        return r.ok ? r.arrayBuffer() : Promise.reject();
+      })
+      .then(function (buffer) {
+        if (buffer) initViewer(buffer);
+      })
+      .catch(function (err) {
+        // Log the real failure reason (network error, bad response) so a missing
+        // model is diagnosable.
+        if (window.console) console.error("[model-viewer] failed to fetch the model:", err);
+        showEmpty("Could not load your 3D model right now.");
+      });
+
+    function initViewer(buffer) {
+      var scene = new THREE.Scene();
+
+      var camera = new THREE.PerspectiveCamera(35, wrap.clientWidth / wrap.clientHeight, 0.1, 1000);
+      camera.position.set(0, 1.6, 3.2);
+
+      var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+
+      // A lost WebGL context (driver reset, too many contexts) would leave the
+      // canvas blank with no sign. event.preventDefault() in the lost handler
+      // lets the browser restore it; three.js re-uploads on the next render, so
+      // restore only logs.
+      var contextLost = false;
+      canvas.addEventListener("webglcontextlost", function (event) {
+        event.preventDefault();
+        contextLost = true;
+        if (window.console) console.warn("[model-viewer] WebGL context lost -- waiting to see if the browser restores it");
+      });
+      canvas.addEventListener("webglcontextrestored", function () {
+        contextLost = false;
+        if (window.console) console.warn("[model-viewer] WebGL context restored -- resuming rendering");
+      });
+
+      var controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 1, 0);
+      controls.enableDamping = true;
+      // Panning is off: right-click would pan the camera off the character.
+      controls.enablePan = false;
+      // Zoom is off: the camera is framed once at a fixed distance.
+      controls.enableZoom = false;
+      // Dragging is off since autoRotate drives the camera (the canvas cursor
+      // rule in character-overview.css drops the grab cursor too).
+      controls.enableRotate = false;
+      // Slow continuous spin instead of user orbit. autoRotate only turns the
+      // azimuth, so DEFAULT_VERTICAL_TILT holds. It ignores enableRotate but
+      // respects min/maxAzimuthAngle (left unset for a full revolution), and is
+      // paced by elapsed time, independent of refresh rate.
+      controls.autoRotate = true;
+      var ROTATION_SECONDS_PER_REVOLUTION = 45;
+      controls.autoRotateSpeed = 60 / ROTATION_SECONDS_PER_REVOLUTION;
+
+      var loader = new GLTFLoader();
+      loader.parse(
+        buffer,
+        "",
+        function (gltf) {
+          var model = gltf.scene;
+          scene.add(model);
+
+          // Per-face render-priority handling. OSRS paints faces in priority
+          // order rather than depth-testing, so gear modeled flush against the
+          // body (cape, necklace) can sit slightly inside what it layers on and
+          // still draw on top. The export (ModelMeshBuilder/GlbWriter in
+          // myscape-plugin) carries each primitive's priority as glTF extras,
+          // which GLTFLoader copies onto geometry.userData.
+          //
+          // To emulate that, nudge each tagged primitive's view-space Z by a
+          // fixed world-unit amount via a vertex-shader patch
+          // (Material#onBeforeCompile), keeping the depth test on so unrelated
+          // gaps stay ordered. renderOrder only breaks exact ties, depthTest =
+          // false breaks self-occlusion, and polygonOffset uses non-linear
+          // units. This is RuneProfile's technique
+          // (packages/model-renderer/src/priority-offset.ts), with one
+          // per-material uniform instead of a per-vertex attribute since the
+          // exporter splits each (texture, priority, bias, translucent)
+          // combination into its own primitive.
+          //
+          // Step and cap are RuneProfile's tuned constants: 3 game units per
+          // priority step, capped at 6 steps. No 1/128 root scale here, so the
+          // raw game-unit step is used. The missing-texture dimming below is
+          // unrelated to priority.
+          var PRIORITY_STEP_GAME_UNITS = 3.0;
+          var PRIORITY_MAX_STEPS = 6;
+          // Fixed, not user-adjustable: half of RuneProfile's tuned 1.0, for a
+          // gentler nudge.
+          var PRIORITY_NUDGE_MULTIPLIER = 0.5;
+
+          function applyPriorityNudge(material, nudge) {
+            material.onBeforeCompile = function (shader) {
+              shader.uniforms.uPriorityNudge = { value: nudge };
+              shader.vertexShader = shader.vertexShader
+                .replace(
+                  "#include <common>",
+                  "#include <common>\nuniform float uPriorityNudge;"
+                )
+                .replace(
+                  "#include <project_vertex>",
+                  [
+                    "vec4 mvPosition = vec4( transformed, 1.0 );",
+                    "#ifdef USE_BATCHING",
+                    "	mvPosition = batchingMatrix * mvPosition;",
+                    "#endif",
+                    "#ifdef USE_INSTANCING",
+                    "	mvPosition = instanceMatrix * mvPosition;",
+                    "#endif",
+                    "mvPosition = modelViewMatrix * mvPosition;",
+                    // View space looks down -Z, so adding moves the vertex
+                    // toward the camera.
+                    "mvPosition.z += uPriorityNudge;",
+                    "gl_Position = projectionMatrix * mvPosition;",
+                  ].join("\n")
+                );
+            };
+            // Three keys its program cache on shader source, which
+            // onBeforeCompile changes identically for every nudged material, so
+            // a constant key shares one program.
+            material.customProgramCacheKey = function () {
+              return "osrs-priority-nudge";
+            };
+            material.needsUpdate = true;
+          }
+
+          model.traverse(function (node) {
+            if (!node.isMesh || !node.geometry) return;
+            if (node.material) {
+              // GlbWriter always exports doubleSided: true, but the OSRS client
+              // culls back faces, and thin cloth (a cape) is two coincident,
+              // oppositely wound surfaces where culling picks the right one.
+              // Double-sided z-fights them, so force FrontSide (as RuneProfile's
+              // load-model.ts does), plus the depthWrite fix below.
+              node.material.side = THREE.FrontSide;
+              if (node.material.transparent) {
+                node.material.depthWrite = false;
+              }
+            }
+            if (!node.geometry.userData) return;
+            var priority = node.geometry.userData.osrsPriority || 0;
+            var bias = node.geometry.userData.osrsBias || 0;
+            var missingTexture = !!node.geometry.userData.missingTexture;
+            if ((priority !== 0 || bias !== 0 || missingTexture) && node.material) {
+              node.material = node.material.clone();
+              if (priority !== 0 || bias !== 0) {
+                if (priority !== 0) {
+                  var nudge = Math.min(priority, PRIORITY_MAX_STEPS) * PRIORITY_STEP_GAME_UNITS * PRIORITY_NUDGE_MULTIPLIER;
+                  applyPriorityNudge(node.material, nudge);
+                }
+                if (window.console) {
+                  console.log("[osrs-priority-debug]", {
+                    name: node.name || "(unnamed)",
+                    priority: priority,
+                    bias: bias,
+                  });
+                }
+              }
+              if (missingTexture) {
+                // The plugin couldn't capture this primitive's texture (see
+                // GlbWriter/ModelExporter), leaving only COLOR_0 (lightness, no
+                // hue): a bright near-white patch. Mute it to dim gray so it
+                // reads as an unknown texture. Rarely triggers.
+                node.material.color.setRGB(0.35, 0.35, 0.35);
+                if (window.console) {
+                  console.log("[osrs-missing-texture]", { name: node.name || "(unnamed)" });
+                }
+              }
+            }
+          });
+
+          // Translucent draw order. Translucent primitives have depthWrite=false
+          // and share one origin, so three.js draws them in creation order and
+          // the last drawn lands on top even if behind (e.g. the Bow of
+          // Faerdhinen's limbs behind translucent armor). As RuneProfile does,
+          // fold every plain translucent primitive into one mesh and re-sort its
+          // triangles back-to-front each draw; the priority nudge becomes a
+          // per-vertex attribute and part of the sort key. Textured ones, and
+          // any a merged mesh can't carry, are left as they were.
+          (function mergeTranslucent() {
+            var candidates = [];
+            model.traverse(function (node) {
+              if (!node.isMesh || !node.geometry || !node.material) return;
+              var m = node.material;
+              if (Array.isArray(m) || !m.transparent || m.map) return;
+              var g = node.geometry;
+              if (!g.attributes.position || !g.attributes.color) return;
+              if (g.userData && g.userData.missingTexture) return;
+              if (!node.parent || !node.matrix.equals(new THREE.Matrix4())) return;
+              candidates.push(node);
+            });
+            if (candidates.length < 2) return;
+            var parent = candidates[0].parent;
+            candidates = candidates.filter(function (n) { return n.parent === parent; });
+            if (candidates.length < 2) return;
+
+            var positions = [];
+            var colors = [];
+            var nudges = [];
+            var tris = [];
+            var base = 0;
+            candidates.forEach(function (node) {
+              var g = node.geometry;
+              var p = g.attributes.position;
+              var c = g.attributes.color;
+              var m = node.material;
+              var priority = (g.userData && g.userData.osrsPriority) || 0;
+              var nudge = Math.min(priority, PRIORITY_MAX_STEPS) * PRIORITY_STEP_GAME_UNITS * PRIORITY_NUDGE_MULTIPLIER;
+              for (var i = 0; i < p.count; i++) {
+                positions.push(p.getX(i), p.getY(i), p.getZ(i));
+                colors.push(
+                  c.getX(i) * m.color.r,
+                  c.getY(i) * m.color.g,
+                  c.getZ(i) * m.color.b,
+                  (c.itemSize === 4 ? c.getW(i) : 1) * m.opacity
+                );
+                nudges.push(nudge);
+              }
+              var idx = g.index;
+              var count = idx ? idx.count : p.count;
+              for (var j = 0; j < count; j += 3) {
+                tris.push(idx
+                  ? [base + idx.getX(j), base + idx.getX(j + 1), base + idx.getX(j + 2)]
+                  : [base + j, base + j + 1, base + j + 2]);
+              }
+              base += p.count;
+            });
+            if (!tris.length) return;
+
+            var geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 4));
+            geometry.setAttribute("aPriorityNudge", new THREE.Float32BufferAttribute(nudges, 1));
+            var indexArray = new Uint32Array(tris.length * 3);
+            var indexAttr = new THREE.BufferAttribute(indexArray, 1);
+            indexAttr.setUsage(THREE.DynamicDrawUsage);
+            geometry.setIndex(indexAttr);
+
+            var material = candidates[0].material.clone();
+            material.color.setRGB(1, 1, 1);
+            material.opacity = 1;
+            material.side = THREE.FrontSide;
+            material.transparent = true;
+            material.depthWrite = false;
+            material.vertexColors = true;
+            material.onBeforeCompile = function (shader) {
+              shader.vertexShader = shader.vertexShader
+                .replace(
+                  "#include <common>",
+                  "#include <common>\nattribute float aPriorityNudge;"
+                )
+                .replace(
+                  "#include <project_vertex>",
+                  [
+                    "vec4 mvPosition = vec4( transformed, 1.0 );",
+                    "mvPosition = modelViewMatrix * mvPosition;",
+                    "mvPosition.z += aPriorityNudge;",
+                    "gl_Position = projectionMatrix * mvPosition;",
+                  ].join("\n")
+                );
+            };
+            material.customProgramCacheKey = function () {
+              return "osrs-priority-nudge-attr";
+            };
+            material.needsUpdate = true;
+
+            var triCount = tris.length;
+            var centroids = new Float32Array(triCount * 3);
+            var triNudge = new Float32Array(triCount);
+            for (var t = 0; t < triCount; t++) {
+              var a = tris[t][0], b = tris[t][1], d = tris[t][2];
+              for (var k = 0; k < 3; k++) {
+                centroids[t * 3 + k] = (positions[a * 3 + k] + positions[b * 3 + k] + positions[d * 3 + k]) / 3;
+              }
+              triNudge[t] = (nudges[a] + nudges[b] + nudges[d]) / 3;
+            }
+            var order = new Array(triCount);
+            var depth = new Float32Array(triCount);
+            var viewMatrix = new THREE.Matrix4();
+            var lastView = new Float32Array(16);
+
+            var merged = new THREE.Mesh(geometry, material);
+            merged.name = "translucent_merged";
+            merged.frustumCulled = false;
+            merged.onBeforeRender = function (renderer, sceneArg, camera) {
+              viewMatrix.multiplyMatrices(camera.matrixWorldInverse, merged.matrixWorld);
+              var e = viewMatrix.elements;
+              var same = true;
+              for (var q = 0; q < 16; q++) {
+                if (e[q] !== lastView[q]) { same = false; break; }
+              }
+              if (same) return;
+              for (var q2 = 0; q2 < 16; q2++) lastView[q2] = e[q2];
+              for (var i2 = 0; i2 < triCount; i2++) {
+                order[i2] = i2;
+                depth[i2] = e[2] * centroids[i2 * 3] + e[6] * centroids[i2 * 3 + 1] + e[10] * centroids[i2 * 3 + 2] + e[14] + triNudge[i2];
+              }
+              // View space looks down -Z: the most negative value is farthest,
+              // drawn first.
+              order.sort(function (x, y) { return depth[x] - depth[y]; });
+              for (var i3 = 0; i3 < triCount; i3++) {
+                var tri = tris[order[i3]];
+                indexArray[i3 * 3] = tri[0];
+                indexArray[i3 * 3 + 1] = tri[1];
+                indexArray[i3 * 3 + 2] = tri[2];
+              }
+              indexAttr.needsUpdate = true;
+            };
+
+            candidates.forEach(function (node) {
+              parent.remove(node);
+              node.geometry.dispose();
+              if (node.material && node.material.dispose) node.material.dispose();
+            });
+            parent.add(merged);
+          })();
+
+          // Frame the camera to the model's real bounding box with the standard
+          // "fit object in view" distance, which works in any units. The export
+          // origin isn't guaranteed to be the visual midpoint, so center/size
+          // come from the geometry.
+          var box = new THREE.Box3().setFromObject(model);
+          var size = box.getSize(new THREE.Vector3());
+          var center = box.getCenter(new THREE.Vector3());
+
+          // Snug fit: zoom is disabled, so this is the only view. Each axis is
+          // fit against its own extent (size.y vs the vertical FOV, size.x vs
+          // the horizontal FOV via aspect); one largest-dimension value would
+          // over-pad portrait viewports.
+          var vFovHalfTan = Math.tan((Math.PI * camera.fov) / 360);
+          var fitHeightDistance = Math.max(size.y, 1e-6) / (2 * vFovHalfTan);
+          var fitWidthDistance = Math.max(size.x, 1e-6) / (2 * vFovHalfTan * camera.aspect);
+          // 1.3 rather than a snug 1.15, leaving room for the button row
+          // (.model-viewer-controls) inside the same frame.
+          var CAMERA_DISTANCE_MULTIPLIER = 1.3;
+          var distance = CAMERA_DISTANCE_MULTIPLIER * Math.max(fitHeightDistance, fitWidthDistance);
+
+          // Orbit around and frame on the bounding box's geometric center.
+          controls.target.copy(center);
+
+          // Default view tilted 10 degrees down from level (polar angle below
+          // 90) so more of the head top reads.
+          var DEFAULT_VERTICAL_TILT = (10 * Math.PI) / 180;
+          var defaultSpherical = new THREE.Spherical(distance, Math.PI / 2 - DEFAULT_VERTICAL_TILT, 0);
+          camera.position.setFromSpherical(defaultSpherical).add(center);
+
+          camera.near = distance / 100;
+          camera.far = distance * 100;
+          camera.updateProjectionMatrix();
+
+          // Pan the image up via a 2D projection shift (applyVerticalFramePan,
+          // near onResize), not by moving camera.position/controls.target, which
+          // changes the viewing angle. setViewOffset leaves the 3D camera, and
+          // what reset/pause freeze to, untouched while clearing space for
+          // .model-viewer-controls.
+          applyVerticalFramePan();
+
+          // No orbit limits: nothing drags the camera, and unclamped azimuth
+          // lets autoRotate complete a full revolution (DEFAULT_VERTICAL_TILT
+          // holds since only azimuth changes).
+          controls.update();
+
+          // Snapshot of the framed view (post vertical shift) for the reset
+          // button.
+          var defaultCameraPosition = camera.position.clone();
+          var defaultTarget = controls.target.clone();
+
+          // enableDamping keeps autoRotate momentum alive briefly after it
+          // switches off, which would read as a coast after pause or an offset
+          // after reset. One extra update() with damping off consumes the whole
+          // pending delta; damping is then restored.
+          function killDampingMomentum() {
+            var wasDamping = controls.enableDamping;
+            controls.enableDamping = false;
+            controls.update();
+            controls.enableDamping = wasDamping;
+          }
+
+          if (playPauseBtn) {
+            playPauseBtn.addEventListener("click", function () {
+              controls.autoRotate = !controls.autoRotate;
+              if (!controls.autoRotate) killDampingMomentum();
+              setPlayPauseIcon(!controls.autoRotate);
+            });
+          }
+          if (resetBtn) {
+            resetBtn.addEventListener("click", function () {
+              // Drain leftover autoRotate momentum against the current position
+              // first, or update() would apply a stale delta on top of the reset
+              // position.
+              controls.autoRotate = false;
+              killDampingMomentum();
+              camera.position.copy(defaultCameraPosition);
+              controls.target.copy(defaultTarget);
+              // Reset also pauses; spinning away again immediately would defeat
+              // the point.
+              setPlayPauseIcon(true);
+              controls.update();
+            });
+          }
+        },
+        undefined,
+        function (err) {
+          // As with the fetch-level catch above: GLTFLoader passes the real
+          // parse error here; log it.
+          if (window.console) console.error("[model-viewer] GLTFLoader failed to parse the model:", err);
+          showEmpty("Could not display your 3D model right now.");
+        }
+      );
+
+      // Fraction of canvas height to pan the image up via camera.setViewOffset
+      // (a post-projection shift). Passing width/height as both full frame and
+      // visible size, with only offsetY nonzero, avoids any scaling.
+      var VERTICAL_FRAME_PAN_FRACTION = 0.03;
+      function applyVerticalFramePan() {
+        var w = wrap.clientWidth;
+        var h = wrap.clientHeight;
+        if (w <= 0 || h <= 0) return;
+        camera.setViewOffset(w, h, 0, h * VERTICAL_FRAME_PAN_FRACTION, w, h);
+      }
+
+      function onResize() {
+        var w = wrap.clientWidth;
+        var h = wrap.clientHeight;
+        if (w <= 0 || h <= 0) return;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+        applyVerticalFramePan();
+      }
+      window.addEventListener("resize", onResize);
+
+      // animateFailed latches the first time a frame throws (context loss is
+      // handled via contextLost): log once and freeze on the last good frame
+      // rather than throwing every frame.
+      var animateFailed = false;
+      (function animate() {
+        requestAnimationFrame(animate);
+        if (contextLost || animateFailed) return;
+        try {
+          controls.update();
+          renderer.render(scene, camera);
+        } catch (err) {
+          animateFailed = true;
+          if (window.console) console.error("[model-viewer] render loop failed:", err);
+        }
+      })();
+    }
+  })();
+</script>
