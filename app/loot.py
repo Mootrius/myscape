@@ -174,14 +174,6 @@ def _noted_id_fallback(
     return None
 
 
-# Untradeable drops valued like a linked tradeable (the same link
-# derived_price_for uses in app/purchase_goals.py, via get_untradeable_mapping).
-# Opt-in rather than every linked item, so other untradeable drops keep their
-# 0 gp. Araxyte fang is untradeable but can be etched into the tradeable Etched
-# araxyte fang.
-_LOOT_LINKED_PRICE_ITEM_IDS = frozenset({29799})  # Araxyte fang
-
-
 def _sell_price_from_listing(p: Optional[dict]) -> Tuple[Optional[int], Optional[str]]:
     if not p:
         return None, None
@@ -201,8 +193,10 @@ def sell_price_for(
 ) -> Tuple[Optional[int], Optional[str]]:
     """What a dropped item is worth if sold: the instant-sell ("low") price, the
     opposite of app/purchase_goals.py's unit_price_for. Falls back to the
-    unnoted price via _noted_id_fallback, then, for the items in
-    _LOOT_LINKED_PRICE_ITEM_IDS, to the linked tradeable's price.
+    unnoted price via _noted_id_fallback, then, for an untradeable the ported
+    RuneLite link table covers (get_untradeable_mapping in
+    app/purchase_goals.py; e.g. Araxyte fang = Etched araxyte fang), to the
+    linked items' instant-sell prices.
     """
     p = prices.get(str(item_id))
     if not p and mapping is not None:
@@ -210,11 +204,14 @@ def sell_price_for(
         if unnoted_id is not None:
             p = prices.get(str(unnoted_id))
     price, source = _sell_price_from_listing(p)
-    if price is not None or item_id not in _LOOT_LINKED_PRICE_ITEM_IDS:
+    if price is not None:
         return price, source
     total = 0
     for component in get_untradeable_mapping().get(str(item_id), []):
-        component_price, _ = _sell_price_from_listing(prices.get(str(component["itemId"])))
+        if component["itemId"] == COINS_ITEM_ID:
+            component_price = 1  # coins have no GE listing; 1 coin is 1 gp
+        else:
+            component_price, _ = _sell_price_from_listing(prices.get(str(component["itemId"])))
         if component_price is not None:
             total += component_price * component["qty"]
     if not total:
