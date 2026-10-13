@@ -17,7 +17,13 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.models import GameAccount, HiddenLootEntry, LootEvent
-from app.purchase_goals import COINS_ITEM_ID, get_latest_prices, get_mapping, item_icon_url
+from app.purchase_goals import (
+    COINS_ITEM_ID,
+    get_latest_prices,
+    get_mapping,
+    get_untradeable_mapping,
+    item_icon_url,
+)
 
 # Timerange presets as fixed lookbacks from now; "24h" is the default for a
 # missing/unknown ?range=.
@@ -168,6 +174,24 @@ def _noted_id_fallback(
     return None
 
 
+# Untradeable drops valued like a linked tradeable (the same link
+# derived_price_for uses in app/purchase_goals.py, via get_untradeable_mapping).
+# Opt-in rather than every linked item, so other untradeable drops keep their
+# 0 gp. Araxyte fang is untradeable but can be etched into the tradeable Etched
+# araxyte fang.
+_LOOT_LINKED_PRICE_ITEM_IDS = frozenset({29799})  # Araxyte fang
+
+
+def _sell_price_from_listing(p: Optional[dict]) -> Tuple[Optional[int], Optional[str]]:
+    if not p:
+        return None, None
+    if p.get("low") is not None:
+        return p["low"], "low (instant-sell)"
+    if p.get("high") is not None:
+        return p["high"], "high (instant-buy, no recent sell trades)"
+    return None, None
+
+
 def sell_price_for(
     item_id: int,
     prices: dict,
@@ -177,20 +201,25 @@ def sell_price_for(
 ) -> Tuple[Optional[int], Optional[str]]:
     """What a dropped item is worth if sold: the instant-sell ("low") price, the
     opposite of app/purchase_goals.py's unit_price_for. Falls back to the
-    unnoted price via _noted_id_fallback.
+    unnoted price via _noted_id_fallback, then, for the items in
+    _LOOT_LINKED_PRICE_ITEM_IDS, to the linked tradeable's price.
     """
     p = prices.get(str(item_id))
     if not p and mapping is not None:
         unnoted_id = _noted_id_fallback(item_id, mapping, item_name, name_index)
         if unnoted_id is not None:
             p = prices.get(str(unnoted_id))
-    if not p:
+    price, source = _sell_price_from_listing(p)
+    if price is not None or item_id not in _LOOT_LINKED_PRICE_ITEM_IDS:
+        return price, source
+    total = 0
+    for component in get_untradeable_mapping().get(str(item_id), []):
+        component_price, _ = _sell_price_from_listing(prices.get(str(component["itemId"])))
+        if component_price is not None:
+            total += component_price * component["qty"]
+    if not total:
         return None, None
-    if p.get("low") is not None:
-        return p["low"], "low (instant-sell)"
-    if p.get("high") is not None:
-        return p["high"], "high (instant-buy, no recent sell trades)"
-    return None, None
+    return total, "linked item (instant-sell)"
 
 
 def _item_value(
