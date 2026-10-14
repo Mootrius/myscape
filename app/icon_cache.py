@@ -1,4 +1,4 @@
-"""Postgres-backed, weekly-refreshed cache for wiki-sourced icon images.
+"""Postgres-backed cache for wiki-sourced icon images.
 
 Used for NPC/event portraits (npc_icon_url in app/loot.py; there is no numeric
 NPC id to use an id-keyed CDN) and as the last-resort fallback for rare recipe
@@ -17,17 +17,18 @@ Render persistent disk because a disk turns off zero-downtime deploys (the old
 instance has to stop before the new one starts, which is what showed visitors
 Render's 502 page on every push); see render.yaml.
 
-Freshness: an icon is stale once the most recent Thursday 06:00
-America/New_York (after the Wednesday game update) has passed since it was
-fetched.
+Freshness: a cached icon is kept indefinitely. It is only re-fetched when
+REFRESH_ICONS_FETCHED_BEFORE (below) is moved past the time it was fetched, so
+refreshing the art means bumping that date and deploying.
 
 Lazy, not cron-driven: the service is a single Render web process with no
 worker, so the /icon-cache/{filename} route (app/routers/site.py) does a cheap
-lookup and hands missing/stale icons to a bounded background thread pool. The
+lookup and hands missing (or, after a bump of that date, outdated) icons to a
+bounded background thread pool. The
 pool's threads open their own DB sessions.
 
-Only a request with nothing cached waits (briefly) on a fetch; stale icons are
-served immediately while refreshing in the background. Letting the browser
+Only a request with nothing cached waits (briefly) on a fetch; outdated icons
+are served immediately while refreshing in the background. Letting the browser
 hotlink the wiki on a miss would bypass the pool's throttling and cause
 request bursts.
 
@@ -47,10 +48,9 @@ import urllib.request
 from collections import OrderedDict
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Dict, Optional
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 
@@ -64,7 +64,12 @@ USER_AGENT = "myscape.io/1.0 (Purchase Goals; contact: chandler@myscape.io)"
 ICON_PATH_BASE = "https://oldschool.runescape.wiki/w/Special:FilePath"
 WIKI_API_BASE = "https://oldschool.runescape.wiki/api.php"
 
-_EASTERN = ZoneInfo("America/New_York")
+# Every icon fetched before this moment is re-fetched (lazily, on its next
+# view, serving the old picture meanwhile); anything fetched after it is kept
+# forever. Move it to "now" and deploy to refresh all NPC/event and diary icons
+# from the wiki, e.g. after a game update changes their art.
+REFRESH_ICONS_FETCHED_BEFORE = datetime(2026, 10, 1, tzinfo=timezone.utc)
+
 _FETCH_TIMEOUT_SECONDS = 15
 # How long a request for a never-cached icon waits on its fetch before 404ing.
 # The fetch keeps running in the background, so the icon is still cached for
@@ -113,20 +118,8 @@ def _safe_filename(icon_filename: Optional[str]) -> Optional[str]:
     return icon_filename
 
 
-def _thursday_cutoff(now: Optional[datetime] = None) -> datetime:
-    """The most recent Thursday 06:00 America/New_York at or before `now`; a
-    cached icon older than this is due for refresh.
-    """
-    now = now or datetime.now(_EASTERN)
-    days_since_thursday = (now.weekday() - 3) % 7  # Mon=0 ... Thu=3 ... Sun=6
-    cutoff = (now - timedelta(days=days_since_thursday)).replace(hour=6, minute=0, second=0, microsecond=0)
-    if cutoff > now:
-        cutoff -= timedelta(days=7)
-    return cutoff
-
-
 def _is_fresh(icon: CachedIcon) -> bool:
-    return icon.fetched_at >= _thursday_cutoff()
+    return icon.fetched_at >= REFRESH_ICONS_FETCHED_BEFORE
 
 
 def _sniff_content_type(data: bytes, filename: str) -> str:
@@ -365,7 +358,7 @@ def ensure_cached_icon(icon_filename: Optional[str]) -> Optional[CachedIcon]:
         return icon
     future = _get_or_start_fetch(filename)
     if icon is not None:
-        # Serve what is cached; a weekly refresh continues in the background.
+        # Serve what is cached; a refresh continues in the background.
         return icon
     if future is None:
         # Nothing cached and a recent failure suppressed a retry: 404 until
