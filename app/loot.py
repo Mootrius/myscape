@@ -332,6 +332,21 @@ def _clue_tier_from_source_name(source_name: Optional[str]) -> Optional[str]:
     return None
 
 
+# Every clue-scroll step has its own item id, so one tier's drops would show as
+# many tiles. _resolve_loot_items folds them onto one representative id per tier
+# (the lowest id of that tier's "Clue scroll (<tier>)" in app/data/item_ids.json),
+# so each tier gets a single item tile. Challenge, torn and special scrolls keep
+# their own tiles.
+_CLUE_SCROLL_TIER_ITEM_IDS = {
+    "Beginner": 23182,
+    "Easy": 2677,
+    "Medium": 2801,
+    "Hard": 2722,
+    "Elite": 12073,
+    "Master": 19835,
+}
+
+
 def clue_casket_icon_url(tier: str) -> str:
     """A closed reward casket's portrait for the tier: the wiki's larger "detail"
     render ("Reward casket (hard) detail.png"), served via /icon-cache/.
@@ -439,6 +454,11 @@ def _resolve_loot_items(
         item_name = raw_item_name or meta.get("name") or (
             f"Item #{canonical_id}" if canonical_id is not None else "Unknown item"
         )
+        # Group every clue scroll of one tier into a single tile.
+        clue_tier = _clue_tier_from_source_name(item_name)
+        if clue_tier is not None:
+            canonical_id = _CLUE_SCROLL_TIER_ITEM_IDS[clue_tier]
+            item_name = f"Clue scroll ({clue_tier.lower()})"
         value = _item_value(item_id, quantity, prices, mapping, raw_item_name, name_index)
         total_value += value
         # Item tiles use the small CDN icon; NPC/source tiles use the wiki
