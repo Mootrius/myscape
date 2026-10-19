@@ -636,6 +636,10 @@
       return /^Imp$/i.test(n.sourceName);
     }
 
+    function isRam(n) {
+      return /^Ram$/i.test(n.sourceName);
+    }
+
     // Yama's reward container (see _NPC_DISPLAY_OVERRIDES in app/loot.py).
     function isDossier(n) {
       return /^Dossier$/i.test(n.sourceName);
@@ -702,7 +706,7 @@
         return '<div class="loot-npc-box-wrap' + (hidden ? ' hidden-entry' : '') + '">' +
           '<button type="button" class="loot-npc-box' + (active ? ' active' : '') + (multiSelected ? ' multi-selected' : '') + '" data-npc="' +
             escapeHtml(n.sourceName) + '" data-tooltip="' + escapeHtml(n.sourceName) + '">' +
-            iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '') + (isSpider(n) ? ' loot-npc-box-icon-spider' : '') + (isDeathSpawn(n) ? ' loot-npc-box-icon-death-spawn' : '') + (isGoblin(n) ? ' loot-npc-box-icon-goblin' : '') + (isRockslug(n) ? ' loot-npc-box-icon-rockslug' : '') + (isHellhound(n) ? ' loot-npc-box-icon-hellhound' : '') + (isAraxyte(n) ? ' loot-npc-box-icon-araxyte' : '') + (isScion(n) ? ' loot-npc-box-icon-scion' : '') + (isJuvenileCustodianStalker(n) ? ' loot-npc-box-icon-juvenile-custodian-stalker' : '') + (isTuroth(n) ? ' loot-npc-box-icon-turoth' : '') + (isSpawn(n) ? ' loot-npc-box-icon-spawn' : '') + (isImp(n) ? ' loot-npc-box-icon-imp' : '') + (isDossier(n) ? ' loot-npc-box-icon-dossier' : '') + (isUnsired(n) ? ' loot-npc-box-icon-unsired' : '') + (isForgottenLockbox(n) ? ' loot-npc-box-icon-forgotten-lockbox' : '') + (isTarnishedItems(n) ? ' loot-npc-box-icon-tarnished' : '')) +
+            iconImg(n.icon, n.sourceName, 'loot-npc-box-icon' + (isCasketNpc(n) ? ' loot-npc-box-icon-casket' : '') + (isIntricatePouch(n) ? ' loot-npc-box-icon-pouch' : '') + (isCrawlingHand(n) ? ' loot-npc-box-icon-crawling-hand' : '') + (isImpling(n) ? ' loot-npc-box-icon-impling' : '') + (isSeedPackSource(n) ? ' loot-npc-box-icon-seedpack' : '') + (isBirdNestSource(n) ? ' loot-npc-box-icon-birdnest' : '') + (isSalvageSource(n) ? ' loot-npc-box-icon-salvage' : '') + (isSpider(n) ? ' loot-npc-box-icon-spider' : '') + (isDeathSpawn(n) ? ' loot-npc-box-icon-death-spawn' : '') + (isGoblin(n) ? ' loot-npc-box-icon-goblin' : '') + (isRockslug(n) ? ' loot-npc-box-icon-rockslug' : '') + (isHellhound(n) ? ' loot-npc-box-icon-hellhound' : '') + (isAraxyte(n) ? ' loot-npc-box-icon-araxyte' : '') + (isScion(n) ? ' loot-npc-box-icon-scion' : '') + (isJuvenileCustodianStalker(n) ? ' loot-npc-box-icon-juvenile-custodian-stalker' : '') + (isTuroth(n) ? ' loot-npc-box-icon-turoth' : '') + (isSpawn(n) ? ' loot-npc-box-icon-spawn' : '') + (isImp(n) ? ' loot-npc-box-icon-imp' : '') + (isRam(n) ? ' loot-npc-box-icon-ram' : '') + (isDossier(n) ? ' loot-npc-box-icon-dossier' : '') + (isUnsired(n) ? ' loot-npc-box-icon-unsired' : '') + (isForgottenLockbox(n) ? ' loot-npc-box-icon-forgotten-lockbox' : '') + (isTarnishedItems(n) ? ' loot-npc-box-icon-tarnished' : '')) +
             '<div class="loot-npc-box-kc">' + n.killCount + ' kc</div>' +
             '<div class="loot-npc-box-value">' + fmtGpCompact(n.value) + ' gp</div>' +
           '</button>' +
