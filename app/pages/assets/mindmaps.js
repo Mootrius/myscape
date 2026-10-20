@@ -896,6 +896,8 @@
     if (goalFieldInput) goalFieldInput.classList.remove('invalid');
     var searchInput = e.target.closest('.mm-search-input');
     if (searchInput) {
+      // Editing the text invalidates the previously picked item id.
+      setItemIdFor(searchInput, '');
       clearTimeout(searchDebounceTimers.get(searchInput));
       searchDebounceTimers.set(searchInput, setTimeout(function () { runGoalSearch(searchInput); }, 200));
       return;
@@ -1023,6 +1025,7 @@
         activeSearchInput.classList.remove('invalid');
         var hidden = hiddenTargetFor(activeSearchInput);
         if (hidden) hidden.value = value;
+        setItemIdFor(activeSearchInput, suggestionEl.getAttribute('data-item-id'));
         hideFloatingSuggestions();
         showGoalSaveError(null);
       });
@@ -1042,6 +1045,16 @@
     floatingSuggestionsEl.classList.remove('show');
     floatingSuggestionsEl.innerHTML = '';
     activeSearchInput = null;
+  }
+
+  // An item goal's search input keeps the picked suggestion's item id in a
+  // hidden itemId field beside it; empty for a hand-typed or untradeable name
+  // (the server then resolves the name instead).
+  function setItemIdFor(input, itemId) {
+    if (input.getAttribute('data-search-kind') !== 'item') return;
+    var wrap = input.closest('[data-role="goal-fields"]');
+    var idField = wrap && wrap.querySelector('[data-goal-field="itemId"]');
+    if (idField) idField.value = itemId || '';
   }
 
   function hiddenTargetFor(input) {
@@ -1089,7 +1102,7 @@
 
   function normalizeSearchResults(kind, raw) {
     if (kind === 'skill' || kind === 'diary') return raw;
-    if (kind === 'item') return raw.map(function (r) { return { value: r.name, label: r.name, icon: r.icon }; });
+    if (kind === 'item') return raw.map(function (r) { return { value: r.name, label: r.name, icon: r.icon, itemId: r.id }; });
     return raw.map(function (name) { return { value: name, label: name, icon: null }; });
   }
 
@@ -1102,7 +1115,8 @@
       box.innerHTML = '<div class="mm-suggestion-empty">' + esc(emptyLabel) + '</div>';
     } else {
       box.innerHTML = results.map(function (r) {
-        return '<div class="mm-suggestion" data-kind="' + esc(kind) + '" data-value="' + esc(r.value) + '" data-label="' + esc(r.label) + '">' +
+        return '<div class="mm-suggestion" data-kind="' + esc(kind) + '" data-value="' + esc(r.value) + '" data-label="' + esc(r.label) + '"' +
+          (r.itemId ? ' data-item-id="' + esc(r.itemId) + '"' : '') + '>' +
           (r.icon ? '<img src="' + esc(r.icon) + '" alt="">' : '') +
           '<span>' + esc(r.label) + '</span></div>';
       }).join('');
@@ -1603,6 +1617,7 @@
     } else if (type === 'item') {
       fields =
         renderSearchFieldHtml('itemName', 'item', 'Search for an item', goal.itemName) +
+        '<input type="hidden" data-goal-field="itemId" value="' + esc(goal.itemId != null ? goal.itemId : '') + '">' +
         '<input class="mm-goal-input" type="text" inputmode="decimal" data-goal-field="targetQty" placeholder="Target quantity" value="' + esc(goal.targetQty != null ? goal.targetQty : '') + '">';
     } else if (type === 'gp') {
       fields =

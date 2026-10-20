@@ -77,6 +77,8 @@ MAX_GOAL_NAME_LENGTH = 80
 MAX_KC_TARGET = 1_000_000
 MAX_ITEM_QTY_TARGET = 2_000_000_000
 MAX_GP_TARGET = 100_000_000_000
+# Item ids are 32-bit in the game client.
+MAX_ITEM_ID = 2_147_483_647
 # Goal bounds: skill LEVEL 1-126 (126 is the virtual-level cap), XP
 # 0-200,000,000 (OSRS max).
 MIN_SKILL_LEVEL, MAX_SKILL_LEVEL = 1, 126
@@ -223,6 +225,13 @@ def clean_goal(color: str, goal, require_complete: bool = True) -> Optional[Dict
     if goal_type == "item":
         field("itemName", lambda v: _clean_goal_text(v, "itemName"), "Pick an item.")
         field("targetQty", lambda v: _clean_int_in_range(v, "targetQty", 1, MAX_ITEM_QTY_TARGET), "Set a target quantity.")
+        # itemId is the id from the search suggestion (always optional: an
+        # untradeable or hand-typed name has none). When present,
+        # evaluate_completion counts it directly, instead of relying on the
+        # name resolving to the same id.
+        item_id = goal.get("itemId")
+        if item_id is not None and item_id != "":
+            cleaned["itemId"] = _clean_int_in_range(item_id, "itemId", 1, MAX_ITEM_ID)
         return cleaned
 
     if goal_type == "gp":
@@ -645,13 +654,20 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
         elif goal_type == "item":
             item_name, target = goal.get("itemName"), goal.get("targetQty")
             if item_name and target:
-                # Either name in an off-hand pair satisfies the other, so ids
-                # from both are pooled, deduped against item_name.
+                # The picked suggestion's id counts first; ids documented for
+                # the name are pooled with it (a name can have several ids),
+                # as are those of the off-hand pair, so owning either tool
+                # satisfies the goal.
                 names = [item_name]
                 pair_name = _offhand_pair_name(item_name)
                 if pair_name and pair_name.lower() != item_name.strip().lower():
                     names.append(pair_name)
-                ids = [i for n in names for i in (find_item_ids(n) or [])]
+                ids = []
+                goal_item_id = goal.get("itemId")
+                if isinstance(goal_item_id, int) and not isinstance(goal_item_id, bool):
+                    ids.append(goal_item_id)
+                ids.extend(i for n in names for i in (find_item_ids(n) or []))
+                ids = list(dict.fromkeys(ids))
                 if ids:
                     owned = sum(owned_pool_by_id.get(i, 0) for i in ids)
                 else:
