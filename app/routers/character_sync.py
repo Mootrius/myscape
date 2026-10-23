@@ -116,7 +116,8 @@ def sync_diaries(
     game_account: GameAccount = Depends(get_current_game_account_from_api_key),
 ):
     """Full replace of the highest completed tier per diary area (see
-    GameAccount.diary_tiers).
+    GameAccount.diary_tiers) and, when sent, of the per-tier task counts (see
+    GameAccount.diary_task_counts).
     """
     if len(payload.diary_tiers) > MAX_DIARY_AREAS_PER_SYNC:
         raise HTTPException(
@@ -124,6 +125,16 @@ def sync_diaries(
             detail=f"Too many diary areas in one sync (max {MAX_DIARY_AREAS_PER_SYNC}).",
         )
     game_account.diary_tiers = {d.area: d.tier for d in payload.diary_tiers}
+    if payload.task_counts is not None:
+        if len(payload.task_counts) > MAX_DIARY_AREAS_PER_SYNC:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Too many diary areas in one sync (max {MAX_DIARY_AREAS_PER_SYNC}).",
+            )
+        game_account.diary_task_counts = {
+            c.area: {"easy": c.easy, "medium": c.medium, "hard": c.hard, "elite": c.elite}
+            for c in payload.task_counts
+        }
     db.commit()
     return DiariesSyncResponse(area_count=len(payload.diary_tiers))
 

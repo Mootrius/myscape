@@ -38,14 +38,30 @@ def _collection_log_payload(game_account: GameAccount) -> dict:
 def _diary_progress_rows(game_account: GameAccount) -> list[dict]:
     """One entry per diary area with completed/total TASK counts and per-tier
     state; shared by the progress payload and the summary tile so they agree.
+
+    Completed tasks come from the plugin's per-tier task counts
+    (GameAccount.diary_task_counts) when it has sent any, so partly finished
+    tiers show their progress. Otherwise (older plugin versions) every task in
+    a tier up to the highest completed one counts, with no partial progress.
     """
     diary_totals = get_diary_tier_totals()
     account_diary_tiers = game_account.diary_tiers or {}
+    account_task_counts = game_account.diary_task_counts or {}
     diaries = []
     for area, tier_totals in diary_totals.items():
         highest = account_diary_tiers.get(area)
         highest_index = DIARY_TIERS.index(highest) if highest in DIARY_TIERS else -1
-        completed = sum(tier_totals[t] for i, t in enumerate(DIARY_TIERS) if i <= highest_index and t in tier_totals)
+        if account_task_counts:
+            area_counts = account_task_counts.get(area) or {}
+            # Clamped to the tier's task total so a count the game reports
+            # differently from the wiki can never push a row past 100%.
+            completed = sum(
+                min(max(int(area_counts.get(t) or 0), 0), tier_totals[t])
+                for t in DIARY_TIERS
+                if t in tier_totals
+            )
+        else:
+            completed = sum(tier_totals[t] for i, t in enumerate(DIARY_TIERS) if i <= highest_index and t in tier_totals)
         total = sum(tier_totals.values())
         tiers = {
             t: ("completed" if i <= highest_index else "not_completed")
@@ -57,10 +73,10 @@ def _diary_progress_rows(game_account: GameAccount) -> list[dict]:
 
 def _achievement_diary_tile_counts(game_account: GameAccount) -> tuple:
     """(completed, total) in TASKS for the Achievement Diaries tile. The in-game
-    figure can be a tier count (e.g. 36/48), so it is computed from
-    diary_tiers once synced.
+    figure can be a tier count (e.g. 36/48), so it is computed from the synced
+    task counts, or diary_tiers for plugin versions that send only those.
     """
-    if game_account.diary_tiers:
+    if game_account.diary_task_counts or game_account.diary_tiers:
         rows = _diary_progress_rows(game_account)
         return sum(r["completed"] for r in rows), sum(r["total"] for r in rows)
     return (

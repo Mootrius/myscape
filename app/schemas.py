@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.mindmaps import DIARY_AREAS, DIARY_TIERS, SKILL_NAMES
 
@@ -1026,8 +1026,30 @@ class DiaryTierIn(BaseModel):
         return normalized
 
 
+class DiaryTaskCountsIn(BaseModel):
+    """Tasks completed in each tier of one diary area, as the plugin reads them
+    from the game. Ceiling is defensive only (the largest tier has 19 tasks).
+    """
+    area: str
+    easy: int = Field(0, ge=0, le=100)
+    medium: int = Field(0, ge=0, le=100)
+    hard: int = Field(0, ge=0, le=100)
+    elite: int = Field(0, ge=0, le=100)
+
+    @field_validator("area")
+    @classmethod
+    def check_area(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in DIARY_AREAS:
+            raise ValueError(f"area must be one of {sorted(DIARY_AREAS)}")
+        return normalized
+
+
 class DiariesSyncRequest(BaseModel):
     diary_tiers: List[DiaryTierIn]
+    # None (older plugin versions) leaves the stored counts alone; a list,
+    # even empty, replaces them (an area left out has no completed tasks).
+    task_counts: Optional[List[DiaryTaskCountsIn]] = None
 
 
 class DiariesSyncResponse(BaseModel):

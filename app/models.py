@@ -103,6 +103,11 @@ class GameAccount(Base):
     in_progress_quests = Column(JSONB, nullable=False, default=list)
     # diary_tiers: {<lowercase area>: <highest completed tier (DIARY_TIERS)>}.
     diary_tiers = Column(JSONB, nullable=False, default=dict)
+    # diary_task_counts: {<lowercase area>: {<tier (DIARY_TIERS)>: tasks
+    # completed}}, from the plugin's per-tier task counts. Empty until the
+    # plugin sends them (older plugin versions never do); diary_tiers alone
+    # cannot show partial progress inside a tier.
+    diary_task_counts = Column(JSONB, nullable=False, default=dict)
 
     # collection_log_items: {<item id as string>: <quantity>}, obtained items
     # only (missing key = not obtained).
