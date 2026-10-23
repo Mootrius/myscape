@@ -78,7 +78,7 @@ _EXCLUDED_NPC_NAMES = frozenset(
         "Entling",
         "Freaky Forester",
         "Unfinished beehive",
-        "Completed beehive",
+        "Complete beehive",
         "Fox trap",
         "Frightened fox",
         "Dryad",
