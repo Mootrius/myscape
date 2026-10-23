@@ -191,7 +191,8 @@
             var tasks = d.tierTasks && d.tierTasks[tier];
             var fraction = state === 'completed' ? 1
               : (tasks && tasks.total > 0 ? Math.min(tasks.completed / tasks.total, 1) : 0);
-            var tip = tasks ? ' title="' + titleCase(tier) + ': ' + tasks.completed + '/' + tasks.total + '"' : '';
+            // Site-style tooltip (data-tooltip, see shell.js): "Easy · 6/12".
+            var tip = tasks ? ' data-tooltip="' + titleCase(tier) + ' · ' + tasks.completed + '/' + tasks.total + '"' : '';
             return '<div class="diary-tier-seg' + (state === 'completed' ? ' diary-tier-seg--completed' : '') + '"' + tip + '>'
               + (fraction > 0 && state !== 'completed'
                 ? '<div class="diary-tier-seg-fill" style="width:' + (fraction * 100).toFixed(1) + '%"></div>'
