@@ -279,7 +279,18 @@
         + '<div class="diary-row-bar">'
         + DIARY_TIER_ORDER.map(function (tier) {
             var state = (d.tiers && d.tiers[tier]) || 'not_completed';
-            return '<div class="diary-tier-seg' + (state === 'completed' ? ' diary-tier-seg--completed' : '') + '"></div>';
+            // A completed tier is always full; otherwise the segment fills
+            // from the left by tasks done (tierTasks, absent for plugin
+            // versions that only report completed tiers).
+            var tasks = d.tierTasks && d.tierTasks[tier];
+            var fraction = state === 'completed' ? 1
+              : (tasks && tasks.total > 0 ? Math.min(tasks.completed / tasks.total, 1) : 0);
+            var tip = tasks ? ' title="' + titleCase(tier) + ': ' + tasks.completed + '/' + tasks.total + '"' : '';
+            return '<div class="diary-tier-seg' + (state === 'completed' ? ' diary-tier-seg--completed' : '') + '"' + tip + '>'
+              + (fraction > 0 && state !== 'completed'
+                ? '<div class="diary-tier-seg-fill" style="width:' + (fraction * 100).toFixed(1) + '%"></div>'
+                : '')
+              + '</div>';
           }).join('')
         + '</div>'
         + '</a>';
