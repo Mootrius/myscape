@@ -66,6 +66,7 @@ def _footer(player: Optional[PlayerView], extra: str = "") -> str:
       <div class="footer-inner wrap">
         {extra}
         <div class="footer-social">
+          <a class="footer-social-link footer-social-plugin-hub" href="https://runelite.net/plugin-hub/show/myscape" target="_blank" rel="noopener" title="RuneLite Plugin Hub" aria-label="RuneLite Plugin Hub"></a>
           <a class="footer-social-link footer-social-github" href="https://github.com/Mootrius" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub"></a>
           <a class="footer-social-link footer-social-discord" href="https://discord.gg/myscape" target="_blank" rel="noopener" title="Discord" aria-label="Discord"></a>
           <a class="footer-social-link footer-social-patreon" href="https://patreon.com/myscape" target="_blank" rel="noopener" title="Patreon" aria-label="Patreon"></a>

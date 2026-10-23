@@ -870,6 +870,10 @@ footer {
   -webkit-mask-size: contain; mask-size: contain;
 }
 .footer-social-link:hover { background-color: var(--gold); }
+.footer-social-plugin-hub {
+  -webkit-mask-image: url(/static/img/icon-social-plugin-hub.png);
+  mask-image: url(/static/img/icon-social-plugin-hub.png);
+}
 .footer-social-github {
   -webkit-mask-image: url(/static/img/icon-social-github.png);
   mask-image: url(/static/img/icon-social-github.png);
