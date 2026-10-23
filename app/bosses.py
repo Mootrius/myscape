@@ -66,6 +66,7 @@ HISCORE_BOSSES: List[Tuple[str, str, bool]] = [
     ("sol-heredit", "Sol Heredit", True),
     ("spindel", "Spindel", True),
     ("tempoross", "Tempoross", True),
+    ("the-fractured-archive", "The Fractured Archive", False),
     ("the-gauntlet", "The Gauntlet", True),
     ("the-corrupted-gauntlet", "The Corrupted Gauntlet", True),
     ("the-hueycoatl", "The Hueycoatl", True),

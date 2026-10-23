@@ -582,7 +582,7 @@
     } else {
       var pool = (GT.type === 'kc') ? BOSS_NAMES : SKILL_NAMES_LIST;
       var iconFor = (GT.type === 'kc')
-        ? function (raw) { return '/static/boss-icons/' + BOSS_SLUG_BY_NAME[raw] + '.png'; }
+        ? function (raw) { var slug = BOSS_SLUG_BY_NAME[raw]; return slug ? '/static/boss-icons/' + slug + '.png' : null; }
         : function (raw) { return '/static/skill-icons/' + raw + '.png'; };
       searchInput.addEventListener('input', debounce(function () {
         searchInput.classList.remove('invalid');

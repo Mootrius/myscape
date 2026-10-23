@@ -49,7 +49,7 @@ except OSError:
 def _goal_tracking_panel_markup() -> Tuple[str, str, str]:
     extra_head = f'<link rel="stylesheet" href="/static/css/goal-tracking.css?v={_GOAL_TRACKING_CSS_VERSION}" />'
 
-    boss_slug_by_name_json = json.dumps({name: slug for slug, name, _has_icon in HISCORE_BOSSES})
+    boss_slug_by_name_json = json.dumps({name: (slug if has_icon else None) for slug, name, has_icon in HISCORE_BOSSES})
     # SKILL_NAMES (app/mindmaps.py) is in the in-game skills-tab order;
     # re-sorted alphabetically for the wizard's skill search list.
     skill_names_json = json.dumps(sorted(SKILL_NAMES))
