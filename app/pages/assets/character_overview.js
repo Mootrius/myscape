@@ -122,90 +122,6 @@
     morytania: 'Morytania', varrock: 'Varrock',
     western_provinces: 'Western Provinces', wilderness: 'Wilderness',
   };
-  // Each area's "Main reward" icon per tier (easy/medium/hard/elite,
-  // matching DIARY_TIER_ORDER); renderDiaries picks the highest completed
-  // tier. Files come from the Main Reward column of the wiki's
-  // Achievement_Diary "List of diaries" table, which is the only place all
-  // 48 icons are available. Served via /icon-cache/ (app/icon_cache.py), which
-  // fetches each from the wiki once a week, instead of every visitor's browser
-  // hotlinking the wiki.
-  var DIARY_AREA_TIER_ICON = {
-    ardougne: [
-      '/icon-cache/Ardougne%20cloak%201.png',
-      '/icon-cache/Ardougne%20cloak%202.png',
-      '/icon-cache/Ardougne%20cloak%203.png',
-      '/icon-cache/Ardougne%20cloak%204.png',
-    ],
-    desert: [
-      '/icon-cache/Desert%20amulet%201.png',
-      '/icon-cache/Desert%20amulet%202.png',
-      '/icon-cache/Desert%20amulet%203.png',
-      '/icon-cache/Desert%20amulet%204.png',
-    ],
-    falador: [
-      '/icon-cache/Falador%20shield%201.png',
-      '/icon-cache/Falador%20shield%202.png',
-      '/icon-cache/Falador%20shield%203.png',
-      '/icon-cache/Falador%20shield%204.png',
-    ],
-    fremennik: [
-      '/icon-cache/Fremennik%20sea%20boots%201.png',
-      '/icon-cache/Fremennik%20sea%20boots%202.png',
-      '/icon-cache/Fremennik%20sea%20boots%203.png',
-      '/icon-cache/Fremennik%20sea%20boots%204.png',
-    ],
-    kandarin: [
-      '/icon-cache/Kandarin%20headgear%201.png',
-      '/icon-cache/Kandarin%20headgear%202.png',
-      '/icon-cache/Kandarin%20headgear%203.png',
-      '/icon-cache/Kandarin%20headgear%204.png',
-    ],
-    karamja: [
-      '/icon-cache/Karamja%20gloves%201.png',
-      '/icon-cache/Karamja%20gloves%202.png',
-      '/icon-cache/Karamja%20gloves%203.png',
-      '/icon-cache/Karamja%20gloves%204.png',
-    ],
-    kourend_kebos: [
-      '/icon-cache/Rada%27s%20blessing%201.png',
-      '/icon-cache/Rada%27s%20blessing%202.png',
-      '/icon-cache/Rada%27s%20blessing%203.png',
-      '/icon-cache/Rada%27s%20blessing%204.png',
-    ],
-    lumbridge_draynor: [
-      '/icon-cache/Explorer%27s%20ring%201.png',
-      '/icon-cache/Explorer%27s%20ring%202.png',
-      '/icon-cache/Explorer%27s%20ring%203.png',
-      '/icon-cache/Explorer%27s%20ring%204.png',
-    ],
-    morytania: [
-      '/icon-cache/Morytania%20legs%201.png',
-      '/icon-cache/Morytania%20legs%202.png',
-      '/icon-cache/Morytania%20legs%203.png',
-      '/icon-cache/Morytania%20legs%204.png',
-    ],
-    varrock: [
-      '/icon-cache/Varrock%20armour%201.png',
-      '/icon-cache/Varrock%20armour%202.png',
-      '/icon-cache/Varrock%20armour%203.png',
-      '/icon-cache/Varrock%20armour%204.png',
-    ],
-    western_provinces: [
-      '/icon-cache/Western%20banner%201.png',
-      '/icon-cache/Western%20banner%202.png',
-      '/icon-cache/Western%20banner%203.png',
-      '/icon-cache/Western%20banner%204.png',
-    ],
-    wilderness: [
-      '/icon-cache/Wilderness%20sword%201.png',
-      '/icon-cache/Wilderness%20sword%202.png',
-      '/icon-cache/Wilderness%20sword%203.png',
-      '/icon-cache/Wilderness%20sword%204.png',
-    ],
-  };
-  // Shown for an area with zero tiers completed; saved locally at
-  // app/static/img/diary-not-started.png.
-  var DIARY_AREA_NOT_STARTED_ICON = '/static/img/diary-not-started.png';
   // In-game area order (matches the journal's tabs), not the alphabetical
   // order DIARY_AREAS/get_diary_tier_totals iterate in.
   var DIARY_AREA_ORDER = [
@@ -260,19 +176,9 @@
     DIARY_AREA_ORDER.forEach(function (area) {
       var d = byArea[area];
       if (!d) return;
-      // Highest completed tier picks the reward icon (DIARY_TIER_ORDER is
-      // easy->elite, so the last match wins). -1 means no tiers completed.
-      var highestCompletedIndex = -1;
-      DIARY_TIER_ORDER.forEach(function (tier, i) {
-        if (d.tiers && d.tiers[tier] === 'completed') highestCompletedIndex = i;
-      });
-      var icon = highestCompletedIndex >= 0
-        ? (DIARY_AREA_TIER_ICON[area] || [])[highestCompletedIndex]
-        : DIARY_AREA_NOT_STARTED_ICON;
       var label = DIARY_AREA_LABELS[area] || titleCase(area);
       html += '<a class="diary-row" href="' + diaryWikiUrl(area) + '" target="_blank" rel="noopener">'
         + '<div class="diary-row-header">'
-        + '<img class="diary-row-icon" src="' + icon + '" alt="" />'
         + '<span class="diary-row-label">' + escapeHtml(label) + '</span>'
         + '<span class="diary-row-count">' + d.completed + '/' + d.total + '</span>'
         + '</div>'
