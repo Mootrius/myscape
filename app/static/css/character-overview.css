@@ -592,6 +592,10 @@
 .diary-tier-seg {
   flex: 1 1 0;
   background: var(--bg);
+  /* Same border as .ca-tile-bar, but border-box so it eats into the bar's 6px
+     height instead of adding to it. */
+  box-sizing: border-box;
+  border: 1px solid var(--border);
 }
 .diary-tier-seg--completed {
   background: var(--green);
