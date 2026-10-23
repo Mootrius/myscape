@@ -44,7 +44,8 @@ _MAX_BUCKETS = 400
 
 # NPCs excluded for every player: Wilderness "Crystalline"/"Corrupted" reskins
 # and Tombs of Amascut's six boss-room NPCs (duplicates of the raid's chest
-# event). Unlike the per-player HiddenLootEntry, build_loot_state skips these
+# event), and the Forestry event sources (Entling, Freaky Forester, beehives,
+# fox trap, Frightened fox, Dryad). Unlike the per-player HiddenLootEntry, build_loot_state skips these
 # before anything else, so they affect no total, tile or item breakdown. Matched
 # like npc_hide_key.
 _EXCLUDED_NPC_NAMES = frozenset(
@@ -74,6 +75,13 @@ _EXCLUDED_NPC_NAMES = frozenset(
         "Zebak",
         "Tumeken's Warden",
         "Elidinis' Warden",
+        "Entling",
+        "Freaky Forester",
+        "Unfinished beehive",
+        "Completed beehive",
+        "Fox trap",
+        "Frightened fox",
+        "Dryad",
     )
 )
 
