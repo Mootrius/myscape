@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, List, Optional
 from sqlalchemy.orm import Session
 
 from app.bosses import HISCORE_BOSSES
-from app.item_ids import find_item_ids
+from app.item_ids import resolve_item_ids
 from app.mindmaps import (
     MAX_SKILL_LEVEL,
     MAX_SKILL_XP,
@@ -253,7 +253,7 @@ def absolute_value(goal, context: dict) -> int:
 
     # item
     names = _item_name_variants(goal.target_name)
-    ids = [i for n in names for i in (find_item_ids(n) or [])]
+    ids = [i for n in names for i in (resolve_item_ids(n) or [])]
     if ids:
         return sum(context["owned_pool_by_id"].get(i, 0) for i in ids)
     return sum(context["owned_pool_by_name"].get(_normalize_lookup_name(n), 0) for n in names)

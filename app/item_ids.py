@@ -144,6 +144,30 @@ def find_item_ids(item_name: str) -> Optional[List[int]]:
     return entry["ids"] if entry else None
 
 
+def resolve_item_ids(item_name: str) -> Optional[List[int]]:
+    """find_item_ids, with a fallback for cosmetic recolors the snapshot only
+    records under their base name (e.g. "Graceful boots (Hallowed)", whose ids
+    sit under "Graceful boots" with every other recolor). The recipe entry for
+    the name stores the variant's wiki icon filename, which
+    ICON_IDS_BY_FILENAME_PATH maps to just that variant's ids, so owning a
+    different recolor does not satisfy it. Returns None if neither resolves.
+    """
+    ids = find_item_ids(item_name)
+    if ids:
+        return ids
+    if not item_name:
+        return None
+    from app.recipes import find_recipe  # lazy: keeps this module import-light
+    recipe = find_recipe(item_name)
+    icon = (recipe or {}).get("icon")
+    if not icon:
+        return None
+    name = icon.strip()
+    if name.lower().startswith("file:"):
+        name = name[len("file:"):]
+    return get_icon_filename_index().get(name.lower()) or None
+
+
 def find_item_by_exact_name(item_name: str) -> Optional[dict]:
     """The raw {"name": str, "icon": str|None, "ids": [int, ...]} entry for
     item_name (case-insensitive exact match), or None. Used by search_items in

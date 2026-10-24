@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.item_ids import find_item_ids
+from app.item_ids import resolve_item_ids
 from app.models import GameAccount, MindMap
 
 # Node colors: a small named set (not free-form hex) so the client styles each
@@ -666,7 +666,7 @@ def evaluate_completion(nodes: List[Dict], context: Dict) -> Dict[str, bool]:
                 goal_item_id = goal.get("itemId")
                 if isinstance(goal_item_id, int) and not isinstance(goal_item_id, bool):
                     ids.append(goal_item_id)
-                ids.extend(i for n in names for i in (find_item_ids(n) or []))
+                ids.extend(i for n in names for i in (resolve_item_ids(n) or []))
                 ids = list(dict.fromkeys(ids))
                 if ids:
                     owned = sum(owned_pool_by_id.get(i, 0) for i in ids)
