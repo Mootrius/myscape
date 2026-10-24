@@ -289,10 +289,11 @@
 .loot-npc-box-icon-ram,
 .loot-npc-box-icon-calf,
 .loot-npc-box-icon-chicken,
-/* Dossier, Unsired and Forgotten lockbox: detail renders in _NPC_DISPLAY_OVERRIDES (app/loot.py). */
+/* Dossier, Unsired, Forgotten lockbox and Cache of runes: detail renders in _NPC_DISPLAY_OVERRIDES (app/loot.py). */
 .loot-npc-box-icon-dossier,
 .loot-npc-box-icon-unsired,
-.loot-npc-box-icon-forgotten-lockbox {
+.loot-npc-box-icon-forgotten-lockbox,
+.loot-npc-box-icon-cache-of-runes {
   transform: scale(0.7);
 }
 /* Tarnished items (nine NPCs in one tile): padding shrinks the picture inside
