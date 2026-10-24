@@ -645,7 +645,7 @@
     }
 
     function isChicken(n) {
-      return /^Chicken$/i.test(n.sourceName);
+      return /^(Undead )?Chicken$/i.test(n.sourceName);
     }
 
     // Yama's reward container (see _NPC_DISPLAY_OVERRIDES in app/loot.py).
