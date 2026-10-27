@@ -85,8 +85,8 @@ _EXCLUDED_NPC_NAMES = frozenset(
     )
 )
 # Sources excluded by prefix, so every variant ("Flowering bush", "Flowering
-# bush (...)") is dropped without listing each. Same effect as above.
-_EXCLUDED_NPC_PREFIXES = ("flowering bush",)
+# bush (...)", "Strange bush") is dropped without listing each. Same effect as above.
+_EXCLUDED_NPC_PREFIXES = ("flowering bush", "strange bush")
 
 
 def _is_excluded_npc(source_name: Optional[str]) -> bool:
