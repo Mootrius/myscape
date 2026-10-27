@@ -84,6 +84,14 @@ _EXCLUDED_NPC_NAMES = frozenset(
         "Dryad",
     )
 )
+# Sources excluded by prefix, so every variant ("Flowering bush", "Flowering
+# bush (...)") is dropped without listing each. Same effect as above.
+_EXCLUDED_NPC_PREFIXES = ("flowering bush",)
+
+
+def _is_excluded_npc(source_name: Optional[str]) -> bool:
+    name = (source_name or "").strip().lower()
+    return name in _EXCLUDED_NPC_NAMES or name.startswith(_EXCLUDED_NPC_PREFIXES)
 
 
 def resolve_range(range_key: Optional[str], start: Optional[datetime], end: Optional[datetime]) -> Tuple[datetime, datetime]:
@@ -567,7 +575,7 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
     for event in events:
         if event.occurred_at is None:
             continue
-        if (event.source_name or "").strip().lower() in _EXCLUDED_NPC_NAMES:
+        if _is_excluded_npc(event.source_name):
             continue
         offset = (event.occurred_at - start).total_seconds()
         if not (0 <= offset <= span_seconds):
