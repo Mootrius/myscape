@@ -6,7 +6,9 @@ Page data is computed fresh from LootEvent rows in the selected range (the DB
 query is windowed).
 Clue caskets arrive as "Clue Scroll (<Tier>)" when the plugin paired the tier,
 else a bare "Casket". Tiered caskets and raid/minigame events get a "By NPC"
-tile; a bare "Casket" or pickpocket only counts toward the chart and totals.
+tile; pickpockets get one tile per victim ("<NPC> (pickpocket)", kept apart
+from that NPC's kill tile); a bare "Casket" only counts toward the chart and
+totals.
 """
 import re
 import urllib.parse
@@ -591,9 +593,10 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
 
         # Resolves the "By NPC" tile identity. An NPC kill uses
         # source_name/npc_icon_url, a tiered clue event the casket's name and
-        # icon, and any other named "event" (raid/minigame) its own name with a
-        # guessed portrait. The untiered "Casket" has no identity and
-        # pickpockets never get a tile. A _NPC_DISPLAY_OVERRIDES entry (by
+        # icon, a pickpocket "<victim> (pickpocket)" with the victim's portrait
+        # (the suffix keeps it apart from the victim's kill tile), and any other
+        # named "event" (raid/minigame) its own name with a guessed portrait.
+        # The untiered "Casket" has no identity. A _NPC_DISPLAY_OVERRIDES entry (by
         # lowercased raw source_name) replaces name/portrait.
         tier = _clue_tier_from_source_name(event.source_name)
         stripped_name = (event.source_name or "").strip()
@@ -601,6 +604,9 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
         if event.source_type == "npc":
             npc_like_name = (override[0] if override else None) or event.source_name
             npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
+        elif event.source_type == "pickpocket" and stripped_name:
+            npc_like_name = f"{stripped_name} (pickpocket)"
+            npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(stripped_name)
         elif tier is not None:
             npc_like_name = f"Reward casket ({tier.lower()})"
             npc_like_icon = clue_casket_icon_url(tier)
