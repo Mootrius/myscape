@@ -302,6 +302,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "unsired": (None, "Unsired detail.png"),
     "forgotten lockbox": (None, "Forgotten lockbox detail.png"),
     "cache of runes": (None, "Cache of runes detail.png"),
+    "martin": (None, "Martin the Master Gardener.png"),
     # Grotesque Guardians' loot is recorded under its phase NPC "Dusk".
     "dusk": ("Grotesque Guardians", "Dusk.png"),
     "duke sucellus": (None, "/static/img/npc-duke-sucellus.png"),
