@@ -320,6 +320,14 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
 }
 
 
+# Pickpocket-only portraits, keyed by the lowercased victim name, for victims
+# whose plain "<Name>.png" is wrong or whose name is shared with a kill tile
+# (an _NPC_DISPLAY_OVERRIDES entry would change both). Wiki filenames.
+_PICKPOCKET_ICON_OVERRIDES: Dict[str, str] = {
+    "warrior": "Warrior (Thieving, blond).png",
+}
+
+
 def _override_icon_url(icon: str) -> Optional[str]:
     """Portrait URL for an override: "/..." values are bundled /static/ images
     used as-is, else a wiki filename routed through npc_icon_url.
@@ -607,7 +615,11 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
             npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
         elif event.source_type == "pickpocket" and stripped_name:
             npc_like_name = f"{stripped_name} (pickpocket)"
-            npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(stripped_name)
+            pickpocket_icon = _PICKPOCKET_ICON_OVERRIDES.get(stripped_name.lower())
+            if pickpocket_icon:
+                npc_like_icon = _override_icon_url(pickpocket_icon)
+            else:
+                npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(stripped_name)
         elif tier is not None:
             npc_like_name = f"Reward casket ({tier.lower()})"
             npc_like_icon = clue_casket_icon_url(tier)
