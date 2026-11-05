@@ -304,6 +304,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "cache of runes": (None, "Cache of runes detail.png"),
     "martin": (None, "Martin the Master Gardener.png"),
     "obor (chest)": ("Obor's Chest", "Chest (Obor's lair, closed).png"),
+    "bryophyta (chest)": ("Bryophyta's Chest", "Chest (Bryophyta's lair, closed).png"),
     # Grotesque Guardians' loot is recorded under its phase NPC "Dusk".
     "dusk": ("Grotesque Guardians", "Dusk.png"),
     "duke sucellus": (None, "/static/img/npc-duke-sucellus.png"),
