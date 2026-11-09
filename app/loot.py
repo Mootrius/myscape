@@ -305,6 +305,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "martin": (None, "Martin the Master Gardener.png"),
     "obor (chest)": ("Obor's Chest", "Chest (Obor's lair, closed).png"),
     "bryophyta (chest)": ("Bryophyta's Chest", "Chest (Bryophyta's lair, closed).png"),
+    "reward cart (wintertodt)": (None, "Reward Cart (100+ rewards).png"),
     # Grotesque Guardians' loot is recorded under its phase NPC "Dusk".
     "dusk": ("Grotesque Guardians", "Dusk.png"),
     "duke sucellus": (None, "/static/img/npc-duke-sucellus.png"),
@@ -327,6 +328,7 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
 # (an _NPC_DISPLAY_OVERRIDES entry would change both). Wiki filenames.
 _PICKPOCKET_ICON_OVERRIDES: Dict[str, str] = {
     "warrior": "Warrior (Thieving, blond).png",
+    "wealthy citizen": "Wealthy citizen (one).png",
 }
 
 
