@@ -4,7 +4,7 @@
   var clearBtn = document.getElementById('hsSearchClear');
   var statusEl = document.getElementById('hsStatus');
   var noteEl = document.getElementById('hsNote');
-  var DISCORD = '<a href="https://discord.gg/myscape" target="_blank" rel="noopener noreferrer">Discord server</a>';
+  var DISCORD = '<a href="https://discord.gg/mootrius" target="_blank" rel="noopener noreferrer">Discord server</a>';
   var resultsEl = document.getElementById('hsResults');
 
   var STOP = {};
