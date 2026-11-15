@@ -141,11 +141,11 @@
   function questWikiUrl(name) {
     return 'https://oldschool.runescape.wiki/w/' + encodeURIComponent(String(name).replace(/ /g, '_'));
   }
-  // Sort key for the quest list: lowercased, leading "The " ignored ("The Grand
-  // Tree" sorts under G). The same rule as get_quest_list in
+  // Sort key for the quest list: lowercased, a leading "The " or "A " ignored
+  // ("The Grand Tree" sorts under G, "A Soul's Bane" under S). The same rule as get_quest_list in
   // app/character_progress_data.py.
   function questSortKey(name) {
-    return String(name || '').toLowerCase().replace(/^the\s+/, '');
+    return String(name || '').toLowerCase().replace(/^(?:the|a)\s+/, '');
   }
 
   function sortQuests(items) {

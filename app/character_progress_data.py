@@ -15,6 +15,7 @@ GameAccount.completed_quests/diary_tiers/character_summary_combat_task_tier_comp
 (app/models.py).
 """
 import json
+import re
 import pathlib
 from typing import Dict, List, Optional
 
@@ -37,9 +38,10 @@ def _load_json(path: pathlib.Path, default):
 
 
 def _quest_sort_key(name: str) -> str:
-    """Lowercased, leading "The " ignored ("The Grand Tree" sorts under G)."""
-    low = name.lower()
-    return low[4:].lstrip() if low.startswith("the ") else low
+    """Lowercased, a leading "The " or "A " ignored ("The Grand Tree" sorts
+    under G, "A Soul's Bane" under S).
+    """
+    return re.sub(r"^(?:the|a)\s+", "", name.lower())
 
 
 def get_quest_list() -> Dict[str, List[str]]:
