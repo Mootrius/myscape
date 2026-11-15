@@ -323,12 +323,33 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
 }
 
 
-# Pickpocket-only portraits, keyed by the lowercased victim name, for victims
-# whose plain "<Name>.png" is wrong or whose name is shared with a kill tile
-# (an _NPC_DISPLAY_OVERRIDES entry would change both). Wiki filenames.
-_PICKPOCKET_ICON_OVERRIDES: Dict[str, str] = {
-    "warrior": "Warrior (Thieving, blond).png",
-    "wealthy citizen": "Wealthy citizen (one).png",
+# Like _NPC_DISPLAY_OVERRIDES but matched by lowercased source_name prefix (after
+# the exact table), so every variant folds into one tile without listing each.
+# H.A.M. Hideout's chests are one tile.
+_NPC_DISPLAY_PREFIX_OVERRIDES: Tuple[Tuple[str, Tuple[Optional[str], str]], ...] = (
+    ("h.a.m. chest", ("H.A.M. Chest", "Small chest (closed).png")),
+)
+
+
+def _display_override(source_name_lower: str) -> Optional[Tuple[Optional[str], str]]:
+    exact = _NPC_DISPLAY_OVERRIDES.get(source_name_lower)
+    if exact:
+        return exact
+    for prefix, value in _NPC_DISPLAY_PREFIX_OVERRIDES:
+        if source_name_lower.startswith(prefix):
+            return value
+    return None
+
+
+# Pickpocket-only overrides, keyed by the lowercased victim name, for victims
+# whose plain "<Name>.png" is wrong, whose name is shared with a kill tile (an
+# _NPC_DISPLAY_OVERRIDES entry would change both) or whose tile needs another
+# name. {key: (display victim name or None, wiki portrait filename)}.
+_PICKPOCKET_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
+    "warrior": (None, "Warrior (Thieving, blond).png"),
+    "wealthy citizen": (None, "Wealthy citizen (one).png"),
+    "ham guard": ("H.A.M. Guard", "Guard (Death to the Dorgeshuun).png"),
+    "h.a.m. guard": ("H.A.M. Guard", "Guard (Death to the Dorgeshuun).png"),
 }
 
 
@@ -613,15 +634,15 @@ def build_loot_state(db: Session, game_account: GameAccount, start: datetime, en
         # lowercased raw source_name) replaces name/portrait.
         tier = _clue_tier_from_source_name(event.source_name)
         stripped_name = (event.source_name or "").strip()
-        override = _NPC_DISPLAY_OVERRIDES.get(stripped_name.lower())
+        override = _display_override(stripped_name.lower())
         if event.source_type == "npc":
             npc_like_name = (override[0] if override else None) or event.source_name
             npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(npc_like_name)
         elif event.source_type == "pickpocket" and stripped_name:
-            npc_like_name = f"{stripped_name} (pickpocket)"
-            pickpocket_icon = _PICKPOCKET_ICON_OVERRIDES.get(stripped_name.lower())
-            if pickpocket_icon:
-                npc_like_icon = _override_icon_url(pickpocket_icon)
+            pickpocket = _PICKPOCKET_OVERRIDES.get(stripped_name.lower())
+            npc_like_name = f"{(pickpocket[0] if pickpocket else None) or stripped_name} (pickpocket)"
+            if pickpocket:
+                npc_like_icon = _override_icon_url(pickpocket[1])
             else:
                 npc_like_icon = _override_icon_url(override[1]) if override else npc_icon_url(stripped_name)
         elif tier is not None:
