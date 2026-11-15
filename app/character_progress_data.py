@@ -36,6 +36,12 @@ def _load_json(path: pathlib.Path, default):
         return default
 
 
+def _quest_sort_key(name: str) -> str:
+    """Lowercased, leading "The " ignored ("The Grand Tree" sorts under G)."""
+    low = name.lower()
+    return low[4:].lstrip() if low.startswith("the ") else low
+
+
 def get_quest_list() -> Dict[str, List[str]]:
     """{"free": [...], "members": [...], "miniquests": [...]}, each alphabetized
     ignoring a leading "The", in the in-game Free/Members/Miniquests order
@@ -49,7 +55,8 @@ def get_quest_list() -> Dict[str, List[str]]:
     """
     global _quest_list
     if _quest_list is None:
-        _quest_list = _load_json(_QUEST_LIST_PATH, {"free": [], "members": [], "miniquests": []})
+        raw = _load_json(_QUEST_LIST_PATH, {"free": [], "members": [], "miniquests": []})
+        _quest_list = {group: sorted(names, key=_quest_sort_key) for group, names in raw.items()}
     return _quest_list
 
 

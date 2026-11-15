@@ -141,6 +141,20 @@
   function questWikiUrl(name) {
     return 'https://oldschool.runescape.wiki/w/' + encodeURIComponent(String(name).replace(/ /g, '_'));
   }
+  // Sort key for the quest list: lowercased, leading "The " ignored ("The Grand
+  // Tree" sorts under G). The same rule as get_quest_list in
+  // app/character_progress_data.py.
+  function questSortKey(name) {
+    return String(name || '').toLowerCase().replace(/^the\s+/, '');
+  }
+
+  function sortQuests(items) {
+    return items.slice().sort(function (a, b) {
+      var ka = questSortKey(a.name), kb = questSortKey(b.name);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+  }
+
   function renderQuests(quests) {
     var listEl = document.getElementById('questsList');
     var emptyEl = document.getElementById('questsEmpty');
@@ -149,7 +163,7 @@
     var html = '';
     groups.forEach(function (group) {
       var label = group[0];
-      var items = group[1] || [];
+      var items = sortQuests(group[1] || []);
       if (!items.length) return;
       html += '<div class="quests-group-title">' + escapeHtml(label) + '</div>';
       items.forEach(function (q) {
