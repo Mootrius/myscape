@@ -348,6 +348,7 @@ def _display_override(source_name_lower: str) -> Optional[Tuple[Optional[str], s
 _PICKPOCKET_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "warrior": (None, "Warrior (Thieving, blond).png"),
     "wealthy citizen": (None, "Wealthy citizen (one).png"),
+    "menaphite": ("Menaphite Thug", "Menaphite Thug.png"),
     "ham guard": ("H.A.M. Guard", "Guard (Death to the Dorgeshuun).png"),
     "h.a.m. guard": ("H.A.M. Guard", "Guard (Death to the Dorgeshuun).png"),
 }
