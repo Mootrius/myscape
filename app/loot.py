@@ -46,8 +46,8 @@ _MAX_BUCKETS = 400
 
 # NPCs excluded for every player: Wilderness "Crystalline"/"Corrupted" reskins
 # and Tombs of Amascut's six boss-room NPCs (duplicates of the raid's chest
-# event), and the Forestry event sources (Entling, Freaky Forester, beehives,
-# fox trap, Frightened fox, Dryad). Unlike the per-player HiddenLootEntry, build_loot_state skips these
+# event). (Forestry event sources are not excluded: they fold into one
+# "Forestry events" tile, see _NPC_DISPLAY_OVERRIDES.) Unlike the per-player HiddenLootEntry, build_loot_state skips these
 # before anything else, so they affect no total, tile or item breakdown. Matched
 # like npc_hide_key.
 _EXCLUDED_NPC_NAMES = frozenset(
@@ -77,23 +77,12 @@ _EXCLUDED_NPC_NAMES = frozenset(
         "Zebak",
         "Tumeken's Warden",
         "Elidinis' Warden",
-        "Entling",
-        "Freaky Forester",
-        "Unfinished beehive",
-        "Complete beehive",
-        "Fox trap",
-        "Frightened fox",
-        "Dryad",
     )
 )
-# Sources excluded by prefix, so every variant ("Flowering bush", "Flowering
-# bush (...)", "Strange bush") is dropped without listing each. Same effect as above.
-_EXCLUDED_NPC_PREFIXES = ("flowering bush", "strange bush")
 
 
 def _is_excluded_npc(source_name: Optional[str]) -> bool:
-    name = (source_name or "").strip().lower()
-    return name in _EXCLUDED_NPC_NAMES or name.startswith(_EXCLUDED_NPC_PREFIXES)
+    return (source_name or "").strip().lower() in _EXCLUDED_NPC_NAMES
 
 
 def resolve_range(range_key: Optional[str], start: Optional[datetime], end: Optional[datetime]) -> Tuple[datetime, datetime]:
@@ -320,6 +309,15 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
     "tarnished bracelet": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
     "tarnished ring": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
     "tarnished spear": ("Tarnished items", "/static/img/npc-tarnished-items.png"),
+    # Forestry event sources fold into one "Forestry events" tile (flowering and
+    # strange bushes by prefix, see _NPC_DISPLAY_PREFIX_OVERRIDES).
+    "entling": ("Forestry events", "Friendly Forester.png"),
+    "freaky forester": ("Forestry events", "Friendly Forester.png"),
+    "unfinished beehive": ("Forestry events", "Friendly Forester.png"),
+    "complete beehive": ("Forestry events", "Friendly Forester.png"),
+    "fox trap": ("Forestry events", "Friendly Forester.png"),
+    "frightened fox": ("Forestry events", "Friendly Forester.png"),
+    "dryad": ("Forestry events", "Friendly Forester.png"),
 }
 
 
@@ -328,6 +326,8 @@ _NPC_DISPLAY_OVERRIDES: Dict[str, Tuple[Optional[str], str]] = {
 # H.A.M. Hideout's chests are one tile.
 _NPC_DISPLAY_PREFIX_OVERRIDES: Tuple[Tuple[str, Tuple[Optional[str], str]], ...] = (
     ("h.a.m. chest", ("H.A.M. Chest", "Small chest (closed).png")),
+    ("flowering bush", ("Forestry events", "Friendly Forester.png")),
+    ("strange bush", ("Forestry events", "Friendly Forester.png")),
 )
 
 
