@@ -415,7 +415,7 @@
       // on .loot-chart-title, which would turn the "ALL NPCs" fallback into
       // "ALL NPCS". Multiple names are joined with a small dot (·) in
       // selection order.
-      titleText = 'ALL NPCs';
+      titleText = 'ALL SOURCES';
       if (selectedNpcs.length === 1) {
         titleText = selectedNpcs[0].toUpperCase();
       } else if (selectedNpcs.length > 1) {
@@ -537,7 +537,7 @@
     var emptyEl = document.getElementById('lootNpcEmpty');
     var rowEl = document.getElementById('lootNpcRow');
     if (!npcs.length) {
-      emptyEl.textContent = 'No NPCs killed in this range.';
+      emptyEl.textContent = 'No sources in this range.';
       emptyEl.style.display = '';
       rowEl.innerHTML = '';
       lastNpcKey = null;
@@ -551,7 +551,7 @@
     // loot-tracker.css.
     var visible = state.npcShowHidden ? npcs : npcs.filter(function (n) { return !npcEffectiveHidden(n); });
     if (!visible.length) {
-      emptyEl.textContent = npcs.length ? 'Every NPC in this range is hidden.' : 'No NPCs killed in this range.';
+      emptyEl.textContent = npcs.length ? 'Every source in this range is hidden.' : 'No sources in this range.';
       emptyEl.style.display = '';
       rowEl.innerHTML = '';
       lastNpcKey = null;
@@ -561,7 +561,7 @@
 
     var sorted = sortEntries(filterByName(visible, state.npcSearch, 'sourceName'), state.npcSort, 'sourceName', 'value', 'lastKillAt', 'killCount');
     if (!sorted.length) {
-      emptyEl.textContent = 'No NPCs match your search.';
+      emptyEl.textContent = 'No sources match your search.';
       emptyEl.style.display = '';
       rowEl.innerHTML = '';
       lastNpcKey = null;
@@ -722,7 +722,7 @@
         var multiSelected = isSelected && state.selectedNpcs.length > 1;
         var hidden = npcEffectiveHidden(n);
         var explicitHidden = !!n.hidden;
-        var eyeTooltip = (explicitHidden ? 'Show ' : 'Hide ') + 'NPC';
+        var eyeTooltip = (explicitHidden ? 'Show ' : 'Hide ') + 'source';
         // A <button> can't nest in a <button> (see .loot-npc-box-wrap in
         // loot-tracker.css), so the eye toggle is a sibling of the box
         // inside a non-interactive div. That also means clicking it needs no
@@ -1020,7 +1020,7 @@
     if (toggleBtn) {
       state.npcShowHidden = !state.npcShowHidden;
       toggleBtn.classList.toggle('active', state.npcShowHidden);
-      toggleBtn.setAttribute('data-tooltip', (state.npcShowHidden ? 'Hide hidden' : 'Show hidden') + ' NPCs');
+      toggleBtn.setAttribute('data-tooltip', (state.npcShowHidden ? 'Hide hidden' : 'Show hidden') + ' sources');
       if (lastData) renderNpcRow(currentNpcs());
       return;
     }

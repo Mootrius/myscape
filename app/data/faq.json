@@ -863,8 +863,8 @@
  },
  {
   "category": "Loot Tracker",
-  "question": "How do I hide an NPC or item I don't want to track?",
-  "answer": "When hovering over an NPC or item on the Loot Tracker, you'll see an \"eye\" icon appear. Click that icon to hide that NPC (and its loot) or item.",
+  "question": "How do I hide a source or item I don't want to track?",
+  "answer": "When hovering over a source (like an NPC) or item on the Loot Tracker, you'll see an \"eye\" icon appear. Click that icon to hide that source (and its loot) or item.",
   "id": 26,
   "tags": [
    "hide",

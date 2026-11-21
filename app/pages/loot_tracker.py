@@ -131,7 +131,7 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
               </div>
             </div>
           </div>
-          <div class="loot-chart-title" id="lootChartTitle">ALL NPCs</div>
+          <div class="loot-chart-title" id="lootChartTitle">ALL SOURCES</div>
           <div class="loot-chart-stats">
             <div class="loot-chart-kills" id="lootChartKills">0 kc</div>
             <div class="loot-chart-total" id="lootChartTotal">0 gp</div>
@@ -147,13 +147,13 @@ def _loot_tracker_panel_markup() -> Tuple[str, str, str]:
         <div class="loot-panel">
           <div class="loot-panel-controls">
             <div class="loot-search-group">
-              <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search for an NPC" autocomplete="off" />
+              <input type="text" class="loot-search" id="lootNpcSearch" placeholder="Search for a source" autocomplete="off" />
               <button type="button" class="loot-search-clear" id="lootNpcSearchClear" style="display:none;">Clear</button>
             </div>
-            {_sort_tabs("lootNpcSortTabs", "KC", "Sort by kill count", "lootNpcHideToggle", "NPCs")}
+            {_sort_tabs("lootNpcSortTabs", "KC", "Sort by kill count", "lootNpcHideToggle", "sources")}
           </div>
           <p class="loot-column-empty" id="lootNpcEmpty" style="display:none;">
-            No NPCs killed in this range.
+            No sources in this range.
           </p>
           <div class="loot-npc-row" id="lootNpcRow"></div>
         </div>
